@@ -16,7 +16,7 @@
     background-size: 12px 12px;
     border-radius: 8px;
     margin-bottom: 16px;
-    min-height: 1600px;
+    min-height: 1420px;
     min-width: 520px;
     overflow: visible;
 }
@@ -131,22 +131,6 @@
     background: #f8f9fa;
     border-color: #9ca3af;
     opacity: 0.5;
-}
-/* Deploy failed state - orange accent */
-.exp-view-dag-node.deploy_failed {
-    background: #ffffff;
-    border-color: #9ca3af;
-}
-.exp-view-dag-node.deploy_failed::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: linear-gradient(to right, transparent, #fff7ed);
-    border-radius: 0 7px 7px 0;
-    pointer-events: none;
 }
 /* Component icon (blue cube like Vertex AI) */
 .exp-view-dag-node-icon {

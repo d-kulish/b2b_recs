@@ -418,9 +418,6 @@ class TrainingRun(models.Model):
     STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
     STATUS_NOT_BLESSED = 'not_blessed'
-    STATUS_DEPLOYING = 'deploying'
-    STATUS_DEPLOYED = 'deployed'
-    STATUS_DEPLOY_FAILED = 'deploy_failed'
 
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pending'),
@@ -431,9 +428,6 @@ class TrainingRun(models.Model):
         (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
         (STATUS_NOT_BLESSED, 'Not Blessed'),
-        (STATUS_DEPLOYING, 'Deploying'),
-        (STATUS_DEPLOYED, 'Deployed'),
-        (STATUS_DEPLOY_FAILED, 'Deploy Failed'),
     ]
 
     # Model type choices
@@ -563,57 +557,6 @@ class TrainingRun(models.Model):
     deployment_config = models.JSONField(
         default=dict,
         help_text="Deployment configuration (auto_deploy, endpoint settings)"
-    )
-
-    # =========================================================================
-    # Deployment Tracking
-    # =========================================================================
-
-    deploy_enabled = models.BooleanField(
-        default=False,
-        help_text="Whether auto-deployment to Cloud Run is enabled"
-    )
-
-    DEPLOYMENT_STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('deploying', 'Deploying'),
-        ('deployed', 'Deployed'),
-        ('failed', 'Failed'),
-        ('skipped', 'Skipped'),
-    ]
-
-    deployment_status = models.CharField(
-        max_length=20,
-        choices=DEPLOYMENT_STATUS_CHOICES,
-        default='pending',
-        help_text="Status of the deployment process"
-    )
-
-    deployment_error = models.TextField(
-        blank=True,
-        default='',
-        help_text="Error message if deployment failed"
-    )
-
-    deployment_started_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When deployment started"
-    )
-
-    deployment_completed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When deployment completed"
-    )
-
-    deployed_endpoint = models.ForeignKey(
-        'DeployedEndpoint',
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='deployed_training_runs',
-        help_text="Cloud Run endpoint this model is deployed to"
     )
 
     schedule_config = models.JSONField(
@@ -888,8 +831,6 @@ class TrainingRun(models.Model):
             self.STATUS_FAILED,
             self.STATUS_CANCELLED,
             self.STATUS_NOT_BLESSED,
-            self.STATUS_DEPLOYED,
-            self.STATUS_DEPLOY_FAILED,
         ]
 
     @property
@@ -898,7 +839,6 @@ class TrainingRun(models.Model):
         return self.status in [
             self.STATUS_SUBMITTING,
             self.STATUS_RUNNING,
-            self.STATUS_DEPLOYING,
         ]
 
     @property

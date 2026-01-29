@@ -201,23 +201,9 @@
     background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
     color: #ea580c;
 }
-/* Deployment states */
-.ml-card-status.deploying {
-    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-    color: #2563eb;
-}
-.ml-card-status.deployed {
-    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-    color: #059669;
-}
-.ml-card-status.deploy_failed {
-    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-    color: #ea580c;
-}
-/* Spinning animation for running/submitting/deploying */
+/* Spinning animation for running/submitting */
 .ml-card-status.running i,
-.ml-card-status.submitting i,
-.ml-card-status.deploying i {
+.ml-card-status.submitting i {
     animation: ml-card-spin 1.5s linear infinite;
 }
 @keyframes ml-card-spin {

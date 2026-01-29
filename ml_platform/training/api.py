@@ -96,13 +96,6 @@ def _serialize_training_run(training_run, include_details=False, deployed_models
 
         # Deployment (dynamic from Vertex AI)
         'is_deployed': is_deployed,
-
-        # Deployment tracking
-        'deploy_enabled': training_run.deploy_enabled,
-        'deployment_status': training_run.deployment_status,
-        'deployment_error': training_run.deployment_error,
-        'deployed_endpoint_id': training_run.deployed_endpoint_id,
-        'deployed_endpoint_url': training_run.deployed_endpoint.service_url if training_run.deployed_endpoint else None,
     }
 
     # Add metrics based on model type
@@ -173,16 +166,6 @@ def _serialize_training_run(training_run, include_details=False, deployed_models
         data['error_stage'] = training_run.error_stage
         data['error_details'] = training_run.error_details
         data['gcs_artifacts_path'] = training_run.gcs_artifacts_path
-
-        # Deployment timestamps
-        data['deployment_started_at'] = (
-            training_run.deployment_started_at.isoformat()
-            if training_run.deployment_started_at else None
-        )
-        data['deployment_completed_at'] = (
-            training_run.deployment_completed_at.isoformat()
-            if training_run.deployment_completed_at else None
-        )
 
     return data
 

@@ -81,17 +81,6 @@ const TrainingWizard = (function() {
                 blessingThreshold: 0.40
             },
             deploymentOption: 'register_only',
-            deploymentConfig: {
-                enabled: false,
-                serviceName: '',
-                customName: false,
-                preset: 'production',
-                minInstances: 1,
-                maxInstances: 10,
-                memory: '4Gi',
-                cpu: '2',
-                timeout: '300'
-            },
             scheduleConfig: {
                 type: 'now',              // 'now', 'once', 'daily', 'weekly'
                 date: null,               // YYYY-MM-DD for 'once'
@@ -1187,245 +1176,12 @@ const TrainingWizard = (function() {
     }
 
     // =============================================================================
-    // DEPLOYMENT CONFIGURATION
-    // =============================================================================
-
-    /**
-     * Toggle deployment on/off and show/hide config section.
-     */
-    function toggleDeployEnabled(enabled) {
-        state.formData.deploymentConfig.enabled = enabled;
-
-        const configSection = document.getElementById('wizardDeployConfig');
-        if (configSection) {
-            configSection.classList.toggle('hidden', !enabled);
-        }
-
-        // Generate endpoint name when enabling for the first time
-        if (enabled && !state.formData.deploymentConfig.serviceName) {
-            generateEndpointName();
-        }
-
-        // Update summary panel
-        renderSummaryPanel();
-    }
-
-    /**
-     * Generate default endpoint name from model name.
-     */
-    function generateEndpointName() {
-        const modelName = state.formData.name || 'model';
-        // Convert to lowercase, replace spaces/underscores with hyphens
-        let serviceName = modelName.toLowerCase()
-            .replace(/[^a-z0-9-]/g, '-')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '');
-
-        // Add -serving suffix
-        serviceName = `${serviceName}-serving`;
-
-        // Truncate to 63 chars (Cloud Run limit)
-        serviceName = serviceName.substring(0, 63);
-
-        // Ensure starts with letter
-        if (!/^[a-z]/.test(serviceName)) {
-            serviceName = 'm-' + serviceName.substring(0, 61);
-        }
-
-        state.formData.deploymentConfig.serviceName = serviceName;
-
-        // Update UI
-        const nameDisplay = document.getElementById('wizardEndpointName');
-        if (nameDisplay) {
-            nameDisplay.textContent = serviceName;
-        }
-    }
-
-    /**
-     * Toggle between auto-generated and custom endpoint name.
-     */
-    function toggleCustomName(useCustom) {
-        state.formData.deploymentConfig.customName = useCustom;
-
-        const customInput = document.getElementById('wizardCustomEndpointName');
-        const nameDisplay = document.getElementById('wizardEndpointName');
-
-        if (useCustom) {
-            customInput?.classList.remove('hidden');
-            customInput.value = state.formData.deploymentConfig.serviceName;
-            customInput?.focus();
-            if (nameDisplay) nameDisplay.classList.add('hidden');
-        } else {
-            customInput?.classList.add('hidden');
-            if (nameDisplay) nameDisplay.classList.remove('hidden');
-            // Reset to auto-generated name
-            generateEndpointName();
-        }
-    }
-
-    /**
-     * Update custom endpoint name with validation.
-     */
-    function updateCustomEndpointName(name) {
-        const errorDiv = document.getElementById('wizardEndpointNameError');
-
-        // Validate Cloud Run service name rules
-        const validationResult = validateEndpointName(name);
-
-        if (!validationResult.valid) {
-            if (errorDiv) {
-                errorDiv.textContent = validationResult.error;
-                errorDiv.classList.remove('hidden');
-            }
-        } else {
-            if (errorDiv) {
-                errorDiv.classList.add('hidden');
-            }
-            state.formData.deploymentConfig.serviceName = validationResult.name;
-        }
-    }
-
-    /**
-     * Validate Cloud Run service name.
-     * Rules: lowercase, alphanumeric and hyphens, 1-63 chars, start with letter, end with alphanumeric
-     */
-    function validateEndpointName(name) {
-        if (!name || name.length === 0) {
-            return { valid: false, error: 'Service name is required' };
-        }
-
-        // Sanitize: lowercase, replace invalid chars
-        let sanitized = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
-
-        if (sanitized.length > 63) {
-            return { valid: false, error: 'Service name must be 63 characters or less' };
-        }
-
-        if (!/^[a-z]/.test(sanitized)) {
-            return { valid: false, error: 'Service name must start with a letter' };
-        }
-
-        if (!/[a-z0-9]$/.test(sanitized)) {
-            return { valid: false, error: 'Service name must end with a letter or number' };
-        }
-
-        return { valid: true, name: sanitized };
-    }
-
-    /**
-     * Select a deployment preset and apply its values.
-     */
-    function selectDeployPreset(preset) {
-        state.formData.deploymentConfig.preset = preset;
-
-        // Preset configurations
-        const presets = {
-            development: { minInstances: 0, maxInstances: 2, memory: '2Gi', cpu: '1', timeout: '300' },
-            production: { minInstances: 1, maxInstances: 10, memory: '4Gi', cpu: '2', timeout: '300' },
-            high_traffic: { minInstances: 2, maxInstances: 50, memory: '8Gi', cpu: '4', timeout: '300' }
-        };
-
-        const config = presets[preset];
-        if (config) {
-            state.formData.deploymentConfig = {
-                ...state.formData.deploymentConfig,
-                ...config
-            };
-
-            // Update UI inputs
-            setInputValue('wizardDeployMinInstances', config.minInstances);
-            setInputValue('wizardDeployMaxInstances', config.maxInstances);
-            setInputValue('wizardDeployMemory', config.memory);
-            setInputValue('wizardDeployCPU', config.cpu);
-            setInputValue('wizardDeployTimeout', config.timeout);
-        }
-
-        // Update preset card selection
-        document.querySelectorAll('.preset-card').forEach(card => {
-            card.classList.toggle('selected', card.dataset.preset === preset);
-        });
-    }
-
-    /**
-     * Update an individual deployment parameter.
-     */
-    function updateDeployParam(param, value) {
-        // Convert numeric values
-        if (['minInstances', 'maxInstances'].includes(param)) {
-            value = parseInt(value, 10);
-        }
-
-        state.formData.deploymentConfig[param] = value;
-
-        // Clear preset selection when manually changing params
-        state.formData.deploymentConfig.preset = 'custom';
-        document.querySelectorAll('.preset-card').forEach(card => {
-            card.classList.remove('selected');
-        });
-    }
-
-    /**
-     * Render the deployment configuration section.
-     */
-    function renderDeploymentConfig() {
-        const config = state.formData.deploymentConfig;
-
-        // Set toggle state
-        const enabledToggle = document.getElementById('wizardDeployEnabled');
-        if (enabledToggle) {
-            enabledToggle.checked = config.enabled;
-        }
-
-        // Show/hide config section
-        const configSection = document.getElementById('wizardDeployConfig');
-        if (configSection) {
-            configSection.classList.toggle('hidden', !config.enabled);
-        }
-
-        // Set endpoint name
-        const nameDisplay = document.getElementById('wizardEndpointName');
-        if (nameDisplay) {
-            nameDisplay.textContent = config.serviceName || 'model-name-serving';
-        }
-
-        // Set custom name checkbox
-        const customCheckbox = document.getElementById('wizardUseCustomName');
-        if (customCheckbox) {
-            customCheckbox.checked = config.customName;
-        }
-
-        // Show/hide custom input
-        const customInput = document.getElementById('wizardCustomEndpointName');
-        if (customInput) {
-            customInput.classList.toggle('hidden', !config.customName);
-            if (config.customName) {
-                customInput.value = config.serviceName;
-            }
-        }
-
-        // Set preset selection
-        document.querySelectorAll('.preset-card').forEach(card => {
-            card.classList.toggle('selected', card.dataset.preset === config.preset);
-        });
-
-        // Set parameter values
-        setInputValue('wizardDeployMinInstances', config.minInstances);
-        setInputValue('wizardDeployMaxInstances', config.maxInstances);
-        setInputValue('wizardDeployMemory', config.memory);
-        setInputValue('wizardDeployCPU', config.cpu);
-        setInputValue('wizardDeployTimeout', config.timeout);
-    }
-
-    // =============================================================================
     // STEP 3: GPU & DEPLOYMENT
     // =============================================================================
 
     function renderStep3() {
         // Render GPU selection
         renderGPUSelection();
-
-        // Render deployment configuration
-        renderDeploymentConfig();
 
         // Render summary panel
         renderSummaryPanel();
@@ -1586,12 +1342,6 @@ const TrainingWizard = (function() {
         const exp = state.formData.selectedExperiment;
         const params = state.formData.trainingParams;
         const gpu = state.formData.gpuConfig;
-        const deploy = state.formData.deploymentConfig;
-
-        let deploymentSummary = 'Disabled';
-        if (deploy.enabled) {
-            deploymentSummary = `<span style="color: #059669;">Enabled</span> (${deploy.serviceName})`;
-        }
 
         summaryEl.innerHTML = `
             <div class="wizard-summary-item">
@@ -1625,10 +1375,6 @@ const TrainingWizard = (function() {
             <div class="wizard-summary-item">
                 <span class="summary-label">Evaluator</span>
                 <span class="summary-value">${state.formData.evaluatorConfig.enabled ? 'Enabled' : 'Disabled'}</span>
-            </div>
-            <div class="wizard-summary-item">
-                <span class="summary-label">Auto-Deploy</span>
-                <span class="summary-value">${deploymentSummary}</span>
             </div>
         `;
     }
@@ -1914,7 +1660,6 @@ const TrainingWizard = (function() {
         const gpu = state.formData.gpuConfig;
         const evaluator = state.formData.evaluatorConfig;
         const schedule = state.formData.scheduleConfig;
-        const deploy = state.formData.deploymentConfig;
 
         const payload = {
             name: state.formData.name,
@@ -1947,17 +1692,6 @@ const TrainingWizard = (function() {
                     metric: 'recall_at_100',
                     min_value: parseFloat(evaluator.blessingThreshold)
                 }
-            },
-            deployment_config: {
-                enabled: deploy.enabled,
-                service_name: deploy.serviceName,
-                custom_name: deploy.customName,
-                preset: deploy.preset,
-                min_instances: parseInt(deploy.minInstances, 10),
-                max_instances: parseInt(deploy.maxInstances, 10),
-                memory: deploy.memory,
-                cpu: deploy.cpu,
-                timeout: deploy.timeout
             }
         };
 
@@ -2008,12 +1742,6 @@ const TrainingWizard = (function() {
         selectDeploymentOption: selectDeploymentOption,
         checkNameAvailability: checkNameAvailability,
         toggleDeploy: toggleDeploy,
-        toggleStep3Advanced: toggleStep3Advanced,
-        // Deployment config methods
-        toggleDeployEnabled: toggleDeployEnabled,
-        toggleCustomName: toggleCustomName,
-        updateCustomEndpointName: updateCustomEndpointName,
-        selectDeployPreset: selectDeployPreset,
-        updateDeployParam: updateDeployParam
+        toggleStep3Advanced: toggleStep3Advanced
     };
 })();

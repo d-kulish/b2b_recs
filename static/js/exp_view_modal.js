@@ -161,7 +161,7 @@ const ExpViewModal = (function() {
         not_blessed: { icon: 'fa-exclamation', color: '#f97316', label: 'Not Blessed' }
     };
 
-    // Pipeline stages for training runs (9 stages including Deploy)
+    // Pipeline stages for training runs (8 stages)
     // NOTE: 'name' must match TFX_PIPELINE.components 'id' in pipeline_dag.js for status mapping
     const TRAINING_PIPELINE_STAGES = [
         { id: 'compile', name: 'Compile', icon: 'fa-cog' },
@@ -171,8 +171,7 @@ const ExpViewModal = (function() {
         { id: 'transform', name: 'Transform', icon: 'fa-exchange-alt' },
         { id: 'train', name: 'Train', icon: 'fa-graduation-cap' },
         { id: 'evaluator', name: 'Evaluator', icon: 'fa-check-double' },
-        { id: 'register', name: 'Register', icon: 'fa-box-archive' },
-        { id: 'deploy', name: 'Deploy', icon: 'fa-rocket' }
+        { id: 'pusher', name: 'Pusher', icon: 'fa-upload' }
     ];
 
     // =============================================================================
@@ -2261,10 +2260,7 @@ const ExpViewModal = (function() {
             { name: 'Stats', status: 'pending', duration_seconds: null },
             { name: 'Schema', status: 'pending', duration_seconds: null },
             { name: 'Transform', status: 'pending', duration_seconds: null },
-            { name: 'Train', status: 'pending', duration_seconds: null },
-            { name: 'Evaluator', status: 'pending', duration_seconds: null },
-            { name: 'Register', status: 'pending', duration_seconds: null },
-            { name: 'Deploy', status: 'skipped', duration_seconds: null }
+            { name: 'Train', status: 'pending', duration_seconds: null }
         ];
     }
 

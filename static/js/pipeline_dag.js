@@ -40,8 +40,7 @@ const TFX_PIPELINE = {
         { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 335, y: 711 },
         { id: 'Train', name: 'Trainer', icon: 'fa-microchip', x: 20, y: 885 },
         { id: 'Evaluator', name: 'Evaluator', icon: 'fa-check-double', x: 290, y: 1059 },
-        { id: 'Register', name: 'Register', icon: 'fa-box-archive', x: 150, y: 1233 },
-        { id: 'Deploy', name: 'Deploy', icon: 'fa-rocket', x: 150, y: 1407 }
+        { id: 'Pusher', name: 'Pusher', icon: 'fa-cloud-upload-alt', x: 150, y: 1233 }
     ],
 
     // Artifacts with absolute positions (centered between source component and next component)
@@ -65,8 +64,7 @@ const TFX_PIPELINE = {
         { id: 'model_run', name: 'Model Run', icon: 'fa-file-alt', type: 'document', componentId: 'Train', x: 155, y: 983 },
         { id: 'model_blessing', name: 'Model Blessing', icon: 'fa-certificate', type: 'blessing', componentId: 'Evaluator', x: 380, y: 1157 },
         { id: 'evaluation', name: 'Evaluation', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Evaluator', x: 425, y: 1157 },
-        { id: 'registered_model', name: 'Registered Model', icon: 'fa-box-archive', type: 'model', componentId: 'Register', x: 262, y: 1331 },
-        { id: 'deployed_endpoint', name: 'Cloud Run Endpoint', icon: 'fa-rocket', type: 'endpoint', componentId: 'Deploy', x: 262, y: 1505 }
+        { id: 'pushed_model', name: 'Model Endpoint', icon: 'fa-cloud', type: 'model', componentId: 'Pusher', x: 262, y: 1331 }
     ],
 
     // Edges: connections between nodes (components and artifacts)
@@ -94,13 +92,11 @@ const TFX_PIPELINE = {
         { from: 'Train', to: 'model', fromType: 'component', toType: 'artifact' },
         { from: 'Train', to: 'model_run', fromType: 'component', toType: 'artifact' },
         { from: 'model', to: 'Evaluator', fromType: 'artifact', toType: 'component', curve: 'right' },
-        { from: 'model', to: 'Register', fromType: 'artifact', toType: 'component', curve: 'down-right' },
+        { from: 'model', to: 'Pusher', fromType: 'artifact', toType: 'component', curve: 'down-right' },
         { from: 'Evaluator', to: 'model_blessing', fromType: 'component', toType: 'artifact' },
         { from: 'Evaluator', to: 'evaluation', fromType: 'component', toType: 'artifact' },
-        { from: 'model_blessing', to: 'Register', fromType: 'artifact', toType: 'component', curve: 'down-left' },
-        { from: 'Register', to: 'registered_model', fromType: 'component', toType: 'artifact' },
-        { from: 'registered_model', to: 'Deploy', fromType: 'artifact', toType: 'component' },
-        { from: 'Deploy', to: 'deployed_endpoint', fromType: 'component', toType: 'artifact' }
+        { from: 'model_blessing', to: 'Pusher', fromType: 'artifact', toType: 'component', curve: 'down-left' },
+        { from: 'Pusher', to: 'pushed_model', fromType: 'component', toType: 'artifact' }
     ]
 };
 
@@ -110,10 +106,7 @@ const STATUS_BADGE_ICONS = {
     'running': 'fa-sync fa-spin',
     'failed': 'fa-exclamation',
     'pending': 'fa-minus',
-    'skipped': 'fa-ban',
-    'deploying': 'fa-sync fa-spin',
-    'deployed': 'fa-rocket',
-    'deploy_failed': 'fa-exclamation-triangle'
+    'skipped': 'fa-ban'
 };
 
 // =============================================================================

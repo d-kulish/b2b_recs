@@ -1551,7 +1551,7 @@
                     </div>
                 </div>
 
-                <!-- Deploy Section -->
+                <!-- Deploy Section (placeholder for future functionality) -->
                 <div class="filter-subchapter" style="margin-top: 16px;">
                     <div class="subchapter-header-tablet" id="wizardDeployToggle" onclick="TrainingWizard.toggleDeploy()">
                         <i class="fas fa-rocket" style="color: #f97316; margin-right: 10px;"></i>
@@ -1559,105 +1559,9 @@
                         <i id="wizardDeployChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                     </div>
                     <div id="wizardDeployContent" class="subchapter-content-outside hidden">
-                        <!-- Deploy Toggle -->
-                        <div class="deploy-toggle-row">
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="wizardDeployEnabled" onchange="TrainingWizard.toggleDeployEnabled(this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <span class="deploy-toggle-label">Enable Auto-Deployment to Cloud Run</span>
-                        </div>
-
-                        <!-- Deploy Config (shown when enabled) -->
-                        <div id="wizardDeployConfig" class="hidden">
-                            <!-- Endpoint Name Section -->
-                            <div class="deploy-section">
-                                <div class="deploy-section-label">ENDPOINT NAME</div>
-                                <div class="endpoint-name-box">
-                                    <div class="endpoint-name-radio selected">
-                                        <span class="radio-dot"></span>
-                                        <span>Create New Endpoint</span>
-                                    </div>
-                                    <div class="endpoint-name-display">
-                                        <i class="fas fa-tag"></i>
-                                        <span id="wizardEndpointName">model-name-serving</span>
-                                    </div>
-                                    <label class="custom-name-checkbox">
-                                        <input type="checkbox" id="wizardUseCustomName" onchange="TrainingWizard.toggleCustomName(this.checked)">
-                                        <span>Use custom name</span>
-                                    </label>
-                                    <input type="text" id="wizardCustomEndpointName" class="hidden"
-                                           placeholder="custom-endpoint-name"
-                                           oninput="TrainingWizard.updateCustomEndpointName(this.value)">
-                                    <div id="wizardEndpointNameError" class="deploy-field-error hidden"></div>
-                                </div>
-                            </div>
-
-                            <!-- Preset Cards -->
-                            <div class="deploy-section">
-                                <div class="deploy-section-label">DEPLOYMENT PRESET</div>
-                                <div class="preset-cards-grid">
-                                    <div class="preset-card" data-preset="development" onclick="TrainingWizard.selectDeployPreset('development')">
-                                        <div class="preset-name">Development</div>
-                                        <div class="preset-specs">0-2 instances</div>
-                                        <div class="preset-specs">2Gi / 1 CPU</div>
-                                        <div class="preset-desc">Testing, low traffic</div>
-                                    </div>
-                                    <div class="preset-card selected" data-preset="production" onclick="TrainingWizard.selectDeployPreset('production')">
-                                        <span class="preset-recommended">RECOMMENDED</span>
-                                        <div class="preset-name">Production</div>
-                                        <div class="preset-specs">1-10 instances</div>
-                                        <div class="preset-specs">4Gi / 2 CPU</div>
-                                        <div class="preset-desc">Standard workload</div>
-                                    </div>
-                                    <div class="preset-card" data-preset="high_traffic" onclick="TrainingWizard.selectDeployPreset('high_traffic')">
-                                        <div class="preset-name">High Traffic</div>
-                                        <div class="preset-specs">2-50 instances</div>
-                                        <div class="preset-specs">8Gi / 4 CPU</div>
-                                        <div class="preset-desc">High concurrency</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Manual Parameters -->
-                            <div class="deploy-params-row">
-                                <div class="deploy-param">
-                                    <label>MIN INSTANCES</label>
-                                    <input type="number" id="wizardDeployMinInstances" value="1" min="0" max="100"
-                                           onchange="TrainingWizard.updateDeployParam('minInstances', this.value)">
-                                </div>
-                                <div class="deploy-param">
-                                    <label>MAX INSTANCES</label>
-                                    <input type="number" id="wizardDeployMaxInstances" value="10" min="1" max="100"
-                                           onchange="TrainingWizard.updateDeployParam('maxInstances', this.value)">
-                                </div>
-                                <div class="deploy-param">
-                                    <label>MEMORY</label>
-                                    <select id="wizardDeployMemory" onchange="TrainingWizard.updateDeployParam('memory', this.value)">
-                                        <option value="2Gi">2 Gi</option>
-                                        <option value="4Gi" selected>4 Gi</option>
-                                        <option value="8Gi">8 Gi</option>
-                                        <option value="16Gi">16 Gi</option>
-                                    </select>
-                                </div>
-                                <div class="deploy-param">
-                                    <label>CPU</label>
-                                    <select id="wizardDeployCPU" onchange="TrainingWizard.updateDeployParam('cpu', this.value)">
-                                        <option value="1">1 vCPU</option>
-                                        <option value="2" selected>2 vCPU</option>
-                                        <option value="4">4 vCPU</option>
-                                        <option value="8">8 vCPU</option>
-                                    </select>
-                                </div>
-                                <div class="deploy-param">
-                                    <label>TIMEOUT</label>
-                                    <select id="wizardDeployTimeout" onchange="TrainingWizard.updateDeployParam('timeout', this.value)">
-                                        <option value="60">60 s</option>
-                                        <option value="300" selected>300 s</option>
-                                        <option value="600">600 s</option>
-                                    </select>
-                                </div>
-                            </div>
+                        <div class="wizard-info-box info" style="margin-top: 0;">
+                            <i class="fas fa-info-circle"></i>
+                            <span>Deployment options will be configured here in a future update.</span>
                         </div>
                     </div>
                 </div>

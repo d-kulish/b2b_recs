@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
 
-**Last Updated**: 2026-01-28 (Fix: RMSE/MAE metric extraction for ranking/multitask models)
+**Last Updated**: 2026-01-29 (Feature: Deployment Integration in Training Wizard)
 
 ---
 
@@ -2363,6 +2363,190 @@ vertex_pipeline_job_id = models.CharField(
     help_text="Short pipeline job ID for display"
 )
 ```
+
+### Deployment Integration in Training Wizard (2026-01-29)
+
+Added automatic Cloud Run deployment configuration to the Training Wizard. Users can now configure deployment options in Step 3 ("GPU & Deploy") and have models automatically deployed to Cloud Run after successful training and registration.
+
+#### Feature Overview
+
+The deployment integration adds:
+1. **Auto-deployment toggle** - Enable/disable automatic deployment to Cloud Run
+2. **Endpoint name configuration** - Auto-generated or custom service name
+3. **Deployment presets** - Development, Production, High Traffic configurations
+4. **Manual parameter tuning** - Fine-tune instances, memory, CPU, timeout
+5. **9-stage pipeline visualization** - Register and Deploy stages in pipeline DAG
+
+#### UI Layout (Step 3: GPU & Deploy)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🚀 Deploy                                                            [▼]    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ [○] Enable Auto-Deployment to Cloud Run                                     │
+│                                                                              │
+│ ─────────────────── (shown when enabled) ───────────────────                │
+│                                                                              │
+│ ENDPOINT NAME                                                                │
+│ ┌──────────────────────────────────────────────────────────────────────┐    │
+│ │ ◉ Create New Endpoint                                                 │    │
+│ │ ┌─────────────────────────────────────────────────────────────────┐  │    │
+│ │ │ 🏷️  my-model-serving                                             │  │    │
+│ │ └─────────────────────────────────────────────────────────────────┘  │    │
+│ │ ☐ Use custom name                                                    │    │
+│ └──────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│ DEPLOYMENT PRESET                                                            │
+│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐                 │
+│ │   Development   │ │  Production ✓   │ │   High Traffic  │                 │
+│ │   0-2 instances │ │ [RECOMMENDED]   │ │   2-50 instances│                 │
+│ │   2Gi / 1 CPU   │ │  1-10 instances │ │   8Gi / 4 CPU   │                 │
+│ │ Testing, low    │ │  4Gi / 2 CPU    │ │ High concurrency│                 │
+│ │ traffic         │ │ Standard workload│ │                 │                 │
+│ └─────────────────┘ └─────────────────┘ └─────────────────┘                 │
+│                                                                              │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐           │
+│ │MIN INST  │ │MAX INST  │ │ MEMORY   │ │   CPU    │ │ TIMEOUT  │           │
+│ │    1     │ │   10     │ │  4 Gi ▼  │ │ 2 vCPU ▼ │ │  300s ▼  │           │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Deployment Presets
+
+| Preset | Min Instances | Max Instances | Memory | CPU | Use Case |
+|--------|---------------|---------------|--------|-----|----------|
+| Development | 0 | 2 | 2Gi | 1 | Testing, low traffic |
+| Production | 1 | 10 | 4Gi | 2 | Standard workload (recommended) |
+| High Traffic | 2 | 50 | 8Gi | 4 | High concurrency |
+
+#### New TrainingRun Status Values
+
+| Status | Description |
+|--------|-------------|
+| `deploying` | Model is being deployed to Cloud Run |
+| `deployed` | Model successfully deployed to Cloud Run |
+| `deploy_failed` | Deployment failed (training completed successfully) |
+
+#### Pipeline Stages (9 stages)
+
+The pipeline visualization now shows 9 stages with renamed and new components:
+
+| Stage | Description | Status |
+|-------|-------------|--------|
+| Compile | Pipeline compilation | Always shown |
+| Examples | ExampleGen - BigQuery data extraction | Always shown |
+| Stats | StatisticsGen - Data statistics | Always shown |
+| Schema | SchemaGen - Schema inference | Always shown |
+| Transform | Transform - Feature engineering | Always shown |
+| Train | Trainer - Model training | Always shown |
+| Evaluator | Evaluator - Model evaluation | Always shown |
+| Register | Model Registry registration (renamed from Pusher) | Always shown |
+| Deploy | Cloud Run deployment | Shown as "pending" if enabled, "skipped" if disabled |
+
+#### Database Changes
+
+New fields added to `TrainingRun` model:
+
+```python
+# Deployment tracking fields
+deploy_enabled = models.BooleanField(default=False)
+deployment_status = models.CharField(
+    max_length=20,
+    choices=[('pending', 'Pending'), ('deploying', 'Deploying'),
+             ('deployed', 'Deployed'), ('failed', 'Failed'), ('skipped', 'Skipped')],
+    default='pending'
+)
+deployment_error = models.TextField(blank=True, default='')
+deployment_started_at = models.DateTimeField(null=True, blank=True)
+deployment_completed_at = models.DateTimeField(null=True, blank=True)
+deployed_endpoint = models.ForeignKey(
+    'DeployedEndpoint', null=True, blank=True,
+    on_delete=models.SET_NULL, related_name='deployed_training_runs'
+)
+```
+
+New status choices added:
+```python
+STATUS_DEPLOYING = 'deploying'
+STATUS_DEPLOYED = 'deployed'
+STATUS_DEPLOY_FAILED = 'deploy_failed'
+```
+
+#### API Changes
+
+**Request Payload** - New `deployment_config` object:
+```json
+{
+    "deployment_config": {
+        "enabled": true,
+        "service_name": "my-model-serving",
+        "custom_name": false,
+        "preset": "production",
+        "min_instances": 1,
+        "max_instances": 10,
+        "memory": "4Gi",
+        "cpu": "2",
+        "timeout": "300"
+    }
+}
+```
+
+**Response** - New fields in training run serialization:
+```json
+{
+    "deploy_enabled": true,
+    "deployment_status": "deployed",
+    "deployment_error": "",
+    "deployed_endpoint_id": 123,
+    "deployed_endpoint_url": "https://my-model-serving-xxx.run.app",
+    "deployment_started_at": "2026-01-29T10:30:00Z",
+    "deployment_completed_at": "2026-01-29T10:32:00Z"
+}
+```
+
+#### Backend Flow
+
+1. User enables deployment in wizard and configures options
+2. Training pipeline executes normally (Compile → Examples → ... → Evaluator → Register)
+3. After model registration completes in `_extract_results()`:
+   - Check if `deployment_config.enabled` is True
+   - Call `_auto_deploy_to_cloud_run()` method
+4. Auto-deploy method:
+   - Sets status to `deploying`
+   - Updates stage_details to show Deploy stage as `running`
+   - Calls existing `deploy_to_cloud_run()` method
+   - On success: status → `deployed`, creates/updates `DeployedEndpoint` record
+   - On failure: status → `deploy_failed`, stores error message
+
+#### Files Changed
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/models.py` | Added deployment status choices, deployment tracking fields |
+| `ml_platform/training/services.py` | Added `_auto_deploy_to_cloud_run()`, `_update_deploy_stage_status()`, updated stage handling |
+| `ml_platform/training/api.py` | Updated serialization to include deployment fields |
+| `templates/ml_platform/model_training.html` | Added deployment config UI to wizard |
+| `static/js/training_wizard.js` | Added deployment config state and methods |
+| `static/css/training_wizard.css` | Added deployment section styles |
+| `static/js/pipeline_dag.js` | Renamed Pusher→Register, added Deploy node |
+| `static/js/exp_view_modal.js` | Updated stage definitions |
+| `static/css/pipeline_dag.css` | Increased height, added deploy_failed styling |
+| `static/css/cards.css` | Added deploying/deployed/deploy_failed status badge styles |
+| `static/js/training_cards.js` | Added STATUS_CONFIG entries for deployment states |
+| `static/js/models_registry.js` | Updated help text to reference Register |
+
+#### Service Name Validation
+
+Cloud Run service names must follow these rules:
+- Lowercase letters, numbers, and hyphens only
+- 1-63 characters
+- Must start with a letter
+- Must end with a letter or number
+
+The wizard auto-generates a valid service name from the model name and validates custom names in real-time.
 
 ### Edit Schedule Feature (2026-01-27)
 

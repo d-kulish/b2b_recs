@@ -117,12 +117,30 @@ const TrainingCards = (function() {
             label: 'Not Blessed',
             spin: false,
             actions: ['view', 'rerun', 'push', 'delete']
+        },
+        deploying: {
+            icon: 'fa-rocket',
+            label: 'Deploying',
+            spin: true,
+            actions: ['view', 'cancel']
+        },
+        deployed: {
+            icon: 'fa-rocket',
+            label: 'Deployed',
+            spin: false,
+            actions: ['view', 'rerun', 'delete']
+        },
+        deploy_failed: {
+            icon: 'fa-exclamation-triangle',
+            label: 'Deploy Failed',
+            spin: false,
+            actions: ['view', 'rerun', 'deploy', 'deployCloudRun', 'delete']
         }
     };
 
-    // Pipeline stages for progress display
+    // Pipeline stages for progress display (9 stages including Deploy)
     const PIPELINE_STAGES = [
-        'compile', 'examples', 'stats', 'schema', 'transform', 'train', 'evaluate', 'push'
+        'compile', 'examples', 'stats', 'schema', 'transform', 'train', 'evaluator', 'register', 'deploy'
     ];
 
     // =============================================================================
@@ -1200,7 +1218,8 @@ const TrainingCards = (function() {
             { name: 'TRANSFORM', status: 'pending' },
             { name: 'TRAIN', status: 'pending' },
             { name: 'EVALUATOR', status: 'pending' },
-            { name: 'PUSHER', status: 'pending' }
+            { name: 'REGISTER', status: 'pending' },
+            { name: 'DEPLOY', status: 'skipped' }
         ];
     }
 

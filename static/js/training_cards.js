@@ -98,25 +98,25 @@ const TrainingCards = (function() {
             icon: 'fa-check-circle',
             label: 'Completed',
             spin: false,
-            actions: ['view', 'rerun', 'deploy', 'deployCloudRun', 'delete']
+            actions: ['view', 'rerun', 'deploy', 'deployCloudRun', 'schedule', 'delete']
         },
         failed: {
             icon: 'fa-times-circle',
             label: 'Failed',
             spin: false,
-            actions: ['view', 'rerun', 'delete']
+            actions: ['view', 'rerun', 'schedule', 'delete']
         },
         cancelled: {
             icon: 'fa-ban',
             label: 'Cancelled',
             spin: false,
-            actions: ['view', 'rerun', 'delete']
+            actions: ['view', 'rerun', 'schedule', 'delete']
         },
         not_blessed: {
             icon: 'fa-exclamation-triangle',
             label: 'Not Blessed',
             spin: false,
-            actions: ['view', 'rerun', 'push', 'delete']
+            actions: ['view', 'rerun', 'push', 'schedule', 'delete']
         },
         deploying: {
             icon: 'fa-rocket',
@@ -128,13 +128,13 @@ const TrainingCards = (function() {
             icon: 'fa-rocket',
             label: 'Deployed',
             spin: false,
-            actions: ['view', 'rerun', 'delete']
+            actions: ['view', 'rerun', 'schedule', 'delete']
         },
         deploy_failed: {
             icon: 'fa-exclamation-triangle',
             label: 'Deploy Failed',
             spin: false,
-            actions: ['view', 'rerun', 'deploy', 'deployCloudRun', 'delete']
+            actions: ['view', 'rerun', 'deploy', 'deployCloudRun', 'schedule', 'delete']
         }
     };
 
@@ -1084,10 +1084,10 @@ const TrainingCards = (function() {
     function renderActions(run, allowedActions) {
         // Determine button states based on run status
         const isCancellable = run.status === 'running' || run.status === 'submitting';
-        const isTerminalState = ['completed', 'failed', 'cancelled', 'not_blessed'].includes(run.status);
-        const canDeploy = run.status === 'completed';
+        const isTerminalState = ['completed', 'failed', 'cancelled', 'not_blessed', 'deployed', 'deploy_failed'].includes(run.status);
+        const canDeploy = allowedActions.includes('deploy') || allowedActions.includes('deployCloudRun');
         const canRerun = allowedActions.includes('rerun');
-        const canSchedule = isTerminalState; // Schedule available for completed/failed/cancelled runs
+        const canSchedule = allowedActions.includes('schedule');
         const canEdit = isTerminalState; // Edit available for terminal states
         const canDelete = allowedActions.includes('delete');
 

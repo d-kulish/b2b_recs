@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-30 (Endpoint Undeploy Status Reset Fix)
+**Last Updated:** 2026-01-30 (Models Registry Deployment Status Fix)
 
 **Status:** Implemented
 
@@ -3042,3 +3042,90 @@ After applying the fix:
 1. Delete an endpoint via UI or API
 2. Training run status automatically resets to `completed` (or `not_blessed`)
 3. Deploy Wizard allows redeployment without errors
+
+---
+
+## Bug Fix: Models Registry Deployment Status (2026-01-30)
+
+### Problem
+
+The Models Registry table displayed incorrect deployment status for registered models. Models that were actively deployed to Cloud Run showed "IDLE" status instead of "DEPLOYED".
+
+**Example:**
+- Model `chern_rank_v4` was deployed to endpoint `chern-rank-v4-serving` (shown as "ACTIVE" in Endpoints table)
+- Models Registry table showed `chern_rank_v4` with "IDLE" deployment status
+
+### Root Cause
+
+The deployment status logic was querying **Vertex AI Endpoints** instead of **Cloud Run services**.
+
+**Before fix - `get_deployed_model_resource_names()` in `services.py`:**
+```python
+endpoint_display_name = f"{self.ml_model.name}-endpoint"
+endpoints = aiplatform.Endpoint.list(
+    filter=f'display_name="{endpoint_display_name}"',
+    order_by="create_time desc"
+)
+# Returns deployed_models from Vertex AI Endpoint
+```
+
+**Problem:** Models are deployed to Cloud Run (tracked in `DeployedEndpoint` Django model), not Vertex AI Endpoints. Since no Vertex AI Endpoints exist, `deployed_models` was always an empty set, causing `get_model_status()` to always return `'idle'`.
+
+### Fix Applied
+
+Changed the Models Registry API to determine deployment status from the `DeployedEndpoint` Django model instead of Vertex AI Endpoints.
+
+**Key changes in `ml_platform/training/api.py`:**
+
+1. **New Cloud Run endpoint query:**
+```python
+# Query Cloud Run endpoints to get deployed model names
+deployed_model_names = set(
+    DeployedEndpoint.objects.filter(
+        registered_model__ml_model=model_endpoint,
+        is_active=True,
+        deployed_training_run__isnull=False
+    ).values_list(
+        'deployed_training_run__vertex_model_name', flat=True
+    ).distinct()
+)
+```
+
+2. **Updated `get_model_status()` function:**
+```python
+def get_model_status(m):
+    # Check if this specific version is deployed to Cloud Run
+    if m.deployed_endpoint and m.deployed_endpoint.is_active:
+        return 'deployed'
+    # Check if another version of this model has an active endpoint
+    if m.vertex_model_name in deployed_model_names:
+        return 'outdated'
+    return 'idle'
+```
+
+3. **Updated serializer functions:**
+- `_serialize_registered_model()` - uses `deployed_model_names` parameter
+- `_serialize_registered_model_entity()` - checks `registered_model.deployed_endpoints.filter(is_active=True).exists()`
+- `_serialize_training_run()` - uses `training_run.deployed_endpoint.is_active`
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/api.py` | Replaced Vertex AI endpoint queries with Cloud Run `DeployedEndpoint` model queries across all Models Registry API endpoints |
+
+### Deployment Status Logic
+
+| Condition | Status |
+|-----------|--------|
+| `training_run.deployed_endpoint.is_active == True` | `deployed` |
+| Another version of same model has active endpoint | `outdated` |
+| No version has active endpoint | `idle` |
+
+### Expected Results
+
+After applying the fix:
+1. Models Registry table shows correct deployment status based on Cloud Run endpoints
+2. Model `chern_rank_v4` displays "DEPLOYED" when `chern-rank-v4-serving` endpoint is active
+3. KPI counts (Deployed/Outdated/Idle) reflect actual Cloud Run deployment state
+4. Filters by deployment status work correctly

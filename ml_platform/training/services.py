@@ -548,12 +548,23 @@ class TrainingService:
                         'duration_seconds': duration
                     })
 
-                # Add Deploy stage with appropriate status
-                # Note: Actual Deploy status is updated by _auto_deploy_to_cloud_run
-                # At this point, if deploy is enabled, it's 'pending' until _extract_results runs
+                # Add Deploy stage with appropriate status based on actual deployment state
+                # Note: _extract_results may have already completed deployment before this runs
+                deploy_status = 'skipped'
+                if deploy_enabled:
+                    # Check actual deployment status to avoid overwriting completed/failed states
+                    if training_run.deployment_status == 'deployed':
+                        deploy_status = 'completed'
+                    elif training_run.deployment_status == 'deploying':
+                        deploy_status = 'running'
+                    elif training_run.deployment_status == 'failed':
+                        deploy_status = 'failed'
+                    else:
+                        deploy_status = 'pending'
+
                 stage_details.append({
                     'name': 'Deploy',
-                    'status': 'pending' if deploy_enabled else 'skipped',
+                    'status': deploy_status,
                     'duration_seconds': None
                 })
 

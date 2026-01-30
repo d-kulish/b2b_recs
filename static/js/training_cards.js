@@ -887,7 +887,9 @@ const TrainingCards = (function() {
 
     function renderMetrics(run) {
         // Different metrics for different model types
-        if (run.status !== 'completed' && run.status !== 'not_blessed') {
+        // Show metrics for all terminal states where training has completed
+        const terminalStatuses = ['completed', 'not_blessed', 'deployed', 'deploying', 'deploy_failed'];
+        if (!terminalStatuses.includes(run.status)) {
             return '<span class="ml-card-metric-value empty">Metrics available after completion</span>';
         }
 

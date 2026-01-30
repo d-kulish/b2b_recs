@@ -502,8 +502,9 @@ const ExpViewModal = (function() {
     function renderTrainingRunMetrics(run) {
         const resultsSummary = document.getElementById('expViewResultsSummary');
 
-        // Only show for completed or not_blessed runs
-        if (run.status !== 'completed' && run.status !== 'not_blessed') {
+        // Show for all terminal states where training has completed
+        const terminalStatuses = ['completed', 'not_blessed', 'deployed', 'deploying', 'deploy_failed'];
+        if (!terminalStatuses.includes(run.status)) {
             resultsSummary.classList.add('hidden');
             return;
         }

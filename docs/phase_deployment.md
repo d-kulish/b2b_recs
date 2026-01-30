@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-29 (Added Serving Endpoints Chapter implementation)
+**Last Updated**: 2026-01-30 (Fixed Cloud Run operations to use Python SDK instead of gcloud CLI)
 
 ---
 
@@ -755,8 +755,9 @@ def validate_api_key(auth_header: str) -> bool:
 ### Phase 2: Cloud Run Integration
 - [x] Implement DeploymentService (`deploy_to_cloud_run` in TrainingService)
 - [x] Copy model artifacts to serving bucket (handled by TFX Pusher)
-- [x] Update Cloud Run service (gcloud CLI integration)
+- [x] Update Cloud Run service (Python SDK `google-cloud-run`)
 - [x] Delete Cloud Run service (`delete_cloud_run_service` method)
+- [x] List Cloud Run services (`list_cloud_run_services` method)
 - [ ] Traffic switching (future)
 
 ### Phase 3: Health & Monitoring
@@ -913,7 +914,7 @@ EndpointsTable.prevPage()
 
 def delete_cloud_run_service(self, service_name: str) -> bool:
     """
-    Delete a Cloud Run service using gcloud CLI.
+    Delete a Cloud Run service using Google Cloud Run Python SDK.
 
     Args:
         service_name: Name of the Cloud Run service to delete
@@ -925,6 +926,84 @@ def delete_cloud_run_service(self, service_name: str) -> bool:
         TrainingServiceError: If deletion fails
     """
 ```
+
+---
+
+# Cloud Run Python SDK Migration (2026-01-30)
+
+## Bug Fix: gcloud CLI Not Available in Cloud Run Container
+
+### Problem
+
+When the Django app was deployed to Cloud Run and users tried to delete (undeploy) an endpoint, they received the error:
+
+```
+Failed to delete Cloud Run service: [Errno 2] No such file or directory: 'gcloud'
+```
+
+### Root Cause
+
+Three functions in `ml_platform/training/services.py` were using `subprocess` to call the `gcloud` CLI:
+
+1. `delete_cloud_run_service()` - Delete Cloud Run services
+2. `list_cloud_run_services()` - List Cloud Run services
+3. `deploy_to_cloud_run()` - Deploy models to Cloud Run
+
+The Dockerfile (`python:3.12-slim` base image) does not include the Google Cloud SDK, so these commands fail when running inside the Cloud Run container.
+
+### Solution
+
+Replaced all `subprocess` + `gcloud` calls with the **Google Cloud Run Python SDK** (`google-cloud-run`), which was already in `requirements.txt`.
+
+### Changes Made
+
+| Function | Before | After |
+|----------|--------|-------|
+| `delete_cloud_run_service()` | `subprocess.run(['gcloud', 'run', 'services', 'delete', ...])` | `run_v2.ServicesClient().delete_service()` |
+| `list_cloud_run_services()` | `subprocess.run(['gcloud', 'run', 'services', 'list', ...])` | `run_v2.ServicesClient().list_services()` |
+| `deploy_to_cloud_run()` | `subprocess.run(['gcloud', 'run', 'deploy', ...])` | `run_v2.ServicesClient().update_service(allow_missing=True)` |
+
+### Key Implementation Details
+
+```python
+from google.cloud import run_v2
+from google.api_core import exceptions as google_exceptions
+
+# Delete service
+client = run_v2.ServicesClient()
+service_path = f"projects/{project_id}/locations/{region}/services/{service_name}"
+operation = client.delete_service(name=service_path)
+operation.result(timeout=120)
+
+# List services
+for svc in client.list_services(parent=f"projects/{project_id}/locations/{region}"):
+    name = svc.name.split('/')[-1]
+    url = svc.uri
+    # ...
+
+# Deploy/update service (creates if not exists)
+service = run_v2.Service(
+    name=service_path,
+    template=run_v2.RevisionTemplate(
+        containers=[run_v2.Container(image=image, ports=[...], env=[...])],
+        scaling=run_v2.RevisionScaling(min_instance_count=0, max_instance_count=10),
+    ),
+)
+operation = client.update_service(service=service, allow_missing=True)
+result = operation.result(timeout=300)
+```
+
+### Exception Handling
+
+| gcloud subprocess | Python SDK |
+|-------------------|------------|
+| `subprocess.TimeoutExpired` | `google_exceptions.DeadlineExceeded` |
+| Check stderr for "not found" | `google_exceptions.NotFound` |
+| `result.returncode != 0` | Exception raised automatically |
+
+### Testing
+
+After redeploying the Django app to Cloud Run (`./deploy_django.sh`), the endpoint delete/undeploy functionality works correctly from the deployed application.
 
 ### Design Decisions
 

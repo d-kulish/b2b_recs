@@ -2005,51 +2005,29 @@ class TrainingService:
                   - status: Service status (e.g., 'Ready')
                   - is_ml_serving: True if name ends with '-serving'
         """
-        import subprocess
-        import json as json_module
+        from google.cloud import run_v2
+        from google.api_core import exceptions as google_exceptions
 
         try:
-            cmd = [
-                'gcloud', 'run', 'services', 'list',
-                f'--region={self.REGION}',
-                f'--project={self.project_id}',
-                '--format=json'
-            ]
+            client = run_v2.ServicesClient()
+            parent = f"projects/{self.project_id}/locations/{self.REGION}"
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode != 0:
-                logger.warning(f"Failed to list Cloud Run services: {result.stderr}")
-                return []
-
-            services_data = json_module.loads(result.stdout) if result.stdout else []
             services = []
+            for svc in client.list_services(parent=parent):
+                # Extract name from full resource path
+                name = svc.name.split('/')[-1]
 
-            for svc in services_data:
-                # Extract metadata
-                metadata = svc.get('metadata', {})
-                name = metadata.get('name', '')
-
-                # Extract status
-                status_obj = svc.get('status', {})
-                conditions = status_obj.get('conditions', [])
+                # Determine status from conditions
                 status = 'Unknown'
-                for cond in conditions:
-                    if cond.get('type') == 'Ready':
-                        status = 'Ready' if cond.get('status') == 'True' else 'Not Ready'
-                        break
-
-                # Extract URL
-                url = status_obj.get('url', '')
+                if svc.terminal_condition:
+                    if svc.terminal_condition.state == run_v2.Condition.State.CONDITION_SUCCEEDED:
+                        status = 'Ready'
+                    elif svc.terminal_condition.state == run_v2.Condition.State.CONDITION_FAILED:
+                        status = 'Not Ready'
 
                 services.append({
                     'name': name,
-                    'url': url,
+                    'url': svc.uri or '',
                     'status': status,
                     'is_ml_serving': name.endswith('-serving')
                 })
@@ -2059,7 +2037,7 @@ class TrainingService:
 
             return services
 
-        except subprocess.TimeoutExpired:
+        except google_exceptions.DeadlineExceeded:
             logger.warning("Timeout listing Cloud Run services")
             return []
         except Exception as e:
@@ -2084,8 +2062,6 @@ class TrainingService:
         Raises:
             TrainingServiceError: If deployment fails
         """
-        import subprocess
-
         # Validate prerequisites
         if not training_run.vertex_model_resource_name:
             raise TrainingServiceError("Model not registered in Model Registry")
@@ -2153,54 +2129,71 @@ class TrainingService:
         logger.info(f"  Config: {cpu} vCPU, {memory} memory, {min_instances}-{max_instances} instances")
 
         try:
-            # Deploy using gcloud CLI
-            # Note: For production, consider using the Cloud Run Admin API directly
-            cmd = [
-                'gcloud', 'run', 'deploy', service_name,
-                f'--image={tf_serving_image}',
-                f'--region={self.REGION}',
-                f'--project={self.project_id}',
-                f'--memory={memory}',
-                f'--cpu={cpu}',
-                f'--min-instances={min_instances}',
-                f'--max-instances={max_instances}',
-                f'--timeout={timeout}',
-                f'--set-env-vars=MODEL_PATH={model_path},MODEL_NAME=recommender',
-                '--port=8501',
-                '--allow-unauthenticated',  # For testing; use IAM in production
-                '--format=value(status.url)',
-            ]
+            from google.cloud import run_v2
+            from google.api_core import exceptions as google_exceptions
 
-            logger.info(f"Running: {' '.join(cmd)}")
+            client = run_v2.ServicesClient()
+            parent = f"projects/{self.project_id}/locations/{self.REGION}"
+            service_path = f"{parent}/services/{service_name}"
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout for deployment
+            # Build the service configuration
+            container = run_v2.Container(
+                image=tf_serving_image,
+                ports=[run_v2.ContainerPort(container_port=8501)],
+                env=[
+                    run_v2.EnvVar(name="MODEL_PATH", value=model_path),
+                    run_v2.EnvVar(name="MODEL_NAME", value="recommender"),
+                ],
+                resources=run_v2.ResourceRequirements(
+                    limits={"cpu": cpu, "memory": memory}
+                ),
             )
 
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "Unknown error"
-                raise TrainingServiceError(f"Cloud Run deployment failed: {error_msg}")
+            service = run_v2.Service(
+                name=service_path,
+                template=run_v2.RevisionTemplate(
+                    containers=[container],
+                    scaling=run_v2.RevisionScaling(
+                        min_instance_count=min_instances,
+                        max_instance_count=max_instances,
+                    ),
+                    timeout=f"{timeout}s",
+                ),
+                ingress=run_v2.IngressTraffic.INGRESS_TRAFFIC_ALL,
+            )
 
-            service_url = result.stdout.strip()
+            logger.info(f"Deploying service: {service_path}")
 
-            if not service_url:
-                # Try to get the URL from describe
-                describe_cmd = [
-                    'gcloud', 'run', 'services', 'describe', service_name,
-                    f'--region={self.REGION}',
-                    f'--project={self.project_id}',
-                    '--format=value(status.url)',
-                ]
-                describe_result = subprocess.run(
-                    describe_cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
+            # Use update_service with allow_missing=True to create or update
+            operation = client.update_service(
+                service=service,
+                allow_missing=True,
+            )
+
+            # Wait for the operation to complete (up to 5 minutes)
+            result = operation.result(timeout=300)
+            service_url = result.uri
+
+            # Set IAM policy to allow unauthenticated access (for testing)
+            try:
+                from google.iam.v1 import iam_policy_pb2, policy_pb2
+
+                policy = policy_pb2.Policy(
+                    bindings=[
+                        policy_pb2.Binding(
+                            role="roles/run.invoker",
+                            members=["allUsers"],
+                        )
+                    ]
                 )
-                service_url = describe_result.stdout.strip()
+                client.set_iam_policy(
+                    request=iam_policy_pb2.SetIamPolicyRequest(
+                        resource=service_path,
+                        policy=policy,
+                    )
+                )
+            except Exception as iam_error:
+                logger.warning(f"Could not set IAM policy for unauthenticated access: {iam_error}")
 
             logger.info(f"Cloud Run service deployed: {service_url}")
 
@@ -2235,8 +2228,10 @@ class TrainingService:
 
             return service_url
 
-        except subprocess.TimeoutExpired:
+        except google_exceptions.DeadlineExceeded:
             raise TrainingServiceError("Cloud Run deployment timed out after 5 minutes")
+        except TrainingServiceError:
+            raise
         except Exception as e:
             logger.exception(f"Error deploying to Cloud Run: {e}")
             raise TrainingServiceError(f"Failed to deploy to Cloud Run: {e}")
@@ -2254,7 +2249,8 @@ class TrainingService:
         Raises:
             TrainingServiceError: If deletion fails
         """
-        import subprocess
+        from google.cloud import run_v2
+        from google.api_core import exceptions as google_exceptions
 
         if not service_name:
             raise TrainingServiceError("Service name is required")
@@ -2262,34 +2258,21 @@ class TrainingService:
         logger.info(f"Deleting Cloud Run service: {service_name}")
 
         try:
-            cmd = [
-                'gcloud', 'run', 'services', 'delete', service_name,
-                f'--region={self.REGION}',
-                f'--project={self.project_id}',
-                '--quiet',  # Skip confirmation prompt
-            ]
+            client = run_v2.ServicesClient()
+            service_path = f"projects/{self.project_id}/locations/{self.REGION}/services/{service_name}"
 
-            logger.info(f"Running: {' '.join(cmd)}")
+            logger.info(f"Deleting service: {service_path}")
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,  # 2 minute timeout for deletion
-            )
-
-            if result.returncode != 0:
-                error_msg = result.stderr or result.stdout or "Unknown error"
-                # Check if service doesn't exist (not an error for us)
-                if 'could not be found' in error_msg.lower() or 'not found' in error_msg.lower():
-                    logger.info(f"Service {service_name} not found (already deleted)")
-                    return True
-                raise TrainingServiceError(f"Cloud Run service deletion failed: {error_msg}")
+            operation = client.delete_service(name=service_path)
+            operation.result(timeout=120)
 
             logger.info(f"Successfully deleted Cloud Run service: {service_name}")
             return True
 
-        except subprocess.TimeoutExpired:
+        except google_exceptions.NotFound:
+            logger.info(f"Service {service_name} not found (already deleted)")
+            return True
+        except google_exceptions.DeadlineExceeded:
             raise TrainingServiceError("Cloud Run service deletion timed out after 2 minutes")
         except TrainingServiceError:
             raise

@@ -5057,7 +5057,7 @@ def endpoint_undeploy(request, endpoint_id):
         # Update training run deployment status if linked
         if endpoint.deployed_training_run:
             training_run = endpoint.deployed_training_run
-            training_run.deployment_status = None
+            training_run.deployment_status = 'pending'  # Reset to pending (ready to deploy again)
             training_run.deployed_endpoint = None
             training_run.save(update_fields=['deployment_status', 'deployed_endpoint'])
 

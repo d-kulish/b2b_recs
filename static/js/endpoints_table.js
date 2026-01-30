@@ -46,10 +46,11 @@ const EndpointsTable = (function() {
         pagination: { page: 1, pageSize: 10, totalCount: 0, totalPages: 1 },
         filters: {
             modelType: 'all',
-            status: 'all',
+            status: 'active',  // Default to showing active endpoints
             modelName: 'all',
             search: ''
         },
+        kpiFilter: 'active',  // Track which KPI card is selected ('all', 'active', 'inactive')
         loading: false,
         searchDebounceTimer: null
     };
@@ -242,15 +243,15 @@ const EndpointsTable = (function() {
         if (!container) return;
 
         container.innerHTML = `
-            <div class="endpoints-kpi-card">
+            <div class="endpoints-kpi-card clickable ${state.kpiFilter === 'all' ? 'selected' : ''}" onclick="EndpointsTable.setKpiFilter('all')">
                 <div class="endpoints-kpi-value">${state.kpi.total}</div>
                 <div class="endpoints-kpi-label">Total Endpoints</div>
             </div>
-            <div class="endpoints-kpi-card">
+            <div class="endpoints-kpi-card clickable ${state.kpiFilter === 'active' ? 'selected' : ''}" onclick="EndpointsTable.setKpiFilter('active')">
                 <div class="endpoints-kpi-value highlight-green">${state.kpi.active}</div>
                 <div class="endpoints-kpi-label">Active</div>
             </div>
-            <div class="endpoints-kpi-card">
+            <div class="endpoints-kpi-card clickable ${state.kpiFilter === 'inactive' ? 'selected' : ''}" onclick="EndpointsTable.setKpiFilter('inactive')">
                 <div class="endpoints-kpi-value highlight-red">${state.kpi.inactive}</div>
                 <div class="endpoints-kpi-label">Inactive</div>
             </div>
@@ -597,6 +598,24 @@ const EndpointsTable = (function() {
     function setFilter(key, value) {
         state.filters[key] = value;
         state.pagination.page = 1;
+        // Sync KPI filter when status dropdown changes
+        if (key === 'status') {
+            state.kpiFilter = value;
+            renderKPI();
+        }
+        fetchEndpoints();
+    }
+
+    function setKpiFilter(filterValue) {
+        state.kpiFilter = filterValue;
+        state.filters.status = filterValue;
+        state.pagination.page = 1;
+        // Update the status dropdown to match
+        const statusDropdown = document.getElementById('endpointsFilterStatus');
+        if (statusDropdown) {
+            statusDropdown.value = filterValue;
+        }
+        renderKPI();
         fetchEndpoints();
     }
 
@@ -673,6 +692,7 @@ const EndpointsTable = (function() {
         load,
         refresh,
         setFilter,
+        setKpiFilter,
         handleSearch,
         copyUrl,
         viewLogs,

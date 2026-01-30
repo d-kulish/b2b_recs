@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-29 (Service Name & Versioned Model Path Fixes)
+**Last Updated:** 2026-01-30 (Endpoint Undeploy Status Reset Fix)
 
 **Status:** Implemented
 
@@ -2945,3 +2945,100 @@ Cloud Run URL: https://chern-rank-v3-serving-3dmqemfmxq-lm.a.run.app
 | File | Change |
 |------|--------|
 | `ml_platform/training/services.py` | Added `STATUS_DEPLOYING` to allowed statuses in `deploy_to_cloud_run()` validation (line 2071) |
+
+---
+
+## Bug Fix: Endpoint Undeploy Status Reset (2026-01-30)
+
+### Problem
+
+After deleting/undeploying a Cloud Run endpoint, attempting to redeploy the same training run failed with error:
+
+```
+Cannot deploy training run in 'deployed' state. Only completed or not-blessed training runs can be deployed.
+```
+
+**Scenario:**
+1. Training run #38 completed and auto-deployed to `chern-rank-v4-serving`
+2. User deleted the endpoint via the UI (Cloud Run service deleted, `DeployedEndpoint.is_active = False`)
+3. User tried to redeploy the same model
+4. Deploy Wizard rejected with the above error
+
+### Root Cause
+
+The `endpoint_undeploy()` function in `api.py` was not resetting the `TrainingRun.status` field when an endpoint was deleted.
+
+**Before fix - `endpoint_undeploy()` (lines 5057-5062):**
+```python
+if endpoint.deployed_training_run:
+    training_run = endpoint.deployed_training_run
+    training_run.deployment_status = 'pending'  # ✅ Updated
+    training_run.deployed_endpoint = None       # ✅ Updated
+    training_run.save(update_fields=['deployment_status', 'deployed_endpoint'])
+    # ❌ training_run.status NOT updated - remains 'deployed'
+```
+
+**State after undeploy (before fix):**
+
+| Field | Value | Problem |
+|-------|-------|---------|
+| `DeployedEndpoint.is_active` | `False` | ✅ Correct |
+| `TrainingRun.deployment_status` | `'pending'` | ✅ Correct |
+| `TrainingRun.deployed_endpoint` | `None` | ✅ Correct |
+| `TrainingRun.status` | `'deployed'` | ❌ **Not reset** |
+
+The deploy API validation at `api.py:1420` checks `status`, not `deployment_status`:
+```python
+if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+    return JsonResponse({'error': f"Cannot deploy training run in '{training_run.status}' state..."})
+```
+
+### Fix Applied
+
+**File:** `ml_platform/training/api.py`, `endpoint_undeploy()` function (lines 5063-5075)
+
+**After fix:**
+```python
+if endpoint.deployed_training_run:
+    training_run = endpoint.deployed_training_run
+    training_run.deployment_status = 'pending'
+    training_run.deployed_endpoint = None
+
+    # Reset status from 'deployed' to allow redeployment
+    # Restore to 'completed' or 'not_blessed' based on blessing status
+    if training_run.status in [
+        TrainingRun.STATUS_DEPLOYED,
+        TrainingRun.STATUS_DEPLOYING,
+        TrainingRun.STATUS_DEPLOY_FAILED
+    ]:
+        if training_run.is_blessed:
+            training_run.status = TrainingRun.STATUS_COMPLETED
+        else:
+            training_run.status = TrainingRun.STATUS_NOT_BLESSED
+
+    training_run.save(update_fields=['deployment_status', 'deployed_endpoint', 'status'])
+```
+
+### Status Reset Logic
+
+| `is_blessed` | Status Before Undeploy | Status After Undeploy |
+|--------------|------------------------|----------------------|
+| `True` | `deployed` | `completed` |
+| `True` | `deploying` | `completed` |
+| `True` | `deploy_failed` | `completed` |
+| `False` | `deployed` | `not_blessed` |
+| `False` | `deploying` | `not_blessed` |
+| `False` | `deploy_failed` | `not_blessed` |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/api.py` | Added status reset logic to `endpoint_undeploy()` (lines 5063-5075) |
+
+### Verification
+
+After applying the fix:
+1. Delete an endpoint via UI or API
+2. Training run status automatically resets to `completed` (or `not_blessed`)
+3. Deploy Wizard allows redeployment without errors

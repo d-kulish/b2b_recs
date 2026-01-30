@@ -1190,8 +1190,8 @@ const TrainingCards = (function() {
     }
 
     function renderStageBar(stageDetails) {
-        // Gradient green colors for 8 stages (matching experiments style)
-        const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#6ee7b7', '#a7f3d0', '#d1fae5'];
+        // Gradient green colors for 9 stages (green-600 to green-200, all visible)
+        const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#5ee8a0', '#6ee7b7', '#86efac', '#a7f3d0'];
 
         const segments = stageDetails.map((stage, idx) => {
             const statusClass = stage.status || 'pending';

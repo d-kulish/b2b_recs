@@ -698,26 +698,26 @@
     border-color: #059669;
 }
 
-/* Rerun Action Button (green like View, but separate class) - solid when active, outline when disabled */
+/* Rerun Action Button (teal - distinct from View) - solid when active, outline when disabled */
 .card-action-btn.rerun {
     width: 64px;
     height: 32px;
-    background-color: #10b981;
+    background-color: #0891b2;
     color: #ffffff;
-    border: 2px solid #10b981;
+    border: 2px solid #0891b2;
     font-weight: 600;
     font-size: 12px;
 }
 
 .card-action-btn.rerun:hover:not(:disabled) {
-    background-color: #059669;
-    border-color: #059669;
+    background-color: #0e7490;
+    border-color: #0e7490;
 }
 
 .card-action-btn.rerun:disabled {
     background-color: #ffffff;
-    color: #10b981;
-    border-color: #10b981;
+    color: #0891b2;
+    border-color: #0891b2;
     opacity: 0.5;
     cursor: not-allowed;
 }

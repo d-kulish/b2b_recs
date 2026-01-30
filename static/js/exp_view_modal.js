@@ -158,7 +158,11 @@ const ExpViewModal = (function() {
         completed: { icon: 'fa-check', color: '#10b981', label: 'Completed' },
         failed: { icon: 'fa-exclamation', color: '#ef4444', label: 'Failed' },
         cancelled: { icon: 'fa-ban', color: '#6b7280', label: 'Cancelled' },
-        not_blessed: { icon: 'fa-exclamation', color: '#f97316', label: 'Not Blessed' }
+        not_blessed: { icon: 'fa-exclamation', color: '#f97316', label: 'Not Blessed' },
+        deploying: { icon: 'fa-sync', color: '#3b82f6', label: 'Deploying' },
+        deployed: { icon: 'fa-check', color: '#10b981', label: 'Deployed' },
+        deploy_failed: { icon: 'fa-exclamation', color: '#ef4444', label: 'Deploy Failed' },
+        registered: { icon: 'fa-check', color: '#10b981', label: 'Registered' }
     };
 
     // Pipeline stages for training runs (9 stages including Deploy)
@@ -383,18 +387,22 @@ const ExpViewModal = (function() {
         window.currentViewRun = run;
 
         // Status gradient on header
+        // Use "registered" class (green) if model is registered, regardless of deployment status
         const header = document.getElementById('expViewHeader');
-        header.className = `modal-header exp-view-header ${run.status}`;
+        const isRegistered = run.vertex_model_resource_name || run.registered_at;
+        const headerStatusClass = isRegistered ? 'registered' : run.status;
+        header.className = `modal-header exp-view-header ${headerStatusClass}`;
 
-        // Status panel
+        // Status panel - use "registered" when model is registered
         const statusPanel = document.getElementById('expViewStatusPanel');
-        statusPanel.className = `exp-view-status-panel ${run.status}`;
+        statusPanel.className = `exp-view-status-panel ${headerStatusClass}`;
 
-        // Status icon
+        // Status icon - use "registered" (checkmark) when model is registered
         const statusIcon = document.getElementById('expViewStatusIcon');
-        const statusCfg = TRAINING_STATUS_CONFIG[run.status] || TRAINING_STATUS_CONFIG.pending;
-        const isSpinning = run.status === 'running' || run.status === 'submitting';
-        statusIcon.className = `exp-view-status-icon ${run.status}`;
+        const iconStatusKey = isRegistered ? 'registered' : run.status;
+        const statusCfg = TRAINING_STATUS_CONFIG[iconStatusKey] || TRAINING_STATUS_CONFIG.pending;
+        const isSpinning = run.status === 'running' || run.status === 'submitting' || run.status === 'deploying';
+        statusIcon.className = `exp-view-status-icon ${headerStatusClass}`;
         statusIcon.innerHTML = `<i class="fas ${statusCfg.icon}${isSpinning ? ' fa-spin' : ''}"></i>`;
 
         // Title (Run #N)

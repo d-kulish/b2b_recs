@@ -1809,6 +1809,19 @@
     background: #f97316;
 }
 
+/* Deployment-related status icons */
+.exp-view-status-icon.deploying {
+    background: #2563eb;
+}
+
+.exp-view-status-icon.deployed {
+    background: #16a34a;
+}
+
+.exp-view-status-icon.deploy_failed {
+    background: #dc2626;
+}
+
 /* ==========================================================================
    Blessing Status Banner (for training run metrics)
    ========================================================================== */

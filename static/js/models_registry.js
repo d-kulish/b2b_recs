@@ -41,7 +41,7 @@ const ModelsRegistry = (function() {
     let state = {
         models: [],
         kpi: { total: 0, deployed: 0, outdated: 0, idle: 0, scheduled: 0 },
-        pagination: { page: 1, pageSize: 10, totalCount: 0, totalPages: 1 },
+        pagination: { page: 1, pageSize: 5, totalCount: 0, totalPages: 1 },
         filters: {
             modelType: 'all',
             status: 'all',
@@ -548,23 +548,66 @@ const ModelsRegistry = (function() {
         `;
     }
 
+    function generateShowingText(currentPage, totalItems, itemsPerPage) {
+        if (totalItems === 0) return 'Showing 0 models';
+        const start = (currentPage - 1) * itemsPerPage + 1;
+        const end = Math.min(currentPage * itemsPerPage, totalItems);
+        return `Showing ${start}-${end} of ${totalItems} models`;
+    }
+
+    function generatePageButton(pageNum, currentPage) {
+        const isActive = pageNum === currentPage;
+        if (isActive) {
+            return `<button class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium bg-blue-600 text-white">${pageNum}</button>`;
+        }
+        return `<button onclick="ModelsRegistry.goToPage(${pageNum})" class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium border border-gray-300 hover:bg-blue-50 text-gray-700">${pageNum}</button>`;
+    }
+
+    function generatePaginationControls(currentPage, totalPages) {
+        const buttons = [];
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) {
+                buttons.push(generatePageButton(i, currentPage));
+            }
+        } else {
+            buttons.push(generatePageButton(1, currentPage));
+            if (currentPage > 3) {
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
+            }
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let i = start; i <= end; i++) {
+                buttons.push(generatePageButton(i, currentPage));
+            }
+            if (currentPage < totalPages - 2) {
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
+            }
+            buttons.push(generatePageButton(totalPages, currentPage));
+        }
+        return buttons.join('');
+    }
+
     function renderPagination() {
         if (state.pagination.totalPages <= 1) return '';
 
+        const { page, totalPages, totalCount, pageSize, hasPrev, hasNext } = state.pagination;
+        const showingText = generateShowingText(page, totalCount, pageSize);
+        const pageButtons = generatePaginationControls(page, totalPages);
+
         return `
-            <div class="models-pagination">
-                <button class="models-pagination-btn" onclick="ModelsRegistry.prevPage()" ${!state.pagination.hasPrev ? 'disabled' : ''}>
-                    <i class="fas fa-chevron-left"></i>
-                    Previous
-                </button>
-                <span class="models-pagination-info">
-                    Page ${state.pagination.page} of ${state.pagination.totalPages}
-                    (${state.pagination.totalCount} models)
-                </span>
-                <button class="models-pagination-btn" onclick="ModelsRegistry.nextPage()" ${!state.pagination.hasNext ? 'disabled' : ''}>
-                    Next
-                    <i class="fas fa-chevron-right"></i>
-                </button>
+            <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                <div class="text-sm text-gray-600">${showingText}</div>
+                <div class="flex items-center gap-1">
+                    <button onclick="ModelsRegistry.prevPage()" ${!hasPrev ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasPrev ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
+                        Previous
+                    </button>
+                    <div class="flex items-center gap-1 mx-2">
+                        ${pageButtons}
+                    </div>
+                    <button onclick="ModelsRegistry.nextPage()" ${!hasNext ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasNext ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
+                        Next
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -729,8 +772,25 @@ const ModelsRegistry = (function() {
         if (!model) return;
 
         const modelName = model.vertex_model_name || 'Unnamed Model';
-        if (confirm(`Are you sure you want to delete "${modelName}"?\n\nThis will remove the model from Vertex AI Model Registry. This action cannot be undone.`)) {
-            deleteModel(modelId);
+
+        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
+            TrainingCards.showConfirmModal({
+                title: 'Delete Model',
+                message: `Are you sure you want to delete "<strong>${modelName}</strong>"?<br><br>This will remove the model from Vertex AI Model Registry.<br><strong>This action cannot be undone.</strong>`,
+                confirmText: 'Confirm',
+                cancelText: 'Cancel',
+                type: 'danger',
+                confirmButtonClass: 'btn-neu-save',
+                cancelButtonClass: 'btn-neu-cancel',
+                onConfirm: () => {
+                    deleteModel(modelId);
+                }
+            });
+        } else {
+            // Fallback to native confirm if TrainingCards not available
+            if (confirm(`Are you sure you want to delete "${modelName}"?\n\nThis will remove the model from Vertex AI Model Registry. This action cannot be undone.`)) {
+                deleteModel(modelId);
+            }
         }
     }
 
@@ -777,6 +837,13 @@ const ModelsRegistry = (function() {
     function prevPage() {
         if (state.pagination.hasPrev) {
             state.pagination.page--;
+            fetchModels();
+        }
+    }
+
+    function goToPage(page) {
+        if (page >= 1 && page <= state.pagination.totalPages) {
+            state.pagination.page = page;
             fetchModels();
         }
     }
@@ -863,7 +930,8 @@ const ModelsRegistry = (function() {
         createSchedule,
         viewSchedule,
         nextPage,
-        prevPage
+        prevPage,
+        goToPage
     };
 
 })();

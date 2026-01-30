@@ -1716,8 +1716,15 @@ const TrainingSchedules = (function() {
 
     let state = {
         schedules: [],
+        allSchedules: [],
         isCollapsed: false,
-        isLoading: false
+        isLoading: false,
+        pagination: {
+            page: 1,
+            pageSize: 5,
+            totalCount: 0,
+            totalPages: 1
+        }
     };
 
     const STATUS_CONFIG = {
@@ -1855,6 +1862,115 @@ const TrainingSchedules = (function() {
     }
 
     // =============================================================================
+    // PAGINATION HELPERS
+    // =============================================================================
+
+    function generateShowingText(currentPage, totalItems, itemsPerPage) {
+        if (totalItems === 0) return 'Showing 0 schedules';
+        const start = (currentPage - 1) * itemsPerPage + 1;
+        const end = Math.min(currentPage * itemsPerPage, totalItems);
+        return `Showing ${start}-${end} of ${totalItems} schedules`;
+    }
+
+    function generatePageButton(pageNum, currentPage) {
+        const isActive = pageNum === currentPage;
+        if (isActive) {
+            return `<button class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium bg-blue-600 text-white">${pageNum}</button>`;
+        }
+        return `<button onclick="TrainingSchedules.goToPage(${pageNum})" class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium border border-gray-300 hover:bg-blue-50 text-gray-700">${pageNum}</button>`;
+    }
+
+    function generatePaginationControls(currentPage, totalPages) {
+        const buttons = [];
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) {
+                buttons.push(generatePageButton(i, currentPage));
+            }
+        } else {
+            buttons.push(generatePageButton(1, currentPage));
+            if (currentPage > 3) {
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
+            }
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let i = start; i <= end; i++) {
+                buttons.push(generatePageButton(i, currentPage));
+            }
+            if (currentPage < totalPages - 2) {
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
+            }
+            buttons.push(generatePageButton(totalPages, currentPage));
+        }
+        return buttons.join('');
+    }
+
+    function renderPagination() {
+        if (state.pagination.totalPages <= 1) return '';
+
+        const { page, totalPages, totalCount, pageSize } = state.pagination;
+        const hasPrev = page > 1;
+        const hasNext = page < totalPages;
+        const showingText = generateShowingText(page, totalCount, pageSize);
+        const pageButtons = generatePaginationControls(page, totalPages);
+
+        return `
+            <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                <div class="text-sm text-gray-600">${showingText}</div>
+                <div class="flex items-center gap-1">
+                    <button onclick="TrainingSchedules.prevPage()" ${!hasPrev ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasPrev ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
+                        Previous
+                    </button>
+                    <div class="flex items-center gap-1 mx-2">
+                        ${pageButtons}
+                    </div>
+                    <button onclick="TrainingSchedules.nextPage()" ${!hasNext ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasNext ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
+                        Next
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function updatePagination() {
+        const totalCount = state.allSchedules.length;
+        const totalPages = Math.max(1, Math.ceil(totalCount / state.pagination.pageSize));
+        state.pagination.totalCount = totalCount;
+        state.pagination.totalPages = totalPages;
+        // Ensure current page is valid
+        if (state.pagination.page > totalPages) {
+            state.pagination.page = totalPages;
+        }
+        // Get the current page's schedules
+        const start = (state.pagination.page - 1) * state.pagination.pageSize;
+        const end = start + state.pagination.pageSize;
+        state.schedules = state.allSchedules.slice(start, end);
+    }
+
+    function nextPage() {
+        if (state.pagination.page < state.pagination.totalPages) {
+            state.pagination.page++;
+            updatePagination();
+            renderSchedulesList();
+        }
+    }
+
+    function prevPage() {
+        if (state.pagination.page > 1) {
+            state.pagination.page--;
+            updatePagination();
+            renderSchedulesList();
+        }
+    }
+
+    function goToPage(page) {
+        if (page >= 1 && page <= state.pagination.totalPages) {
+            state.pagination.page = page;
+            updatePagination();
+            renderSchedulesList();
+        }
+    }
+
+    // =============================================================================
     // RENDERING
     // =============================================================================
 
@@ -1876,9 +1992,12 @@ const TrainingSchedules = (function() {
 
             if (data.success && data.schedules) {
                 // Filter to only show active and paused
-                state.schedules = data.schedules.filter(
+                state.allSchedules = data.schedules.filter(
                     s => s.status === 'active' || s.status === 'paused'
                 );
+                // Reset to page 1 when reloading
+                state.pagination.page = 1;
+                updatePagination();
                 renderSchedulesList();
             }
         } catch (error) {
@@ -1892,14 +2011,14 @@ const TrainingSchedules = (function() {
 
         if (!section || !list) return;
 
-        if (state.schedules.length === 0) {
+        if (state.allSchedules.length === 0) {
             section.classList.add('hidden');
             return;
         }
 
         section.classList.remove('hidden');
 
-        const html = state.schedules.map(schedule => {
+        const cardsHtml = state.schedules.map(schedule => {
             const statusConfig = STATUS_CONFIG[schedule.status] || STATUS_CONFIG.active;
             const typeLabel = SCHEDULE_TYPE_LABELS[schedule.schedule_type] || schedule.schedule_type;
             const modelName = schedule.registered_model_name || '-';
@@ -1967,7 +2086,7 @@ const TrainingSchedules = (function() {
             `;
         }).join('');
 
-        list.innerHTML = html;
+        list.innerHTML = cardsHtml + renderPagination();
     }
 
     // =============================================================================
@@ -2139,6 +2258,9 @@ const TrainingSchedules = (function() {
         deleteSchedule: deleteSchedule,
         triggerNow: triggerNow,
         toggleSection: toggleSection,
-        editSchedule: editSchedule
+        editSchedule: editSchedule,
+        nextPage: nextPage,
+        prevPage: prevPage,
+        goToPage: goToPage
     };
 })();

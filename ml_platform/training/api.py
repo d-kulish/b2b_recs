@@ -5059,7 +5059,20 @@ def endpoint_undeploy(request, endpoint_id):
             training_run = endpoint.deployed_training_run
             training_run.deployment_status = 'pending'  # Reset to pending (ready to deploy again)
             training_run.deployed_endpoint = None
-            training_run.save(update_fields=['deployment_status', 'deployed_endpoint'])
+
+            # Reset status from 'deployed' to allow redeployment
+            # Restore to 'completed' or 'not_blessed' based on blessing status
+            if training_run.status in [
+                TrainingRun.STATUS_DEPLOYED,
+                TrainingRun.STATUS_DEPLOYING,
+                TrainingRun.STATUS_DEPLOY_FAILED
+            ]:
+                if training_run.is_blessed:
+                    training_run.status = TrainingRun.STATUS_COMPLETED
+                else:
+                    training_run.status = TrainingRun.STATUS_NOT_BLESSED
+
+            training_run.save(update_fields=['deployment_status', 'deployed_endpoint', 'status'])
 
         return JsonResponse({
             'success': True,

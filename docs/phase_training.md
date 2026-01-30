@@ -1,9 +1,9 @@
 # Phase: Training Domain
 
 ## Document Purpose
-This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training.
+This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training and manages model deployment to Cloud Run.
 
-**Last Updated**: 2026-01-29 (Feature: Deployment Integration in Training Wizard)
+**Last Updated**: 2026-01-30 (Consolidated deployment documentation from training_deploy.md)
 
 ---
 
@@ -16,6 +16,7 @@ The Training domain allows users to:
 3. Execute a full TFX pipeline via Vertex AI Pipelines
 4. Monitor pipeline progress in real-time
 5. Track artifacts in ML Metadata
+6. Deploy models to Cloud Run with TF Serving
 
 ### Key Principle
 **Training is the production execution of a validated configuration.** Users should run Quick Tests in Modeling first, then promote the best config to Full Training.
@@ -24,7 +25,8 @@ The Training domain allows users to:
 - Trained TFRS model (SavedModel with embedded Transform)
 - TFX artifacts tracked in ML Metadata
 - Metrics logged to MLflow
-- Model ready for deployment
+- Model registered to Vertex AI Model Registry
+- Model deployed to Cloud Run (optional auto-deployment)
 
 ---
 
@@ -2177,6 +2179,664 @@ Cloud Run service names must follow these rules:
 
 The wizard auto-generates a valid service name from the model name and validates custom names in real-time.
 
+### Deployment Architecture
+
+The deployment system enables one-click deployment of trained recommendation models to Cloud Run with TensorFlow Serving.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DEPLOYMENT ARCHITECTURE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  TFX Pipeline (Vertex AI)                                                   │
+│       │                                                                      │
+│       ▼                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Pusher Component                                                     │   │
+│  │   - Saves ServingModel to gs://bucket/training-runs/{id}/pushed_model│   │
+│  │   - Model has RAW TENSOR signature (simple JSON interface)          │   │
+│  │   - Self-contained (vocabs + embeddings embedded)                   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                      │
+│       ▼ (automatic after pipeline completion)                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Vertex AI Model Registry                                             │   │
+│  │   - Auto-registered via _register_to_model_registry()               │   │
+│  │   - Labels: training_run_id, model_type, metrics, is_blessed        │   │
+│  │   - Enables version tracking and lineage                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                      │
+│       ▼ (one-click from UI or auto-deploy)                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ Cloud Run Service                                                    │   │
+│  │   ┌─────────────────────────────────────────────────────────────┐   │   │
+│  │   │ TF Serving Container (europe-central2-docker.pkg.dev/...)   │   │   │
+│  │   │                                                              │   │   │
+│  │   │ startup.sh:                                                  │   │   │
+│  │   │   1. Downloads model from GCS (MODEL_PATH env var)          │   │   │
+│  │   │   2. Starts tensorflow_model_server with batching           │   │   │
+│  │   │                                                              │   │   │
+│  │   │ Endpoints:                                                   │   │   │
+│  │   │   - REST: POST /v1/models/recommender:predict               │   │   │
+│  │   │   - gRPC: port 8500                                         │   │   │
+│  │   └─────────────────────────────────────────────────────────────┘   │   │
+│  │                                                                      │   │
+│  │   Configuration:                                                     │   │
+│  │   - Memory: 4Gi (configurable)                                      │   │
+│  │   - CPU: 2 (configurable)                                           │   │
+│  │   - Min instances: 0 (scale to zero)                                │   │
+│  │   - Max instances: 10                                               │   │
+│  │   - Batching: enabled (max 64 requests)                             │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Architecture Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Serving Interface** | Raw Tensors (Simple JSON) | Simple client experience; same as past FastAPI solution |
+| **Deployment Target** | Cloud Run + TF Serving | Scale-to-zero minimizes costs during development |
+| **Model Types** | Retrieval first | Polish one type before expanding to Ranking/Multitask |
+| **Container Registry** | Artifact Registry | Regional (europe-central2), integrated with Cloud Build |
+| **TF Serving Version** | 2.19.0 | Latest stable version available |
+
+#### Client Interface
+
+**Request:**
+```json
+POST https://{service-name}.run.app/v1/models/recommender:predict
+{
+  "instances": [
+    {
+      "customer_id": "CUST123",
+      "city": "Warsaw",
+      "revenue": 5000.0,
+      "segment": "enterprise"
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "predictions": [
+    {
+      "product_ids": ["PROD001", "PROD002", "PROD003", ...],
+      "scores": [0.95, 0.87, 0.82, ...]
+    }
+  ]
+}
+```
+
+### Cloud Run Deployment Implementation
+
+#### Model Registry Integration
+
+Models are automatically registered to Vertex AI Model Registry after training pipeline completion.
+
+**File:** `ml_platform/training/services.py`
+
+**Method:** `_register_to_model_registry()`
+
+```python
+def _register_to_model_registry(self, training_run: TrainingRun) -> None:
+    """Register trained model to Vertex AI Model Registry."""
+    model_name = f"{self.ml_model.slug}-v{training_run.run_number}"
+    artifact_uri = f"{training_run.gcs_artifacts_path}/pushed_model"
+
+    labels = {
+        'training_run_id': str(training_run.id),
+        'model_endpoint_id': str(self.ml_model.id),
+        'model_type': training_run.model_type,
+        'is_blessed': str(training_run.is_blessed).lower(),
+    }
+
+    model = aiplatform.Model.upload(
+        display_name=model_name,
+        artifact_uri=artifact_uri,
+        serving_container_image_uri="tensorflow/serving:2.19.0",
+        labels=labels,
+    )
+
+    training_run.vertex_model_resource_name = model.resource_name
+    training_run.vertex_model_name = model.display_name
+    training_run.registered_at = timezone.now()
+    training_run.save()
+```
+
+#### deploy_to_cloud_run() Method
+
+**File:** `ml_platform/training/services.py`
+
+```python
+def deploy_to_cloud_run(self, training_run: TrainingRun, service_name: str = None) -> str:
+    """Deploy trained model to Cloud Run with TF Serving."""
+
+    # Validate prerequisites
+    if not training_run.vertex_model_resource_name:
+        raise TrainingServiceError("Model not registered in Model Registry")
+
+    # Build service name from model name
+    if not service_name:
+        model_name = (
+            training_run.vertex_model_name or
+            (training_run.registered_model.model_name if training_run.registered_model else None) or
+            training_run.name or
+            self.ml_model.name
+        )
+        service_name = f"{model_name}-serving".lower().replace('_', '-')
+
+    # Get deployment config
+    deployment_config = training_run.deployment_config or {}
+    memory = deployment_config.get('memory', '4Gi')
+    cpu = deployment_config.get('cpu', '2')
+    min_instances = deployment_config.get('min_instances', 0)
+    max_instances = deployment_config.get('max_instances', 10)
+
+    # Find versioned model path
+    model_path = self._find_versioned_model_path(
+        f"{training_run.gcs_artifacts_path}/pushed_model"
+    )
+
+    # Select container based on retrieval algorithm
+    retrieval_algorithm = self._get_retrieval_algorithm(training_run)
+    if retrieval_algorithm == 'scann':
+        tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving-scann:latest"
+    else:
+        tf_serving_image = f"europe-central2-docker.pkg.dev/{self.project_id}/ml-serving/tf-serving-native:latest"
+
+    # Deploy using Cloud Run API
+    # ... deployment logic ...
+
+    return service_url
+```
+
+### TF Serving Container Implementation
+
+#### Directory Structure
+
+```
+deploy/
+├── tf_serving_native/         # Native TF Serving for brute-force models
+│   ├── Dockerfile
+│   ├── startup.sh
+│   ├── batching_config.txt
+│   └── cloudbuild.yaml
+│
+└── tf_serving_scann/          # Python/Flask with ScaNN for ScaNN models
+    ├── Dockerfile
+    ├── server.py
+    ├── startup.sh
+    └── cloudbuild.yaml
+```
+
+#### Native TF Serving Dockerfile
+
+**File:** `deploy/tf_serving_native/Dockerfile`
+
+```dockerfile
+FROM tensorflow/serving:2.19.0
+
+# Install gsutil for GCS model download
+RUN apt-get update && apt-get install -y curl gnupg && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | \
+    tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+    apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && \
+    apt-get update && apt-get install -y google-cloud-cli && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY batching_config.txt /etc/tf_serving/batching_config.txt
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+ENV MODEL_BASE_PATH=/models
+ENV MODEL_NAME=recommender
+ENV PORT=8501
+
+EXPOSE 8501
+ENTRYPOINT ["/startup.sh"]
+```
+
+#### Startup Script
+
+**File:** `deploy/tf_serving_native/startup.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+if [ -z "$MODEL_PATH" ]; then
+    echo "ERROR: MODEL_PATH environment variable not set"
+    exit 1
+fi
+
+MODEL_DIR="/models/${MODEL_NAME:-recommender}/1"
+mkdir -p "$MODEL_DIR"
+
+echo "Downloading model from $MODEL_PATH..."
+gsutil -m cp -r "$MODEL_PATH/*" "$MODEL_DIR/"
+
+if [ ! -f "$MODEL_DIR/saved_model.pb" ]; then
+    echo "ERROR: saved_model.pb not found"
+    exit 1
+fi
+
+tensorflow_model_server \
+    --port=8500 \
+    --rest_api_port=${PORT:-8501} \
+    --model_name=${MODEL_NAME:-recommender} \
+    --model_base_path=/models/${MODEL_NAME:-recommender} \
+    --enable_batching=true \
+    --batching_parameters_file=/etc/tf_serving/batching_config.txt
+```
+
+#### Batching Configuration
+
+**File:** `deploy/tf_serving_native/batching_config.txt`
+
+```
+max_batch_size { value: 64 }
+batch_timeout_micros { value: 10000 }
+max_enqueued_batches { value: 100 }
+num_batch_threads { value: 4 }
+pad_variable_length_inputs: true
+```
+
+#### Building the Containers
+
+```bash
+# Build Native TF Serving container
+gcloud builds submit --config=deploy/tf_serving_native/cloudbuild.yaml .
+
+# Build ScaNN container
+gcloud builds submit --config=deploy/tf_serving_scann/cloudbuild.yaml .
+```
+
+### ScaNN Model Serving
+
+Retrieval models using ScaNN (Scalable Nearest Neighbors) require a **Python-based serving solution** instead of standard TensorFlow Serving due to custom ops.
+
+#### The Problem: ScaNN Custom Ops
+
+When deploying retrieval models that use ScaNN, standard TensorFlow Serving fails with:
+
+```
+Op type not registered 'Scann>ScannSearchBatched' in binary running on...
+```
+
+ScaNN uses custom TensorFlow operations that are not included in the standard TensorFlow Serving binary.
+
+#### Solution: Python-Based Model Server
+
+We implemented a Python-based serving solution using Flask/Gunicorn that:
+- Uses TensorFlow directly (not TF Serving binary)
+- Imports ScaNN to register custom ops before model loading
+- Provides TF Serving-compatible REST API for drop-in replacement
+- Based on Google Deep Learning Container (`gcr.io/deeplearning-platform-release/tf2-cpu.2-15.py310`)
+
+#### ScaNN Container Dockerfile
+
+**File:** `deploy/tf_serving_scann/Dockerfile`
+
+```dockerfile
+FROM gcr.io/deeplearning-platform-release/tf2-cpu.2-15.py310
+
+LABEL maintainer="B2B Recs Platform"
+LABEL description="Python model server with ScaNN support for TFRS models"
+
+RUN apt-get update && apt-get install -y \
+    curl gnupg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | \
+    tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+    apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - \
+    && apt-get update && apt-get install -y google-cloud-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --no-deps scann==1.3.0
+RUN pip install --no-cache-dir flask gunicorn
+
+COPY server.py /app/server.py
+COPY startup.sh /startup.sh
+RUN chmod +x /startup.sh
+
+ENV MODEL_BASE_PATH=/models
+ENV MODEL_NAME=recommender
+ENV PORT=8501
+
+EXPOSE 8501
+WORKDIR /app
+ENTRYPOINT ["/startup.sh"]
+```
+
+#### Python Server
+
+**File:** `deploy/tf_serving_scann/server.py`
+
+```python
+"""Python-based model serving for TFRS models with ScaNN support."""
+import os
+import json
+import logging
+from flask import Flask, request, jsonify
+import tensorflow as tf
+import scann  # Import to register custom ops
+
+app = Flask(__name__)
+model = None
+MODEL_NAME = os.environ.get('MODEL_NAME', 'recommender')
+
+def load_model():
+    global model
+    model_path = f"/models/{MODEL_NAME}/1"
+    model = tf.saved_model.load(model_path)
+    return model
+
+@app.route('/v1/models/<model_name>:predict', methods=['POST'])
+def predict(model_name):
+    """Handle prediction requests (TF Serving REST API compatible)."""
+    if model is None:
+        return jsonify({"error": "Model not loaded"}), 503
+
+    data = request.get_json()
+    instances = data.get('instances', [])
+    serve_fn = model.signatures['serving_default']
+    input_specs = serve_fn.structured_input_signature[1]
+    input_names = list(input_specs.keys())
+
+    # Auto-detect input format
+    first_instance = instances[0]
+    is_raw_json = isinstance(first_instance, dict) and 'b64' not in first_instance
+
+    if is_raw_json:
+        # Build tensors from feature values
+        input_tensors = {}
+        for input_name in input_names:
+            values = [inst.get(input_name) for inst in instances]
+            dtype = input_specs[input_name].dtype
+            input_tensors[input_name] = tf.constant(values, dtype=dtype)
+        result = serve_fn(**input_tensors)
+    else:
+        # Legacy base64 tf.Example format
+        # ... handle legacy format ...
+        pass
+
+    # Convert to JSON-serializable format
+    predictions = []
+    for i in range(len(instances)):
+        pred = {}
+        for key, tensor in result.items():
+            value = tensor[i].numpy()
+            pred[key] = value.tolist() if hasattr(value, 'tolist') else value
+        predictions.append(pred)
+
+    return jsonify({"predictions": predictions})
+
+load_model()
+```
+
+### Hybrid TF Serving Deployment
+
+The system automatically routes models to the appropriate serving container based on their retrieval algorithm.
+
+#### Routing Logic
+
+| Algorithm | Container | Latency | Use Case |
+|-----------|-----------|---------|----------|
+| `brute_force` | `tf-serving-native` (Native TF Serving) | ~15-25ms | Standard retrieval |
+| `scann` | `tf-serving-scann` (Python/Flask) | ~30-50ms | Large candidate sets |
+
+**Implementation in `services.py`:**
+
+```python
+def _get_retrieval_algorithm(self, training_run: TrainingRun) -> str:
+    """Determine which serving container to use."""
+    if training_run.model_config:
+        algorithm = getattr(training_run.model_config, 'retrieval_algorithm', None)
+        if algorithm:
+            return algorithm
+    return 'brute_force'
+```
+
+#### Container Images in Artifact Registry
+
+| Image | Base | Use Case |
+|-------|------|----------|
+| `tf-serving-native:latest` | `tensorflow/serving:2.19.0` | Brute-force models |
+| `tf-serving-scann:latest` | `gcr.io/deeplearning-platform-release/tf2-cpu.2-15.py310` | ScaNN models |
+
+### Deploy Wizard
+
+The Deploy Wizard provides a user-friendly modal for configuring Cloud Run deployments.
+
+#### Files
+
+| File | Description |
+|------|-------------|
+| `templates/includes/_deploy_wizard.html` | Modal HTML template |
+| `static/js/deploy_wizard.js` | JavaScript IIFE module (~400 lines) |
+| `static/css/deploy_wizard.css` | Modal styles (~460 lines) |
+
+#### Wizard UI
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ☁️ Deploy to Cloud Run                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  MODEL  product-recs-v3          VERSION  v47                       │
+│                                                                     │
+│  ▼ Endpoint Selection                                               │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │ ◉ Create New Endpoint                                         │ │
+│  │   └─ 🏷️ product-recs-v3-serving                               │ │
+│  │   └─ ☐ Use custom name                                        │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │ ○ Update Existing Endpoint                                    │ │
+│  │   └─ [Select a service... ▼]                                  │ │
+│  └───────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  ▼ Deployment Preset                                                │
+│  ┌─────────────┐ ┌─────────────────┐ ┌─────────────┐               │
+│  │ Development │ │ Production ✓    │ │ High Traffic│               │
+│  │ 0-2 inst    │ │ (Recommended)   │ │ 2-50 inst   │               │
+│  │ 2Gi / 1 CPU │ │ 1-10 instances  │ │ 8Gi / 4 CPU │               │
+│  └─────────────┘ │ 4Gi / 2 CPU     │ └─────────────┘               │
+│                  └─────────────────┘                                │
+│                                                                     │
+│  ▸ Advanced Options                                                 │
+│                                                                     │
+│  ┌─ Configuration Summary ────────────────────────────────────────┐│
+│  │ Endpoint: product-recs-v3-serving [new]                        ││
+│  │ Instances: 1-10 │ Memory: 4Gi │ CPU: 2 vCPU │ Timeout: 300s    ││
+│  └────────────────────────────────────────────────────────────────┘│
+│                                                                     │
+│                                        [Deploy]  [Cancel]           │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Deployment Presets
+
+| Preset | Min Instances | Max Instances | Memory | CPU | Use Case |
+|--------|---------------|---------------|--------|-----|----------|
+| **Development** | 0 | 2 | 2Gi | 1 | Testing, low traffic |
+| **Production** | 1 | 10 | 4Gi | 2 | Standard workload (Recommended) |
+| **High Traffic** | 2 | 50 | 8Gi | 4 | High concurrency |
+
+#### JavaScript API
+
+```javascript
+// Configure callbacks
+DeployWizard.configure({
+    onSuccess: function(result) {
+        console.log('Deployed:', result.endpoint_url);
+    },
+    onError: function(error) {
+        console.error('Deployment failed:', error);
+    }
+});
+
+// Open wizard for a training run
+DeployWizard.open(runId);
+
+// Close the wizard
+DeployWizard.close();
+
+// Select a preset programmatically
+DeployWizard.selectPreset('production');
+
+// Toggle advanced options visibility
+DeployWizard.toggleAdvanced();
+
+// Trigger deployment
+DeployWizard.deploy();
+```
+
+#### Deploy Wizard API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/registered-models/<id>/endpoints/` | GET | Get model-scoped endpoints |
+| `POST /api/training-runs/<id>/deploy-cloud-run/` | POST | Deploy to Cloud Run |
+
+### Model-Scoped Endpoint Tracking
+
+The Deploy Wizard tracks endpoint ownership at the **RegisteredModel** level to prevent deploying models to unrelated Cloud Run services.
+
+#### DeployedEndpoint Model
+
+**File:** `ml_platform/training/models.py`
+
+```python
+class DeployedEndpoint(models.Model):
+    """Tracks Cloud Run endpoints owned by registered models."""
+
+    registered_model = models.ForeignKey('RegisteredModel', on_delete=models.CASCADE)
+    service_name = models.CharField(max_length=63, unique=True)
+    service_url = models.URLField(blank=True)
+    deployed_version = models.CharField(max_length=100, blank=True)
+    deployed_training_run = models.ForeignKey('TrainingRun', null=True, on_delete=models.SET_NULL)
+    is_active = models.BooleanField(default=True)
+    deployment_config = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+```
+
+#### Endpoint Selection Behavior
+
+| Scenario | "Update Existing Endpoint" Option |
+|----------|-----------------------------------|
+| First deployment for a model | **Disabled** - only "Create New Endpoint" available |
+| Model has existing endpoints | **Enabled** - shows only endpoints belonging to this model |
+
+### Client Usage Guide
+
+#### Making Predictions
+
+```python
+import requests
+
+# Get recommendations
+response = requests.post(
+    "https://{service-name}.run.app/v1/models/recommender:predict",
+    json={
+        "instances": [
+            {
+                "customer_id": "CUST123",
+                "city": "Warsaw",
+                "revenue": 5000.0,
+                "segment": "enterprise"
+            }
+        ]
+    }
+)
+
+result = response.json()
+product_ids = result['predictions'][0]['product_ids']
+scores = result['predictions'][0]['scores']
+```
+
+#### Batch Predictions
+
+```python
+# Multiple customers in single request
+response = requests.post(
+    "https://{service-name}.run.app/v1/models/recommender:predict",
+    json={
+        "instances": [
+            {"customer_id": "CUST1", "city": "Warsaw", "revenue": 5000.0},
+            {"customer_id": "CUST2", "city": "Krakow", "revenue": 3000.0},
+            {"customer_id": "CUST3", "city": "Gdansk", "revenue": 7000.0}
+        ]
+    }
+)
+```
+
+#### Health Check
+
+```bash
+curl https://{service-name}.run.app/v1/models/recommender
+```
+
+### Deployment Troubleshooting
+
+#### Model Registration Failed
+
+**Symptoms:** `vertex_model_resource_name` is empty after training completion
+
+**Solutions:**
+1. Check Vertex AI API is enabled
+2. Verify IAM permissions for Model Registry
+3. Check logs: `TrainingService._register_to_model_registry()`
+
+#### Deployment Failed
+
+**Symptoms:** Error when clicking "Cloud Run" button
+
+**Common causes:**
+- Model not registered (wait for registration)
+- Cloud Run API not enabled
+- IAM permissions missing
+- Image not found in Artifact Registry
+
+**Debug:**
+```bash
+# Check service status
+gcloud run services describe {service-name} --region=europe-central2
+
+# Check logs
+gcloud run services logs read {service-name} --region=europe-central2
+```
+
+#### Inference Errors
+
+**404 Not Found:**
+- Model name mismatch (check `MODEL_NAME` env var)
+- Model not loaded (check startup logs)
+
+**Input validation errors:**
+- Feature name mismatch (check FeatureConfig)
+- Type mismatch (see Type Mapping below)
+
+**Cold start timeout:**
+- Increase `min_instances` to 1+
+- Increase Cloud Run timeout
+
+#### Type Mapping
+
+| BigQuery Type | TensorFlow dtype | JSON Example |
+|---------------|------------------|--------------|
+| STRING, BYTES | tf.string | `"customer_id": "CUST123"` |
+| INT64, INTEGER | tf.int64 | `"timestamp": 1705849200` |
+| FLOAT64, FLOAT, NUMERIC | tf.float32 | `"revenue": 5000.0` |
+| TIMESTAMP, DATETIME | tf.int64 | `"created_at": 1705849200` |
+| DATE | tf.string | `"date": "2026-01-21"` |
+
 ### Edit Schedule Feature (2026-01-27)
 
 Added ability to edit existing training schedules from the Schedules section. Users can modify schedule timing (type, time, day, timezone) but NOT training configuration (which remains frozen from the source run).
@@ -2313,6 +2973,22 @@ Schedule configuration for recurring training runs. See [Schedule Feature](#sche
 
 Groups model versions under a single name. See [RegisteredModel Entity](#registeredmodel-entity-2026-01-25) section.
 
+#### DeployedEndpoint
+
+Tracks Cloud Run endpoints owned by registered models for model-scoped endpoint management.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `registered_model` | FK | Parent RegisteredModel |
+| `service_name` | CharField(63) | Cloud Run service name (unique) |
+| `service_url` | URLField | Cloud Run service URL |
+| `deployed_version` | CharField | Model version deployed |
+| `deployed_training_run` | FK | TrainingRun that was deployed |
+| `is_active` | BooleanField | Whether endpoint is active |
+| `deployment_config` | JSONField | Deployment configuration (memory, CPU, instances) |
+| `created_at` | DateTimeField | Creation timestamp |
+| `updated_at` | DateTimeField | Last update timestamp |
+
 ---
 
 ## API Endpoints
@@ -2336,6 +3012,15 @@ Groups model versions under a single name. See [RegisteredModel Entity](#registe
 | POST | `/api/training-runs/{run_id}/webhook/epoch-complete/` | Training epoch completed |
 | POST | `/api/training-runs/{run_id}/webhook/failed/` | Pipeline failed |
 | POST | `/api/training-runs/{run_id}/webhook/completed/` | Pipeline completed |
+
+### Deployment API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/training-runs/{run_id}/deploy-cloud-run/` | Deploy model to Cloud Run |
+| POST | `/api/training-runs/{run_id}/push/` | Push model to Vertex AI Registry |
+| GET | `/api/registered-models/{id}/endpoints/` | Get model-scoped endpoints |
+| POST | `/api/endpoints/{id}/undeploy/` | Undeploy a Cloud Run endpoint |
 
 ---
 
@@ -3111,6 +3796,56 @@ to:
 
 The modal now shows only 4 tabs: **Overview**, **Versions**, **Artifacts**, **Deployment**.
 
+## Deployment Bug Fixes (2026-01-29 to 2026-01-30)
+
+### Fix: All Models Deploying to Same Endpoint (2026-01-29)
+
+**Problem:** When deploying different models from the Model Registry, all deployments went to the same Cloud Run service regardless of which model was selected.
+
+**Root Cause:** Mismatch between frontend and backend service name generation - frontend used `training_run.vertex_model_name` but backend used `self.ml_model.name` (ModelEndpoint).
+
+**Fix:** Updated both frontend (`getEffectiveServiceName()`) and backend (service name generation in `deploy_to_cloud_run()`) to use proper priority chain: `vertex_model_name` → `registered_model.model_name` → `training_run.name` → `ml_model.name`.
+
+### Fix: Container Failed to Start - Versioned Model Path (2026-01-29)
+
+**Problem:** Cloud Run deployment failed because `MODEL_PATH` was missing the versioned subdirectory.
+
+**Root Cause:** TFX Pusher creates a versioned subdirectory (e.g., `pushed_model/1768842986/`) but the code passed only `pushed_model/`.
+
+**Fix:** Added `_find_versioned_model_path()` helper that lists GCS blobs to find the correct versioned path containing `saved_model.pb`.
+
+### Fix: Auto-Deployment Status Validation (2026-01-30)
+
+**Problem:** Training runs completed but failed to auto-deploy with error "Cannot deploy model with status: deploying".
+
+**Root Cause:** `_auto_deploy_to_cloud_run()` sets status to `DEPLOYING` before calling `deploy_to_cloud_run()`, but validation only accepted `COMPLETED` or `NOT_BLESSED`.
+
+**Fix:** Added `STATUS_DEPLOYING` to allowed statuses in `deploy_to_cloud_run()` validation.
+
+### Fix: Endpoint Undeploy Status Reset (2026-01-30)
+
+**Problem:** After undeploying an endpoint, redeployment failed because `TrainingRun.status` remained `deployed`.
+
+**Root Cause:** `endpoint_undeploy()` reset `deployment_status` but not `status`.
+
+**Fix:** Added status reset logic to restore `status` to `completed` or `not_blessed` based on `is_blessed` value.
+
+### Fix: Models Registry Deployment Status (2026-01-30)
+
+**Problem:** Models Registry showed "OUTDATED" for actively deployed models.
+
+**Root Cause:** Query filtered through `registered_model__ml_model` which was NULL for some endpoints.
+
+**Fix:** Removed problematic filter, now queries `DeployedEndpoint.deployed_training_run` directly which is always correctly maintained.
+
+### Fix: Training Run Deployment Badge Logic (2026-01-30)
+
+**Problem:** Training run badges showed "Not Deployed" even after successful deployment.
+
+**Root Cause:** `is_deployed` was derived from `deployed_endpoint.is_active` (current state) instead of `deployment_status` (pipeline result).
+
+**Fix:** Changed derivation to use `deployment_status == 'deployed'` for badge display, added `has_active_endpoint` for UI that needs current state.
+
 ---
 
 ## Implementation Checklist
@@ -3161,3 +3896,6 @@ The modal now shows only 4 tabs: **Overview**, **Versions**, **Artifacts**, **De
 - [Modeling Phase](phase_modeling.md)
 - [Experiments Phase](phase_experiments.md)
 - [Deployment Phase](phase_deployment.md)
+- [Models Registry](models_registry.md)
+
+> **Note:** The deployment documentation from `training_deploy.md` has been consolidated into this document as of 2026-01-30. The `training_deploy.md` file can be archived or deleted.

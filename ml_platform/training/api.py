@@ -4447,9 +4447,10 @@ def model_delete(request, model_id):
             }, status=500)
 
         # Clear registration data from training run
-        training_run.vertex_model_resource_name = None
-        training_run.vertex_model_name = None
-        training_run.vertex_model_version = None
+        # Note: CharField fields use empty string, not None (they have blank=True but not null=True)
+        training_run.vertex_model_resource_name = ''
+        training_run.vertex_model_name = ''
+        training_run.vertex_model_version = ''
         training_run.registered_at = None
         training_run.save(update_fields=[
             'vertex_model_resource_name',

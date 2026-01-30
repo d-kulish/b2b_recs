@@ -2862,3 +2862,86 @@ After fix, deployment logs show:
 ```
 Found versioned model path: gs://bucket/artifacts/pushed_model/1768842986
 ```
+
+---
+
+## Bug Fix: Auto-Deployment Status Validation (2026-01-30)
+
+### Problem
+
+Training run #37 completed successfully (model trained, blessed, registered to Vertex AI Model Registry) but failed to deploy to Cloud Run despite having deployment enabled in the Training Wizard.
+
+**Database state before fix:**
+```
+status: deploy_failed
+deployment_status: failed
+deployment_error: Cannot deploy model with status: deploying
+deploy_enabled: True
+deployment_config: {'cpu': '1', 'memory': '2Gi', 'preset': 'development', 'enabled': True, ...}
+vertex_model_resource_name: projects/555035914949/locations/europe-central2/models/2864962264123834368
+is_blessed: True
+```
+
+### Root Cause
+
+The bug was in the status validation logic in `deploy_to_cloud_run()` method.
+
+**Execution flow:**
+
+1. `_extract_results()` calls `_auto_deploy_to_cloud_run()` when `deployment_config.enabled` is True (line 878)
+2. `_auto_deploy_to_cloud_run()` sets `training_run.status = STATUS_DEPLOYING` and saves to DB (lines 909-915)
+3. `_auto_deploy_to_cloud_run()` then calls `deploy_to_cloud_run()` (line 922)
+4. `deploy_to_cloud_run()` validates status at line 2071:
+   ```python
+   if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+       raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
+   ```
+5. **BUG:** Status is now `DEPLOYING`, not `COMPLETED` or `NOT_BLESSED`, so validation fails
+
+The `deploy_to_cloud_run()` method was originally designed for manual deployment (clicking "Deploy" button on a completed run). When auto-deployment was added via `_auto_deploy_to_cloud_run()`, the status was changed to `DEPLOYING` before calling `deploy_to_cloud_run()`, but the validation wasn't updated to accept this status.
+
+### Fix Applied
+
+**File:** `ml_platform/training/services.py`, line 2071
+
+**Before:**
+```python
+if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+    raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
+```
+
+**After:**
+```python
+if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED, TrainingRun.STATUS_DEPLOYING]:
+    raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
+```
+
+### Verification
+
+After applying the fix, training run #37 was reset and redeployed successfully:
+
+```python
+# Reset and redeploy
+tr = TrainingRun.objects.get(id=37)
+tr.status = TrainingRun.STATUS_COMPLETED
+tr.deployment_status = 'pending'
+tr.deployment_error = ''
+tr.save()
+
+service = TrainingService(tr.ml_model)
+service._auto_deploy_to_cloud_run(tr)
+```
+
+**Result:**
+```
+Status: deployed
+Deployment status: deployed
+Deployment error: (none)
+Cloud Run URL: https://chern-rank-v3-serving-3dmqemfmxq-lm.a.run.app
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/services.py` | Added `STATUS_DEPLOYING` to allowed statuses in `deploy_to_cloud_run()` validation (line 2071) |

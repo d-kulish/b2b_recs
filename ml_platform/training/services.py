@@ -2068,7 +2068,7 @@ class TrainingService:
         if not training_run.vertex_model_resource_name:
             raise TrainingServiceError("Model not registered in Model Registry")
 
-        if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+        if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED, TrainingRun.STATUS_DEPLOYING]:
             raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
 
         if not training_run.gcs_artifacts_path:

@@ -850,8 +850,9 @@ const TrainingCards = (function() {
     function renderBadges(run) {
         let badges = '';
 
-        // Always show deployment status for completed runs
-        if (run.status === 'completed' || run.status === 'not_blessed') {
+        // Always show deployment status for terminal states where training completed
+        const terminalCompletedStatuses = ['completed', 'not_blessed', 'deployed', 'deploying', 'deploy_failed'];
+        if (terminalCompletedStatuses.includes(run.status)) {
             if (run.is_deployed) {
                 badges += `
                     <span class="training-card-deployed-badge">
@@ -1035,9 +1036,10 @@ const TrainingCards = (function() {
         // Model type badge
         const modelTypeBadge = renderModelTypeBadge(run.model_type);
 
-        // Blessed status badge (for completed/not_blessed runs)
+        // Blessed status badge (for terminal states where training completed)
         let blessedBadge = '';
-        if (run.status === 'completed' || run.status === 'not_blessed') {
+        const terminalCompletedStatuses = ['completed', 'not_blessed', 'deployed', 'deploying', 'deploy_failed'];
+        if (terminalCompletedStatuses.includes(run.status)) {
             if (run.is_blessed === true) {
                 blessedBadge = `
                     <span class="blessed-status-badge blessed">
@@ -1053,9 +1055,9 @@ const TrainingCards = (function() {
             }
         }
 
-        // Deployment status badge (for completed runs)
+        // Deployment status badge (for terminal states where training completed)
         let deployBadge = '';
-        if (run.status === 'completed') {
+        if (terminalCompletedStatuses.includes(run.status)) {
             const deployIcon = run.is_deployed ? 'fa-check-circle' : 'fa-times-circle';
             const deployText = run.is_deployed ? 'Deployed' : 'Not Deployed';
             deployBadge = `

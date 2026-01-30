@@ -41,8 +41,16 @@ def _serialize_training_run(training_run, include_details=False):
     Returns:
         Dict representation of the training run
     """
-    # Derive is_deployed from Cloud Run endpoint
+    # Badge shows whether pipeline deployment succeeded (historical fact)
+    # - 'deployed' status means deployment step completed successfully
+    # - STATUS_DEPLOYED constant also indicates successful deployment
     is_deployed = (
+        training_run.deployment_status == 'deployed' or
+        training_run.status == TrainingRun.STATUS_DEPLOYED
+    )
+
+    # Also provide current endpoint state for UI that needs it
+    has_active_endpoint = (
         training_run.deployed_endpoint is not None and
         training_run.deployed_endpoint.is_active
     )
@@ -94,8 +102,10 @@ def _serialize_training_run(training_run, include_details=False):
         # Evaluation
         'is_blessed': training_run.is_blessed,
 
-        # Deployment (dynamic from Vertex AI)
+        # Deployment (shows pipeline deployment result - historical fact)
         'is_deployed': is_deployed,
+        # Current endpoint state (for UI that needs real-time status)
+        'has_active_endpoint': has_active_endpoint,
 
         # Deployment tracking
         'deploy_enabled': training_run.deploy_enabled,

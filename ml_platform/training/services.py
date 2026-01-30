@@ -938,12 +938,23 @@ class TrainingService:
             training_run.deployment_completed_at = timezone.now()
 
             # Link to the DeployedEndpoint record
-            if service_name:
-                try:
-                    endpoint = DeployedEndpoint.objects.get(service_name=service_name)
-                    training_run.deployed_endpoint = endpoint
-                except DeployedEndpoint.DoesNotExist:
-                    pass
+            # The endpoint was just created/updated in deploy_to_cloud_run(), so it should exist
+            try:
+                endpoint = DeployedEndpoint.objects.get(
+                    deployed_training_run=training_run
+                )
+                training_run.deployed_endpoint = endpoint
+            except DeployedEndpoint.DoesNotExist:
+                # Fallback: try by service_name
+                if service_name:
+                    try:
+                        endpoint = DeployedEndpoint.objects.get(service_name=service_name)
+                        training_run.deployed_endpoint = endpoint
+                    except DeployedEndpoint.DoesNotExist:
+                        logger.warning(
+                            f"{training_run.display_name}: Could not find DeployedEndpoint "
+                            f"for service {service_name}"
+                        )
 
             training_run.save(update_fields=[
                 'status', 'deployment_status', 'deployment_completed_at', 'deployed_endpoint'

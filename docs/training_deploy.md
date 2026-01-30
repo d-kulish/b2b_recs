@@ -3163,3 +3163,141 @@ After applying the fix:
 2. Endpoint `chern-rank-v4-serving` continues to show "ACTIVE"
 3. KPI counts correctly reflect deployment state
 4. Deploy/undeploy operations update status correctly
+
+---
+
+## Bug Fix: Training Run Deployment Badge Logic (2025-01-30)
+
+### Problem
+
+Training run deployment badges showed "Not Deployed" even when:
+1. Run #38: Auto-deployment succeeded (endpoint `is_active: True`)
+2. Run #37: Manual deployment succeeded (endpoint `is_active: False` now)
+
+### Root Cause
+
+The `is_deployed` flag was derived from `deployed_endpoint.is_active` (current endpoint state) instead of `deployment_status` (pipeline deployment result).
+
+**Semantic distinction:**
+
+| Concept | Badge Meaning | Source Field | Changes When |
+|---------|---------------|--------------|--------------|
+| **Pipeline Result** (desired) | "Did deployment succeed at training time?" | `deployment_status` | Never (historical) |
+| **Endpoint State** (previous) | "Is there an active endpoint now?" | `deployed_endpoint.is_active` | Undeploy, delete, etc. |
+
+### Solution
+
+#### 1. Changed `is_deployed` Derivation (`ml_platform/training/api.py`)
+
+**Before:**
+```python
+is_deployed = (
+    training_run.deployed_endpoint is not None and
+    training_run.deployed_endpoint.is_active
+)
+```
+
+**After:**
+```python
+# Badge shows whether pipeline deployment succeeded (historical fact)
+is_deployed = (
+    training_run.deployment_status == 'deployed' or
+    training_run.status == TrainingRun.STATUS_DEPLOYED
+)
+
+# Also provide current endpoint state for UI that needs it
+has_active_endpoint = (
+    training_run.deployed_endpoint is not None and
+    training_run.deployed_endpoint.is_active
+)
+```
+
+#### 2. Improved Endpoint Linking (`ml_platform/training/services.py`)
+
+**Before:**
+```python
+if service_name:
+    try:
+        endpoint = DeployedEndpoint.objects.get(service_name=service_name)
+        training_run.deployed_endpoint = endpoint
+    except DeployedEndpoint.DoesNotExist:
+        pass
+```
+
+**After:**
+```python
+# Primary lookup by deployed_training_run (more reliable)
+try:
+    endpoint = DeployedEndpoint.objects.get(
+        deployed_training_run=training_run
+    )
+    training_run.deployed_endpoint = endpoint
+except DeployedEndpoint.DoesNotExist:
+    # Fallback: try by service_name
+    if service_name:
+        try:
+            endpoint = DeployedEndpoint.objects.get(service_name=service_name)
+            training_run.deployed_endpoint = endpoint
+        except DeployedEndpoint.DoesNotExist:
+            logger.warning(
+                f"{training_run.display_name}: Could not find DeployedEndpoint "
+                f"for service {service_name}"
+            )
+```
+
+#### 3. Fixed Badge Display for Deployed Status (`static/js/training_cards.js`)
+
+The `renderBadges()` and `renderBadgesRow()` functions only showed badges when `status === 'completed'`, missing runs with `status === 'deployed'`.
+
+**Before:**
+```javascript
+if (run.status === 'completed' || run.status === 'not_blessed') {
+    // render badges
+}
+```
+
+**After:**
+```javascript
+const terminalCompletedStatuses = ['completed', 'not_blessed', 'deployed', 'deploying', 'deploy_failed'];
+if (terminalCompletedStatuses.includes(run.status)) {
+    // render badges
+}
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/api.py` | Changed `is_deployed` derivation, added `has_active_endpoint` |
+| `ml_platform/training/services.py` | Improved endpoint linking in `_auto_deploy_to_cloud_run()` |
+| `static/js/training_cards.js` | Updated badge display conditions for all terminal states |
+
+### Data Fix Script
+
+One-time fix for existing runs (`scripts/fix_deployment_data.py`):
+
+```python
+from ml_platform.training.models import TrainingRun, DeployedEndpoint
+
+# Fix Run #38 (auto-deployed, endpoint is active)
+tr38 = TrainingRun.objects.get(id=38)
+ep38 = DeployedEndpoint.objects.get(service_name='chern-rank-v4-serving')
+tr38.deployed_endpoint = ep38
+tr38.deployment_status = 'deployed'
+tr38.save(update_fields=['deployed_endpoint', 'deployment_status'])
+
+# Fix Run #37 (deployed but endpoint now inactive)
+tr37 = TrainingRun.objects.get(id=37)
+ep37 = DeployedEndpoint.objects.get(service_name='chern-rank-v3-serving')
+tr37.deployed_endpoint = ep37
+tr37.deployment_status = 'deployed'
+tr37.save(update_fields=['deployed_endpoint', 'deployment_status'])
+```
+
+### Verification
+
+After applying the fix:
+1. Run #39 shows green "Deployed" and "Blessed" badges
+2. Run #38 shows green "Deployed" badge (auto-deployed, endpoint active)
+3. Run #37 shows green "Deployed" badge (deployment succeeded, even if endpoint now inactive)
+4. New training runs with deployment show correct badges after completion

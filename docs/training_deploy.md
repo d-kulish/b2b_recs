@@ -3049,53 +3049,63 @@ After applying the fix:
 
 ### Problem
 
-The Models Registry table displayed incorrect deployment status for registered models. Models that were actively deployed to Cloud Run showed "IDLE" status instead of "DEPLOYED".
+The Models Registry table displayed incorrect deployment status for registered models. Models that were actively deployed to Cloud Run showed "OUTDATED" status instead of "DEPLOYED".
 
 **Example:**
-- Model `chern_rank_v4` was deployed to endpoint `chern-rank-v4-serving` (shown as "ACTIVE" in Endpoints table)
-- Models Registry table showed `chern_rank_v4` with "IDLE" deployment status
+- Model `chern_rank_v4` (Run #27) was deployed to endpoint `chern-rank-v4-serving` (shown as "ACTIVE" in Endpoints table)
+- Endpoints table correctly showed Run #27 associated with the active endpoint
+- Models Registry table incorrectly showed `chern_rank_v4` with "OUTDATED" deployment status
 
 ### Root Cause
 
-The deployment status logic was querying **Vertex AI Endpoints** instead of **Cloud Run services**.
+**Filter mismatch** in the query that builds `deployed_training_run_ids`.
 
-**Before fix - `get_deployed_model_resource_names()` in `services.py`:**
+The data model has two separate foreign key relationships between `TrainingRun` and `DeployedEndpoint`:
+
+1. **`TrainingRun.deployed_endpoint`** - FK from TrainingRun → DeployedEndpoint (may be NULL)
+2. **`DeployedEndpoint.deployed_training_run`** - FK from DeployedEndpoint → TrainingRun (correctly maintained)
+
+These are independent FKs that can get out of sync. In this case, `DeployedEndpoint.deployed_training_run` was set correctly (Run #27), but `TrainingRun.deployed_endpoint` was NULL.
+
+**Buggy query in `models_list()` (api.py):**
 ```python
-endpoint_display_name = f"{self.ml_model.name}-endpoint"
-endpoints = aiplatform.Endpoint.list(
-    filter=f'display_name="{endpoint_display_name}"',
-    order_by="create_time desc"
+active_endpoints = DeployedEndpoint.objects.filter(
+    registered_model__ml_model=model_endpoint,  # <-- BUG: This filter is the problem
+    is_active=True,
+    deployed_training_run__isnull=False
 )
-# Returns deployed_models from Vertex AI Endpoint
 ```
 
-**Problem:** Models are deployed to Cloud Run (tracked in `DeployedEndpoint` Django model), not Vertex AI Endpoints. Since no Vertex AI Endpoints exist, `deployed_models` was always an empty set, causing `get_model_status()` to always return `'idle'`.
+**Problem:** This query filters through `DeployedEndpoint → RegisteredModel → ModelEndpoint`. If the `DeployedEndpoint.registered_model` FK is NULL (which it was), the endpoint is excluded from results even though it's active. This caused the training run ID to not be found in `deployed_training_run_ids`, resulting in "OUTDATED" status instead of "DEPLOYED".
 
 ### Fix Applied
 
-Changed the Models Registry API to determine deployment status from the `DeployedEndpoint` Django model instead of Vertex AI Endpoints.
+Removed the problematic `registered_model__ml_model` filter. The query now directly checks for active endpoints without going through the `registered_model` relationship.
 
 **Key changes in `ml_platform/training/api.py`:**
 
-1. **New Cloud Run endpoint query:**
+1. **Fixed Cloud Run endpoint query (all endpoints):**
 ```python
-# Query Cloud Run endpoints to get deployed model names
-deployed_model_names = set(
-    DeployedEndpoint.objects.filter(
-        registered_model__ml_model=model_endpoint,
-        is_active=True,
-        deployed_training_run__isnull=False
-    ).values_list(
-        'deployed_training_run__vertex_model_name', flat=True
-    ).distinct()
-)
+# Query Cloud Run endpoints to get deployed training run IDs and model names
+# NOTE: Do NOT filter through registered_model - that FK may be NULL
+# Use DeployedEndpoint.deployed_training_run which is the correctly maintained FK
+active_endpoints = DeployedEndpoint.objects.filter(
+    is_active=True,
+    deployed_training_run__isnull=False
+).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+deployed_training_run_ids = set()
+deployed_model_names = set()
+for tr_id, model_name in active_endpoints:
+    deployed_training_run_ids.add(tr_id)
+    deployed_model_names.add(model_name)
 ```
 
 2. **Updated `get_model_status()` function:**
 ```python
 def get_model_status(m):
-    # Check if this specific version is deployed to Cloud Run
-    if m.deployed_endpoint and m.deployed_endpoint.is_active:
+    # Check via DeployedEndpoint.deployed_training_run (the reverse FK that IS set correctly)
+    if m.id in deployed_training_run_ids:
         return 'deployed'
     # Check if another version of this model has an active endpoint
     if m.vertex_model_name in deployed_model_names:
@@ -3103,29 +3113,53 @@ def get_model_status(m):
     return 'idle'
 ```
 
-3. **Updated serializer functions:**
-- `_serialize_registered_model()` - uses `deployed_model_names` parameter
-- `_serialize_registered_model_entity()` - checks `registered_model.deployed_endpoints.filter(is_active=True).exists()`
-- `_serialize_training_run()` - uses `training_run.deployed_endpoint.is_active`
+3. **Updated `_serialize_registered_model()` function:**
+```python
+# Check via DeployedEndpoint.deployed_training_run (the reverse FK that IS set correctly)
+if deployed_training_run_ids and training_run.id in deployed_training_run_ids:
+    model_status = 'deployed'
+elif deployed_model_names and training_run.vertex_model_name in deployed_model_names:
+    model_status = 'outdated'
+else:
+    model_status = 'idle'
+```
+
+### Endpoints Updated
+
+The fix was applied to all Models Registry API endpoints:
+
+| Endpoint | Function |
+|----------|----------|
+| `GET /api/models/` | `models_list()` |
+| `GET /api/models/<id>/` | `registered_model_detail()` |
+| `GET /api/models/<id>/versions/` | `model_versions()` |
+| `POST /api/models/<id>/deploy/` | `model_deploy()` |
+| `POST /api/models/<id>/undeploy/` | `model_undeploy()` |
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `ml_platform/training/api.py` | Replaced Vertex AI endpoint queries with Cloud Run `DeployedEndpoint` model queries across all Models Registry API endpoints |
+| `ml_platform/training/api.py` | Removed `registered_model__ml_model` filter from DeployedEndpoint queries across all Models Registry API endpoints |
 
 ### Deployment Status Logic
 
-| Condition | Status |
-|-----------|--------|
-| `training_run.deployed_endpoint.is_active == True` | `deployed` |
-| Another version of same model has active endpoint | `outdated` |
-| No version has active endpoint | `idle` |
+| Condition | Status | Description |
+|-----------|--------|-------------|
+| `training_run.id in deployed_training_run_ids` | `deployed` | This training run has an active Cloud Run endpoint |
+| `training_run.vertex_model_name in deployed_model_names` | `outdated` | Another version of this model has an active endpoint |
+| Neither condition met | `idle` | No version of this model has an active endpoint |
 
-### Expected Results
+### Key Insight
+
+The bug occurred because the code relied on a FK path (`DeployedEndpoint.registered_model`) that may be NULL. The fix uses `DeployedEndpoint.deployed_training_run` which is the authoritative source for which training run is deployed to which endpoint.
+
+**Lesson learned:** When checking deployment status, always use the FK that is guaranteed to be maintained (`deployed_training_run`), not optional relationships (`registered_model`).
+
+### Verification
 
 After applying the fix:
-1. Models Registry table shows correct deployment status based on Cloud Run endpoints
-2. Model `chern_rank_v4` displays "DEPLOYED" when `chern-rank-v4-serving` endpoint is active
-3. KPI counts (Deployed/Outdated/Idle) reflect actual Cloud Run deployment state
-4. Filters by deployment status work correctly
+1. Model `chern_rank_v4` (Run #27) displays "DEPLOYED" status (green badge)
+2. Endpoint `chern-rank-v4-serving` continues to show "ACTIVE"
+3. KPI counts correctly reflect deployment state
+4. Deploy/undeploy operations update status correctly

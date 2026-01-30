@@ -3329,7 +3329,7 @@ def training_schedule_from_run(request):
 # Models Registry API Endpoints
 # =============================================================================
 
-def _serialize_registered_model(training_run, include_details=False, deployed_model_names=None):
+def _serialize_registered_model(training_run, include_details=False, deployed_model_names=None, deployed_training_run_ids=None):
     """
     Serialize a TrainingRun that has a registered model to dict.
 
@@ -3337,13 +3337,15 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
         training_run: TrainingRun model instance with vertex_model_resource_name
         include_details: If True, include full configuration and artifacts
         deployed_model_names: Set of vertex_model_name strings that have active Cloud Run endpoints
+        deployed_training_run_ids: Set of TrainingRun IDs that have active Cloud Run endpoints
 
     Returns:
         Dict representation of the registered model
     """
     # Determine deployment status from Cloud Run endpoints
     # Three states: 'deployed' (this version on endpoint), 'outdated' (other version deployed), 'idle' (none)
-    if training_run.deployed_endpoint and training_run.deployed_endpoint.is_active:
+    # Check via DeployedEndpoint.deployed_training_run (the reverse FK that IS set correctly)
+    if deployed_training_run_ids and training_run.id in deployed_training_run_ids:
         model_status = 'deployed'
     elif deployed_model_names and training_run.vertex_model_name in deployed_model_names:
         # Another version of this model has an active endpoint
@@ -3858,17 +3860,19 @@ def models_list(request):
         from django.db.models import Q
         from .models import DeployedEndpoint
 
-        # Query Cloud Run endpoints to get deployed model names
-        # Build a set of vertex_model_name values that have at least one active endpoint
-        deployed_model_names = set(
-            DeployedEndpoint.objects.filter(
-                registered_model__ml_model=model_endpoint,
-                is_active=True,
-                deployed_training_run__isnull=False
-            ).values_list(
-                'deployed_training_run__vertex_model_name', flat=True
-            ).distinct()
-        )
+        # Query Cloud Run endpoints to get deployed training run IDs and model names
+        # NOTE: Do NOT filter through registered_model - that FK may be NULL
+        # Use DeployedEndpoint.deployed_training_run which is the correctly maintained FK
+        active_endpoints = DeployedEndpoint.objects.filter(
+            is_active=True,
+            deployed_training_run__isnull=False
+        ).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+        deployed_training_run_ids = set()
+        deployed_model_names = set()
+        for tr_id, model_name in active_endpoints:
+            deployed_training_run_ids.add(tr_id)
+            deployed_model_names.add(model_name)
 
         # Base filter for all registered models
         base_filter = {
@@ -3934,12 +3938,12 @@ def models_list(request):
         def get_model_status(m):
             """
             Determine deployment status based on Cloud Run endpoints:
-            - 'deployed': This version has an active Cloud Run endpoint
+            - 'deployed': This training run has an active Cloud Run endpoint
             - 'outdated': Another version of the same model has an active endpoint
             - 'idle': No version of this model has an active endpoint
             """
-            # Check if this specific version is deployed to Cloud Run
-            if m.deployed_endpoint and m.deployed_endpoint.is_active:
+            # Check via DeployedEndpoint.deployed_training_run (the reverse FK that IS set correctly)
+            if m.id in deployed_training_run_ids:
                 return 'deployed'
             # Check if another version of this model has an active endpoint
             if m.vertex_model_name in deployed_model_names:
@@ -4024,7 +4028,8 @@ def models_list(request):
                 {
                     **_serialize_registered_model(
                         m,
-                        deployed_model_names=deployed_model_names
+                        deployed_model_names=deployed_model_names,
+                        deployed_training_run_ids=deployed_training_run_ids
                     ),
                     'version_count': version_counts.get(m.vertex_model_name, 1)
                 }
@@ -4102,24 +4107,27 @@ def model_detail(request, model_id):
                 'error': f'Registered model {model_id} not found'
             }, status=404)
 
-        # Query Cloud Run endpoints to get deployed model names
+        # Query Cloud Run endpoints to get deployed training run IDs and model names
+        # NOTE: Do NOT filter through registered_model - that FK may be NULL
         from .models import DeployedEndpoint
-        deployed_model_names = set(
-            DeployedEndpoint.objects.filter(
-                registered_model__ml_model=model_endpoint,
-                is_active=True,
-                deployed_training_run__isnull=False
-            ).values_list(
-                'deployed_training_run__vertex_model_name', flat=True
-            ).distinct()
-        )
+        active_endpoints = DeployedEndpoint.objects.filter(
+            is_active=True,
+            deployed_training_run__isnull=False
+        ).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+        deployed_training_run_ids = set()
+        deployed_model_names = set()
+        for tr_id, model_name in active_endpoints:
+            deployed_training_run_ids.add(tr_id)
+            deployed_model_names.add(model_name)
 
         return JsonResponse({
             'success': True,
             'model': _serialize_registered_model(
                 training_run,
                 include_details=True,
-                deployed_model_names=deployed_model_names
+                deployed_model_names=deployed_model_names,
+                deployed_training_run_ids=deployed_training_run_ids
             )
         })
 
@@ -4173,17 +4181,19 @@ def model_versions(request, model_id):
             'dataset', 'feature_config', 'model_config', 'created_by', 'deployed_endpoint'
         ).order_by('-registered_at')
 
-        # Query Cloud Run endpoints to get deployed model names
+        # Query Cloud Run endpoints to get deployed training run IDs and model names
+        # NOTE: Do NOT filter through registered_model - that FK may be NULL
         from .models import DeployedEndpoint
-        deployed_model_names = set(
-            DeployedEndpoint.objects.filter(
-                registered_model__ml_model=model_endpoint,
-                is_active=True,
-                deployed_training_run__isnull=False
-            ).values_list(
-                'deployed_training_run__vertex_model_name', flat=True
-            ).distinct()
-        )
+        active_endpoints = DeployedEndpoint.objects.filter(
+            is_active=True,
+            deployed_training_run__isnull=False
+        ).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+        deployed_training_run_ids = set()
+        deployed_model_names = set()
+        for tr_id, model_name in active_endpoints:
+            deployed_training_run_ids.add(tr_id)
+            deployed_model_names.add(model_name)
 
         return JsonResponse({
             'success': True,
@@ -4191,7 +4201,8 @@ def model_versions(request, model_id):
             'versions': [
                 _serialize_registered_model(
                     v,
-                    deployed_model_names=deployed_model_names
+                    deployed_model_names=deployed_model_names,
+                    deployed_training_run_ids=deployed_training_run_ids
                 )
                 for v in versions
             ]
@@ -4242,8 +4253,9 @@ def model_deploy(request, model_id):
                 'error': 'Cannot deploy unblessed model. Model must pass evaluation first.'
             }, status=400)
 
-        # Check if already deployed to Cloud Run
-        if training_run.deployed_endpoint and training_run.deployed_endpoint.is_active:
+        # Check if already deployed to Cloud Run (using reverse FK)
+        from .models import DeployedEndpoint
+        if DeployedEndpoint.objects.filter(deployed_training_run=training_run, is_active=True).exists():
             return JsonResponse({
                 'success': False,
                 'error': 'Model is already deployed to endpoint'
@@ -4262,24 +4274,27 @@ def model_deploy(request, model_id):
         # Re-fetch training run to get updated deployment info
         training_run.refresh_from_db()
 
-        # Query Cloud Run endpoints to get deployed model names for response
+        # Query Cloud Run endpoints to get deployed training run IDs and model names
+        # NOTE: Do NOT filter through registered_model - that FK may be NULL
         from .models import DeployedEndpoint
-        deployed_model_names = set(
-            DeployedEndpoint.objects.filter(
-                registered_model__ml_model=model_endpoint,
-                is_active=True,
-                deployed_training_run__isnull=False
-            ).values_list(
-                'deployed_training_run__vertex_model_name', flat=True
-            ).distinct()
-        )
+        active_endpoints = DeployedEndpoint.objects.filter(
+            is_active=True,
+            deployed_training_run__isnull=False
+        ).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+        deployed_training_run_ids = set()
+        deployed_model_names = set()
+        for tr_id, model_name in active_endpoints:
+            deployed_training_run_ids.add(tr_id)
+            deployed_model_names.add(model_name)
 
         return JsonResponse({
             'success': True,
             'model': _serialize_registered_model(
                 training_run,
                 include_details=True,
-                deployed_model_names=deployed_model_names
+                deployed_model_names=deployed_model_names,
+                deployed_training_run_ids=deployed_training_run_ids
             ),
             'message': f'Model deployed to endpoint'
         })
@@ -4322,8 +4337,9 @@ def model_undeploy(request, model_id):
                 'error': f'Registered model {model_id} not found'
             }, status=404)
 
-        # Check if actually deployed to Cloud Run
-        if not training_run.deployed_endpoint or not training_run.deployed_endpoint.is_active:
+        # Check if actually deployed to Cloud Run (using reverse FK)
+        from .models import DeployedEndpoint
+        if not DeployedEndpoint.objects.filter(deployed_training_run=training_run, is_active=True).exists():
             return JsonResponse({
                 'success': False,
                 'error': 'Model is not currently deployed'
@@ -4342,24 +4358,27 @@ def model_undeploy(request, model_id):
         # Re-fetch training run to get updated deployment info
         training_run.refresh_from_db()
 
-        # Query Cloud Run endpoints to get deployed model names for response
+        # Query Cloud Run endpoints to get deployed training run IDs and model names
+        # NOTE: Do NOT filter through registered_model - that FK may be NULL
         from .models import DeployedEndpoint
-        deployed_model_names = set(
-            DeployedEndpoint.objects.filter(
-                registered_model__ml_model=model_endpoint,
-                is_active=True,
-                deployed_training_run__isnull=False
-            ).values_list(
-                'deployed_training_run__vertex_model_name', flat=True
-            ).distinct()
-        )
+        active_endpoints = DeployedEndpoint.objects.filter(
+            is_active=True,
+            deployed_training_run__isnull=False
+        ).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+        deployed_training_run_ids = set()
+        deployed_model_names = set()
+        for tr_id, model_name in active_endpoints:
+            deployed_training_run_ids.add(tr_id)
+            deployed_model_names.add(model_name)
 
         return JsonResponse({
             'success': True,
             'model': _serialize_registered_model(
                 training_run,
                 include_details=True,
-                deployed_model_names=deployed_model_names
+                deployed_model_names=deployed_model_names,
+                deployed_training_run_ids=deployed_training_run_ids
             ),
             'message': 'Model undeployed successfully'
         })

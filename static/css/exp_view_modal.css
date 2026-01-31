@@ -2632,7 +2632,14 @@
 }
 
 .version-card {
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+}
+
+.version-card.deployed {
+    border-color: #bbf7d0;
 }
 
 .version-card-header {
@@ -2641,14 +2648,19 @@
     justify-content: space-between;
     padding: 12px 16px;
     background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px 12px 0 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.version-card-header.deployed {
+    background: linear-gradient(to right, #f0fdf4, #dcfce7);
+    border-bottom-color: #bbf7d0;
 }
 
 .version-card-info {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .version-badge {
@@ -2679,9 +2691,6 @@
     gap: 12px;
     padding: 12px 16px;
     background: white;
-    border: 1px solid #e5e7eb;
-    border-top: none;
-    border-radius: 0 0 12px 12px;
 }
 
 .version-kpi-box {
@@ -2706,26 +2715,7 @@
     color: #1f2937;
 }
 
-/* Version Deployment Status Row */
-.version-deployment-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px;
-    border: 1px solid #e5e7eb;
-    border-top: none;
-    border-radius: 0 0 12px 12px;
-    margin-top: -12px;
-}
-
-.version-deployment-row.deployed {
-    background: linear-gradient(to right, #f0fdf4, #dcfce7);
-    border-color: #bbf7d0;
-}
-
-.version-deployment-row.not-deployed {
-    background: #f9fafb;
-}
+/* Version Deployment Status - now inline in header */
 
 .version-deployment-status {
     display: flex;
@@ -2751,53 +2741,58 @@
     color: #166534;
 }
 
-/* Deploy/Undeploy buttons */
+/* Deploy/Undeploy buttons - matching main page style (~102px like model tablet buttons) */
 .version-deploy-btn {
-    background: #3b82f6;
-    color: white;
-    border: none;
-    padding: 6px 14px;
+    width: 102px;
+    height: 32px;
+    background-color: #c9a227;
+    color: #ffffff;
+    border: 2px solid #c9a227;
+    font-weight: 600;
     font-size: 12px;
-    font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
 }
 
 .version-deploy-btn:hover {
-    background: #2563eb;
+    background-color: #b8922a;
+    border-color: #b8922a;
 }
 
 .version-deploy-btn:disabled {
-    background: #93c5fd;
+    background-color: #ffffff;
+    color: #c9a227;
+    border-color: #c9a227;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .version-undeploy-btn {
-    background: white;
-    color: #dc2626;
-    border: 1px solid #fecaca;
-    padding: 6px 14px;
+    width: 102px;
+    height: 32px;
+    background-color: #ffffff;
+    color: #c9a227;
+    border: 2px solid #c9a227;
+    font-weight: 600;
     font-size: 12px;
-    font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s ease;
+    flex-shrink: 0;
 }
 
 .version-undeploy-btn:hover {
-    background: #fef2f2;
-    border-color: #f87171;
+    background-color: #fef9e6;
+    border-color: #b8922a;
 }
 
 .version-undeploy-btn:disabled {
     background: #f9fafb;
     color: #9ca3af;
     border-color: #e5e7eb;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
-/* Adjust version card border radius when deployment row is present */
-.version-card.has-deployment-row {
-    border-radius: 12px 12px 0 0;
-}

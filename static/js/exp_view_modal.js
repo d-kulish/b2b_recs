@@ -1627,54 +1627,56 @@ const ExpViewModal = (function() {
                 </div>
             `).join('');
 
-            // Build deployment status row
+            // Build deployment status and button for header
             const isDeployed = v.model_status === 'deployed' && v.deployed_endpoint_info;
             const endpointInfo = v.deployed_endpoint_info;
-            let deploymentRowHtml;
+            let deploymentStatusHtml;
+            let deployButtonHtml;
 
             if (isDeployed) {
-                deploymentRowHtml = `
-                    <div class="version-deployment-row deployed">
-                        <div class="version-deployment-status deployed">
-                            <i class="fas fa-check-circle"></i>
-                            <span>Deployed to <span class="endpoint-name">${endpointInfo.service_name}</span></span>
-                        </div>
-                        <button class="version-undeploy-btn" onclick="event.stopPropagation(); ExpViewModal.undeployVersion(${endpointInfo.id}, ${v.id})">
-                            Undeploy
-                        </button>
+                deploymentStatusHtml = `
+                    <div class="version-deployment-status deployed">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Deployed to <span class="endpoint-name">${endpointInfo.service_name}</span></span>
                     </div>
                 `;
+                deployButtonHtml = `
+                    <button class="version-undeploy-btn" onclick="event.stopPropagation(); ExpViewModal.undeployVersion(${endpointInfo.id}, ${v.id})">
+                        Undeploy
+                    </button>
+                `;
             } else {
-                deploymentRowHtml = `
-                    <div class="version-deployment-row not-deployed">
-                        <div class="version-deployment-status not-deployed">
-                            <i class="fas fa-circle"></i>
-                            <span>Not deployed</span>
-                        </div>
-                        <button class="version-deploy-btn" onclick="event.stopPropagation(); ExpViewModal.deployVersion(${v.id})">
-                            Deploy
-                        </button>
+                deploymentStatusHtml = `
+                    <div class="version-deployment-status not-deployed">
+                        <i class="fas fa-circle"></i>
+                        <span>Not deployed</span>
                     </div>
+                `;
+                deployButtonHtml = `
+                    <button class="version-deploy-btn" onclick="event.stopPropagation(); ExpViewModal.deployVersion(${v.id})">
+                        Deploy
+                    </button>
                 `;
             }
 
             return `
-                <div class="version-card has-deployment-row" onclick="ExpViewModal.selectModelVersion(${v.id})" style="cursor: pointer;">
-                    <div class="version-card-header">
+                <div class="version-card ${isDeployed ? 'deployed' : ''}" onclick="ExpViewModal.selectModelVersion(${v.id})" style="cursor: pointer;">
+                    <div class="version-card-header ${isDeployed ? 'deployed' : ''}">
                         <div class="version-card-info">
                             <span class="version-badge">
                                 <i class="fas fa-code-branch"></i>
                                 v${versionNum}
                             </span>
                             <span class="version-run">Run #${v.run_number}</span>
+                            <span class="version-date">${formatDate(v.registered_at)}</span>
+                            ${deploymentStatusHtml}
                         </div>
-                        <span class="version-date">${formatDate(v.registered_at)}</span>
+                        ${deployButtonHtml}
                     </div>
                     <div class="version-kpis">
                         ${kpiBoxesHtml}
                     </div>
                 </div>
-                ${deploymentRowHtml}
             `;
         }).join('');
 

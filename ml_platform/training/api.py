@@ -4847,6 +4847,41 @@ def _serialize_deployed_endpoint(endpoint, include_details=False):
     if include_details:
         data['deployment_config'] = endpoint.deployment_config or {}
 
+    # Include metrics from the deployed training run
+    if endpoint.deployed_training_run:
+        run = endpoint.deployed_training_run
+        model_type = endpoint.registered_model.model_type if endpoint.registered_model else 'retrieval'
+
+        if model_type == 'ranking':
+            data['metrics'] = {
+                'rmse': run.rmse,
+                'mae': run.mae,
+                'test_rmse': run.test_rmse,
+                'test_mae': run.test_mae,
+            }
+        elif model_type == 'multitask':
+            # Multitask has both retrieval and ranking metrics
+            data['metrics'] = {
+                'recall_at_5': run.recall_at_5,
+                'recall_at_10': run.recall_at_10,
+                'recall_at_50': run.recall_at_50,
+                'recall_at_100': run.recall_at_100,
+                'rmse': run.rmse,
+                'mae': run.mae,
+                'test_rmse': run.test_rmse,
+                'test_mae': run.test_mae,
+            }
+        else:
+            # Default: retrieval metrics
+            data['metrics'] = {
+                'recall_at_5': run.recall_at_5,
+                'recall_at_10': run.recall_at_10,
+                'recall_at_50': run.recall_at_50,
+                'recall_at_100': run.recall_at_100,
+            }
+    else:
+        data['metrics'] = None
+
     return data
 
 

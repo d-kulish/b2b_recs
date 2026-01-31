@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-31 (Endpoint View Modal with tabbed interface)
+**Last Updated**: 2026-01-31 (Endpoint View Modal with Results section and green/red header styling)
 
 ---
 
@@ -1857,12 +1857,19 @@ The Endpoint View Modal provides a styled, tabbed interface for viewing endpoint
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Header: [Endpoint Name]    [Status Badge: Active/Inactive]  │
-│         Purple/gray gradient                    [Rocket/Pause icon] │
+│ Header: [Endpoint Name]    [Status Badge: ACTIVE/INACTIVE]  │
+│         Green/red gradient                    [Check/Pause icon] │
 ├─────────────────────────────────────────────────────────────┤
 │ [Overview] [Test] [Logs] [Versions]  ← Tab buttons          │
 ├─────────────────────────────────────────────────────────────┤
 │ OVERVIEW TAB:                                               │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ RESULTS                                                  │ │
+│ │ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │ │
+│ │ │  RMSE   │ │   MAE   │ │Test RMSE│ │Test MAE │        │ │
+│ │ │  0.53   │ │  0.36   │ │  0.53   │ │  0.36   │        │ │
+│ │ └─────────┘ └─────────┘ └─────────┘ └─────────┘        │ │
+│ └─────────────────────────────────────────────────────────┘ │
 │ ┌─────────────────────────────────────────────────────────┐ │
 │ │ Service URL: https://xxx.run.app  [Copy]                │ │
 │ └─────────────────────────────────────────────────────────┘ │
@@ -1884,7 +1891,7 @@ The Endpoint View Modal provides a styled, tabbed interface for viewing endpoint
 
 | Tab | Content |
 |-----|---------|
-| **Overview** | Service URL with copy button, Model info (name, type, version, run#), Hardware config (memory, CPU, instances) |
+| **Overview** | **Results** (4 metric cards: RMSE/MAE/Test RMSE/Test MAE for ranking, Recall@5/10/50/100 for retrieval, R@50/R@100/Test RMSE/Test MAE for multitask), Service URL with copy button, Model info (name, type, version, run#), Hardware config (memory, CPU, instances) |
 | **Test** | Placeholder with "Coming Soon" message |
 | **Logs** | Placeholder with GCP Console link (opens in new tab) |
 | **Versions** | Last 5 model versions with metrics tablets (reuses existing `renderVersionsTab`) |
@@ -1893,8 +1900,8 @@ The Endpoint View Modal provides a styled, tabbed interface for viewing endpoint
 
 | Status | Gradient | Icon |
 |--------|----------|------|
-| Active | Purple (`#d8b4fe` → `#f3e8ff`) | Rocket (`fa-rocket`) |
-| Inactive | Gray (`#d1d5db` → `#e5e7eb`) | Pause (`fa-pause`) |
+| Active | Green (`#dceade` → `#b2d4b7`) - matches registered model style | Checkmark (`fa-check`) |
+| Inactive | Red (`#fee2e2` → `#fecaca`) - matches failed status style | Pause (`fa-pause`) |
 
 ## Files Modified
 
@@ -1909,6 +1916,42 @@ The Endpoint View Modal provides a styled, tabbed interface for viewing endpoint
 | `static/js/endpoints_table.js` | Updated `viewDetails()` to call `openForEndpoint()` |
 
 ## API Endpoint
+
+### GET `/api/deployed-endpoints/<id>/`
+
+Returns detailed information about a specific deployed endpoint, including metrics from the deployed training run.
+
+**Response:**
+```json
+{
+  "success": true,
+  "endpoint": {
+    "id": 1,
+    "service_name": "chern-rank-v4-serving",
+    "service_url": "https://...",
+    "deployed_version": "v4",
+    "is_active": true,
+    "model_name": "chern_rank_v4",
+    "model_type": "ranking",
+    "training_run_id": 47,
+    "run_number": 47,
+    "deployment_config": {"memory": "4Gi", "cpu": "2"},
+    "metrics": {
+      "rmse": 0.53,
+      "mae": 0.36,
+      "test_rmse": 0.53,
+      "test_mae": 0.36
+    },
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}
+```
+
+**Metrics by model type:**
+- **Ranking**: `rmse`, `mae`, `test_rmse`, `test_mae`
+- **Retrieval**: `recall_at_5`, `recall_at_10`, `recall_at_50`, `recall_at_100`
+- **Multitask**: All of the above (displayed as R@50, R@100, Test RMSE, Test MAE)
 
 ### GET `/api/deployed-endpoints/<id>/versions/`
 
@@ -1979,14 +2022,14 @@ if (state.mode === 'endpoint') {
 ## CSS Classes
 
 ### Header Classes
-- `.exp-view-header.endpoint-mode.active` - Purple gradient
-- `.exp-view-header.endpoint-mode.inactive` - Gray gradient
+- `.exp-view-header.endpoint-mode.active` - Green gradient (matches registered model style)
+- `.exp-view-header.endpoint-mode.inactive` - Red gradient (matches failed status style)
 - `.exp-view-endpoint-name-text` - Large endpoint name
-- `.exp-view-endpoint-status-inline.active/.inactive` - Status badge
+- `.exp-view-endpoint-status-inline.active/.inactive` - Status badge (green/red)
 
 ### Status Icons
-- `.exp-view-status-icon.endpoint-active` - Purple background
-- `.exp-view-status-icon.endpoint-inactive` - Gray background
+- `.exp-view-status-icon.endpoint-active` - Green background (`#16a34a`)
+- `.exp-view-status-icon.endpoint-inactive` - Red background (`#dc2626`)
 
 ### Content Classes
 - `.exp-view-endpoint-url-section` - URL container with copy button

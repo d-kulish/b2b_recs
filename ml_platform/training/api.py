@@ -1422,15 +1422,14 @@ def training_run_deploy_cloud_run(request, training_run_id):
                 'error': f'TrainingRun {training_run_id} not found'
             }, status=404)
 
-        # Validate state - allow both completed and not_blessed
-        if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED]:
+        # Block only if deployment is already in progress (prevent concurrent deployments)
+        if training_run.status == TrainingRun.STATUS_DEPLOYING:
             return JsonResponse({
                 'success': False,
-                'error': f"Cannot deploy training run in '{training_run.status}' state. "
-                         f"Only completed or not-blessed training runs can be deployed."
+                'error': "Deployment already in progress. Please wait for it to complete."
             }, status=400)
 
-        # Check if model is registered
+        # Check if model is registered (this is the key requirement for deployment)
         if not training_run.vertex_model_resource_name:
             return JsonResponse({
                 'success': False,
@@ -3392,6 +3391,23 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
     # Derive is_deployed from model_status (dynamic from Vertex AI)
     is_deployed = model_status == 'deployed'
 
+    # Get deployed endpoint info if this version is deployed
+    deployed_endpoint_info = None
+    if model_status == 'deployed':
+        from .models import DeployedEndpoint
+        try:
+            endpoint = DeployedEndpoint.objects.get(
+                deployed_training_run=training_run,
+                is_active=True
+            )
+            deployed_endpoint_info = {
+                'id': endpoint.id,
+                'service_name': endpoint.service_name,
+                'service_url': endpoint.service_url,
+            }
+        except DeployedEndpoint.DoesNotExist:
+            pass
+
     data = {
         'id': training_run.id,
         'training_run_id': training_run.id,
@@ -3408,6 +3424,7 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
         'model_status': model_status,
         'is_blessed': training_run.is_blessed,
         'is_deployed': is_deployed,
+        'deployed_endpoint_info': deployed_endpoint_info,
 
         # Metrics
         'metrics': metrics,

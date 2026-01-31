@@ -2066,8 +2066,10 @@ class TrainingService:
         if not training_run.vertex_model_resource_name:
             raise TrainingServiceError("Model not registered in Model Registry")
 
-        if training_run.status not in [TrainingRun.STATUS_COMPLETED, TrainingRun.STATUS_NOT_BLESSED, TrainingRun.STATUS_DEPLOYING]:
-            raise TrainingServiceError(f"Cannot deploy model with status: {training_run.status}")
+        # Note: We don't restrict based on training_run.status here.
+        # The only requirement is that the model is registered (checked above).
+        # Status like 'deployed' or 'deploy_failed' should not block re-deployment.
+        # Concurrent deployment prevention is handled at the API layer.
 
         if not training_run.gcs_artifacts_path:
             raise TrainingServiceError("No GCS artifacts path found for this training run")
@@ -2165,10 +2167,12 @@ class TrainingService:
             logger.info(f"Deploying service: {service_path}")
 
             # Use update_service with allow_missing=True to create or update
-            operation = client.update_service(
+            # allow_missing must be passed via UpdateServiceRequest, not as a kwarg
+            request = run_v2.UpdateServiceRequest(
                 service=service,
                 allow_missing=True,
             )
+            operation = client.update_service(request=request)
 
             # Wait for the operation to complete (up to 5 minutes)
             result = operation.result(timeout=300)

@@ -2705,3 +2705,99 @@
     font-weight: 600;
     color: #1f2937;
 }
+
+/* Version Deployment Status Row */
+.version-deployment-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border: 1px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    margin-top: -12px;
+}
+
+.version-deployment-row.deployed {
+    background: linear-gradient(to right, #f0fdf4, #dcfce7);
+    border-color: #bbf7d0;
+}
+
+.version-deployment-row.not-deployed {
+    background: #f9fafb;
+}
+
+.version-deployment-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.version-deployment-status.deployed {
+    color: #15803d;
+}
+
+.version-deployment-status.deployed i {
+    color: #22c55e;
+}
+
+.version-deployment-status.not-deployed {
+    color: #6b7280;
+}
+
+.version-deployment-status .endpoint-name {
+    font-weight: 500;
+    color: #166534;
+}
+
+/* Deploy/Undeploy buttons */
+.version-deploy-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.version-deploy-btn:hover {
+    background: #2563eb;
+}
+
+.version-deploy-btn:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+}
+
+.version-undeploy-btn {
+    background: white;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.version-undeploy-btn:hover {
+    background: #fef2f2;
+    border-color: #f87171;
+}
+
+.version-undeploy-btn:disabled {
+    background: #f9fafb;
+    color: #9ca3af;
+    border-color: #e5e7eb;
+    cursor: not-allowed;
+}
+
+/* Adjust version card border radius when deployment row is present */
+.version-card.has-deployment-row {
+    border-radius: 12px 12px 0 0;
+}

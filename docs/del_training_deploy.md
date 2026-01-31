@@ -2,7 +2,7 @@
 
 This document describes the model deployment architecture for TFRS (TensorFlow Recommenders) models trained via TFX pipelines. It covers the implementation details, configuration options, and usage instructions.
 
-**Last Updated:** 2026-01-30 (Models Registry Deployment Status Fix)
+**Last Updated:** 2026-01-31 (Version Deployment UI, Cloud Run Permission & Status Validation Fixes)
 
 **Status:** Implemented
 
@@ -754,6 +754,84 @@ gcloud run services describe {service-name} --region=europe-central2
 # Check logs
 gcloud run services logs read {service-name} --region=europe-central2
 ```
+
+### Cloud Run Deployment Permission Denied (2026-01-31)
+
+**Symptoms:**
+```
+403 Permission 'artifactregistry.repositories.downloadArtifacts' denied on resource (or it may not exist).
+```
+
+**Root Cause:** Cloud Run Service Agent lacks permission to pull Docker images from Artifact Registry.
+
+**Fix:**
+```bash
+# Get project number
+PROJECT_NUMBER=$(gcloud projects describe b2b-recs --format='value(projectNumber)')
+
+# Grant Cloud Run Service Agent access to Artifact Registry
+gcloud artifacts repositories add-iam-policy-binding ml-serving \
+    --location=europe-central2 \
+    --member="serviceAccount:service-${PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com" \
+    --role="roles/artifactregistry.reader" \
+    --project=b2b-recs
+
+# Also grant default compute service account
+gcloud artifacts repositories add-iam-policy-binding ml-serving \
+    --location=europe-central2 \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/artifactregistry.reader" \
+    --project=b2b-recs
+```
+
+### UpdateServiceRequest allow_missing Bug (2026-01-31)
+
+**Symptoms:**
+```
+ServicesClient.update_service() got an unexpected keyword argument 'allow_missing'
+```
+
+**Root Cause:** The `allow_missing` parameter must be passed via `UpdateServiceRequest` object, not as a keyword argument to `update_service()`.
+
+**Wrong:**
+```python
+# This does NOT work
+operation = client.update_service(
+    service=service,
+    allow_missing=True,  # ERROR: not a valid kwarg
+)
+```
+
+**Correct:**
+```python
+from google.cloud import run_v2
+
+request = run_v2.UpdateServiceRequest(
+    service=service,
+    allow_missing=True,
+)
+operation = client.update_service(request=request)
+```
+
+**Additional Fix:** Upgrade `google-cloud-run` library:
+```bash
+pip install --upgrade google-cloud-run>=0.15.0
+```
+
+### Training Run Status Blocking Deployment (2026-01-31)
+
+**Symptoms:**
+```
+Cannot deploy training run in 'deploy_failed' state. Only completed or not-blessed training runs can be deployed.
+```
+
+**Root Cause:** The deployment validation logic incorrectly used `training_run.status` as a gate for deployment eligibility. After a failed deployment (`deploy_failed` status) or successful deployment (`deployed` status), re-deployment was blocked.
+
+**Fix:** Changed validation to only block concurrent deployments (`deploying` status). The key requirement for deployment is that the model is **registered** (has `vertex_model_resource_name`), not the training run status.
+
+**Files Changed:**
+- `ml_platform/training/api.py`: Only block if `status == 'deploying'`
+- `ml_platform/training/services.py`: Removed status restriction entirely
 
 ### Inference Errors
 

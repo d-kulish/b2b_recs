@@ -973,6 +973,81 @@ const ExpViewModal = (function() {
         }
     }
 
+    /**
+     * Deploy a specific version from the Versions tab.
+     * Opens the DeployWizard with a success callback to refresh versions.
+     */
+    async function deployVersion(trainingRunId) {
+        // Configure DeployWizard with success callback to refresh versions
+        if (typeof DeployWizard !== 'undefined') {
+            DeployWizard.configure({
+                onSuccess: function(result) {
+                    // Refresh the versions tab to show updated deployment status
+                    if (state.currentModel && state.currentModel.id) {
+                        // Clear cache to force refresh
+                        state.dataCache.versions = null;
+                        loadModelVersions(state.currentModel.id);
+                    }
+                }
+            });
+            DeployWizard.open(trainingRunId);
+        } else {
+            alert('Deploy wizard is not available. Please refresh the page.');
+        }
+    }
+
+    /**
+     * Undeploy a specific version from the Versions tab.
+     * Shows confirmation dialog and calls the endpoint undeploy API.
+     */
+    async function undeployVersion(endpointId, trainingRunId) {
+        if (!confirm('Are you sure you want to undeploy this version? This will delete the Cloud Run service.')) {
+            return;
+        }
+
+        // Find and disable the undeploy button
+        const buttons = document.querySelectorAll('.version-undeploy-btn');
+        buttons.forEach(btn => {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Undeploying...';
+        });
+
+        try {
+            const response = await fetch(`/api/deployed-endpoints/${endpointId}/undeploy/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                // Refresh the versions tab to show updated deployment status
+                if (state.currentModel && state.currentModel.id) {
+                    // Clear cache to force refresh
+                    state.dataCache.versions = null;
+                    loadModelVersions(state.currentModel.id);
+                }
+            } else {
+                alert('Failed to undeploy: ' + (data.error || 'Unknown error'));
+                // Re-enable buttons
+                buttons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Undeploy';
+                });
+            }
+        } catch (error) {
+            console.error('Error undeploying version:', error);
+            alert('Error undeploying version');
+            // Re-enable buttons
+            buttons.forEach(btn => {
+                btn.disabled = false;
+                btn.innerHTML = 'Undeploy';
+            });
+        }
+    }
+
     function scheduleRetraining(runId) {
         // Close the view modal to show the schedule modal
         close();
@@ -1552,8 +1627,39 @@ const ExpViewModal = (function() {
                 </div>
             `).join('');
 
+            // Build deployment status row
+            const isDeployed = v.model_status === 'deployed' && v.deployed_endpoint_info;
+            const endpointInfo = v.deployed_endpoint_info;
+            let deploymentRowHtml;
+
+            if (isDeployed) {
+                deploymentRowHtml = `
+                    <div class="version-deployment-row deployed">
+                        <div class="version-deployment-status deployed">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Deployed to <span class="endpoint-name">${endpointInfo.service_name}</span></span>
+                        </div>
+                        <button class="version-undeploy-btn" onclick="event.stopPropagation(); ExpViewModal.undeployVersion(${endpointInfo.id}, ${v.id})">
+                            Undeploy
+                        </button>
+                    </div>
+                `;
+            } else {
+                deploymentRowHtml = `
+                    <div class="version-deployment-row not-deployed">
+                        <div class="version-deployment-status not-deployed">
+                            <i class="fas fa-circle"></i>
+                            <span>Not deployed</span>
+                        </div>
+                        <button class="version-deploy-btn" onclick="event.stopPropagation(); ExpViewModal.deployVersion(${v.id})">
+                            Deploy
+                        </button>
+                    </div>
+                `;
+            }
+
             return `
-                <div class="version-card" onclick="ExpViewModal.selectModelVersion(${v.id})" style="cursor: pointer;">
+                <div class="version-card has-deployment-row" onclick="ExpViewModal.selectModelVersion(${v.id})" style="cursor: pointer;">
                     <div class="version-card-header">
                         <div class="version-card-info">
                             <span class="version-badge">
@@ -1568,6 +1674,7 @@ const ExpViewModal = (function() {
                         ${kpiBoxesHtml}
                     </div>
                 </div>
+                ${deploymentRowHtml}
             `;
         }).join('');
 
@@ -4536,6 +4643,10 @@ const ExpViewModal = (function() {
         deployToCloudRun: deployToCloudRun,
         undeployTrainingRun: undeployTrainingRun,
         scheduleRetraining: scheduleRetraining,
+
+        // Version deployment actions (Versions tab)
+        deployVersion: deployVersion,
+        undeployVersion: undeployVersion,
 
         // Tab switching
         switchTab: switchTab,

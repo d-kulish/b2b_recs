@@ -2284,6 +2284,206 @@ class TrainingService:
             logger.exception(f"Error deleting Cloud Run service: {e}")
             raise TrainingServiceError(f"Failed to delete Cloud Run service: {e}")
 
+    def redeploy_endpoint(self, endpoint: 'DeployedEndpoint') -> str:
+        """
+        Re-deploy an inactive endpoint with its existing config.
+
+        This re-creates the Cloud Run service with the same model version
+        and deployment configuration that was used when the endpoint was
+        originally deployed.
+
+        Args:
+            endpoint: DeployedEndpoint instance (must be inactive)
+
+        Returns:
+            str: New service URL
+
+        Raises:
+            TrainingServiceError: If redeployment fails
+        """
+        from .models import DeployedEndpoint
+
+        if endpoint.is_active:
+            raise TrainingServiceError("Endpoint is already active")
+
+        if not endpoint.deployed_training_run:
+            raise TrainingServiceError("No training run linked to this endpoint")
+
+        training_run = endpoint.deployed_training_run
+
+        # Validate the training run still has the necessary artifacts
+        if not training_run.gcs_artifacts_path:
+            raise TrainingServiceError("Training run has no GCS artifacts path")
+
+        if not training_run.vertex_model_resource_name:
+            raise TrainingServiceError("Training run has no registered model")
+
+        # Get deployment config from endpoint (preserves original settings)
+        deployment_config = endpoint.deployment_config or {}
+        memory = deployment_config.get('memory', '4Gi')
+        cpu = deployment_config.get('cpu', '2')
+        min_instances = deployment_config.get('min_instances', 0)
+        max_instances = deployment_config.get('max_instances', 10)
+        timeout = deployment_config.get('timeout', '300')
+
+        # Apply config to training run temporarily for deployment
+        training_run.deployment_config = deployment_config
+
+        logger.info(
+            f"Re-deploying endpoint {endpoint.service_name} with config: "
+            f"{cpu} vCPU, {memory} memory, {min_instances}-{max_instances} instances"
+        )
+
+        try:
+            # Use existing deploy_to_cloud_run method with the original service name
+            service_url = self.deploy_to_cloud_run(
+                training_run,
+                service_name=endpoint.service_name
+            )
+
+            # Update endpoint record
+            endpoint.service_url = service_url
+            endpoint.is_active = True
+            endpoint.save(update_fields=['service_url', 'is_active', 'updated_at'])
+
+            # Update training run status if linked
+            training_run.deployment_status = 'deployed'
+            training_run.status = TrainingRun.STATUS_DEPLOYED
+            training_run.deployed_endpoint = endpoint
+            training_run.save(update_fields=['deployment_status', 'status', 'deployed_endpoint'])
+
+            logger.info(f"Successfully re-deployed endpoint: {service_url}")
+            return service_url
+
+        except Exception as e:
+            logger.exception(f"Error re-deploying endpoint: {e}")
+            raise TrainingServiceError(f"Failed to re-deploy endpoint: {e}")
+
+    def update_endpoint_config(
+        self,
+        endpoint: 'DeployedEndpoint',
+        new_config: dict
+    ) -> str:
+        """
+        Update endpoint configuration via atomic undeploy/redeploy.
+
+        This performs an atomic operation:
+        1. Delete the existing Cloud Run service
+        2. Re-deploy with the new configuration
+
+        Args:
+            endpoint: DeployedEndpoint instance (must be active)
+            new_config: Dict with memory, cpu, min_instances, max_instances, timeout
+
+        Returns:
+            str: Service URL after redeploy
+
+        Raises:
+            TrainingServiceError: If update fails
+        """
+        from .models import DeployedEndpoint
+
+        if not endpoint.is_active:
+            raise TrainingServiceError("Cannot update config of inactive endpoint")
+
+        if not endpoint.deployed_training_run:
+            raise TrainingServiceError("No training run linked to this endpoint")
+
+        training_run = endpoint.deployed_training_run
+
+        # Validate required fields
+        if not training_run.gcs_artifacts_path:
+            raise TrainingServiceError("Training run has no GCS artifacts path")
+
+        if not training_run.vertex_model_resource_name:
+            raise TrainingServiceError("Training run has no registered model")
+
+        # Merge new config with existing config
+        current_config = endpoint.deployment_config or {}
+        updated_config = {
+            'memory': new_config.get('memory', current_config.get('memory', '4Gi')),
+            'cpu': new_config.get('cpu', current_config.get('cpu', '2')),
+            'min_instances': new_config.get('min_instances', current_config.get('min_instances', 0)),
+            'max_instances': new_config.get('max_instances', current_config.get('max_instances', 10)),
+            'timeout': new_config.get('timeout', current_config.get('timeout', '300')),
+        }
+
+        logger.info(
+            f"Updating endpoint {endpoint.service_name} config: "
+            f"{updated_config['cpu']} vCPU, {updated_config['memory']} memory, "
+            f"{updated_config['min_instances']}-{updated_config['max_instances']} instances"
+        )
+
+        try:
+            # Step 1: Delete existing Cloud Run service
+            logger.info(f"Deleting existing service: {endpoint.service_name}")
+            self.delete_cloud_run_service(endpoint.service_name)
+
+            # Step 2: Update endpoint config
+            endpoint.deployment_config = updated_config
+            endpoint.save(update_fields=['deployment_config', 'updated_at'])
+
+            # Step 3: Apply config to training run and redeploy
+            training_run.deployment_config = updated_config
+
+            service_url = self.deploy_to_cloud_run(
+                training_run,
+                service_name=endpoint.service_name
+            )
+
+            # Step 4: Update endpoint with new URL
+            endpoint.service_url = service_url
+            endpoint.is_active = True
+            endpoint.save(update_fields=['service_url', 'is_active', 'updated_at'])
+
+            logger.info(f"Successfully updated endpoint config: {service_url}")
+            return service_url
+
+        except Exception as e:
+            # If deployment fails, mark endpoint as inactive
+            endpoint.is_active = False
+            endpoint.save(update_fields=['is_active', 'updated_at'])
+
+            # Update training run status
+            training_run.deployment_status = 'failed'
+            training_run.status = TrainingRun.STATUS_DEPLOY_FAILED
+            training_run.save(update_fields=['deployment_status', 'status'])
+
+            logger.exception(f"Error updating endpoint config: {e}")
+            raise TrainingServiceError(f"Failed to update endpoint config: {e}")
+
+    def delete_endpoint_record(self, endpoint: 'DeployedEndpoint') -> bool:
+        """
+        Delete endpoint record from database.
+
+        Only inactive endpoints can be deleted. Active endpoints must be
+        undeployed first.
+
+        Args:
+            endpoint: DeployedEndpoint instance (must be inactive)
+
+        Returns:
+            bool: True if deleted
+
+        Raises:
+            TrainingServiceError: If deletion fails
+        """
+        if endpoint.is_active:
+            raise TrainingServiceError(
+                "Cannot delete active endpoint. Undeploy it first."
+            )
+
+        service_name = endpoint.service_name
+        endpoint_id = endpoint.id
+
+        try:
+            endpoint.delete()
+            logger.info(f"Deleted endpoint record: {service_name} (id={endpoint_id})")
+            return True
+        except Exception as e:
+            logger.exception(f"Error deleting endpoint record: {e}")
+            raise TrainingServiceError(f"Failed to delete endpoint record: {e}")
+
     def submit_training_pipeline(self, training_run: TrainingRun) -> TrainingRun:
         """
         Submit a training run to Vertex AI Pipeline.

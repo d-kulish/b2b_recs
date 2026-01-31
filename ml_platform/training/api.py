@@ -5112,3 +5112,307 @@ def endpoint_undeploy(request, endpoint_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def endpoint_deploy(request, endpoint_id):
+    """
+    Re-deploy an inactive endpoint with same version & config.
+
+    POST /api/deployed-endpoints/<id>/deploy/
+
+    Re-creates the Cloud Run service using the endpoint's stored
+    configuration and the linked training run's model artifacts.
+    """
+    from .models import DeployedEndpoint
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        if endpoint.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Endpoint is already active'
+            }, status=400)
+
+        if not endpoint.deployed_training_run:
+            return JsonResponse({
+                'success': False,
+                'error': 'No training run linked to this endpoint'
+            }, status=400)
+
+        # Re-deploy the endpoint
+        service = TrainingService(model_endpoint)
+        try:
+            service_url = service.redeploy_endpoint(endpoint)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        # Refresh from database
+        endpoint.refresh_from_db()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Endpoint {endpoint.service_name} deployed successfully',
+            'endpoint': _serialize_deployed_endpoint(endpoint, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deploying endpoint: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["PATCH"])
+def endpoint_update_config(request, endpoint_id):
+    """
+    Update endpoint config and redeploy (atomic operation).
+
+    PATCH /api/deployed-endpoints/<id>/config/
+
+    Request body:
+    {
+        "memory": "8Gi",
+        "cpu": "4",
+        "min_instances": 1,
+        "max_instances": 20,
+        "timeout": "600"
+    }
+
+    Performs an atomic undeploy/redeploy with the new configuration.
+    """
+    from .models import DeployedEndpoint
+    import json
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        if not endpoint.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot update config of inactive endpoint'
+            }, status=400)
+
+        if not endpoint.deployed_training_run:
+            return JsonResponse({
+                'success': False,
+                'error': 'No training run linked to this endpoint'
+            }, status=400)
+
+        # Parse request body
+        try:
+            body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON in request body'
+            }, status=400)
+
+        # Validate and extract config values
+        new_config = {}
+
+        if 'memory' in body:
+            memory = body['memory']
+            valid_memory = ['1Gi', '2Gi', '4Gi', '8Gi', '16Gi', '32Gi']
+            if memory not in valid_memory:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid memory value. Valid options: {valid_memory}'
+                }, status=400)
+            new_config['memory'] = memory
+
+        if 'cpu' in body:
+            cpu = str(body['cpu'])
+            valid_cpu = ['1', '2', '4', '8']
+            if cpu not in valid_cpu:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid CPU value. Valid options: {valid_cpu}'
+                }, status=400)
+            new_config['cpu'] = cpu
+
+        if 'min_instances' in body:
+            try:
+                min_instances = int(body['min_instances'])
+                if min_instances < 0 or min_instances > 100:
+                    raise ValueError("Must be between 0 and 100")
+                new_config['min_instances'] = min_instances
+            except (ValueError, TypeError) as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid min_instances: {e}'
+                }, status=400)
+
+        if 'max_instances' in body:
+            try:
+                max_instances = int(body['max_instances'])
+                if max_instances < 1 or max_instances > 1000:
+                    raise ValueError("Must be between 1 and 1000")
+                new_config['max_instances'] = max_instances
+            except (ValueError, TypeError) as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid max_instances: {e}'
+                }, status=400)
+
+        if 'timeout' in body:
+            try:
+                timeout = int(body['timeout'])
+                if timeout < 1 or timeout > 3600:
+                    raise ValueError("Must be between 1 and 3600 seconds")
+                new_config['timeout'] = str(timeout)
+            except (ValueError, TypeError) as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid timeout: {e}'
+                }, status=400)
+
+        if not new_config:
+            return JsonResponse({
+                'success': False,
+                'error': 'No valid config values provided'
+            }, status=400)
+
+        # Validate min <= max instances
+        current_config = endpoint.deployment_config or {}
+        final_min = new_config.get('min_instances', current_config.get('min_instances', 0))
+        final_max = new_config.get('max_instances', current_config.get('max_instances', 10))
+        if final_min > final_max:
+            return JsonResponse({
+                'success': False,
+                'error': 'min_instances cannot be greater than max_instances'
+            }, status=400)
+
+        # Update endpoint config via service
+        service = TrainingService(model_endpoint)
+        try:
+            service_url = service.update_endpoint_config(endpoint, new_config)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        # Refresh from database
+        endpoint.refresh_from_db()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Endpoint {endpoint.service_name} config updated successfully',
+            'endpoint': _serialize_deployed_endpoint(endpoint, include_details=True)
+        })
+
+    except Exception as e:
+        logger.exception(f"Error updating endpoint config: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def endpoint_delete(request, endpoint_id):
+    """
+    Delete endpoint record from database (only if inactive).
+
+    DELETE /api/deployed-endpoints/<id>/
+
+    Removes the endpoint record from the database. The Cloud Run service
+    must already be deleted (endpoint must be inactive).
+    """
+    from .models import DeployedEndpoint
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        if endpoint.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot delete active endpoint. Undeploy it first.'
+            }, status=400)
+
+        service_name = endpoint.service_name
+
+        # Delete the endpoint record
+        service = TrainingService(model_endpoint)
+        try:
+            service.delete_endpoint_record(endpoint)
+        except TrainingServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Endpoint {service_name} deleted successfully'
+        })
+
+    except Exception as e:
+        logger.exception(f"Error deleting endpoint: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

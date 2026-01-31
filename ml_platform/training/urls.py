@@ -273,4 +273,19 @@ urlpatterns = [
         api.endpoint_undeploy,
         name='endpoint_undeploy'
     ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/deploy/',
+        api.endpoint_deploy,
+        name='endpoint_deploy'
+    ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/config/',
+        api.endpoint_update_config,
+        name='endpoint_update_config'
+    ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/delete/',
+        api.endpoint_delete,
+        name='endpoint_delete'
+    ),
 ]

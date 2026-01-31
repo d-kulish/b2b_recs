@@ -30,6 +30,9 @@ const EndpointsTable = (function() {
             list: '/api/deployed-endpoints/',
             detail: '/api/deployed-endpoints/{id}/',
             undeploy: '/api/deployed-endpoints/{id}/undeploy/',
+            deploy: '/api/deployed-endpoints/{id}/deploy/',
+            config: '/api/deployed-endpoints/{id}/config/',
+            delete: '/api/deployed-endpoints/{id}/delete/',
         },
         // Cloud Run logs URL pattern
         logsUrlPattern: 'https://console.cloud.google.com/run/detail/{region}/{service}/logs?project={project}',
@@ -225,6 +228,348 @@ const EndpointsTable = (function() {
         }
     }
 
+    async function deployEndpoint(endpointId) {
+        try {
+            showToast('Deploying endpoint...', 'info');
+            const response = await fetch(buildUrl(config.endpoints.deploy, { id: endpointId }), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Endpoint deployed successfully', 'success');
+                fetchEndpoints();
+            } else {
+                showToast(data.error || 'Failed to deploy endpoint', 'error');
+            }
+        } catch (error) {
+            console.error('Error deploying endpoint:', error);
+            showToast('Failed to deploy endpoint', 'error');
+        }
+    }
+
+    async function updateEndpointConfig(endpointId, newConfig) {
+        try {
+            showToast('Updating endpoint configuration...', 'info');
+            const response = await fetch(buildUrl(config.endpoints.config, { id: endpointId }), {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify(newConfig)
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Endpoint configuration updated successfully', 'success');
+                closeEditModal();
+                fetchEndpoints();
+            } else {
+                showToast(data.error || 'Failed to update endpoint config', 'error');
+            }
+        } catch (error) {
+            console.error('Error updating endpoint config:', error);
+            showToast('Failed to update endpoint config', 'error');
+        }
+    }
+
+    async function deleteEndpoint(endpointId) {
+        try {
+            const response = await fetch(buildUrl(config.endpoints.delete, { id: endpointId }), {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('Endpoint deleted successfully', 'success');
+                fetchEndpoints();
+            } else {
+                showToast(data.error || 'Failed to delete endpoint', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting endpoint:', error);
+            showToast('Failed to delete endpoint', 'error');
+        }
+    }
+
+    // =============================================================================
+    // DROPDOWN & MODAL
+    // =============================================================================
+
+    function toggleViewDropdown(endpointId, event) {
+        event.stopPropagation();
+        closeAllDropdowns();
+
+        const dropdown = document.getElementById(`viewDropdown-${endpointId}`);
+        if (dropdown) {
+            dropdown.classList.toggle('visible');
+        }
+    }
+
+    function closeAllDropdowns() {
+        document.querySelectorAll('.endpoints-dropdown-menu.visible').forEach(menu => {
+            menu.classList.remove('visible');
+        });
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.endpoints-dropdown')) {
+            closeAllDropdowns();
+        }
+    });
+
+    // Edit modal state
+    let editModalState = {
+        endpointId: null,
+        endpoint: null,
+        selectedPreset: 'production',
+        showAdvanced: false
+    };
+
+    // Preset configurations
+    const PRESETS = {
+        development: {
+            name: 'Development',
+            description: 'Low cost, scale to zero',
+            icon: 'fa-laptop-code',
+            config: { memory: '2Gi', cpu: '1', min_instances: 0, max_instances: 2, timeout: '300' }
+        },
+        production: {
+            name: 'Production',
+            description: 'Balanced performance',
+            icon: 'fa-server',
+            config: { memory: '4Gi', cpu: '2', min_instances: 1, max_instances: 10, timeout: '300' }
+        },
+        high_traffic: {
+            name: 'High Traffic',
+            description: 'Maximum performance',
+            icon: 'fa-rocket',
+            config: { memory: '8Gi', cpu: '4', min_instances: 2, max_instances: 20, timeout: '600' }
+        }
+    };
+
+    function openEditModal(endpointId) {
+        const endpoint = state.endpoints.find(e => e.id === endpointId);
+        if (!endpoint) return;
+
+        editModalState.endpointId = endpointId;
+        editModalState.endpoint = endpoint;
+        editModalState.showAdvanced = false;
+
+        // Detect current preset based on config
+        const currentConfig = endpoint.deployment_config || {};
+        editModalState.selectedPreset = detectPreset(currentConfig);
+
+        renderEditModal();
+    }
+
+    function detectPreset(config) {
+        // Try to match current config to a preset
+        for (const [key, preset] of Object.entries(PRESETS)) {
+            if (preset.config.memory === config.memory &&
+                preset.config.cpu === config.cpu &&
+                preset.config.min_instances === config.min_instances &&
+                preset.config.max_instances === config.max_instances) {
+                return key;
+            }
+        }
+        return 'custom';
+    }
+
+    function renderEditModal() {
+        // Remove existing modal if any
+        const existingModal = document.getElementById('endpointEditModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const endpoint = editModalState.endpoint;
+        const currentConfig = endpoint.deployment_config || {};
+
+        const modalHtml = `
+            <div id="endpointEditModal" class="endpoint-edit-modal-overlay">
+                <div class="endpoint-edit-modal">
+                    <div class="endpoint-edit-modal-header">
+                        <h3><i class="fas fa-cog"></i> Edit Endpoint Configuration</h3>
+                        <button class="endpoint-edit-modal-close" onclick="EndpointsTable.closeEditModal()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="endpoint-edit-modal-body">
+                        <!-- Endpoint Info -->
+                        <div class="edit-endpoint-info">
+                            <span class="edit-endpoint-name">${endpoint.service_name}</span>
+                            <span class="edit-endpoint-version">Version ${endpoint.deployed_version || 'v1'}</span>
+                        </div>
+
+                        <!-- Deployment Presets -->
+                        <div class="edit-section-label">Configuration Preset</div>
+                        <div class="deploy-preset-cards">
+                            ${Object.entries(PRESETS).map(([key, preset]) => `
+                                <div class="deploy-preset-card ${editModalState.selectedPreset === key ? 'selected' : ''}"
+                                     data-preset="${key}"
+                                     onclick="EndpointsTable.selectPreset('${key}')">
+                                    <div class="deploy-preset-icon"><i class="fas ${preset.icon}"></i></div>
+                                    <div class="deploy-preset-name">${preset.name}</div>
+                                    <div class="deploy-preset-desc">${preset.description}</div>
+                                    <div class="deploy-preset-specs">
+                                        ${preset.config.cpu} vCPU, ${preset.config.memory}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Advanced Options Toggle -->
+                        <div class="edit-advanced-header" onclick="EndpointsTable.toggleAdvancedOptions()">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Advanced Options</span>
+                            <i class="fas fa-chevron-${editModalState.showAdvanced ? 'up' : 'down'}" id="advancedChevron"></i>
+                        </div>
+
+                        <!-- Advanced Options Panel -->
+                        <div class="edit-advanced-options ${editModalState.showAdvanced ? 'visible' : ''}" id="editAdvancedOptions">
+                            <div class="edit-option-row">
+                                <div class="edit-option-group">
+                                    <label>Memory</label>
+                                    <select id="editMemory">
+                                        ${['1Gi', '2Gi', '4Gi', '8Gi', '16Gi', '32Gi'].map(m =>
+                                            `<option value="${m}" ${currentConfig.memory === m ? 'selected' : ''}>${m}</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                                <div class="edit-option-group">
+                                    <label>CPU</label>
+                                    <select id="editCpu">
+                                        ${['1', '2', '4', '8'].map(c =>
+                                            `<option value="${c}" ${currentConfig.cpu === c ? 'selected' : ''}>${c} vCPU</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="edit-option-row">
+                                <div class="edit-option-group">
+                                    <label>Min Instances</label>
+                                    <input type="number" id="editMinInstances" min="0" max="100"
+                                           value="${currentConfig.min_instances || 0}">
+                                </div>
+                                <div class="edit-option-group">
+                                    <label>Max Instances</label>
+                                    <input type="number" id="editMaxInstances" min="1" max="1000"
+                                           value="${currentConfig.max_instances || 10}">
+                                </div>
+                            </div>
+                            <div class="edit-option-row">
+                                <div class="edit-option-group" style="flex: 1;">
+                                    <label>Timeout (seconds)</label>
+                                    <input type="number" id="editTimeout" min="1" max="3600"
+                                           value="${currentConfig.timeout || 300}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Warning -->
+                        <div class="edit-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>This will undeploy and redeploy the endpoint with the new configuration. There may be brief downtime.</span>
+                        </div>
+                    </div>
+
+                    <div class="endpoint-edit-modal-footer">
+                        <button class="btn-cancel" onclick="EndpointsTable.closeEditModal()">Cancel</button>
+                        <button class="btn-save" onclick="EndpointsTable.saveEndpointConfig()">
+                            <i class="fas fa-check"></i> Apply Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function closeEditModal() {
+        const modal = document.getElementById('endpointEditModal');
+        if (modal) {
+            modal.remove();
+        }
+        editModalState = {
+            endpointId: null,
+            endpoint: null,
+            selectedPreset: 'production',
+            showAdvanced: false
+        };
+    }
+
+    function selectPreset(presetName) {
+        editModalState.selectedPreset = presetName;
+        const preset = PRESETS[presetName];
+
+        if (preset) {
+            // Update advanced options with preset values
+            const memorySelect = document.getElementById('editMemory');
+            const cpuSelect = document.getElementById('editCpu');
+            const minInput = document.getElementById('editMinInstances');
+            const maxInput = document.getElementById('editMaxInstances');
+            const timeoutInput = document.getElementById('editTimeout');
+
+            if (memorySelect) memorySelect.value = preset.config.memory;
+            if (cpuSelect) cpuSelect.value = preset.config.cpu;
+            if (minInput) minInput.value = preset.config.min_instances;
+            if (maxInput) maxInput.value = preset.config.max_instances;
+            if (timeoutInput) timeoutInput.value = preset.config.timeout;
+        }
+
+        // Update selected state on preset cards
+        document.querySelectorAll('.deploy-preset-card').forEach(card => {
+            card.classList.remove('selected');
+            if (card.dataset.preset === presetName) {
+                card.classList.add('selected');
+            }
+        });
+    }
+
+    function toggleAdvancedOptions() {
+        editModalState.showAdvanced = !editModalState.showAdvanced;
+        const panel = document.getElementById('editAdvancedOptions');
+        const chevron = document.getElementById('advancedChevron');
+
+        if (panel) {
+            panel.classList.toggle('visible', editModalState.showAdvanced);
+        }
+        if (chevron) {
+            chevron.className = `fas fa-chevron-${editModalState.showAdvanced ? 'up' : 'down'}`;
+        }
+    }
+
+    function saveEndpointConfig() {
+        const newConfig = {
+            memory: document.getElementById('editMemory')?.value,
+            cpu: document.getElementById('editCpu')?.value,
+            min_instances: parseInt(document.getElementById('editMinInstances')?.value || '0', 10),
+            max_instances: parseInt(document.getElementById('editMaxInstances')?.value || '10', 10),
+            timeout: document.getElementById('editTimeout')?.value
+        };
+
+        // Validate
+        if (newConfig.min_instances > newConfig.max_instances) {
+            showToast('Min instances cannot exceed max instances', 'error');
+            return;
+        }
+
+        updateEndpointConfig(editModalState.endpointId, newConfig);
+    }
+
     // =============================================================================
     // RENDERING
     // =============================================================================
@@ -305,9 +650,6 @@ const EndpointsTable = (function() {
                        value="${state.filters.search}"
                        oninput="EndpointsTable.handleSearch(this.value)">
             </div>
-            <button class="endpoints-refresh-btn" onclick="EndpointsTable.refresh()" title="Refresh">
-                <i class="fas fa-sync-alt"></i>
-            </button>
         `;
     }
 
@@ -414,19 +756,58 @@ const EndpointsTable = (function() {
 
         return `
             <div class="endpoints-action-buttons">
-                <button class="endpoints-action-btn test" onclick="EndpointsTable.testEndpoint(${endpoint.id})" title="Test Endpoint" ${!isActive ? 'disabled' : ''}>
-                    <i class="fas fa-play"></i>
+                <!-- View Dropdown -->
+                <div class="endpoints-dropdown">
+                    <button class="endpoints-action-btn view-dropdown"
+                            onclick="EndpointsTable.toggleViewDropdown(${endpoint.id}, event)"
+                            title="View Options">
+                        <i class="fas fa-eye"></i>
+                        <i class="fas fa-caret-down" style="font-size: 9px; margin-left: 2px;"></i>
+                    </button>
+                    <div class="endpoints-dropdown-menu" id="viewDropdown-${endpoint.id}">
+                        <button onclick="EndpointsTable.viewLogs(${endpoint.id})">
+                            <i class="fas fa-file-alt"></i> Logs
+                        </button>
+                        <button onclick="EndpointsTable.viewDetails(${endpoint.id})">
+                            <i class="fas fa-info-circle"></i> Details
+                        </button>
+                        <button onclick="EndpointsTable.testEndpoint(${endpoint.id})" ${!isActive ? 'disabled' : ''}>
+                            <i class="fas fa-vial"></i> Test
+                        </button>
+                        <button onclick="EndpointsTable.copyUrl(${endpoint.id})">
+                            <i class="fas fa-link"></i> Copy URL
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Deploy/Undeploy (contextual) -->
+                ${isActive ? `
+                    <button class="endpoints-action-btn undeploy"
+                            onclick="EndpointsTable.confirmUndeploy(${endpoint.id})"
+                            title="Undeploy">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                ` : `
+                    <button class="endpoints-action-btn deploy"
+                            onclick="EndpointsTable.confirmDeploy(${endpoint.id})"
+                            title="Deploy">
+                        <i class="fas fa-play"></i>
+                    </button>
+                `}
+
+                <!-- Edit (only for active) -->
+                <button class="endpoints-action-btn edit"
+                        onclick="EndpointsTable.openEditModal(${endpoint.id})"
+                        title="Edit Config"
+                        ${!isActive ? 'disabled' : ''}>
+                    <i class="fas fa-cog"></i>
                 </button>
-                <button class="endpoints-action-btn copy" onclick="EndpointsTable.copyUrl(${endpoint.id})" title="Copy URL">
-                    <i class="fas fa-link"></i>
-                </button>
-                <button class="endpoints-action-btn logs" onclick="EndpointsTable.viewLogs(${endpoint.id})" title="View Logs">
-                    <i class="fas fa-file-alt"></i>
-                </button>
-                <button class="endpoints-action-btn details" onclick="EndpointsTable.viewDetails(${endpoint.id})" title="View Details">
-                    <i class="fas fa-info-circle"></i>
-                </button>
-                <button class="endpoints-action-btn undeploy" onclick="EndpointsTable.confirmUndeploy(${endpoint.id})" title="Undeploy" ${!isActive ? 'disabled' : ''}>
+
+                <!-- Delete (only for inactive) -->
+                <button class="endpoints-action-btn delete"
+                        onclick="EndpointsTable.confirmDelete(${endpoint.id})"
+                        title="Delete"
+                        ${isActive ? 'disabled' : ''}>
                     <i class="fas fa-trash-alt"></i>
                 </button>
             </div>
@@ -586,8 +967,41 @@ const EndpointsTable = (function() {
         }
 
         const serviceName = endpoint.service_name || 'this endpoint';
-        if (confirm(`Are you sure you want to undeploy "${serviceName}"?\n\nThis will delete the Cloud Run service. This action cannot be undone.`)) {
+        if (confirm(`Are you sure you want to undeploy "${serviceName}"?\n\nThis will delete the Cloud Run service. The endpoint record will remain and can be re-deployed.`)) {
             undeployEndpoint(endpointId);
+        }
+    }
+
+    function confirmDeploy(endpointId) {
+        const endpoint = state.endpoints.find(e => e.id === endpointId);
+        if (!endpoint) return;
+
+        if (endpoint.is_active) {
+            showToast('Endpoint is already active', 'error');
+            return;
+        }
+
+        const serviceName = endpoint.service_name || 'this endpoint';
+        const config = endpoint.deployment_config || {};
+        const configStr = `${config.cpu || '2'} vCPU, ${config.memory || '4Gi'}`;
+
+        if (confirm(`Deploy "${serviceName}"?\n\nThis will create the Cloud Run service with:\n- Version: ${endpoint.deployed_version || 'v1'}\n- Config: ${configStr}`)) {
+            deployEndpoint(endpointId);
+        }
+    }
+
+    function confirmDelete(endpointId) {
+        const endpoint = state.endpoints.find(e => e.id === endpointId);
+        if (!endpoint) return;
+
+        if (endpoint.is_active) {
+            showToast('Cannot delete active endpoint. Undeploy it first.', 'error');
+            return;
+        }
+
+        const serviceName = endpoint.service_name || 'this endpoint';
+        if (confirm(`Delete "${serviceName}" permanently?\n\nThis will remove the endpoint record from the database. This action cannot be undone.`)) {
+            deleteEndpoint(endpointId);
         }
     }
 
@@ -699,6 +1113,14 @@ const EndpointsTable = (function() {
         viewDetails,
         testEndpoint,
         confirmUndeploy,
+        confirmDeploy,
+        confirmDelete,
+        toggleViewDropdown,
+        openEditModal,
+        closeEditModal,
+        selectPreset,
+        toggleAdvancedOptions,
+        saveEndpointConfig,
         nextPage,
         prevPage
     };

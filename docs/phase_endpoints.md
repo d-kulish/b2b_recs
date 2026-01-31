@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-30 (Fixed Cloud Run operations to use Python SDK instead of gcloud CLI)
+**Last Updated**: 2026-01-31 (Restructured endpoint action buttons with grouped layout)
 
 ---
 
@@ -808,9 +808,9 @@ The Serving Endpoints chapter displays all deployed ML serving endpoints (Cloud 
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `ml_platform/training/api.py` | Modified | Added 3 API functions + serializer |
-| `ml_platform/training/urls.py` | Modified | Registered 3 new URL patterns |
-| `ml_platform/training/services.py` | Modified | Added `delete_cloud_run_service()` method |
+| `ml_platform/training/api.py` | Modified | Added 6 API functions + serializer |
+| `ml_platform/training/urls.py` | Modified | Registered 6 new URL patterns |
+| `ml_platform/training/services.py` | Modified | Added `delete_cloud_run_service()`, `redeploy_endpoint()`, `update_endpoint_config()`, `delete_endpoint_record()` methods |
 | `templates/ml_platform/model_deployment.html` | Modified | Full chapter implementation |
 | `static/js/endpoints_table.js` | Created | IIFE module for table management |
 | `static/css/endpoints_table.css` | Created | Styles with `.endpoints-` prefix |
@@ -822,6 +822,9 @@ The Serving Endpoints chapter displays all deployed ML serving endpoints (Cloud 
 | GET | `/api/deployed-endpoints/` | List endpoints with filters, pagination, KPIs |
 | GET | `/api/deployed-endpoints/<id>/` | Get endpoint details |
 | POST | `/api/deployed-endpoints/<id>/undeploy/` | Delete Cloud Run service, mark inactive |
+| POST | `/api/deployed-endpoints/<id>/deploy/` | Re-deploy inactive endpoint with same config |
+| PATCH | `/api/deployed-endpoints/<id>/config/` | Update config and redeploy (atomic) |
+| DELETE | `/api/deployed-endpoints/<id>/delete/` | Delete endpoint record (only if inactive) |
 
 ### API Response Format (List)
 
@@ -859,7 +862,6 @@ The Serving Endpoints chapter displays all deployed ML serving endpoints (Cloud 
 - Status dropdown (All, Active, Inactive)
 - Model Name dropdown (populated dynamically)
 - Search input (debounced)
-- Refresh button
 
 **Endpoints Table Columns:**
 1. # (row number)
@@ -872,12 +874,29 @@ The Serving Endpoints chapter displays all deployed ML serving endpoints (Cloud 
 8. Last Updated (relative time)
 9. Actions (icon buttons)
 
-**Action Buttons:**
+**Action Buttons (Updated 2026-01-31):**
+
+The action buttons are now grouped in a role-based layout:
+
+| Button | Active Endpoint | Inactive Endpoint |
+|--------|-----------------|-------------------|
+| **View** (dropdown) | Enabled | Enabled |
+| **Deploy** | Hidden | Enabled (re-deploys) |
+| **Undeploy** | Enabled | Hidden |
+| **Edit** | Enabled (opens config modal) | Disabled |
+| **Delete** | Disabled | Enabled (removes DB record) |
+
+**View Dropdown Menu:**
+- Logs (opens Cloud Run logs in GCP Console)
+- Details (opens ExpViewModal for linked training run)
 - Test (placeholder for future testing feature)
-- Copy URL (clipboard)
-- View Logs (opens Cloud Run logs in new tab)
-- View Details (opens ExpViewModal for linked training run)
-- Undeploy (confirmation + delete)
+- Copy URL (copies endpoint URL to clipboard)
+
+**Edit Config Modal:**
+- Preset cards (Development, Production, High Traffic)
+- Advanced options (Memory, CPU, Min/Max Instances, Timeout)
+- Warning about undeploy/redeploy process
+- Applies changes via atomic undeploy + redeploy
 
 ### JavaScript Module: `EndpointsTable`
 
@@ -903,15 +922,49 @@ EndpointsTable.viewLogs(endpointId)
 EndpointsTable.viewDetails(endpointId)
 EndpointsTable.testEndpoint(endpointId)
 EndpointsTable.confirmUndeploy(endpointId)
+EndpointsTable.confirmDeploy(endpointId)   // NEW: Re-deploy inactive endpoint
+EndpointsTable.confirmDelete(endpointId)   // NEW: Delete endpoint record
+EndpointsTable.toggleViewDropdown(id, e)   // NEW: Toggle view dropdown menu
+EndpointsTable.openEditModal(endpointId)   // NEW: Open config edit modal
+EndpointsTable.closeEditModal()            // NEW: Close edit modal
+EndpointsTable.selectPreset(presetName)    // NEW: Select config preset
+EndpointsTable.toggleAdvancedOptions()     // NEW: Toggle advanced options
+EndpointsTable.saveEndpointConfig()        // NEW: Save config changes
 EndpointsTable.nextPage()
 EndpointsTable.prevPage()
 ```
 
-### Service Method: `delete_cloud_run_service`
+### Service Methods
 
 ```python
 # ml_platform/training/services.py
 
+def delete_cloud_run_service(self, service_name: str) -> bool:
+    """Delete a Cloud Run service using Google Cloud Run Python SDK."""
+
+def redeploy_endpoint(self, endpoint: DeployedEndpoint) -> str:
+    """
+    Re-deploy an inactive endpoint with its existing config.
+    Returns new service URL.
+    """
+
+def update_endpoint_config(self, endpoint: DeployedEndpoint, new_config: dict) -> str:
+    """
+    Update endpoint configuration via atomic undeploy/redeploy.
+    new_config can contain: memory, cpu, min_instances, max_instances, timeout
+    Returns service URL after redeploy.
+    """
+
+def delete_endpoint_record(self, endpoint: DeployedEndpoint) -> bool:
+    """
+    Delete endpoint record from database.
+    Only works for inactive endpoints.
+    """
+```
+
+### Service Method Details: `delete_cloud_run_service`
+
+```python
 def delete_cloud_run_service(self, service_name: str) -> bool:
     """
     Delete a Cloud Run service using Google Cloud Run Python SDK.

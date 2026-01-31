@@ -166,33 +166,6 @@
     flex: 1;
 }
 
-.endpoints-refresh-btn {
-    padding: 8px 16px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: white;
-    font-size: 13px;
-    color: #374151;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-}
-
-.endpoints-refresh-btn:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-}
-
-.endpoints-refresh-btn.loading i {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
 
 /* =========================================================================
    Endpoints Table
@@ -633,5 +606,420 @@
 
     .endpoints-url-text {
         max-width: 120px;
+    }
+}
+
+/* =========================================================================
+   Dropdown Menu
+   ========================================================================= */
+.endpoints-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.endpoints-action-btn.view-dropdown {
+    padding: 6px 10px;
+}
+
+.endpoints-action-btn.view-dropdown:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.endpoints-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 140px;
+    z-index: 100;
+    display: none;
+    overflow: hidden;
+}
+
+.endpoints-dropdown-menu.visible {
+    display: block;
+}
+
+.endpoints-dropdown-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    background: none;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+}
+
+.endpoints-dropdown-menu button:hover:not(:disabled) {
+    background: #f3f4f6;
+}
+
+.endpoints-dropdown-menu button:disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.endpoints-dropdown-menu button i {
+    width: 14px;
+    text-align: center;
+    color: #6b7280;
+}
+
+.endpoints-dropdown-menu button:hover:not(:disabled) i {
+    color: #374151;
+}
+
+/* =========================================================================
+   Additional Action Button States
+   ========================================================================= */
+.endpoints-action-btn.deploy:hover {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+    color: #059669;
+}
+
+.endpoints-action-btn.edit:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #2563eb;
+}
+
+.endpoints-action-btn.delete:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+/* =========================================================================
+   Edit Modal
+   ========================================================================= */
+.endpoint-edit-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.endpoint-edit-modal {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.endpoint-edit-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.endpoint-edit-modal-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.endpoint-edit-modal-header h3 i {
+    color: #6366f1;
+}
+
+.endpoint-edit-modal-close {
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    color: #6b7280;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+}
+
+.endpoint-edit-modal-close:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.endpoint-edit-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Endpoint Info */
+.edit-endpoint-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.edit-endpoint-name {
+    font-weight: 600;
+    color: #111827;
+    font-size: 14px;
+}
+
+.edit-endpoint-version {
+    font-size: 12px;
+    color: #6b7280;
+    padding: 2px 8px;
+    background: white;
+    border-radius: 4px;
+}
+
+/* Section Label */
+.edit-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+/* Preset Cards */
+.deploy-preset-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.deploy-preset-card {
+    padding: 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    background: white;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.deploy-preset-card:hover {
+    border-color: #c7d2fe;
+    background: #f5f3ff;
+}
+
+.deploy-preset-card.selected {
+    border-color: #6366f1;
+    background: #eef2ff;
+}
+
+.deploy-preset-icon {
+    font-size: 20px;
+    color: #6366f1;
+    margin-bottom: 8px;
+}
+
+.deploy-preset-name {
+    font-weight: 600;
+    color: #111827;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.deploy-preset-desc {
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+
+.deploy-preset-specs {
+    font-size: 10px;
+    color: #9ca3af;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* Advanced Options */
+.edit-advanced-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 12px;
+    transition: all 0.15s ease;
+}
+
+.edit-advanced-header:hover {
+    background: #f3f4f6;
+}
+
+.edit-advanced-header i:first-child {
+    color: #6366f1;
+}
+
+.edit-advanced-header span {
+    flex: 1;
+}
+
+.edit-advanced-options {
+    display: none;
+    padding: 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.edit-advanced-options.visible {
+    display: block;
+}
+
+.edit-option-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.edit-option-row:last-child {
+    margin-bottom: 0;
+}
+
+.edit-option-group {
+    flex: 1;
+}
+
+.edit-option-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 6px;
+}
+
+.edit-option-group select,
+.edit-option-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #111827;
+    background: white;
+}
+
+.edit-option-group select:focus,
+.edit-option-group input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+/* Warning */
+.edit-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #92400e;
+}
+
+.edit-warning i {
+    color: #d97706;
+    margin-top: 1px;
+}
+
+/* Modal Footer */
+.endpoint-edit-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.btn-cancel {
+    padding: 10px 20px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-cancel:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.btn-save {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #6366f1;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-save:hover {
+    background: #4f46e5;
+}
+
+.btn-save:active {
+    background: #4338ca;
+}
+
+/* Modal Responsive */
+@media (max-width: 600px) {
+    .deploy-preset-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .edit-option-row {
+        flex-direction: column;
+        gap: 12px;
     }
 }

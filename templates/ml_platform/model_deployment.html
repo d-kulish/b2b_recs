@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="{% static 'css/endpoints_table.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
 {% endblock %}
 
 {% block model_content %}
@@ -57,6 +58,11 @@
 {% include 'includes/_exp_view_modal.html' %}
 
 <!-- =============================================================================
+     DEPLOY WIZARD MODAL (Cloud Run deployment with presets)
+     ============================================================================ -->
+{% include 'includes/_deploy_wizard.html' %}
+
+<!-- =============================================================================
      CONFIRMATION MODAL (Reusable styled confirmation dialog)
      ============================================================================ -->
 <div id="confirmModal" class="modal-overlay hidden">
@@ -89,9 +95,142 @@
 <!-- Chart.js for Versions tab charts -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{% static 'js/exp_view_modal.js' %}?v=2"></script>
+
+<!-- TrainingCards shim for styled confirmation modals (required by DeployWizard) -->
+<script>
+/**
+ * Lightweight TrainingCards shim providing showConfirmModal functionality.
+ * This allows DeployWizard to show styled modals instead of browser alerts.
+ */
+const TrainingCards = (function() {
+    'use strict';
+
+    let autoCloseTimer = null;
+
+    function hideConfirmModal() {
+        const modal = document.getElementById('confirmModal');
+        if (modal) modal.classList.add('hidden');
+        if (autoCloseTimer) {
+            clearTimeout(autoCloseTimer);
+            autoCloseTimer = null;
+        }
+    }
+
+    /**
+     * Show a styled confirmation modal
+     * @param {Object} options - Modal options
+     * @param {string} options.title - Modal title
+     * @param {string} options.message - Modal message (can include HTML)
+     * @param {string} options.confirmText - Confirm button text
+     * @param {string} options.cancelText - Cancel button text
+     * @param {string} options.type - Modal type: 'warning', 'danger', 'info', 'success'
+     * @param {boolean} options.hideCancel - Hide the cancel button (for notifications)
+     * @param {number} options.autoClose - Auto-close modal after N milliseconds
+     * @param {Function} options.onConfirm - Callback when confirmed
+     * @param {Function} options.onCancel - Callback when cancelled
+     */
+    function showConfirmModal(options) {
+        const modal = document.getElementById('confirmModal');
+        const icon = document.getElementById('confirmModalIcon');
+        const title = document.getElementById('confirmModalTitle');
+        const message = document.getElementById('confirmModalMessage');
+        const confirmBtn = document.getElementById('confirmModalConfirmBtn');
+        const cancelBtn = document.getElementById('confirmModalCancelBtn');
+
+        if (!modal) return;
+
+        // Set content
+        title.textContent = options.title || 'Confirm Action';
+        message.innerHTML = options.message || 'Are you sure you want to proceed?';
+
+        // Update button text
+        const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
+        const cancelInner = cancelBtn.querySelector('.btn-neu-inner');
+        if (confirmInner) confirmInner.textContent = options.confirmText || 'Confirm';
+        if (cancelInner) cancelInner.textContent = options.cancelText || 'Cancel';
+
+        // Set icon and button styling based on type
+        const type = options.type || 'warning';
+        icon.className = `modal-header-icon ${type}`;
+        const iconElement = icon.querySelector('i');
+        const baseClasses = 'btn-neu btn-neu-action';
+
+        if (type === 'danger') {
+            iconElement.className = 'fas fa-trash-alt text-xl';
+            confirmBtn.className = `${baseClasses} btn-neu-cancel`;
+        } else if (type === 'warning') {
+            iconElement.className = 'fas fa-exclamation-circle text-xl';
+            confirmBtn.className = `${baseClasses} btn-neu-warning`;
+        } else if (type === 'info') {
+            iconElement.className = 'fas fa-info-circle text-xl';
+            confirmBtn.className = `${baseClasses} btn-neu-nav-wide`;
+        } else if (type === 'success') {
+            iconElement.className = 'fas fa-check-circle text-xl';
+            confirmBtn.className = `${baseClasses} btn-neu-save`;
+        }
+
+        // Hide/show cancel button
+        cancelBtn.style.display = options.hideCancel ? 'none' : '';
+
+        // Remove old event listeners by cloning
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+        // Add new event listeners
+        newConfirmBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (options.onConfirm) options.onConfirm();
+        });
+
+        newCancelBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (options.onCancel) options.onCancel();
+        });
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Auto-close if specified
+        if (options.autoClose) {
+            autoCloseTimer = setTimeout(() => {
+                hideConfirmModal();
+            }, options.autoClose);
+        }
+    }
+
+    return {
+        showConfirmModal: showConfirmModal,
+        hideConfirmModal: hideConfirmModal
+    };
+})();
+</script>
+
+<script src="{% static 'js/deploy_wizard.js' %}?v=1"></script>
 <script src="{% static 'js/endpoints_table.js' %}?v=5"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Configure DeployWizard to refresh endpoints table and modal on success
+    if (typeof DeployWizard !== 'undefined') {
+        DeployWizard.configure({
+            onSuccess: function(result) {
+                // Refresh the endpoints table
+                if (typeof EndpointsTable !== 'undefined') {
+                    EndpointsTable.refresh();
+                }
+                // Refresh the endpoint view modal if open
+                if (typeof ExpViewModal !== 'undefined' && ExpViewModal.getCurrentEndpoint) {
+                    const endpoint = ExpViewModal.getCurrentEndpoint();
+                    if (endpoint && endpoint.id) {
+                        // Clear cache and reload versions
+                        ExpViewModal.openForEndpoint(endpoint.id);
+                    }
+                }
+            }
+        });
+    }
+
     // Initialize Endpoints Table
     EndpointsTable.init({
         containerId: '#endpointsChapter',

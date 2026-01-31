@@ -1704,6 +1704,13 @@ const ExpViewModal = (function() {
     }
 
     /**
+     * Check if a KPI key represents a recall (accuracy) metric
+     */
+    function isRecallMetric(kpiKey) {
+        return kpiKey.startsWith('recall_at_');
+    }
+
+    /**
      * Render grouped bar chart for version KPIs
      */
     function renderVersionsChart(versions, kpiConfig) {
@@ -1716,53 +1723,185 @@ const ExpViewModal = (function() {
             charts.versionsChart = null;
         }
 
+        // Determine chart mode based on metric types
+        const hasRecallMetrics = kpiConfig.some(kpi => isRecallMetric(kpi.key));
+        const hasErrorMetrics = kpiConfig.some(kpi => !isRecallMetric(kpi.key));
+        const chartMode = hasRecallMetrics && hasErrorMetrics ? 'dual' :
+                          hasRecallMetrics ? 'recall' : 'error';
+
         // Take up to 5 versions for chart, reverse to oldest→newest
         const chartVersions = versions.slice(0, 5).reverse();
 
-        // Blue gradient colors from light to dark (oldest to newest)
-        const colors = ['#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'];
+        // Color schemes
+        const blueColors = ['#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb'];
+        const amberColors = ['#fef3c7', '#fde68a', '#fcd34d', '#f59e0b', '#d97706'];
 
-        // Build datasets - one per version
-        const datasets = chartVersions.map((v, idx) => {
-            const versionNum = v.vertex_model_version || (versions.length - (versions.indexOf(v)));
-            const metrics = v.metrics || {};
+        // Build datasets
+        let datasets;
 
-            return {
-                label: `v${versionNum}`,
-                data: kpiConfig.map(kpi => metrics[kpi.key] || 0),
-                backgroundColor: colors[idx] || colors[colors.length - 1],
-                borderColor: colors[idx] || colors[colors.length - 1],
-                borderWidth: 1,
-                borderRadius: 3,
-                barPercentage: 0.8,
-                categoryPercentage: 0.7
-            };
-        });
+        if (chartMode === 'dual') {
+            // For dual-axis mode, split each version into two datasets:
+            // one for recall metrics (left axis) and one for error metrics (right axis)
+            datasets = [];
+            chartVersions.forEach((v, idx) => {
+                const versionNum = v.vertex_model_version || (versions.length - (versions.indexOf(v)));
+                const metrics = v.metrics || {};
 
-        // Build scales configuration - single Y-axis for all model types
-        const scales = {
-            x: {
-                grid: {
-                    display: false
-                },
-                ticks: {
-                    font: chartDefaults.font.axis
+                // Recall dataset (left Y-axis) - use null for error metric positions
+                datasets.push({
+                    label: `v${versionNum}`,
+                    data: kpiConfig.map(kpi => {
+                        if (isRecallMetric(kpi.key)) {
+                            return (metrics[kpi.key] || 0) * 100;
+                        }
+                        return null;
+                    }),
+                    backgroundColor: blueColors[idx] || blueColors[blueColors.length - 1],
+                    borderColor: blueColors[idx] || blueColors[blueColors.length - 1],
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.7,
+                    yAxisID: 'y'
+                });
+
+                // Error dataset (right Y-axis) - use null for recall metric positions
+                datasets.push({
+                    label: `v${versionNum}`,
+                    data: kpiConfig.map(kpi => {
+                        if (!isRecallMetric(kpi.key)) {
+                            return metrics[kpi.key] || 0;
+                        }
+                        return null;
+                    }),
+                    backgroundColor: amberColors[idx] || amberColors[amberColors.length - 1],
+                    borderColor: amberColors[idx] || amberColors[amberColors.length - 1],
+                    borderWidth: 1,
+                    borderRadius: 3,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.7,
+                    yAxisID: 'y2'
+                });
+            });
+        } else {
+            // Single-axis modes
+            datasets = chartVersions.map((v, idx) => {
+                const versionNum = v.vertex_model_version || (versions.length - (versions.indexOf(v)));
+                const metrics = v.metrics || {};
+
+                if (chartMode === 'recall') {
+                    // Convert recall values to percentages
+                    return {
+                        label: `v${versionNum}`,
+                        data: kpiConfig.map(kpi => (metrics[kpi.key] || 0) * 100),
+                        backgroundColor: blueColors[idx] || blueColors[blueColors.length - 1],
+                        borderColor: blueColors[idx] || blueColors[blueColors.length - 1],
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.7
+                    };
+                } else {
+                    // Error-only mode - keep values as-is
+                    return {
+                        label: `v${versionNum}`,
+                        data: kpiConfig.map(kpi => metrics[kpi.key] || 0),
+                        backgroundColor: blueColors[idx] || blueColors[blueColors.length - 1],
+                        borderColor: blueColors[idx] || blueColors[blueColors.length - 1],
+                        borderWidth: 1,
+                        borderRadius: 3,
+                        barPercentage: 0.8,
+                        categoryPercentage: 0.7
+                    };
                 }
-            },
-            y: {
-                beginAtZero: true,
-                grace: '5%',
-                grid: {
-                    color: '#f3f4f6'
+            });
+        }
+
+        // Build scales configuration based on chart mode
+        let scales;
+        if (chartMode === 'dual') {
+            scales = {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: chartDefaults.font.axis }
                 },
-                ticks: {
-                    font: chartDefaults.font.axis,
-                    callback: function(value) {
-                        return value.toFixed(2);
+                y: {
+                    position: 'left',
+                    beginAtZero: true,
+                    grace: '5%',
+                    grid: { color: '#f3f4f6' },
+                    ticks: {
+                        font: chartDefaults.font.axis,
+                        color: '#3b82f6',
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Recall',
+                        color: '#3b82f6',
+                        font: { size: 11, weight: '500' }
+                    }
+                },
+                y2: {
+                    position: 'right',
+                    beginAtZero: true,
+                    grace: '5%',
+                    grid: { drawOnChartArea: false },
+                    ticks: {
+                        font: chartDefaults.font.axis,
+                        color: '#f59e0b',
+                        callback: function(value) {
+                            return value.toFixed(2);
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Error',
+                        color: '#f59e0b',
+                        font: { size: 11, weight: '500' }
                     }
                 }
-            }
-        };
+            };
+        } else if (chartMode === 'recall') {
+            scales = {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: chartDefaults.font.axis }
+                },
+                y: {
+                    beginAtZero: true,
+                    grace: '5%',
+                    grid: { color: '#f3f4f6' },
+                    ticks: {
+                        font: chartDefaults.font.axis,
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            };
+        } else {
+            // Error-only mode
+            scales = {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: chartDefaults.font.axis }
+                },
+                y: {
+                    beginAtZero: true,
+                    grace: '5%',
+                    grid: { color: '#f3f4f6' },
+                    ticks: {
+                        font: chartDefaults.font.axis,
+                        callback: function(value) {
+                            return value.toFixed(2);
+                        }
+                    }
+                }
+            };
+        }
 
         const ctx = canvas.getContext('2d');
 
@@ -1785,19 +1924,24 @@ const ExpViewModal = (function() {
                             ...chartDefaults.legend.labels,
                             usePointStyle: false,
                             boxWidth: 12,
-                            boxHeight: 12
+                            boxHeight: 12,
+                            // In dual mode, filter out duplicate version labels (show only recall/blue datasets)
+                            filter: chartMode === 'dual'
+                                ? (item, data) => item.datasetIndex % 2 === 0
+                                : undefined
                         }
                     },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
                                 const value = context.raw;
-                                const kpiLabel = kpiConfig[context.dataIndex]?.label || '';
-                                // Format recall as percentage, RMSE/MAE as decimal
-                                if (kpiLabel.startsWith('R@')) {
-                                    return `${context.dataset.label}: ${value ? (value * 100).toFixed(1) + '%' : '-'}`;
+                                if (value === null) return null; // Skip null values in dual mode
+                                const kpiKey = kpiConfig[context.dataIndex]?.key || '';
+                                // Format based on metric type (values already converted for display)
+                                if (isRecallMetric(kpiKey)) {
+                                    return `${context.dataset.label}: ${value.toFixed(1) + '%'}`;
                                 }
-                                return `${context.dataset.label}: ${value ? value.toFixed(3) : '-'}`;
+                                return `${context.dataset.label}: ${value.toFixed(3)}`;
                             }
                         }
                     }
@@ -2135,10 +2279,10 @@ const ExpViewModal = (function() {
         const statusPanel = document.getElementById('expViewStatusPanel');
         statusPanel.className = `exp-view-status-panel ${statusClass}`;
 
-        // Status icon - rocket for active, pause for inactive
+        // Status icon - checkmark for active, pause for inactive
         const statusIcon = document.getElementById('expViewStatusIcon');
         const iconClass = endpoint.is_active ? 'endpoint-active' : 'endpoint-inactive';
-        const iconSymbol = endpoint.is_active ? 'fa-rocket' : 'fa-pause';
+        const iconSymbol = endpoint.is_active ? 'fa-check' : 'fa-pause';
         statusIcon.className = `exp-view-status-icon ${iconClass}`;
         statusIcon.innerHTML = `<i class="fas ${iconSymbol}"></i>`;
 
@@ -2146,8 +2290,8 @@ const ExpViewModal = (function() {
         const titleEl = document.getElementById('expViewTitle');
         const statusText = endpoint.is_active ? 'Active' : 'Inactive';
         const statusBadge = endpoint.is_active
-            ? '<i class="fas fa-circle"></i> Active'
-            : '<i class="fas fa-pause-circle"></i> Inactive';
+            ? '<i class="fas fa-check-circle"></i> ACTIVE'
+            : '<i class="fas fa-pause-circle"></i> INACTIVE';
 
         titleEl.innerHTML = `
             <span class="exp-view-endpoint-name-text">${endpoint.service_name || 'Endpoint'}</span>
@@ -2191,7 +2335,7 @@ const ExpViewModal = (function() {
             acc.style.display = 'none';
         });
 
-        // Hide results summary
+        // Hide results summary (we'll render our own)
         const resultsSummary = document.getElementById('expViewResultsSummary');
         if (resultsSummary) resultsSummary.classList.add('hidden');
 
@@ -2200,9 +2344,93 @@ const ExpViewModal = (function() {
         if (!overviewTab) return;
 
         const config = endpoint.deployment_config || {};
+        const modelType = endpoint.model_type || 'retrieval';
+        const metrics = endpoint.metrics || {};
+
+        // Build Results section HTML based on model type
+        let resultsHtml = '';
+        if (metrics && Object.keys(metrics).length > 0) {
+            const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
+            const formatRMSE = v => v != null ? v.toFixed(2) : 'N/A';
+
+            let metricsCards = '';
+
+            if (modelType === 'ranking') {
+                metricsCards = `
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">RMSE</div>
+                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.rmse)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">MAE</div>
+                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.mae)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Test RMSE</div>
+                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_rmse)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Test MAE</div>
+                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_mae)}</div>
+                    </div>
+                `;
+            } else if (modelType === 'multitask') {
+                // Multitask: show mix of R@50, R@100 + Test RMSE, Test MAE
+                metricsCards = `
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">R@50</div>
+                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_50)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">R@100</div>
+                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_100)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Test RMSE</div>
+                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_rmse)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Test MAE</div>
+                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_mae)}</div>
+                    </div>
+                `;
+            } else {
+                // Default: retrieval metrics
+                metricsCards = `
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Recall@5</div>
+                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_5)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Recall@10</div>
+                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_10)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Recall@50</div>
+                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_50)}</div>
+                    </div>
+                    <div class="exp-view-metric-card">
+                        <div class="exp-view-metric-card-label">Recall@100</div>
+                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_100)}</div>
+                    </div>
+                `;
+            }
+
+            resultsHtml = `
+                <!-- Results Section -->
+                <div class="exp-view-results-summary">
+                    <h4 class="exp-view-group-title">RESULTS</h4>
+                    <div class="exp-view-metrics-row">
+                        ${metricsCards}
+                    </div>
+                </div>
+            `;
+        }
 
         // Build the overview HTML
         let overviewHtml = `
+            ${resultsHtml}
+
             <!-- Service URL Section -->
             <div class="exp-view-endpoint-url-section">
                 <div class="exp-view-endpoint-url-label">
@@ -2226,7 +2454,7 @@ const ExpViewModal = (function() {
                     </div>
                     <div class="exp-view-endpoint-info-item">
                         <span class="exp-view-endpoint-info-item-label">Type</span>
-                        <span class="exp-view-endpoint-info-item-value">${(endpoint.model_type || 'retrieval').charAt(0).toUpperCase() + (endpoint.model_type || 'retrieval').slice(1)}</span>
+                        <span class="exp-view-endpoint-info-item-value">${modelType.charAt(0).toUpperCase() + modelType.slice(1)}</span>
                     </div>
                     <div class="exp-view-endpoint-info-item">
                         <span class="exp-view-endpoint-info-item-label">Version</span>

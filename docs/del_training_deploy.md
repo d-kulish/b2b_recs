@@ -3301,3 +3301,106 @@ After applying the fix:
 2. Run #38 shows green "Deployed" badge (auto-deployed, endpoint active)
 3. Run #37 shows green "Deployed" badge (deployment succeeded, even if endpoint now inactive)
 4. New training runs with deployment show correct badges after completion
+
+---
+
+## Bug Fix: Cloud Run Code Version Mismatch (2026-01-31)
+
+### Problem
+
+Training run #40 completed successfully (model trained, blessed, registered to Vertex AI Model Registry) but auto-deployment to Cloud Run failed with:
+
+```
+TypeError: ServicesClient.update_service() got an unexpected keyword argument 'allow_missing'
+```
+
+**Full error from Cloud Run logs:**
+```
+File "/app/ml_platform/training/services.py", line 2168, in deploy_to_cloud_run
+    operation = client.update_service(
+TypeError: ServicesClient.update_service() got an unexpected keyword argument 'allow_missing'
+```
+
+### Root Cause: Deployed Code vs Git Code Mismatch
+
+The **deployed Django app on Cloud Run** was running **different code** than what exists in the git repository.
+
+| Component | Code Approach | Status |
+|-----------|---------------|--------|
+| **Local git repo** | `subprocess.run(['gcloud', 'run', 'deploy', ...])` (CLI) | ✅ Correct |
+| **Deployed Cloud Run** | `ServicesClient.update_service(..., allow_missing=True)` (Python API) | ❌ Buggy |
+
+**Evidence:**
+
+1. **Local code at line 2168** (`ml_platform/training/services.py`):
+   ```python
+   f'--set-env-vars=MODEL_PATH={model_path},MODEL_NAME=recommender',
+   ```
+
+2. **Deployed code at line 2168** (from error logs):
+   ```python
+   operation = client.update_service(..., allow_missing=True)
+   ```
+
+3. **Git history search** for `ServicesClient` and `allow_missing`: No matches found - this code was never committed to git.
+
+### The API Bug in Deployed Code
+
+The deployed code incorrectly passed `allow_missing` as a keyword argument:
+
+```python
+# WRONG - deployed code
+client.update_service(service=service, allow_missing=True)
+```
+
+But `allow_missing` is a field on `UpdateServiceRequest`, not a parameter of `update_service()`:
+
+```python
+# CORRECT usage
+from google.cloud.run_v2.types import UpdateServiceRequest
+request = UpdateServiceRequest(service=service, allow_missing=True)
+client.update_service(request=request)
+```
+
+### Why Local Server Worked
+
+The local development server runs the current git code which uses `subprocess` + `gcloud` CLI. This approach doesn't use the Python Cloud Run API and thus doesn't have the `allow_missing` bug.
+
+### Fix
+
+**Redeploy the Django app to Cloud Run** with the current git code:
+
+```bash
+# Option 1: Direct source deploy
+gcloud run deploy django-app \
+  --source . \
+  --region europe-central2 \
+  --project b2b-recs
+
+# Option 2: Via Cloud Build
+gcloud builds submit --tag gcr.io/b2b-recs/django-app
+gcloud run deploy django-app \
+  --image gcr.io/b2b-recs/django-app:latest \
+  --region europe-central2 \
+  --project b2b-recs
+```
+
+### Post-Fix Steps
+
+After redeploying the Django app:
+
+1. Training run #40's model is already registered in Vertex AI Model Registry
+2. Manually trigger deployment via:
+   - Deploy Wizard UI (click "Cloud Run" button on training card)
+   - API: `POST /api/training-runs/40/deploy-cloud-run/`
+
+### Key Lesson
+
+**Always ensure deployed code matches git repository.** This bug occurred because code was deployed without being committed to git, causing a mismatch between development and production environments.
+
+### Files Reference
+
+| File | Current Implementation |
+|------|------------------------|
+| `ml_platform/training/services.py` | Uses `subprocess.run(['gcloud', 'run', 'deploy', ...])` for Cloud Run deployment |
+| `ml_platform/training/services.py` | Uses `subprocess.run(['gcloud', 'run', 'services', 'delete', ...])` for Cloud Run deletion |

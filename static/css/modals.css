@@ -3379,11 +3379,11 @@ select option {
 }
 
 .model-nav-bar .progress-step-pill.current {
-    padding-top: 14px;           /* Taller green button */
-    padding-bottom: 14px;
+    padding-top: 10px;           /* Taller green button (reduced from 14px) */
+    padding-bottom: 10px;
     border-radius: 10px;
-    margin-top: -6px;            /* Extend above container */
-    margin-bottom: -6px;         /* Extend below container */
+    margin-top: -4px;            /* Extend above container */
+    margin-bottom: -4px;         /* Extend below container */
     margin-left: 2px;
     margin-right: 2px;
 }

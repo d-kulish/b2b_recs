@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-31 (Restructured endpoint action buttons with grouped layout)
+**Last Updated**: 2026-01-31 (Action buttons now use 2×2 grid layout matching Training page)
 
 ---
 
@@ -876,21 +876,30 @@ The Serving Endpoints chapter displays all deployed ML serving endpoints (Cloud 
 
 **Action Buttons (Updated 2026-01-31):**
 
-The action buttons are now grouped in a role-based layout:
+The action buttons now use a **2×2 grid layout** matching the Models Registry on the Training page:
+
+```
+┌──────────────┬──────────────┐
+│ Deploy/      │    View      │  ← Row 1: Gold + Green text buttons
+│ Undeploy     │              │
+├──────────────┼──────────────┤
+│              │ [Edit][Del]  │  ← Row 2: Spacer + Icon button group
+└──────────────┴──────────────┘
+```
+
+Uses shared CSS classes from `cards.css`:
+- `.ml-card-col-actions`, `.ml-card-actions-grid`
+- `.card-action-btn.deploy` (gold #c9a227)
+- `.card-action-btn.view` (green #10b981)
+- `.card-action-btn.icon-only.edit`, `.card-action-btn.icon-only.delete`
+- `.card-action-btn-group` (groups Edit + Delete)
 
 | Button | Active Endpoint | Inactive Endpoint |
 |--------|-----------------|-------------------|
-| **View** (dropdown) | Enabled | Enabled |
-| **Deploy** | Hidden | Enabled (re-deploys) |
-| **Undeploy** | Enabled | Hidden |
-| **Edit** | Enabled (opens config modal) | Disabled |
-| **Delete** | Disabled | Enabled (removes DB record) |
-
-**View Dropdown Menu:**
-- Logs (opens Cloud Run logs in GCP Console)
-- Details (opens ExpViewModal for linked training run)
-- Test (placeholder for future testing feature)
-- Copy URL (copies endpoint URL to clipboard)
+| **Deploy/Undeploy** | Shows "Undeploy" | Shows "Deploy" |
+| **View** | Enabled (opens ExpViewModal) | Enabled |
+| **Edit** | Enabled (opens config modal) | Disabled (grayed) |
+| **Delete** | Disabled (grayed) | Enabled (removes DB record) |
 
 **Edit Config Modal:**
 - Preset cards (Development, Production, High Traffic)
@@ -922,10 +931,9 @@ EndpointsTable.viewLogs(endpointId)
 EndpointsTable.viewDetails(endpointId)
 EndpointsTable.testEndpoint(endpointId)
 EndpointsTable.confirmUndeploy(endpointId)
-EndpointsTable.confirmDeploy(endpointId)   // NEW: Re-deploy inactive endpoint
-EndpointsTable.confirmDelete(endpointId)   // NEW: Delete endpoint record
-EndpointsTable.toggleViewDropdown(id, e)   // NEW: Toggle view dropdown menu
-EndpointsTable.openEditModal(endpointId)   // NEW: Open config edit modal
+EndpointsTable.confirmDeploy(endpointId)   // Re-deploy inactive endpoint
+EndpointsTable.confirmDelete(endpointId)   // Delete endpoint record
+EndpointsTable.openEditModal(endpointId)   // Open config edit modal
 EndpointsTable.closeEditModal()            // NEW: Close edit modal
 EndpointsTable.selectPreset(presetName)    // NEW: Select config preset
 EndpointsTable.toggleAdvancedOptions()     // NEW: Toggle advanced options

@@ -754,62 +754,41 @@ const EndpointsTable = (function() {
     function renderActionButtons(endpoint) {
         const isActive = endpoint.is_active;
 
+        // 2x2 Grid Layout matching Models Registry on Training page:
+        // Row 1: [Deploy/Undeploy] [View]
+        // Row 2: [empty spacer]    [Edit][Delete] grouped
         return `
-            <div class="endpoints-action-buttons">
-                <!-- View Dropdown -->
-                <div class="endpoints-dropdown">
-                    <button class="endpoints-action-btn view-dropdown"
-                            onclick="EndpointsTable.toggleViewDropdown(${endpoint.id}, event)"
-                            title="View Options">
-                        <i class="fas fa-eye"></i>
-                        <i class="fas fa-caret-down" style="font-size: 9px; margin-left: 2px;"></i>
+            <div class="ml-card-col-actions">
+                <div class="ml-card-actions-grid">
+                    <!-- Row 1: Deploy/Undeploy | View -->
+                    <button class="card-action-btn deploy"
+                            onclick="${isActive
+                                ? `EndpointsTable.confirmUndeploy(${endpoint.id})`
+                                : `EndpointsTable.confirmDeploy(${endpoint.id})`}">
+                        ${isActive ? 'Undeploy' : 'Deploy'}
                     </button>
-                    <div class="endpoints-dropdown-menu" id="viewDropdown-${endpoint.id}">
-                        <button onclick="EndpointsTable.viewLogs(${endpoint.id})">
-                            <i class="fas fa-file-alt"></i> Logs
+                    <button class="card-action-btn view"
+                            onclick="EndpointsTable.viewDetails(${endpoint.id})">
+                        View
+                    </button>
+
+                    <!-- Row 2: Spacer | Edit+Delete group -->
+                    <div></div>
+                    <div class="card-action-btn-group">
+                        <button class="card-action-btn icon-only edit"
+                                onclick="EndpointsTable.openEditModal(${endpoint.id})"
+                                title="Edit Config"
+                                ${!isActive ? 'disabled' : ''}>
+                            <i class="fas fa-external-link-alt"></i>
                         </button>
-                        <button onclick="EndpointsTable.viewDetails(${endpoint.id})">
-                            <i class="fas fa-info-circle"></i> Details
-                        </button>
-                        <button onclick="EndpointsTable.testEndpoint(${endpoint.id})" ${!isActive ? 'disabled' : ''}>
-                            <i class="fas fa-vial"></i> Test
-                        </button>
-                        <button onclick="EndpointsTable.copyUrl(${endpoint.id})">
-                            <i class="fas fa-link"></i> Copy URL
+                        <button class="card-action-btn icon-only delete"
+                                onclick="EndpointsTable.confirmDelete(${endpoint.id})"
+                                title="Delete"
+                                ${isActive ? 'disabled' : ''}>
+                            <i class="fas fa-trash-alt"></i>
                         </button>
                     </div>
                 </div>
-
-                <!-- Deploy/Undeploy (contextual) -->
-                ${isActive ? `
-                    <button class="endpoints-action-btn undeploy"
-                            onclick="EndpointsTable.confirmUndeploy(${endpoint.id})"
-                            title="Undeploy">
-                        <i class="fas fa-stop"></i>
-                    </button>
-                ` : `
-                    <button class="endpoints-action-btn deploy"
-                            onclick="EndpointsTable.confirmDeploy(${endpoint.id})"
-                            title="Deploy">
-                        <i class="fas fa-play"></i>
-                    </button>
-                `}
-
-                <!-- Edit (only for active) -->
-                <button class="endpoints-action-btn edit"
-                        onclick="EndpointsTable.openEditModal(${endpoint.id})"
-                        title="Edit Config"
-                        ${!isActive ? 'disabled' : ''}>
-                    <i class="fas fa-cog"></i>
-                </button>
-
-                <!-- Delete (only for inactive) -->
-                <button class="endpoints-action-btn delete"
-                        onclick="EndpointsTable.confirmDelete(${endpoint.id})"
-                        title="Delete"
-                        ${isActive ? 'disabled' : ''}>
-                    <i class="fas fa-trash-alt"></i>
-                </button>
             </div>
         `;
     }

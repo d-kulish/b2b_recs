@@ -373,7 +373,13 @@
 }
 
 /* =========================================================================
-   Action Buttons (Icon-only style)
+   Action Buttons (2x2 Grid Layout - same as Models Registry)
+   Uses shared classes from cards.css:
+   - .ml-card-col-actions
+   - .ml-card-actions-grid
+   - .card-action-btn.deploy, .view
+   - .card-action-btn.icon-only.edit, .delete
+   - .card-action-btn-group
    ========================================================================= */
 .endpoints-actions-header {
     text-align: right;
@@ -384,75 +390,21 @@
     padding: 8px 16px !important;
 }
 
-.endpoints-action-buttons {
-    display: flex;
-    gap: 4px;
+/* Set fixed width for the actions column container in the table */
+/* Width: 210px gives ~102px per button (2 cols with 6px gap), matching Training page */
+.endpoints-actions-cell .ml-card-col-actions {
+    width: 210px;
+    margin-left: auto;
+}
+
+/* 2-row grid for endpoints (Deploy, View on row 1; Edit+Delete on row 2) */
+.endpoints-actions-cell .ml-card-actions-grid {
+    grid-template-rows: auto auto;
+}
+
+/* Ensure button group aligns to the right beneath View button */
+.endpoints-actions-cell .card-action-btn-group {
     justify-content: flex-end;
-}
-
-.endpoints-action-btn {
-    padding: 6px 8px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: white;
-    color: #6b7280;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-}
-
-.endpoints-action-btn:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-}
-
-.endpoints-action-btn.test:hover {
-    background: #ede9fe;
-    border-color: #a78bfa;
-    color: #7c3aed;
-}
-
-.endpoints-action-btn.copy:hover {
-    background: #e0f2fe;
-    border-color: #7dd3fc;
-    color: #0284c7;
-}
-
-.endpoints-action-btn.logs:hover {
-    background: #fef3c7;
-    border-color: #fcd34d;
-    color: #d97706;
-}
-
-.endpoints-action-btn.details:hover {
-    background: #dbeafe;
-    border-color: #93c5fd;
-    color: #2563eb;
-}
-
-.endpoints-action-btn.undeploy:hover {
-    background: #fee2e2;
-    border-color: #fca5a5;
-    color: #dc2626;
-}
-
-.endpoints-action-btn[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.endpoints-action-btn[disabled]:hover {
-    background: white;
-    border-color: #e5e7eb;
-    color: #6b7280;
-}
-
-/* Tooltip for action buttons */
-.endpoints-action-btn[title] {
-    position: relative;
 }
 
 /* =========================================================================

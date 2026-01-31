@@ -55,7 +55,8 @@ const EndpointsTable = (function() {
         },
         kpiFilter: 'active',  // Track which KPI card is selected ('all', 'active', 'inactive')
         loading: false,
-        searchDebounceTimer: null
+        searchDebounceTimer: null,
+        autoCloseTimer: null
     };
 
     // Status badge configurations
@@ -230,7 +231,9 @@ const EndpointsTable = (function() {
 
     async function deployEndpoint(endpointId) {
         try {
-            showToast('Deploying endpoint...', 'info');
+            // Show loading spinner
+            showLoadingModal('Deploying', 'Deploying endpoint...');
+
             const response = await fetch(buildUrl(config.endpoints.deploy, { id: endpointId }), {
                 method: 'POST',
                 headers: {
@@ -241,14 +244,40 @@ const EndpointsTable = (function() {
             const data = await response.json();
 
             if (data.success) {
-                showToast('Endpoint deployed successfully', 'success');
+                // Show success with auto-close after 3 seconds
+                showConfirmModal({
+                    title: 'Success',
+                    message: 'Endpoint deployed successfully',
+                    type: 'success',
+                    confirmText: 'Ok',
+                    confirmButtonClass: 'btn-neu-save',
+                    hideCancel: true,
+                    autoClose: 3000,
+                    onConfirm: () => {}
+                });
                 fetchEndpoints();
             } else {
-                showToast(data.error || 'Failed to deploy endpoint', 'error');
+                showConfirmModal({
+                    title: 'Error',
+                    message: data.error || 'Failed to deploy endpoint',
+                    type: 'danger',
+                    confirmText: 'Close',
+                    confirmButtonClass: 'btn-neu-cancel',
+                    hideCancel: true,
+                    onConfirm: () => {}
+                });
             }
         } catch (error) {
             console.error('Error deploying endpoint:', error);
-            showToast('Failed to deploy endpoint', 'error');
+            showConfirmModal({
+                title: 'Error',
+                message: 'Failed to deploy endpoint',
+                type: 'danger',
+                confirmText: 'Close',
+                confirmButtonClass: 'btn-neu-cancel',
+                hideCancel: true,
+                onConfirm: () => {}
+            });
         }
     }
 
@@ -946,9 +975,18 @@ const EndpointsTable = (function() {
         }
 
         const serviceName = endpoint.service_name || 'this endpoint';
-        if (confirm(`Are you sure you want to undeploy "${serviceName}"?\n\nThis will delete the Cloud Run service. The endpoint record will remain and can be re-deployed.`)) {
-            undeployEndpoint(endpointId);
-        }
+        showConfirmModal({
+            title: 'Undeploy Endpoint',
+            message: `Are you sure you want to undeploy <strong>${serviceName}</strong>?<br><br>This will delete the Cloud Run service.<br>The endpoint record will remain and can be re-deployed.`,
+            confirmText: 'Undeploy',
+            cancelText: 'Cancel',
+            type: 'warning',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
+            onConfirm: () => {
+                undeployEndpoint(endpointId);
+            }
+        });
     }
 
     function confirmDeploy(endpointId) {
@@ -961,12 +999,21 @@ const EndpointsTable = (function() {
         }
 
         const serviceName = endpoint.service_name || 'this endpoint';
-        const config = endpoint.deployment_config || {};
-        const configStr = `${config.cpu || '2'} vCPU, ${config.memory || '4Gi'}`;
+        const deployConfig = endpoint.deployment_config || {};
+        const configStr = `${deployConfig.cpu || '2'} vCPU, ${deployConfig.memory || '4Gi'}`;
 
-        if (confirm(`Deploy "${serviceName}"?\n\nThis will create the Cloud Run service with:\n- Version: ${endpoint.deployed_version || 'v1'}\n- Config: ${configStr}`)) {
-            deployEndpoint(endpointId);
-        }
+        showConfirmModal({
+            title: 'Deploy Endpoint',
+            message: `Deploy <strong>${serviceName}</strong>?<br><br>This will create the Cloud Run service with:<br>• Version: ${endpoint.deployed_version || 'v1'}<br>• Config: ${configStr}`,
+            confirmText: 'Deploy',
+            cancelText: 'Cancel',
+            type: 'info',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
+            onConfirm: () => {
+                deployEndpoint(endpointId);
+            }
+        });
     }
 
     function confirmDelete(endpointId) {
@@ -978,10 +1025,18 @@ const EndpointsTable = (function() {
             return;
         }
 
-        const serviceName = endpoint.service_name || 'this endpoint';
-        if (confirm(`Delete "${serviceName}" permanently?\n\nThis will remove the endpoint record from the database. This action cannot be undone.`)) {
-            deleteEndpoint(endpointId);
-        }
+        showConfirmModal({
+            title: 'Delete Endpoint',
+            message: 'Are you sure you want to delete this endpoint?<br><br><strong>This action cannot be undone.</strong>',
+            confirmText: 'Confirm',
+            cancelText: 'Cancel',
+            type: 'danger',
+            confirmButtonClass: 'btn-neu-save',      // Green button
+            cancelButtonClass: 'btn-neu-cancel',     // Red button
+            onConfirm: () => {
+                deleteEndpoint(endpointId);
+            }
+        });
     }
 
     // =============================================================================
@@ -1031,24 +1086,167 @@ const EndpointsTable = (function() {
     }
 
     // =============================================================================
+    // CONFIRMATION MODAL (styled modal matching Training page)
+    // =============================================================================
+
+    function showConfirmModal(options) {
+        const modal = document.getElementById('confirmModal');
+        const icon = document.getElementById('confirmModalIcon');
+        const title = document.getElementById('confirmModalTitle');
+        const message = document.getElementById('confirmModalMessage');
+        const confirmBtn = document.getElementById('confirmModalConfirmBtn');
+        const cancelBtn = document.getElementById('confirmModalCancelBtn');
+
+        // Set content
+        title.textContent = options.title || 'Confirm Action';
+        message.innerHTML = options.message || 'Are you sure you want to proceed?';
+
+        // Update inner span text for neumorphic buttons
+        const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
+        const cancelInner = cancelBtn.querySelector('.btn-neu-inner');
+        if (confirmInner) confirmInner.textContent = options.confirmText || 'Confirm';
+        if (cancelInner) cancelInner.textContent = options.cancelText || 'Cancel';
+
+        // Set icon and button type
+        const type = options.type || 'warning';
+        icon.className = `modal-header-icon ${type}`;
+
+        // Update icon based on type
+        const iconElement = icon.querySelector('i');
+        const baseClasses = 'btn-neu btn-neu-action';
+
+        // Determine confirm button class (custom class takes precedence)
+        let confirmButtonClass = options.confirmButtonClass;
+        if (!confirmButtonClass) {
+            if (type === 'danger') {
+                iconElement.className = 'fas fa-trash-alt text-xl';
+                confirmButtonClass = 'btn-neu-cancel';  // RED button for destructive actions
+            } else if (type === 'warning') {
+                iconElement.className = 'fas fa-exclamation-circle text-xl';
+                confirmButtonClass = 'btn-neu-warning';
+            } else if (type === 'info') {
+                iconElement.className = 'fas fa-info-circle text-xl';
+                confirmButtonClass = 'btn-neu-nav-wide';
+            } else if (type === 'success') {
+                iconElement.className = 'fas fa-check-circle text-xl';
+                confirmButtonClass = 'btn-neu-save';
+            }
+        } else {
+            // Set icon based on type even when custom button class is provided
+            if (type === 'danger') {
+                iconElement.className = 'fas fa-trash-alt text-xl';
+            } else if (type === 'warning') {
+                iconElement.className = 'fas fa-exclamation-circle text-xl';
+            } else if (type === 'info') {
+                iconElement.className = 'fas fa-info-circle text-xl';
+            } else if (type === 'success') {
+                iconElement.className = 'fas fa-check-circle text-xl';
+            }
+        }
+        confirmBtn.className = `${baseClasses} ${confirmButtonClass}`;
+
+        // Set cancel button class (default: btn-neu-secondary for grey neutral button)
+        cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-secondary'}`;
+
+        // Hide cancel button if requested (for notification modals)
+        if (options.hideCancel) {
+            cancelBtn.style.display = 'none';
+        } else {
+            cancelBtn.style.display = '';
+        }
+
+        // Hide confirm button if requested (for loading modals)
+        if (options.hideConfirm) {
+            confirmBtn.style.display = 'none';
+        } else {
+            confirmBtn.style.display = '';  // Always restore visibility
+        }
+
+        // Remove old event listeners by cloning
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+        // Add new event listeners
+        newConfirmBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (options.onConfirm) options.onConfirm();
+        });
+
+        newCancelBtn.addEventListener('click', () => {
+            hideConfirmModal();
+            if (options.onCancel) options.onCancel();
+        });
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Close on overlay click
+        modal.addEventListener('click', function overlayClick(e) {
+            if (e.target === modal) {
+                hideConfirmModal();
+                if (options.onCancel) options.onCancel();
+                modal.removeEventListener('click', overlayClick);
+            }
+        });
+
+        // Close on ESC key
+        function escapeHandler(e) {
+            if (e.key === 'Escape') {
+                hideConfirmModal();
+                if (options.onCancel) options.onCancel();
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        }
+        document.addEventListener('keydown', escapeHandler);
+
+        // Auto-close after specified time if requested
+        if (options.autoClose && options.autoClose > 0) {
+            // Clear any existing timer
+            if (state.autoCloseTimer) {
+                clearTimeout(state.autoCloseTimer);
+            }
+            state.autoCloseTimer = setTimeout(() => {
+                hideConfirmModal();
+                if (options.onConfirm) options.onConfirm();
+            }, options.autoClose);
+        }
+    }
+
+    function hideConfirmModal() {
+        const modal = document.getElementById('confirmModal');
+        modal.classList.add('hidden');
+        // Clear auto-close timer if any
+        if (state.autoCloseTimer) {
+            clearTimeout(state.autoCloseTimer);
+            state.autoCloseTimer = null;
+        }
+    }
+
+    function showLoadingModal(title, message) {
+        showConfirmModal({
+            title: title,
+            message: `<div style="display: flex; align-items: center; gap: 12px;"><i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #6366f1;"></i><span>${message}</span></div>`,
+            type: 'info',
+            hideCancel: true,
+            hideConfirm: true
+        });
+    }
+
+    // =============================================================================
     // NOTIFICATIONS
     // =============================================================================
 
     function showToast(message, type = 'info') {
-        // Use TrainingCards modal if available for consistent UI
-        if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
-            TrainingCards.showConfirmModal({
-                title: type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info',
-                message: message,
-                type: type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info',
-                confirmText: 'Close',
-                hideCancel: true,
-                autoClose: type === 'success' || type === 'info' ? 4000 : 0,
-                onConfirm: () => {}
-            });
-        } else {
-            alert(message);
-        }
+        showConfirmModal({
+            title: type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info',
+            message: message,
+            type: type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info',
+            confirmText: 'Close',
+            hideCancel: true,
+            onConfirm: () => {}
+        });
     }
 
     // =============================================================================

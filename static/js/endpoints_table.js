@@ -928,9 +928,9 @@ const EndpointsTable = (function() {
         const endpoint = state.endpoints.find(e => e.id === endpointId);
         if (!endpoint) return;
 
-        // If ExpViewModal is available, use it for the linked training run
-        if (endpoint.training_run_id && typeof ExpViewModal !== 'undefined') {
-            ExpViewModal.open(endpoint.training_run_id, { mode: 'training_run' });
+        // If ExpViewModal is available with endpoint mode, use it
+        if (typeof ExpViewModal !== 'undefined' && typeof ExpViewModal.openForEndpoint === 'function') {
+            ExpViewModal.openForEndpoint(endpointId);
         } else if (config.onViewDetails) {
             config.onViewDetails(endpointId);
         } else {

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-31 (Action buttons now use 2×2 grid layout matching Training page)
+**Last Updated**: 2026-01-31 (Endpoint View Modal with tabbed interface)
 
 ---
 
@@ -1844,3 +1844,192 @@ saved_model_cli show --dir=/path/to/model --all
 3. **Phase 3**: UI integration (Test button on deployed models)
 4. **Phase 4**: Scheduled health checks with alerting
 5. **Phase 5**: Load testing support (concurrent requests, throughput measurement)
+
+---
+
+# Endpoint View Modal (2026-01-31)
+
+## Overview
+
+The Endpoint View Modal provides a styled, tabbed interface for viewing endpoint details, replacing the basic alert dialog. It reuses the existing `ExpViewModal` component with a new `endpoint` mode.
+
+### Modal Design
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Header: [Endpoint Name]    [Status Badge: Active/Inactive]  │
+│         Purple/gray gradient                    [Rocket/Pause icon] │
+├─────────────────────────────────────────────────────────────┤
+│ [Overview] [Test] [Logs] [Versions]  ← Tab buttons          │
+├─────────────────────────────────────────────────────────────┤
+│ OVERVIEW TAB:                                               │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Service URL: https://xxx.run.app  [Copy]                │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ MODEL INFORMATION                                        │ │
+│ │ Model: chern_hybrid_v1  |  Type: Retrieval               │ │
+│ │ Version: v2  |  Run #: 47                                │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ HARDWARE CONFIGURATION                                   │ │
+│ │ Memory: 4Gi  |  CPU: 2  |  Min: 0  |  Max: 10           │ │
+│ └─────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│                                              [Close]        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Tab Contents
+
+| Tab | Content |
+|-----|---------|
+| **Overview** | Service URL with copy button, Model info (name, type, version, run#), Hardware config (memory, CPU, instances) |
+| **Test** | Placeholder with "Coming Soon" message |
+| **Logs** | Placeholder with GCP Console link (opens in new tab) |
+| **Versions** | Last 5 model versions with metrics tablets (reuses existing `renderVersionsTab`) |
+
+### Header Styling
+
+| Status | Gradient | Icon |
+|--------|----------|------|
+| Active | Purple (`#d8b4fe` → `#f3e8ff`) | Rocket (`fa-rocket`) |
+| Inactive | Gray (`#d1d5db` → `#e5e7eb`) | Pause (`fa-pause`) |
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/api.py` | Added `endpoint_versions()` API endpoint |
+| `ml_platform/training/urls.py` | Added URL route for versions endpoint |
+| `templates/includes/_exp_view_modal.html` | Added Test and Logs tab buttons + content containers |
+| `templates/ml_platform/model_deployment.html` | Added CSS, HTML include, and JS for ExpViewModal |
+| `static/css/exp_view_modal.css` | Added `endpoint-mode` CSS classes |
+| `static/js/exp_view_modal.js` | Added endpoint mode functions, state, exports |
+| `static/js/endpoints_table.js` | Updated `viewDetails()` to call `openForEndpoint()` |
+
+## API Endpoint
+
+### GET `/api/deployed-endpoints/<id>/versions/`
+
+Returns last 5 model versions for the endpoint's registered model.
+
+**Response:**
+```json
+{
+  "success": true,
+  "model_name": "chern_hybrid_v1",
+  "versions": [
+    {
+      "id": 123,
+      "vertex_model_version": 2,
+      "run_number": 47,
+      "registered_at": "2026-01-30T...",
+      "metrics": {
+        "recall_at_5": 0.18,
+        "recall_at_10": 0.25,
+        "recall_at_50": 0.42,
+        "recall_at_100": 0.48
+      },
+      "model_status": "deployed",
+      "deployed_endpoint_info": {...}
+    },
+    ...
+  ]
+}
+```
+
+## JavaScript API
+
+### New Functions
+
+| Function | Description |
+|----------|-------------|
+| `ExpViewModal.openForEndpoint(endpointId)` | Entry point - fetches endpoint data and opens modal |
+| `ExpViewModal.openWithEndpointData(endpoint)` | Opens modal with provided endpoint object |
+| `ExpViewModal.getCurrentEndpoint()` | Returns current endpoint state |
+
+### State Updates
+
+```javascript
+let state = {
+    mode: 'endpoint',  // New mode added
+    endpointId: null,
+    currentEndpoint: null,
+    // ... existing state
+};
+```
+
+### Mode-Specific Tab Handling
+
+```javascript
+// In updateVisibleTabs()
+if (state.mode === 'endpoint') {
+    visibleTabs = ['overview', 'test', 'logs', 'versions'];
+}
+
+// In switchTab()
+if (state.mode === 'endpoint') {
+    if (tabName === 'test') renderEndpointTestTab();
+    if (tabName === 'logs') renderEndpointLogsTab(endpoint);
+    if (tabName === 'versions') loadEndpointVersions(endpoint.id);
+}
+```
+
+## CSS Classes
+
+### Header Classes
+- `.exp-view-header.endpoint-mode.active` - Purple gradient
+- `.exp-view-header.endpoint-mode.inactive` - Gray gradient
+- `.exp-view-endpoint-name-text` - Large endpoint name
+- `.exp-view-endpoint-status-inline.active/.inactive` - Status badge
+
+### Status Icons
+- `.exp-view-status-icon.endpoint-active` - Purple background
+- `.exp-view-status-icon.endpoint-inactive` - Gray background
+
+### Content Classes
+- `.exp-view-endpoint-url-section` - URL container with copy button
+- `.exp-view-endpoint-info-card` - Information cards
+- `.exp-view-endpoint-info-grid` - 2-column grid layout
+- `.exp-view-endpoint-placeholder` - Placeholder for Test/Logs tabs
+
+## Usage
+
+The modal is triggered when clicking "View" on any endpoint in the Serving Endpoints table:
+
+```javascript
+// In endpoints_table.js
+function viewDetails(endpointId) {
+    if (typeof ExpViewModal !== 'undefined' &&
+        typeof ExpViewModal.openForEndpoint === 'function') {
+        ExpViewModal.openForEndpoint(endpointId);
+    } else {
+        // Fallback to alert
+    }
+}
+```
+
+## Template Requirements
+
+The deployment page must include:
+
+```html
+<!-- CSS (load modals.css BEFORE exp_view_modal.css for proper cascade) -->
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=2">
+
+<!-- HTML component -->
+{% include 'includes/_exp_view_modal.html' %}
+
+<!-- JavaScript (load BEFORE endpoints_table.js) -->
+<script src="{% static 'js/exp_view_modal.js' %}?v=2"></script>
+<script src="{% static 'js/endpoints_table.js' %}?v=5"></script>
+```
+
+## Future Enhancements
+
+1. **Test Tab**: Interactive endpoint testing with sample requests
+2. **Logs Tab**: Embedded log viewer instead of external link
+3. **Metrics Tab**: Real-time serving metrics from Cloud Monitoring
+4. **Actions**: Deploy/Undeploy buttons within modal

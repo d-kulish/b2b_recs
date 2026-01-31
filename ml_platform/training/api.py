@@ -5023,6 +5023,97 @@ def endpoint_detail(request, endpoint_id):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def endpoint_versions(request, endpoint_id):
+    """
+    Get last 5 model versions for an endpoint's registered model.
+
+    GET /api/deployed-endpoints/<id>/versions/
+
+    Returns version history with metrics for the model associated with this endpoint.
+    """
+    from .models import DeployedEndpoint
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        # Get the model name from the deployed training run
+        if not endpoint.deployed_training_run:
+            return JsonResponse({
+                'success': False,
+                'error': 'Endpoint has no deployed training run'
+            }, status=400)
+
+        model_name = endpoint.deployed_training_run.vertex_model_name
+        if not model_name:
+            return JsonResponse({
+                'success': False,
+                'error': 'Deployed training run has no model name'
+            }, status=400)
+
+        # Get all versions with the same model name (last 5)
+        versions = TrainingRun.objects.filter(
+            ml_model=model_endpoint,
+            vertex_model_name=model_name,
+            vertex_model_resource_name__isnull=False
+        ).exclude(
+            vertex_model_resource_name=''
+        ).select_related(
+            'dataset', 'feature_config', 'model_config', 'created_by', 'deployed_endpoint'
+        ).order_by('-registered_at')[:5]
+
+        # Query Cloud Run endpoints to get deployed training run IDs and model names
+        active_endpoints = DeployedEndpoint.objects.filter(
+            is_active=True,
+            deployed_training_run__isnull=False
+        ).values_list('deployed_training_run_id', 'deployed_training_run__vertex_model_name')
+
+        deployed_training_run_ids = set()
+        deployed_model_names = set()
+        for tr_id, mn in active_endpoints:
+            deployed_training_run_ids.add(tr_id)
+            deployed_model_names.add(mn)
+
+        return JsonResponse({
+            'success': True,
+            'model_name': model_name,
+            'versions': [
+                _serialize_registered_model(
+                    v,
+                    deployed_model_names=deployed_model_names,
+                    deployed_training_run_ids=deployed_training_run_ids
+                )
+                for v in versions
+            ]
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting endpoint versions: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def endpoint_undeploy(request, endpoint_id):
     """

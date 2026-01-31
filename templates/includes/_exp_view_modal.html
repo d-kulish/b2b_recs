@@ -89,6 +89,12 @@
             <button class="exp-view-tab" data-tab="lineage" onclick="ExpViewModal.switchTab('lineage')" style="display: none;">
                 Lineage
             </button>
+            <button class="exp-view-tab" data-tab="test" onclick="ExpViewModal.switchTab('test')" style="display: none;">
+                Test
+            </button>
+            <button class="exp-view-tab" data-tab="logs" onclick="ExpViewModal.switchTab('logs')" style="display: none;">
+                Logs
+            </button>
         </div>
 
         <!-- Tab Content -->
@@ -386,6 +392,16 @@
 
             <!-- Lineage Tab (for model mode) -->
             <div id="expViewTabLineage" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Test Tab (for endpoint mode) -->
+            <div id="expViewTabTest" class="exp-view-tab-content">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Logs Tab (for endpoint mode) -->
+            <div id="expViewTabLogs" class="exp-view-tab-content">
                 <!-- Populated by JavaScript -->
             </div>
         </div>

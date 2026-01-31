@@ -319,6 +319,240 @@
 }
 
 /* ==========================================================================
+   Endpoint Mode Header Styles - Similar to Model Mode
+   ========================================================================== */
+
+/* Active endpoint: Purple gradient */
+.exp-view-header.endpoint-mode.active {
+    background: linear-gradient(to right,
+        rgba(255,255,255,1) 0%,
+        rgba(243,232,255,0.3) 30%,
+        rgba(233,213,255,0.7) 60%,
+        rgba(216,180,254,1) 100%);
+}
+
+/* Inactive endpoint: Gray gradient */
+.exp-view-header.endpoint-mode.inactive {
+    background: linear-gradient(to right,
+        rgba(255,255,255,1) 0%,
+        rgba(229,231,235,0.3) 30%,
+        rgba(229,231,235,0.7) 60%,
+        rgba(209,213,219,1) 100%);
+}
+
+/* Endpoint mode header layout - match model-mode */
+.exp-view-header.endpoint-mode .exp-view-header-number {
+    width: auto;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding-left: 24px;
+    gap: 8px;
+}
+
+.exp-view-header.endpoint-mode .exp-view-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.exp-view-header.endpoint-mode .exp-view-endpoint-name-text {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    letter-spacing: -0.02em;
+}
+
+/* Status badge shown below endpoint name in endpoint mode */
+.exp-view-header.endpoint-mode .exp-view-endpoint-status-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.exp-view-header.endpoint-mode .exp-view-endpoint-status-inline i {
+    font-size: 10px;
+}
+
+.exp-view-header.endpoint-mode .exp-view-endpoint-status-inline.active {
+    background: #f3e8ff;
+    color: #7c3aed;
+    border: 1px solid #e9d5ff;
+}
+
+.exp-view-header.endpoint-mode .exp-view-endpoint-status-inline.inactive {
+    background: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+}
+
+/* Hide the info column in endpoint mode (times, etc.) */
+.exp-view-header.endpoint-mode .exp-view-header-info {
+    display: none;
+}
+
+.exp-view-header.endpoint-mode .exp-view-status-panel {
+    width: auto;
+    padding: 16px 24px;
+}
+
+/* Endpoint status icons */
+.exp-view-status-icon.endpoint-active {
+    background: #8b5cf6;
+}
+
+.exp-view-status-icon.endpoint-inactive {
+    background: #6b7280;
+}
+
+/* ==========================================================================
+   Endpoint Overview Sections
+   ========================================================================== */
+
+.exp-view-endpoint-url-section {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.exp-view-endpoint-url-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.exp-view-endpoint-url-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.exp-view-endpoint-url-value code {
+    flex: 1;
+    background: white;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 13px;
+    color: #374151;
+    word-break: break-all;
+}
+
+.exp-view-endpoint-info-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.exp-view-endpoint-info-card-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.exp-view-endpoint-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.exp-view-endpoint-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.exp-view-endpoint-info-item-label {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.exp-view-endpoint-info-item-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: #111827;
+}
+
+/* Endpoint placeholder tabs (Test, Logs) */
+.exp-view-endpoint-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    background: #f9fafb;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    color: #6b7280;
+    text-align: center;
+}
+
+.exp-view-endpoint-placeholder i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #9ca3af;
+}
+
+.exp-view-endpoint-placeholder p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.exp-view-endpoint-placeholder .placeholder-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.exp-view-endpoint-placeholder a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s ease;
+}
+
+.exp-view-endpoint-placeholder a:hover {
+    background: #2563eb;
+}
+
+/* ==========================================================================
    Tabs - Pill Button Style
    ========================================================================== */
 .exp-view-tabs {

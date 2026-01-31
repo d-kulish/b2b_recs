@@ -69,13 +69,15 @@ const ExpViewModal = (function() {
     };
 
     let state = {
-        mode: 'experiment',  // 'experiment', 'training_run', or 'model'
+        mode: 'experiment',  // 'experiment', 'training_run', 'model', or 'endpoint'
         expId: null,
         currentExp: null,
         runId: null,
         currentRun: null,
         modelId: null,
         currentModel: null,
+        endpointId: null,
+        currentEndpoint: null,
         currentTab: 'overview',
         pollInterval: null,
         dataCache: {
@@ -2059,6 +2061,313 @@ const ExpViewModal = (function() {
         `;
     }
 
+    // =============================================================================
+    // ENDPOINT MODE FUNCTIONS
+    // =============================================================================
+
+    async function openForEndpoint(endpointId) {
+        state.mode = 'endpoint';
+
+        try {
+            const url = `/api/deployed-endpoints/${endpointId}/`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (!data.success) {
+                console.error('Failed to load endpoint:', data.error);
+                return;
+            }
+
+            openWithEndpointData(data.endpoint);
+        } catch (error) {
+            console.error('Error loading endpoint details:', error);
+        }
+    }
+
+    function openWithEndpointData(endpoint) {
+        state.mode = 'endpoint';
+        state.endpointId = endpoint.id;
+        state.currentEndpoint = endpoint;
+
+        // Reset state
+        state.dataCache = {
+            statistics: null,
+            schema: null,
+            errorDetails: null,
+            trainingHistory: null,
+            versions: null,
+            lineage: null,
+            _loadingInsights: false,
+            _statsData: null,
+            _schemaData: null
+        };
+
+        // Set initial tab
+        state.currentTab = 'overview';
+
+        // Reset tabs
+        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
+        const targetTab = document.querySelector(`.exp-view-tab[data-tab="overview"]`);
+        if (targetTab) targetTab.classList.add('active');
+
+        document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
+        const targetContent = document.getElementById('expViewTabOverview');
+        if (targetContent) targetContent.classList.add('active');
+
+        // Update visible tabs for endpoint mode
+        updateVisibleTabs();
+
+        // Populate modal with endpoint data
+        populateEndpointModal(endpoint);
+        document.getElementById('expViewModal').classList.remove('hidden');
+    }
+
+    function populateEndpointModal(endpoint) {
+        // Store current endpoint for tab data loading
+        window.currentViewEndpoint = endpoint;
+
+        // Endpoint mode header: use active/inactive status + endpoint-mode class
+        const header = document.getElementById('expViewHeader');
+        const statusClass = endpoint.is_active ? 'active' : 'inactive';
+        header.className = `modal-header exp-view-header endpoint-mode ${statusClass}`;
+
+        // Status panel
+        const statusPanel = document.getElementById('expViewStatusPanel');
+        statusPanel.className = `exp-view-status-panel ${statusClass}`;
+
+        // Status icon - rocket for active, pause for inactive
+        const statusIcon = document.getElementById('expViewStatusIcon');
+        const iconClass = endpoint.is_active ? 'endpoint-active' : 'endpoint-inactive';
+        const iconSymbol = endpoint.is_active ? 'fa-rocket' : 'fa-pause';
+        statusIcon.className = `exp-view-status-icon ${iconClass}`;
+        statusIcon.innerHTML = `<i class="fas ${iconSymbol}"></i>`;
+
+        // Title (Endpoint name) - shown prominently with status badge below
+        const titleEl = document.getElementById('expViewTitle');
+        const statusText = endpoint.is_active ? 'Active' : 'Inactive';
+        const statusBadge = endpoint.is_active
+            ? '<i class="fas fa-circle"></i> Active'
+            : '<i class="fas fa-pause-circle"></i> Inactive';
+
+        titleEl.innerHTML = `
+            <span class="exp-view-endpoint-name-text">${endpoint.service_name || 'Endpoint'}</span>
+            <span class="exp-view-endpoint-status-inline ${statusClass}">${statusBadge}</span>
+        `;
+
+        // Hide version/run info for endpoint mode (simplified header)
+        const expNameEl = document.getElementById('expViewExpName');
+        expNameEl.textContent = '';
+        expNameEl.style.display = 'none';
+
+        // Hide the separate type badge in header-info
+        const typeBadgeEl = document.getElementById('expViewTypeBadge');
+        typeBadgeEl.style.display = 'none';
+
+        // Description - hidden
+        const descEl = document.getElementById('expViewDescription');
+        descEl.textContent = '';
+        descEl.style.display = 'none';
+
+        // Hide times for endpoint mode (simplified header)
+        const timesEl = document.querySelector('.exp-view-times');
+        if (timesEl) timesEl.style.display = 'none';
+
+        // Overview Tab - render endpoint overview
+        renderEndpointOverview(endpoint);
+    }
+
+    function renderEndpointOverview(endpoint) {
+        // Hide standard accordions for endpoint mode - use simplified view
+        const regDeploySection = document.getElementById('expViewRegistryDeploymentSection');
+        if (regDeploySection) regDeploySection.style.display = 'none';
+
+        const datasetAccordion = document.querySelector('.exp-view-accordion:has(#expViewDatasetName)');
+        const featuresAccordion = document.querySelector('.exp-view-accordion:has(#expViewFeaturesConfigName)');
+        const modelAccordion = document.querySelector('.exp-view-accordion:has(#expViewModelConfigName)');
+        const trainingSetupAccordion = document.querySelector('.exp-view-accordion:has(#expViewTrainingSetupContent)');
+
+        // Use alternative approach - hide by finding parent accordions
+        document.querySelectorAll('.exp-view-accordion').forEach(acc => {
+            acc.style.display = 'none';
+        });
+
+        // Hide results summary
+        const resultsSummary = document.getElementById('expViewResultsSummary');
+        if (resultsSummary) resultsSummary.classList.add('hidden');
+
+        // Build custom endpoint overview content in the Overview tab
+        const overviewTab = document.getElementById('expViewTabOverview');
+        if (!overviewTab) return;
+
+        const config = endpoint.deployment_config || {};
+
+        // Build the overview HTML
+        let overviewHtml = `
+            <!-- Service URL Section -->
+            <div class="exp-view-endpoint-url-section">
+                <div class="exp-view-endpoint-url-label">
+                    <i class="fas fa-link"></i> Service URL
+                </div>
+                <div class="exp-view-endpoint-url-value">
+                    <code>${endpoint.service_url || 'N/A'}</code>
+                    <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${endpoint.service_url || ''}')">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Model Information Card -->
+            <div class="exp-view-endpoint-info-card">
+                <div class="exp-view-endpoint-info-card-title">Model Information</div>
+                <div class="exp-view-endpoint-info-grid">
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Model</span>
+                        <span class="exp-view-endpoint-info-item-value">${endpoint.model_name || '-'}</span>
+                    </div>
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Type</span>
+                        <span class="exp-view-endpoint-info-item-value">${(endpoint.model_type || 'retrieval').charAt(0).toUpperCase() + (endpoint.model_type || 'retrieval').slice(1)}</span>
+                    </div>
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Version</span>
+                        <span class="exp-view-endpoint-info-item-value">v${endpoint.deployed_version || '-'}</span>
+                    </div>
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Run #</span>
+                        <span class="exp-view-endpoint-info-item-value">${endpoint.run_number || '-'}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hardware Configuration Card -->
+            <div class="exp-view-endpoint-info-card">
+                <div class="exp-view-endpoint-info-card-title">Hardware Configuration</div>
+                <div class="exp-view-endpoint-info-grid">
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Memory</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.memory || '4Gi'}</span>
+                    </div>
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">CPU</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.cpu || '2'}</span>
+                    </div>
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Min Instances</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.min_instances !== undefined ? config.min_instances : '0'}</span>
+                    </div>
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Max Instances</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.max_instances || '10'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Add advanced deployment params if present
+        if (config.timeout_seconds || config.concurrency || config.gpu_type) {
+            overviewHtml += `
+            <!-- Advanced Deployment Parameters Card -->
+            <div class="exp-view-endpoint-info-card">
+                <div class="exp-view-endpoint-info-card-title">Advanced Parameters</div>
+                <div class="exp-view-endpoint-info-grid">
+                    ${config.timeout_seconds ? `
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Timeout</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.timeout_seconds}s</span>
+                    </div>` : ''}
+                    ${config.concurrency ? `
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">Concurrency</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.concurrency}</span>
+                    </div>` : ''}
+                    ${config.gpu_type ? `
+                    <div class="exp-view-endpoint-info-item">
+                        <span class="exp-view-endpoint-info-item-label">GPU</span>
+                        <span class="exp-view-endpoint-info-item-value">${config.gpu_type}</span>
+                    </div>` : ''}
+                </div>
+            </div>
+            `;
+        }
+
+        overviewTab.innerHTML = overviewHtml;
+    }
+
+    function renderEndpointTestTab() {
+        const container = document.getElementById('expViewTabTest');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="exp-view-endpoint-placeholder">
+                <i class="fas fa-flask"></i>
+                <p class="placeholder-title">Test Endpoint</p>
+                <p>Interactive endpoint testing is coming soon.</p>
+                <p style="color: #9ca3af; font-size: 12px; margin-top: 8px;">You will be able to send test requests and view responses directly here.</p>
+            </div>
+        `;
+    }
+
+    function renderEndpointLogsTab(endpoint) {
+        const container = document.getElementById('expViewTabLogs');
+        if (!container) return;
+
+        // Build GCP Console logs URL
+        const serviceName = endpoint.service_name || '';
+        const region = 'us-central1';  // Default region
+        const project = 'b2b-recs';    // Project ID
+
+        const logsUrl = `https://console.cloud.google.com/run/detail/${region}/${serviceName}/logs?project=${project}`;
+
+        container.innerHTML = `
+            <div class="exp-view-endpoint-placeholder">
+                <i class="fas fa-stream"></i>
+                <p class="placeholder-title">Service Logs</p>
+                <p>View logs for this endpoint in the Google Cloud Console.</p>
+                <a href="${logsUrl}" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-external-link-alt"></i>
+                    Open in Cloud Console
+                </a>
+            </div>
+        `;
+    }
+
+    async function loadEndpointVersions(endpointId) {
+        const container = document.getElementById('expViewTabVersions');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="exp-view-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading versions...</span>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`/api/deployed-endpoints/${endpointId}/versions/`);
+            const data = await response.json();
+
+            if (data.success) {
+                state.dataCache.versions = data.versions;
+                renderVersionsTab(data.model_name, data.versions);
+            } else {
+                container.innerHTML = `
+                    <div class="exp-view-data-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Failed to load versions: ${data.error}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading endpoint versions:', error);
+            container.innerHTML = `
+                <div class="exp-view-data-message">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Error loading versions</span>
+                </div>
+            `;
+        }
+    }
+
     async function deployModel(modelId) {
         // Use the DeployWizard modal instead of confirm dialog
         if (typeof DeployWizard !== 'undefined') {
@@ -2150,6 +2459,10 @@ const ExpViewModal = (function() {
         state.modelId = null;
         state.currentModel = null;
 
+        // Reset endpoint state
+        state.endpointId = null;
+        state.currentEndpoint = null;
+
         state.mode = 'experiment';
 
         state.dataCache = {
@@ -2194,6 +2507,8 @@ const ExpViewModal = (function() {
             visibleTabs = ['overview', 'pipeline', 'data', 'training'];
         } else if (state.mode === 'model') {
             visibleTabs = ['overview', 'versions', 'artifacts', 'deployment'];
+        } else if (state.mode === 'endpoint') {
+            visibleTabs = ['overview', 'test', 'logs', 'versions'];
         } else {
             visibleTabs = config.showTabs;
         }
@@ -2425,6 +2740,23 @@ const ExpViewModal = (function() {
                     loadModelLineage(model.id);
                 } else {
                     renderLineageTab(state.dataCache.lineage);
+                }
+            }
+        } else if (state.mode === 'endpoint') {
+            // Endpoint mode tabs
+            const endpoint = state.currentEndpoint;
+            if (tabName === 'test' && endpoint) {
+                renderEndpointTestTab();
+            }
+            if (tabName === 'logs' && endpoint) {
+                renderEndpointLogsTab(endpoint);
+            }
+            if (tabName === 'versions' && endpoint) {
+                if (!state.dataCache.versions) {
+                    loadEndpointVersions(endpoint.id);
+                } else {
+                    const modelName = endpoint.model_name || state.dataCache.versions[0]?.vertex_model_name;
+                    renderVersionsTab(modelName, state.dataCache.versions);
                 }
             }
         } else if (state.mode === 'training_run') {
@@ -4638,6 +4970,10 @@ const ExpViewModal = (function() {
         undeployModel: undeployModel,
         copyToClipboard: copyToClipboard,
 
+        // Endpoint mode operations
+        openForEndpoint: openForEndpoint,
+        openWithEndpointData: openWithEndpointData,
+
         // Training run actions (Registry & Deployment)
         pushToRegistry: pushToRegistry,
         registerModel: registerModel,
@@ -4668,6 +5004,7 @@ const ExpViewModal = (function() {
         getCurrentExp: () => state.currentExp,
         getCurrentRun: () => state.currentRun,
         getCurrentModel: () => state.currentModel,
+        getCurrentEndpoint: () => state.currentEndpoint,
         getMode: () => state.mode
     };
 })();

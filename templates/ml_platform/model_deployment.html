@@ -6,6 +6,8 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cards.css' %}">
 <link rel="stylesheet" href="{% static 'css/endpoints_table.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=2">
 {% endblock %}
 
 {% block model_content %}
@@ -50,6 +52,11 @@
 <!-- End Chapter: Serving Endpoints -->
 
 <!-- =============================================================================
+     EXPERIMENT VIEW MODAL (Reusable modal for endpoint/model/training run details)
+     ============================================================================ -->
+{% include 'includes/_exp_view_modal.html' %}
+
+<!-- =============================================================================
      CONFIRMATION MODAL (Reusable styled confirmation dialog)
      ============================================================================ -->
 <div id="confirmModal" class="modal-overlay hidden">
@@ -79,6 +86,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/exp_view_modal.js' %}?v=2"></script>
 <script src="{% static 'js/endpoints_table.js' %}?v=5"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

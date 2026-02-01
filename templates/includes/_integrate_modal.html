@@ -40,107 +40,121 @@
             </div>
         </div>
 
-        <!-- Body with 3 Sections -->
-        <div class="integrate-modal-body">
-            <!-- Section 1: Quick Validation -->
-            <div id="integrateQuickValidation" class="integrate-section">
-                <div class="integrate-section-header">
-                    <h4 class="integrate-section-title">
-                        <i class="fas fa-check-double"></i>
-                        Quick Validation
-                    </h4>
-                </div>
+        <!-- Tab Navigation -->
+        <div class="integrate-tabs" id="integrateTabs">
+            <button class="integrate-tab active" data-tab="validation" onclick="IntegrateModal.switchTab('validation')">
+                Validation
+            </button>
+            <button class="integrate-tab" data-tab="code" onclick="IntegrateModal.switchTab('code')">
+                Code Examples
+            </button>
+        </div>
 
-                <!-- Sample Request Row -->
-                <div class="integrate-validation-row integrate-validation-row-expanded">
-                    <div class="integrate-validation-label">
-                        <span class="integrate-label-text">Sample Request</span>
-                        <div class="integrate-label-actions">
-                            <button class="integrate-btn integrate-btn-icon" onclick="IntegrateModal.refreshSample()" title="Get new sample">
-                                <i class="fas fa-sync-alt" id="integrateSampleRefreshIcon"></i>
-                            </button>
-                            <button class="integrate-btn integrate-btn-primary integrate-btn-sm" onclick="IntegrateModal.runPredictionTest()" id="integratePredictBtn">
-                                <i class="fas fa-play"></i> Run Test
-                            </button>
+        <!-- Tab Content -->
+        <div class="integrate-modal-body">
+            <!-- Validation Tab -->
+            <div id="integrateTabValidation" class="integrate-tab-content active">
+                <!-- Input Schema Accordion -->
+                <div class="integrate-accordion">
+                    <div class="integrate-accordion-header" onclick="IntegrateModal.toggleAccordion('schema')">
+                        <span class="integrate-accordion-title">
+                            <i class="fas fa-table integrate-icon-blue"></i>
+                            Input Schema
+                        </span>
+                        <i id="integrateSchemaChevron" class="fas fa-chevron-right integrate-accordion-chevron"></i>
+                    </div>
+                    <div id="integrateSchemaContent" class="integrate-accordion-content hidden">
+                        <div class="integrate-schema-table-container">
+                            <table class="integrate-schema-table">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Type</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="integrateSchemaBody">
+                                    <tr>
+                                        <td colspan="3" class="integrate-loading">
+                                            <i class="fas fa-spinner fa-spin"></i> Loading schema...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <div class="integrate-sample-box">
-                        <pre class="integrate-sample-code" id="integrateSampleData">{"loading": "..."}</pre>
-                    </div>
                 </div>
 
-                <!-- Prediction Response Row -->
-                <div class="integrate-validation-row integrate-validation-row-expanded" id="integratePredictResultRow" style="display: none;">
-                    <div class="integrate-validation-label">
-                        <span class="integrate-label-text">Response</span>
-                        <span class="integrate-result-status" id="integratePredictStatus"></span>
+                <!-- Sample Test Accordion -->
+                <div class="integrate-accordion">
+                    <div class="integrate-accordion-header" onclick="IntegrateModal.toggleAccordion('test')">
+                        <span class="integrate-accordion-title">
+                            <i class="fas fa-flask integrate-icon-green"></i>
+                            Sample Test
+                        </span>
+                        <i id="integrateTestChevron" class="fas fa-chevron-right integrate-accordion-chevron expanded"></i>
                     </div>
-                    <div class="integrate-sample-box">
-                        <pre class="integrate-sample-code" id="integratePredictResult"></pre>
+                    <div id="integrateTestContent" class="integrate-accordion-content">
+                        <!-- Sample Request Row -->
+                        <div class="integrate-validation-row integrate-validation-row-expanded">
+                            <div class="integrate-validation-label">
+                                <span class="integrate-label-text">Sample Request</span>
+                                <div class="integrate-label-actions">
+                                    <button class="integrate-action-btn integrate-action-btn-blue" onclick="event.stopPropagation(); IntegrateModal.refreshSample()" id="integrateUpdateBtn">
+                                        <i class="fas fa-sync-alt" id="integrateSampleRefreshIcon"></i>
+                                        <span>Update</span>
+                                    </button>
+                                    <button class="integrate-action-btn integrate-action-btn-green" onclick="event.stopPropagation(); IntegrateModal.runPredictionTest()" id="integratePredictBtn">
+                                        <i class="fas fa-play" id="integratePredictIcon"></i>
+                                        <span>Predict</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="integrate-sample-box">
+                                <pre class="integrate-sample-code" id="integrateSampleData">{"loading": "..."}</pre>
+                            </div>
+                        </div>
+
+                        <!-- Prediction Response Row -->
+                        <div class="integrate-validation-row integrate-validation-row-expanded" id="integratePredictResultRow" style="display: none;">
+                            <div class="integrate-validation-label">
+                                <span class="integrate-label-text">Response</span>
+                            </div>
+                            <div class="integrate-sample-box">
+                                <pre class="integrate-sample-code" id="integratePredictResult"></pre>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Section 2: Input Schema -->
-            <div id="integrateInputSchema" class="integrate-section">
-                <div class="integrate-section-header">
-                    <h4 class="integrate-section-title">
-                        <i class="fas fa-table"></i>
-                        Input Schema
-                    </h4>
-                </div>
-                <div class="integrate-schema-table-container">
-                    <table class="integrate-schema-table">
-                        <thead>
-                            <tr>
-                                <th>Field</th>
-                                <th>Type</th>
-                                <th>Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody id="integrateSchemaBody">
-                            <tr>
-                                <td colspan="3" class="integrate-loading">
-                                    <i class="fas fa-spinner fa-spin"></i> Loading schema...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <!-- Code Examples Tab -->
+            <div id="integrateTabCode" class="integrate-tab-content">
+                <div id="integrateCodeExamples" class="integrate-section integrate-section-full">
+                    <!-- Language Tabs -->
+                    <div class="integrate-code-tabs">
+                        <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
+                            <i class="fab fa-python"></i> Python
+                        </button>
+                        <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
+                            <i class="fab fa-js-square"></i> JavaScript
+                        </button>
+                        <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
+                            <i class="fas fa-terminal"></i> cURL
+                        </button>
+                        <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
+                            <i class="fab fa-java"></i> Java
+                        </button>
+                    </div>
 
-            <!-- Section 3: Code Examples -->
-            <div id="integrateCodeExamples" class="integrate-section">
-                <div class="integrate-section-header">
-                    <h4 class="integrate-section-title">
-                        <i class="fas fa-code"></i>
-                        Code Examples
-                    </h4>
-                </div>
-
-                <!-- Language Tabs -->
-                <div class="integrate-code-tabs">
-                    <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
-                        <i class="fab fa-python"></i> Python
-                    </button>
-                    <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
-                        <i class="fab fa-js-square"></i> JavaScript
-                    </button>
-                    <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
-                        <i class="fas fa-terminal"></i> cURL
-                    </button>
-                    <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
-                        <i class="fab fa-java"></i> Java
-                    </button>
-                </div>
-
-                <!-- Code Display -->
-                <div class="integrate-code-container">
-                    <button class="integrate-copy-btn" onclick="IntegrateModal.copyCode()" title="Copy to clipboard">
-                        <i class="fas fa-copy" id="integrateCopyIcon"></i>
-                        <span id="integrateCopyText">Copy</span>
-                    </button>
-                    <pre class="integrate-code-block"><code id="integrateCodeDisplay" class="language-python">Loading...</code></pre>
+                    <!-- Code Display -->
+                    <div class="integrate-code-container">
+                        <button class="integrate-copy-btn" onclick="IntegrateModal.copyCode()" title="Copy to clipboard">
+                            <i class="fas fa-copy" id="integrateCopyIcon"></i>
+                            <span id="integrateCopyText">Copy</span>
+                        </button>
+                        <pre class="integrate-code-block"><code id="integrateCodeDisplay" class="language-python">Loading...</code></pre>
+                    </div>
                 </div>
             </div>
         </div>

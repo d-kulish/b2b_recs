@@ -30,6 +30,7 @@ const IntegrateModal = (function() {
         schema: null,
         sampleData: null,
         codeExamples: null,
+        currentTab: 'validation',
         currentCodeTab: 'python',
         loading: false
     };
@@ -70,6 +71,18 @@ const IntegrateModal = (function() {
     function formatJson(obj) {
         try {
             return JSON.stringify(obj, null, 2);
+        } catch (e) {
+            return String(obj);
+        }
+    }
+
+    function formatJsonCompact(obj) {
+        // Format JSON with arrays shown inline (compact) instead of one item per line
+        try {
+            return JSON.stringify(obj, (key, value) => value, 2)
+                .replace(/\[\n\s+/g, '[')
+                .replace(/\n\s+\]/g, ']')
+                .replace(/,\n\s+(?=[\d"\-])/g, ', ');
         } catch (e) {
             return String(obj);
         }
@@ -208,31 +221,16 @@ const IntegrateModal = (function() {
 
     function renderPredictResult(result) {
         const resultRow = document.getElementById('integratePredictResultRow');
-        const statusEl = document.getElementById('integratePredictStatus');
         const resultEl = document.getElementById('integratePredictResult');
 
         resultRow.style.display = '';
 
         if (result.success) {
-            statusEl.innerHTML = `
-                <span class="integrate-result-status success">
-                    <i class="fas fa-check-circle"></i>
-                    ${result.status_code} OK
-                </span>
-                <span class="integrate-result-latency">(${result.latency_ms}ms)</span>
-            `;
+            resultEl.textContent = formatJsonCompact(result.response);
         } else {
             const errorMsg = result.error || `Status ${result.status_code}`;
-            statusEl.innerHTML = `
-                <span class="integrate-result-status error">
-                    <i class="fas fa-times-circle"></i>
-                    ${escapeHtml(errorMsg)}
-                </span>
-                ${result.latency_ms > 0 ? `<span class="integrate-result-latency">(${result.latency_ms}ms)</span>` : ''}
-            `;
+            resultEl.textContent = `Error: ${errorMsg}`;
         }
-
-        resultEl.textContent = formatJson(result.response || result.error);
     }
 
     function renderLoading() {
@@ -273,7 +271,12 @@ const IntegrateModal = (function() {
         state.schema = null;
         state.sampleData = null;
         state.codeExamples = null;
+        state.currentTab = 'validation';
         state.currentCodeTab = 'python';
+
+        // Reset tabs and accordions to default
+        switchTab('validation');
+        resetAccordions();
 
         // Show modal with loading state
         const modal = document.getElementById('integrateModal');
@@ -335,9 +338,13 @@ const IntegrateModal = (function() {
     async function refreshSample() {
         if (!state.endpointId) return;
 
+        const btn = document.getElementById('integrateUpdateBtn');
+        const icon = document.getElementById('integrateSampleRefreshIcon');
+
         // Show spinner
-        const refreshIcon = document.getElementById('integrateSampleRefreshIcon');
-        refreshIcon.classList.add('fa-spin');
+        icon.classList.remove('fa-sync-alt');
+        icon.classList.add('fa-spinner', 'fa-spin');
+        btn.disabled = true;
 
         try {
             const data = await fetchSampleData(state.endpointId);
@@ -358,7 +365,10 @@ const IntegrateModal = (function() {
             document.getElementById('integrateSampleData').textContent =
                 `Error: ${error.message}`;
         } finally {
-            refreshIcon.classList.remove('fa-spin');
+            // Restore icon
+            icon.classList.remove('fa-spinner', 'fa-spin');
+            icon.classList.add('fa-sync-alt');
+            btn.disabled = false;
         }
     }
 
@@ -368,8 +378,11 @@ const IntegrateModal = (function() {
         }
 
         const btn = document.getElementById('integratePredictBtn');
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+        const icon = document.getElementById('integratePredictIcon');
+
+        // Show spinner
+        icon.classList.remove('fa-play');
+        icon.classList.add('fa-spinner', 'fa-spin');
         btn.disabled = true;
 
         try {
@@ -387,9 +400,67 @@ const IntegrateModal = (function() {
                 latency_ms: 0
             });
         } finally {
-            btn.innerHTML = originalHtml;
+            // Restore icon
+            icon.classList.remove('fa-spinner', 'fa-spin');
+            icon.classList.add('fa-play');
             btn.disabled = false;
         }
+    }
+
+    function switchTab(tabName) {
+        state.currentTab = tabName;
+
+        // Update tab buttons
+        document.querySelectorAll('.integrate-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        });
+
+        // Update tab content
+        document.querySelectorAll('.integrate-tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
+        const activeContent = document.getElementById(
+            tabName === 'validation' ? 'integrateTabValidation' : 'integrateTabCode'
+        );
+        if (activeContent) {
+            activeContent.classList.add('active');
+        }
+    }
+
+    function toggleAccordion(section) {
+        const contentId = section === 'schema' ? 'integrateSchemaContent' : 'integrateTestContent';
+        const chevronId = section === 'schema' ? 'integrateSchemaChevron' : 'integrateTestChevron';
+
+        const content = document.getElementById(contentId);
+        const chevron = document.getElementById(chevronId);
+        const header = chevron ? chevron.closest('.integrate-accordion-header') : null;
+
+        if (content && chevron) {
+            content.classList.toggle('hidden');
+            chevron.classList.toggle('expanded');
+            if (header) {
+                header.classList.toggle('expanded');
+            }
+        }
+    }
+
+    function resetAccordions() {
+        // Schema: closed by default
+        const schemaContent = document.getElementById('integrateSchemaContent');
+        const schemaChevron = document.getElementById('integrateSchemaChevron');
+        const schemaHeader = schemaChevron ? schemaChevron.closest('.integrate-accordion-header') : null;
+        if (schemaContent) schemaContent.classList.add('hidden');
+        if (schemaChevron) schemaChevron.classList.remove('expanded');
+        if (schemaHeader) schemaHeader.classList.remove('expanded');
+
+        // Test: open by default
+        const testContent = document.getElementById('integrateTestContent');
+        const testChevron = document.getElementById('integrateTestChevron');
+        const testHeader = testChevron ? testChevron.closest('.integrate-accordion-header') : null;
+        if (testContent) testContent.classList.remove('hidden');
+        if (testChevron) testChevron.classList.add('expanded');
+        if (testHeader) testHeader.classList.add('expanded');
     }
 
     function switchCodeTab(lang) {
@@ -437,6 +508,8 @@ const IntegrateModal = (function() {
         close,
         refreshSample,
         runPredictionTest,
+        switchTab,
+        toggleAccordion,
         switchCodeTab,
         copyCode,
         handleOverlayClick

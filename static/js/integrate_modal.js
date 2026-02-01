@@ -142,11 +142,22 @@ const IntegrateModal = (function() {
 
     function renderHeader() {
         const title = document.getElementById('integrateModalTitle');
-        const subtitle = document.getElementById('integrateModalSubtitle');
+        const typeBadge = document.getElementById('integrateModalTypeBadge');
 
         if (state.endpoint) {
-            title.textContent = `Integrate: ${state.endpoint.service_name}`;
-            subtitle.textContent = `${state.endpoint.model_name} (${state.endpoint.model_type})`;
+            // Title shows the service name
+            title.textContent = state.endpoint.service_name;
+
+            // Type badge with icon
+            const modelType = state.endpoint.model_type || 'retrieval';
+            const typeIcons = {
+                'retrieval': 'fa-search',
+                'ranking': 'fa-sort-amount-down',
+                'multitask': 'fa-layer-group'
+            };
+            const icon = typeIcons[modelType] || 'fa-cube';
+            typeBadge.className = `integrate-modal-type-badge ${modelType}`;
+            typeBadge.innerHTML = `<i class="fas ${icon}"></i> ${modelType.toUpperCase()}`;
         }
     }
 
@@ -466,6 +477,7 @@ const IntegrateModal = (function() {
             }, 2000);
         }
     }
+
 
     // =============================================================================
     // EXPOSE PUBLIC API

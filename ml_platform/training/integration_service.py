@@ -130,28 +130,10 @@ class IntegrationService:
                 'notes': notes
             })
 
-        # Also add product model features
-        product_features = self.feature_config.product_model_features or []
-        for feature in product_features:
-            column = feature.get('column', '')
-            if not column:
-                continue
-
-            original_type = column_types.get(column, 'STRING')
-            display_type = self.TYPE_DISPLAY_MAP.get(original_type, original_type)
-            notes = self.TYPE_NOTES.get(original_type, '')
-            if not notes:
-                feature_type = feature.get('type', '')
-                if feature_type == 'string_embedding':
-                    notes = 'Product identifier'
-                else:
-                    notes = 'Required'
-
-            fields.append({
-                'name': column,
-                'type': display_type,
-                'notes': notes
-            })
+        # NOTE: Product model features are NOT included here because the model's
+        # serving signature only accepts buyer_model_features as inputs.
+        # Product features are used internally by the candidate tower during training,
+        # but inference only requires buyer (query) features.
 
         return fields
 
@@ -159,15 +141,30 @@ class IntegrationService:
         """
         Query BigQuery for random sample using for_tfx=True.
 
+        Only returns fields that are in buyer_model_features, since the model's
+        serving signature only accepts those as inputs.
+
         Args:
             count: Number of samples to retrieve (default 1)
 
         Returns:
-            Dict with 'instance' containing sample feature values
+            Dict with 'instance' containing sample feature values for buyer features only
         """
         from ml_platform.datasets.services import BigQueryService, BigQueryServiceError
 
         try:
+            # Get the list of buyer feature columns - these are the only inputs
+            # the model's serving signature accepts
+            buyer_features = self.feature_config.buyer_model_features or []
+            buyer_columns = {
+                f.get('display_name') or f.get('column')
+                for f in buyer_features
+                if f.get('display_name') or f.get('column')
+            }
+
+            if not buyer_columns:
+                return {'instance': {}, 'error': 'No buyer features configured'}
+
             # Get the model endpoint from the registered model
             model_endpoint = self.endpoint.registered_model.ml_model
 
@@ -193,12 +190,15 @@ class IntegrationService:
             if not rows:
                 return {'instance': {}, 'error': 'No data found'}
 
-            # Get the first row as a dict
+            # Get the first row as a dict, filtering to only buyer feature columns
             row = rows[0]
             instance = {}
 
-            # Get schema fields for this row
             for field in result.schema:
+                # Only include columns that are buyer features (model inputs)
+                if field.name not in buyer_columns:
+                    continue
+
                 value = getattr(row, field.name, None)
                 # Convert to JSON-serializable format
                 if value is not None:

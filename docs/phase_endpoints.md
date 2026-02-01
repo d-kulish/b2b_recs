@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-02-01 (Integrate Modal for endpoint testing and code examples)
+**Last Updated**: 2026-02-01 (Fixed Integrate Modal to send only buyer features to endpoint)
 
 ---
 
@@ -2438,10 +2438,13 @@ class IntegrationService:
         self.dataset = self.training_run.dataset
 
     def get_input_schema(self) -> List[Dict]:
-        """Extract schema from feature_config.buyer_model_features."""
+        """Extract schema from feature_config.buyer_model_features only.
+        Note: Product features are NOT included - the model's serving
+        signature only accepts buyer features as inputs."""
 
     def get_sample_data(self, count=1) -> Dict:
-        """Query BigQuery for random sample using for_tfx=True."""
+        """Query BigQuery for random sample, filtered to buyer features only.
+        The model's serving signature only accepts buyer_model_features."""
 
     def run_health_check(self) -> Dict:
         """GET /v1/models/recommender - check endpoint health."""
@@ -2555,3 +2558,55 @@ Button styling:
 7. Switch language tabs → code updates with same sample data
 8. Click "Copy" → code copied to clipboard
 9. Test error handling with inactive endpoint → appropriate error message
+
+---
+
+## Bug Fix: Payload Mismatch (2026-02-01)
+
+### Problem
+
+The "Run Test" button in the Integrate Modal returned an error:
+```json
+{
+  "error": "Failed to process element: 0 key: product_id of 'instances' list. Error: INVALID_ARGUMENT: JSON object: does not have named input: product_id"
+}
+```
+
+### Root Cause
+
+The model's serving signature (defined in `configs/services.py:_generate_raw_tensor_signature()`) only accepts **buyer_model_features** as inputs. However, `IntegrationService` was:
+
+1. **`get_input_schema()`**: Including both buyer AND product features in the schema
+2. **`get_sample_data()`**: Returning ALL dataset columns instead of filtering to buyer features
+
+The sample payload included fields like `product_id`, `category`, `sub_category` (product features) and `sales` (target column), which the model doesn't accept.
+
+### Verification
+
+Query the model metadata to see expected inputs:
+```bash
+curl -s "https://<endpoint-url>/v1/models/recommender/metadata" | jq '.metadata.signature_def.signature_def.serving_default.inputs | keys'
+# Returns: ["customer_id", "date", "cust_value"]  ← Only buyer features
+```
+
+### Fix
+
+**File**: `ml_platform/training/integration_service.py`
+
+1. **`get_input_schema()`**: Removed the block that added `product_model_features` (was lines 133-154)
+
+2. **`get_sample_data()`**: Added filtering to only include `buyer_model_features` columns:
+   ```python
+   buyer_columns = {
+       f.get('display_name') or f.get('column')
+       for f in self.feature_config.buyer_model_features
+   }
+   # Filter query result to only include buyer feature columns
+   instance = {k: v for k, v in row.items() if k in buyer_columns}
+   ```
+
+### Result
+
+- Schema table now shows only the 3 buyer features the model expects
+- Sample data only includes those 3 fields
+- "Run Test" succeeds and returns product recommendations

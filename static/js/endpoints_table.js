@@ -33,6 +33,7 @@ const EndpointsTable = (function() {
             deploy: '/api/deployed-endpoints/{id}/deploy/',
             config: '/api/deployed-endpoints/{id}/config/',
             delete: '/api/deployed-endpoints/{id}/delete/',
+            healthCheck: '/api/deployed-endpoints/{id}/integration/test/',
         },
         // Cloud Run logs URL pattern
         logsUrlPattern: 'https://console.cloud.google.com/run/detail/{region}/{service}/logs?project={project}',
@@ -56,7 +57,8 @@ const EndpointsTable = (function() {
         kpiFilter: 'active',  // Track which KPI card is selected ('all', 'active', 'inactive')
         loading: false,
         searchDebounceTimer: null,
-        autoCloseTimer: null
+        autoCloseTimer: null,
+        healthStatus: {}  // Track health check status per endpoint: { endpointId: { status: 'neutral'|'checking'|'healthy'|'unhealthy', latency: null, error: null } }
     };
 
     // Status badge configurations
@@ -716,6 +718,7 @@ const EndpointsTable = (function() {
                             <th>URL</th>
                             <th>Config</th>
                             <th>Status</th>
+                            <th class="endpoints-health-header">Health</th>
                             <th>Last Updated</th>
                             <th class="endpoints-actions-header">Actions</th>
                         </tr>
@@ -772,6 +775,9 @@ const EndpointsTable = (function() {
                         ${statusConfig.label}
                     </span>
                 </td>
+                <td class="endpoints-health-cell">
+                    ${renderHealthButton(endpoint)}
+                </td>
                 <td>${formatRelativeTime(endpoint.updated_at)}</td>
                 <td class="endpoints-actions-cell">
                     ${renderActionButtons(endpoint)}
@@ -825,6 +831,127 @@ const EndpointsTable = (function() {
                 </div>
             </div>
         `;
+    }
+
+    function renderHealthButton(endpoint) {
+        const isActive = endpoint.is_active;
+        const healthData = state.healthStatus[endpoint.id] || { status: 'neutral' };
+
+        // Disabled state for inactive endpoints
+        if (!isActive) {
+            return `
+                <button class="endpoints-health-btn disabled" disabled title="Endpoint is inactive">
+                    <i class="fas fa-circle"></i>
+                </button>
+            `;
+        }
+
+        // Different states based on health status
+        switch (healthData.status) {
+            case 'checking':
+                return `
+                    <button class="endpoints-health-btn checking" disabled title="Checking health...">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </button>
+                `;
+            case 'healthy':
+                const latencyText = healthData.latency ? `${healthData.latency}ms` : '';
+                return `
+                    <button class="endpoints-health-btn healthy"
+                            onclick="EndpointsTable.checkHealth(${endpoint.id})"
+                            title="Healthy${latencyText ? ` (${latencyText})` : ''} - Click to recheck">
+                        <i class="fas fa-check"></i>
+                    </button>
+                `;
+            case 'unhealthy':
+                const errorText = healthData.error || 'Health check failed';
+                return `
+                    <button class="endpoints-health-btn unhealthy"
+                            onclick="EndpointsTable.checkHealth(${endpoint.id})"
+                            title="${errorText} - Click to retry">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+            default: // 'neutral'
+                return `
+                    <button class="endpoints-health-btn neutral"
+                            onclick="EndpointsTable.checkHealth(${endpoint.id})"
+                            title="Click to check health">
+                        <i class="fas fa-circle"></i>
+                    </button>
+                `;
+        }
+    }
+
+    function updateHealthButton(endpointId) {
+        const endpoint = state.endpoints.find(e => e.id === endpointId);
+        if (!endpoint) return;
+
+        const cell = document.querySelector(`tr[data-endpoint-id="${endpointId}"] .endpoints-health-cell`);
+        if (cell) {
+            cell.innerHTML = renderHealthButton(endpoint);
+        }
+    }
+
+    async function checkHealth(endpointId) {
+        const endpoint = state.endpoints.find(e => e.id === endpointId);
+        if (!endpoint || !endpoint.is_active) return;
+
+        // Set checking state
+        state.healthStatus[endpointId] = { status: 'checking' };
+        updateHealthButton(endpointId);
+
+        try {
+            const url = buildUrl(config.endpoints.healthCheck, { id: endpointId });
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ test_type: 'health' })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.result && data.result.success) {
+                state.healthStatus[endpointId] = {
+                    status: 'healthy',
+                    latency: data.result.latency_ms,
+                    error: null
+                };
+            } else {
+                const errorMsg = data.result?.error || data.error || 'Health check failed';
+                state.healthStatus[endpointId] = {
+                    status: 'unhealthy',
+                    latency: data.result?.latency_ms || null,
+                    error: errorMsg
+                };
+            }
+        } catch (error) {
+            state.healthStatus[endpointId] = {
+                status: 'unhealthy',
+                latency: null,
+                error: error.message || 'Network error'
+            };
+        }
+
+        updateHealthButton(endpointId);
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
     }
 
     function renderPagination() {
@@ -1294,6 +1421,7 @@ const EndpointsTable = (function() {
         viewLogs,
         viewDetails,
         testEndpoint,
+        checkHealth,
         confirmUndeploy,
         confirmDeploy,
         confirmDelete,

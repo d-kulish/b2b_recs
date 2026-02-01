@@ -29,9 +29,9 @@
     border-radius: 12px 12px 0 0;
     background: linear-gradient(to right,
         rgba(255,255,255,1) 0%,
-        rgba(220,237,222,0.4) 30%,
-        rgba(200,225,204,0.7) 60%,
-        rgba(178,212,183,1) 100%);
+        rgba(224,231,255,0.4) 30%,
+        rgba(199,210,254,0.7) 60%,
+        rgba(165,180,252,1) 100%);
     overflow: hidden;
     min-height: 90px;
     position: relative;
@@ -110,7 +110,7 @@
     flex-shrink: 0;
     color: white;
     font-weight: 600;
-    background: #16a34a;
+    background: #6366f1;
 }
 
 /* Model name row - hidden for now, keeping for future use */

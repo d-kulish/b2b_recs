@@ -206,29 +206,6 @@ const IntegrateModal = (function() {
         });
     }
 
-    function renderHealthResult(result) {
-        const resultEl = document.getElementById('integrateHealthResult');
-
-        if (result.success) {
-            resultEl.innerHTML = `
-                <span class="integrate-result-status success">
-                    <i class="fas fa-check-circle"></i>
-                    ${result.status_code} OK
-                </span>
-                <span class="integrate-result-latency">(${result.latency_ms}ms)</span>
-            `;
-        } else {
-            const errorMsg = result.error || `Status ${result.status_code}`;
-            resultEl.innerHTML = `
-                <span class="integrate-result-status error">
-                    <i class="fas fa-times-circle"></i>
-                    ${escapeHtml(errorMsg)}
-                </span>
-                ${result.latency_ms > 0 ? `<span class="integrate-result-latency">(${result.latency_ms}ms)</span>` : ''}
-            `;
-        }
-    }
-
     function renderPredictResult(result) {
         const resultRow = document.getElementById('integratePredictResultRow');
         const statusEl = document.getElementById('integratePredictStatus');
@@ -324,10 +301,6 @@ const IntegrateModal = (function() {
             renderSampleData();
             renderCodeExamples();
 
-            // Reset health check result
-            document.getElementById('integrateHealthResult').innerHTML =
-                '<span class="integrate-result-placeholder">Click to test endpoint health</span>';
-
             // Hide prediction result row
             document.getElementById('integratePredictResultRow').style.display = 'none';
 
@@ -386,30 +359,6 @@ const IntegrateModal = (function() {
                 `Error: ${error.message}`;
         } finally {
             refreshIcon.classList.remove('fa-spin');
-        }
-    }
-
-    async function runHealthCheck() {
-        if (!state.endpointId) return;
-
-        const btn = document.getElementById('integrateHealthBtn');
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
-        btn.disabled = true;
-
-        try {
-            const result = await runTest(state.endpointId, 'health');
-            renderHealthResult(result);
-        } catch (error) {
-            console.error('Error running health check:', error);
-            renderHealthResult({
-                success: false,
-                error: error.message,
-                latency_ms: 0
-            });
-        } finally {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
         }
     }
 
@@ -487,7 +436,6 @@ const IntegrateModal = (function() {
         open,
         close,
         refreshSample,
-        runHealthCheck,
         runPredictionTest,
         switchCodeTab,
         copyCode,

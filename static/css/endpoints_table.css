@@ -975,3 +975,83 @@
         gap: 12px;
     }
 }
+
+/* =========================================================================
+   Health Check Button
+   ========================================================================= */
+.endpoints-health-header {
+    text-align: center;
+    width: 70px;
+}
+
+.endpoints-health-cell {
+    text-align: center;
+}
+
+.endpoints-health-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+}
+
+/* Neutral state - grey circle, click to check */
+.endpoints-health-btn.neutral {
+    background: transparent;
+    color: #9ca3af;
+}
+
+.endpoints-health-btn.neutral:hover {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.endpoints-health-btn.neutral i {
+    font-size: 10px;
+}
+
+/* Checking state - spinner */
+.endpoints-health-btn.checking {
+    background: #f3f4f6;
+    color: #6b7280;
+    cursor: default;
+}
+
+/* Healthy state - green checkmark */
+.endpoints-health-btn.healthy {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.endpoints-health-btn.healthy:hover {
+    background: #a7f3d0;
+    color: #047857;
+}
+
+/* Unhealthy state - red x */
+.endpoints-health-btn.unhealthy {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.endpoints-health-btn.unhealthy:hover {
+    background: #fecaca;
+    color: #b91c1c;
+}
+
+/* Disabled state - for inactive endpoints */
+.endpoints-health-btn.disabled {
+    background: transparent;
+    color: #d1d5db;
+    cursor: not-allowed;
+}
+
+.endpoints-health-btn.disabled i {
+    font-size: 10px;
+}

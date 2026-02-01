@@ -54,6 +54,7 @@ venv.bak/
 *.json
 !**/package.json
 !**/package-lock.json
+!static/data/demo/*.json
 service-account-*.json
 credentials.json
 gcp-key.json

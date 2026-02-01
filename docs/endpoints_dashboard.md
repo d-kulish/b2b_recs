@@ -4,7 +4,7 @@
 This document provides detailed specifications for implementing the **Endpoints Dashboard** chapter on the Deployment page. The dashboard displays performance metrics, health status, and resource utilization for deployed ML serving endpoints.
 
 **Created**: 2026-02-01
-**Status**: Phase 0 Implemented (Skeleton UI)
+**Status**: Phase 0.5 Implemented (Demo Data for Sales Demos)
 
 ---
 
@@ -1004,6 +1004,58 @@ function getEndpointColor(index) {
 - `static/js/endpoints_dashboard.js` - IIFE module with init/load/refresh API
 - `templates/ml_platform/model_deployment.html` - Added chapter HTML, CSS/JS links, initialization
 
+### Phase 0.5: Demo Data ✅ COMPLETE
+
+Artificial data implementation for sales demonstrations. Uses a hybrid approach with JSON data files loaded by JavaScript.
+
+| Component | Status | Files |
+|-----------|--------|-------|
+| Demo data JSON | ✅ Done | `static/data/demo/endpoints_dashboard_demo.json` |
+| Data loading | ✅ Done | `loadDemoData()` async function |
+| KPI rendering with data | ✅ Done | `renderKPIsWithData()` with change indicators |
+| Chart 1: Request Volume | ✅ Done | Stacked area, 3 endpoints, 42 data points |
+| Chart 2: Latency P50/P95/P99 | ✅ Done | Multi-line with different styles |
+| Chart 3: Container Instances | ✅ Done | Stacked area for scaling patterns |
+| Chart 4: Error Rate | ✅ Done | Line with spike highlighting |
+| Chart 5: Cold Start Latency | ✅ Done | Horizontal bar (P50/P95 per endpoint) |
+| Chart 6: Resource Utilization | ✅ Done | Dual Y-axis (CPU + Memory) |
+| Table 1: Endpoint Performance | ✅ Done | 3 rows with trend indicators |
+| Table 2: Peak Usage Periods | ✅ Done | Top 5 busiest time windows |
+| Refresh button | ✅ Done | Enabled with spinner animation |
+| Demo mode toggle | ✅ Done | `DEMO_MODE = true` flag |
+
+**Deliverable**: Fully populated dashboard with realistic data for sales demos
+
+**Demo Data Scenario**:
+
+3 Endpoints representing realistic use cases:
+1. `chern-retrieval-v5` - Production model (high traffic, stable, blue)
+2. `fashion-recs-v2` - Growing model (medium traffic, some variance, green)
+3. `b2b-cross-sell-v1` - Pilot model (low traffic, being tested, purple)
+
+**Time Range**: 7 days, 4-hour buckets (42 data points)
+
+**Realistic Patterns**:
+- Business hours traffic spikes (9am-6pm)
+- Weekend traffic dip
+- One latency spike mid-week (demonstrates alerting value)
+- Gradual auto-scaling during peaks
+
+**KPI Summary Values**:
+| Metric | Value |
+|--------|-------|
+| Total Requests | 47,250 (+12.3% vs prev) |
+| Avg Latency P95 | 142ms (-8ms vs prev) |
+| Error Rate | 0.04% (stable) |
+| Peak Instances | 8 (avg 2.4) |
+
+**Files Created/Modified**:
+- `static/data/demo/endpoints_dashboard_demo.json` - Demo data (~200 lines)
+- `static/js/endpoints_dashboard.js` - Added demo data loading and rendering (~200 lines added)
+- `static/css/endpoints_dashboard.css` - Added KPI change indicators, table styles (~40 lines added)
+
+**To Disable Demo Mode**: Set `DEMO_MODE = false` in `endpoints_dashboard.js` to revert to skeleton UI.
+
 ### Phase 1: Core Dashboard (MVP)
 
 | Component | Priority |
@@ -1095,5 +1147,6 @@ gcloud projects add-iam-policy-binding PROJECT_ID \
 
 | Date | Change |
 |------|--------|
+| 2026-02-01 | Phase 0.5 implemented: Demo data with 3 endpoints, 7-day time series, realistic patterns |
 | 2026-02-01 | Phase 0 implemented: Skeleton UI with CSS, JS module, HTML integration |
 | 2026-02-01 | Initial specification created |

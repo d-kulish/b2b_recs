@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/integrate_modal.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/endpoints_dashboard.css' %}?v=1">
 {% endblock %}
 
 {% block model_content %}
@@ -52,6 +53,35 @@
     </div>
 </div>
 <!-- End Chapter: Serving Endpoints -->
+
+<!-- CHAPTER: ENDPOINTS DASHBOARD -->
+<div id="endpointsDashboardChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-3">
+            <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
+                <i class="fas fa-chart-line text-white text-lg"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-900">Endpoints Dashboard</h2>
+        </div>
+        <button id="dashboardRefreshBtn" class="dashboard-refresh-btn" disabled>
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+
+    <!-- KPI Row -->
+    <div id="dashboardKpiSummary" class="dashboard-kpi-row"></div>
+
+    <!-- Charts Grid -->
+    <div id="dashboardChartsGrid" class="dashboard-charts-grid"></div>
+
+    <!-- Tables Section -->
+    <div id="dashboardTablesSection" class="dashboard-tables-section"></div>
+
+    <!-- Prometheus Section -->
+    <div id="dashboardPrometheusSection" class="dashboard-prometheus-section"></div>
+</div>
+<!-- End Chapter: Endpoints Dashboard -->
 
 <!-- =============================================================================
      EXPERIMENT VIEW MODAL (Reusable modal for endpoint/model/training run details)
@@ -216,6 +246,7 @@ const TrainingCards = (function() {
 <script src="{% static 'js/deploy_wizard.js' %}?v=1"></script>
 <script src="{% static 'js/integrate_modal.js' %}?v=1"></script>
 <script src="{% static 'js/endpoints_table.js' %}?v=6"></script>
+<script src="{% static 'js/endpoints_dashboard.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Configure DeployWizard to refresh endpoints table and modal on success
@@ -250,6 +281,16 @@ document.addEventListener('DOMContentLoaded', function() {
         project: 'b2b-recs'
     });
     EndpointsTable.load();
+
+    // Initialize Endpoints Dashboard
+    EndpointsDashboard.init({
+        containerId: '#endpointsDashboardChapter',
+        kpiContainerId: '#dashboardKpiSummary',
+        chartsContainerId: '#dashboardChartsGrid',
+        tablesContainerId: '#dashboardTablesSection',
+        prometheusContainerId: '#dashboardPrometheusSection'
+    });
+    EndpointsDashboard.load();
 });
 </script>
 {% endblock %}

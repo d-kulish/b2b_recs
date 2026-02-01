@@ -1,0 +1,443 @@
+/**
+ * Endpoints Dashboard CSS
+ *
+ * Styles for the Endpoints Dashboard chapter on the Deployment page.
+ * Includes: KPI summary row, charts grid, tables, Prometheus section.
+ * All classes prefixed with .dashboard- to avoid conflicts.
+ */
+
+/* =========================================================================
+   Skeleton Animation (Shimmer Effect)
+   ========================================================================= */
+@keyframes dashboard-shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.dashboard-skeleton {
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 200% 100%;
+    animation: dashboard-shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+}
+
+.dashboard-skeleton-text {
+    height: 14px;
+    width: 60%;
+    margin: 4px 0;
+}
+
+.dashboard-skeleton-text.short {
+    width: 40%;
+}
+
+.dashboard-skeleton-text.long {
+    width: 80%;
+}
+
+/* =========================================================================
+   Refresh Button (Disabled State)
+   ========================================================================= */
+.dashboard-refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: not-allowed;
+    transition: all 0.15s ease;
+    opacity: 0.6;
+}
+
+.dashboard-refresh-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.dashboard-refresh-btn:not(:disabled):hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+.dashboard-refresh-btn i {
+    font-size: 12px;
+}
+
+/* =========================================================================
+   KPI Summary Row (4 cards)
+   ========================================================================= */
+.dashboard-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.dashboard-kpi-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    transition: all 0.2s ease;
+}
+
+.dashboard-kpi-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-kpi-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dashboard-kpi-icon i {
+    font-size: 18px;
+    color: white;
+}
+
+.dashboard-kpi-icon.requests {
+    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+}
+
+.dashboard-kpi-icon.latency {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.dashboard-kpi-icon.errors {
+    background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+}
+
+.dashboard-kpi-icon.instances {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+}
+
+.dashboard-kpi-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.dashboard-kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.2;
+    margin-bottom: 2px;
+}
+
+.dashboard-kpi-value.skeleton {
+    color: #9ca3af;
+}
+
+.dashboard-kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* =========================================================================
+   Charts Grid (2x3 layout)
+   ========================================================================= */
+.dashboard-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.dashboard-chart-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.dashboard-chart-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.dashboard-chart-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.dashboard-chart-badge {
+    font-size: 10px;
+    font-weight: 500;
+    color: #9ca3af;
+    padding: 2px 8px;
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+.dashboard-chart-container {
+    height: 220px;
+    position: relative;
+}
+
+.dashboard-chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* =========================================================================
+   Tables Section
+   ========================================================================= */
+.dashboard-tables-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.dashboard-table-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.dashboard-table-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dashboard-table-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.dashboard-table th {
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.dashboard-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+
+.dashboard-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.dashboard-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+/* Skeleton row cells */
+.dashboard-table td .dashboard-skeleton {
+    height: 12px;
+    width: 70%;
+}
+
+.dashboard-table td .dashboard-skeleton.short {
+    width: 50%;
+}
+
+.dashboard-table td .dashboard-skeleton.long {
+    width: 90%;
+}
+
+/* Trend indicator placeholder */
+.dashboard-trend-placeholder {
+    width: 50px;
+    height: 20px;
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+/* =========================================================================
+   Prometheus Section (Coming Soon)
+   ========================================================================= */
+.dashboard-prometheus-section {
+    margin-top: 8px;
+}
+
+.dashboard-prometheus-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+}
+
+.dashboard-prometheus-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.dashboard-prometheus-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.dashboard-prometheus-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #e65100 0%, #ff9800 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dashboard-prometheus-icon i {
+    font-size: 22px;
+    color: white;
+}
+
+.dashboard-prometheus-info {
+    flex: 1;
+}
+
+.dashboard-prometheus-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.dashboard-prometheus-title h4 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.dashboard-coming-soon-badge {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6366f1;
+    background: #eef2ff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.dashboard-prometheus-desc {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.dashboard-prometheus-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.dashboard-prometheus-btn:disabled {
+    cursor: not-allowed;
+}
+
+/* =========================================================================
+   Responsive Design
+   ========================================================================= */
+@media (max-width: 1200px) {
+    .dashboard-kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-charts-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-tables-section {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-kpi-row {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-chart-container {
+        height: 180px;
+    }
+
+    .dashboard-prometheus-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 16px;
+    }
+
+    .dashboard-prometheus-content {
+        flex-direction: column;
+    }
+}

@@ -293,4 +293,9 @@ urlpatterns = [
         api.endpoint_delete,
         name='endpoint_delete'
     ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/logs/',
+        api.endpoint_logs,
+        name='endpoint_logs'
+    ),
 ]

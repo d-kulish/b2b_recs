@@ -5542,3 +5542,60 @@ def endpoint_delete(request, endpoint_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def endpoint_logs(request, endpoint_id):
+    """
+    Get Cloud Run logs for a deployed endpoint.
+
+    GET /api/deployed-endpoints/<id>/logs/
+
+    Query params:
+        limit: Max log entries (default: 100)
+
+    Returns:
+        {success: true, logs: {available, logs[], count}}
+    """
+    from .models import DeployedEndpoint
+    from .endpoint_logs_service import EndpointLogsService
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        # Get limit from query params
+        limit = int(request.GET.get('limit', 100))
+        limit = min(max(limit, 1), 500)  # Clamp between 1 and 500
+
+        # Fetch logs from Cloud Logging
+        logs_service = EndpointLogsService()
+        logs = logs_service.get_logs(endpoint.service_name, limit=limit)
+
+        return JsonResponse({
+            'success': True,
+            'logs': logs
+        })
+
+    except Exception as e:
+        logger.exception(f"Error fetching endpoint logs: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

@@ -2539,24 +2539,82 @@ const ExpViewModal = (function() {
         const container = document.getElementById('expViewTabLogs');
         if (!container) return;
 
-        // Build GCP Console logs URL
-        const serviceName = endpoint.service_name || '';
-        const region = 'us-central1';  // Default region
-        const project = 'b2b-recs';    // Project ID
-
-        const logsUrl = `https://console.cloud.google.com/run/detail/${region}/${serviceName}/logs?project=${project}`;
-
         container.innerHTML = `
-            <div class="exp-view-endpoint-placeholder">
-                <i class="fas fa-stream"></i>
-                <p class="placeholder-title">Service Logs</p>
-                <p>View logs for this endpoint in the Google Cloud Console.</p>
-                <a href="${logsUrl}" target="_blank" rel="noopener noreferrer">
-                    <i class="fas fa-external-link-alt"></i>
-                    Open in Cloud Console
-                </a>
+            <div class="exp-view-content-card">
+                <div class="exp-view-card-header">
+                    <h4>Service Logs</h4>
+                    <button class="btn btn-secondary btn-sm" id="endpointLoadLogsBtn"
+                            onclick="ExpViewModal.loadEndpointLogs()">
+                        <i class="fas fa-sync-alt"></i>
+                        Load Logs
+                    </button>
+                </div>
+                <div class="exp-view-logs-container" id="endpointLogsContainer">
+                    <div class="exp-view-logs-empty">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Click "Load Logs" to fetch recent entries</span>
+                    </div>
+                </div>
             </div>
         `;
+    }
+
+    async function loadEndpointLogs() {
+        const endpoint = state.currentEndpoint;
+        if (!endpoint) return;
+
+        const container = document.getElementById('endpointLogsContainer');
+        const btn = document.getElementById('endpointLoadLogsBtn');
+        if (!container || !btn) return;
+
+        // Show loading state
+        container.innerHTML = `
+            <div class="exp-view-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading logs...</span>
+            </div>
+        `;
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/deployed-endpoints/${endpoint.id}/logs/?limit=100`);
+            const data = await response.json();
+
+            if (data.success && data.logs.available) {
+                // Render log entries
+                container.innerHTML = data.logs.logs.map(log => {
+                    // Map DEFAULT to INFO for styling (container logs without explicit severity)
+                    const severityClass = log.severity === 'DEFAULT' ? 'INFO' : log.severity.toUpperCase();
+                    const severityLabel = log.severity === 'DEFAULT' ? 'INFO' : log.severity;
+                    return `
+                        <div class="exp-view-log-entry">
+                            <span class="exp-view-log-severity ${severityClass}"></span>
+                            <span class="exp-view-log-time">${log.timestamp}</span>
+                            <span class="exp-view-log-message">${escapeHtml(log.message)}</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                // Show message
+                const message = data.logs?.message || data.error || 'No logs available';
+                container.innerHTML = `
+                    <div class="exp-view-logs-empty">
+                        <i class="fas fa-info-circle"></i>
+                        <span>${escapeHtml(message)}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading endpoint logs:', error);
+            container.innerHTML = `
+                <div class="exp-view-logs-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>Error loading logs. Please try again.</span>
+                </div>
+            `;
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     async function loadEndpointVersions(endpointId) {
@@ -5201,6 +5259,7 @@ const ExpViewModal = (function() {
         // Endpoint mode operations
         openForEndpoint: openForEndpoint,
         openWithEndpointData: openWithEndpointData,
+        loadEndpointLogs: loadEndpointLogs,
 
         // Training run actions (Registry & Deployment)
         pushToRegistry: pushToRegistry,

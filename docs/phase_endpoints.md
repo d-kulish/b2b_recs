@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-01-31 (Endpoint View Modal with Results section and green/red header styling)
+**Last Updated**: 2026-02-01 (In-app endpoint logs via Cloud Logging API)
 
 ---
 
@@ -2073,6 +2073,206 @@ The deployment page must include:
 ## Future Enhancements
 
 1. **Test Tab**: Interactive endpoint testing with sample requests
-2. **Logs Tab**: Embedded log viewer instead of external link
-3. **Metrics Tab**: Real-time serving metrics from Cloud Monitoring
-4. **Actions**: Deploy/Undeploy buttons within modal
+2. **Metrics Tab**: Real-time serving metrics from Cloud Monitoring
+3. **Actions**: Deploy/Undeploy buttons within modal
+
+---
+
+# Endpoint Logs Service (2026-02-01)
+
+## Overview
+
+Replaced the GCP Console link in the endpoint Logs tab with an in-app log viewer. Logs are fetched directly from Cloud Logging API using the same query as the GCP Log Explorer.
+
+## Files Created/Modified
+
+| File | Action | Description |
+|------|--------|-------------|
+| `ml_platform/training/endpoint_logs_service.py` | **Created** | Service class for fetching Cloud Run logs |
+| `ml_platform/training/api.py` | Modified | Added `endpoint_logs()` API endpoint |
+| `ml_platform/training/urls.py` | Modified | Added URL route for logs endpoint |
+| `static/js/exp_view_modal.js` | Modified | Updated `renderEndpointLogsTab()`, added `loadEndpointLogs()` |
+
+## EndpointLogsService
+
+### Cloud Logging Query
+
+The service uses the exact same filter as the GCP Log Explorer:
+
+```
+resource.type = "cloud_run_revision"
+resource.labels.service_name = "{service_name}"
+resource.labels.location = "{region}"
+severity>=DEFAULT
+```
+
+**Key design decisions:**
+- No timestamp filter (Cloud Logging returns newest logs first with `order_by=DESCENDING`)
+- `severity>=DEFAULT` includes all log severities (DEFAULT, DEBUG, INFO, WARNING, ERROR, etc.)
+- Matches GCP Log Explorer behavior exactly
+
+### Log Entry Types
+
+Cloud Run logs come in two types:
+
+| Type | Payload | Use Case |
+|------|---------|----------|
+| `TextEntry` | String (`payload` attribute) | Container stdout/stderr (TensorFlow Serving output) |
+| `ProtobufEntry` | OrderedDict (`payload` attribute) | Audit logs (Cloud Run operations) |
+
+The service filters out audit logs (entries where `payload['@type']` ends with `'AuditLog'`) to show only container logs.
+
+### Service Class
+
+```python
+class EndpointLogsService:
+    """Service for fetching Cloud Run endpoint logs from Cloud Logging."""
+
+    DEFAULT_LOG_LIMIT = 100
+    LOG_RETENTION_DAYS = 7
+    MAX_MESSAGE_LENGTH = 1000
+
+    def __init__(self, project_id: str = None, region: str = 'europe-central2'):
+        self.project_id = project_id or getattr(settings, 'GCP_PROJECT_ID', 'b2b-recs')
+        self.region = region
+        self._logging_client = None
+
+    @property
+    def logging_client(self):
+        """Lazy-load Cloud Logging client."""
+
+    def get_logs(self, service_name: str, limit: int = 100) -> dict:
+        """
+        Fetch logs for a Cloud Run service.
+
+        Returns:
+            {
+                'available': bool,
+                'logs': [{'timestamp': str, 'severity': str, 'message': str}, ...],
+                'count': int,
+                'message': str  # Only if available=False
+            }
+        """
+
+    def _fetch_cloud_run_logs(self, service_name: str, limit: int) -> List[Dict]:
+        """Fetch logs from Cloud Logging for a Cloud Run service."""
+
+    def _parse_entry(self, entry) -> Optional[Dict]:
+        """Parse a single Cloud Logging entry, filtering out audit logs."""
+
+    def _handle_error(self, error: Exception) -> Dict:
+        """Handle errors with user-friendly messages."""
+```
+
+## API Endpoint
+
+### GET `/api/deployed-endpoints/<id>/logs/`
+
+Fetch Cloud Run logs for a deployed endpoint.
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 100 | Max log entries (1-500) |
+
+**Response (success):**
+```json
+{
+  "success": true,
+  "logs": {
+    "available": true,
+    "logs": [
+      {"timestamp": "10:57:22", "severity": "INFO", "message": "Default STARTUP TCP probe succeeded..."},
+      {"timestamp": "10:57:22", "severity": "DEFAULT", "message": "[evhttp_server.cc : 261] NET_LOG: Entering..."},
+      {"timestamp": "10:57:22", "severity": "DEFAULT", "message": "2026-02-01 10:57:22.704554: I tensorflow_serving..."}
+    ],
+    "count": 18
+  }
+}
+```
+
+**Response (no logs):**
+```json
+{
+  "success": true,
+  "logs": {
+    "available": false,
+    "message": "No logs found. The endpoint may not have received any requests yet."
+  }
+}
+```
+
+## Frontend Updates
+
+### Logs Tab UI
+
+Replaced the GCP Console link with a "Load Logs" button and log viewer:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Service Logs                                    [Load Logs]     │
+├─────────────────────────────────────────────────────────────────┤
+│ [INFO] 10:57:22  Default STARTUP TCP probe succeeded...        │
+│ [INFO] 10:57:22  [evhttp_server.cc : 261] NET_LOG: Entering... │
+│ [INFO] 10:57:22  2026-02-01 10:57:22.704554: I tensorflow...   │
+│ [INFO] 10:57:22  2026-02-01 10:57:22.703018: I tensorflow...   │
+│ ...                                                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### JavaScript Functions
+
+| Function | Description |
+|----------|-------------|
+| `renderEndpointLogsTab(endpoint)` | Renders the initial UI with "Load Logs" button |
+| `loadEndpointLogs()` | Fetches logs from API and renders them |
+
+### Severity Styling
+
+Container logs often have no explicit severity (returned as `DEFAULT`). The frontend maps `DEFAULT` to `INFO` for styling:
+
+```javascript
+const severityClass = log.severity === 'DEFAULT' ? 'INFO' : log.severity.toUpperCase();
+```
+
+CSS uses uppercase class names: `.exp-view-log-severity.INFO`, `.exp-view-log-severity.ERROR`, etc.
+
+## Testing
+
+### Backend Testing
+
+```bash
+# Django shell
+python manage.py shell
+
+from ml_platform.training.endpoint_logs_service import EndpointLogsService
+svc = EndpointLogsService('b2b-recs', 'europe-central2')
+logs = svc.get_logs('chern-retriv-v5-serving', limit=10)
+print(logs)
+```
+
+### Expected Log Output
+
+```
+Logs (newest first):
+  10:57:22 [INFO    ] Default STARTUP TCP probe succeeded...
+  10:57:22 [DEFAULT ] [evhttp_server.cc : 261] NET_LOG: Entering the event loop...
+  10:57:22 [DEFAULT ] 2026-02-01 10:57:22.704554: I tensorflow_serving/model_servers/server.cc:449]...
+  10:57:19 [DEFAULT ] Starting TensorFlow Serving...
+  10:57:19 [DEFAULT ]   - Model: recommender
+  10:57:19 [DEFAULT ]   - REST API port: 8501
+```
+
+## Dependencies
+
+- `google-cloud-logging` - Already in requirements.txt
+- IAM: `roles/logging.viewer` on Django service account
+
+## Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| No logs returned | Wrong service name or region | Verify `service_name` and `region` match Cloud Run |
+| Permission denied | Missing IAM role | Grant `roles/logging.viewer` to service account |
+| Old logs showing | Caching or wrong query | Check filter matches Log Explorer exactly |
+| Audit logs appearing | Filter not applied | Ensure `_parse_entry()` skips AuditLog entries |

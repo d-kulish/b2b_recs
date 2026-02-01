@@ -130,31 +130,29 @@
 
             <!-- Code Examples Tab -->
             <div id="integrateTabCode" class="integrate-tab-content">
-                <div id="integrateCodeExamples" class="integrate-section integrate-section-full">
-                    <!-- Language Tabs -->
-                    <div class="integrate-code-tabs">
-                        <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
-                            <i class="fab fa-python"></i> Python
-                        </button>
-                        <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
-                            <i class="fab fa-js-square"></i> JavaScript
-                        </button>
-                        <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
-                            <i class="fas fa-terminal"></i> cURL
-                        </button>
-                        <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
-                            <i class="fab fa-java"></i> Java
-                        </button>
-                    </div>
+                <!-- Language Tabs -->
+                <div class="integrate-code-tabs">
+                    <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
+                        Python
+                    </button>
+                    <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
+                        JavaScript
+                    </button>
+                    <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
+                        cURL
+                    </button>
+                    <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
+                        Java
+                    </button>
+                </div>
 
-                    <!-- Code Display -->
-                    <div class="integrate-code-container">
-                        <button class="integrate-copy-btn" onclick="IntegrateModal.copyCode()" title="Copy to clipboard">
-                            <i class="fas fa-copy" id="integrateCopyIcon"></i>
-                            <span id="integrateCopyText">Copy</span>
-                        </button>
-                        <pre class="integrate-code-block"><code id="integrateCodeDisplay" class="language-python">Loading...</code></pre>
-                    </div>
+                <!-- Code Display -->
+                <div class="integrate-code-container">
+                    <button class="integrate-copy-btn" onclick="IntegrateModal.copyCode()" title="Copy to clipboard">
+                        <i class="fas fa-copy" id="integrateCopyIcon"></i>
+                        <span id="integrateCopyText">Copy</span>
+                    </button>
+                    <pre class="integrate-code-block"><code id="integrateCodeDisplay" class="language-python">Loading...</code></pre>
                 </div>
             </div>
         </div>

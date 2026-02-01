@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/integrate_modal.css' %}?v=1">
 {% endblock %}
 
 {% block model_content %}
@@ -61,6 +62,11 @@
      DEPLOY WIZARD MODAL (Cloud Run deployment with presets)
      ============================================================================ -->
 {% include 'includes/_deploy_wizard.html' %}
+
+<!-- =============================================================================
+     INTEGRATE MODAL (Endpoint testing and code examples)
+     ============================================================================ -->
+{% include 'includes/_integrate_modal.html' %}
 
 <!-- =============================================================================
      CONFIRMATION MODAL (Reusable styled confirmation dialog)
@@ -208,7 +214,8 @@ const TrainingCards = (function() {
 </script>
 
 <script src="{% static 'js/deploy_wizard.js' %}?v=1"></script>
-<script src="{% static 'js/endpoints_table.js' %}?v=5"></script>
+<script src="{% static 'js/integrate_modal.js' %}?v=1"></script>
+<script src="{% static 'js/endpoints_table.js' %}?v=6"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Configure DeployWizard to refresh endpoints table and modal on success

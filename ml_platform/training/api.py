@@ -5599,3 +5599,232 @@ def endpoint_logs(request, endpoint_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# =============================================================================
+# Endpoint Integration API endpoints
+# =============================================================================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def endpoint_integration(request, endpoint_id):
+    """
+    Get integration data for a deployed endpoint.
+
+    GET /api/deployed-endpoints/<id>/integration/
+
+    Returns schema, sample data, and code examples for integration.
+    """
+    from .models import DeployedEndpoint
+    from .integration_service import IntegrationService, IntegrationServiceError
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run',
+                'deployed_training_run__feature_config',
+                'deployed_training_run__dataset'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        if not endpoint.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Endpoint is not active'
+            }, status=400)
+
+        # Get integration data
+        try:
+            service = IntegrationService(endpoint)
+            integration_data = service.get_integration_data()
+        except IntegrationServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'integration': integration_data
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting endpoint integration data: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def endpoint_integration_sample(request, endpoint_id):
+    """
+    Get a new random sample for an endpoint.
+
+    GET /api/deployed-endpoints/<id>/integration/sample/
+
+    Returns fresh sample data from BigQuery.
+    """
+    from .models import DeployedEndpoint
+    from .integration_service import IntegrationService, IntegrationServiceError
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run',
+                'deployed_training_run__feature_config',
+                'deployed_training_run__dataset'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        # Get new sample data
+        try:
+            service = IntegrationService(endpoint)
+            sample_data = service.get_sample_data(count=1)
+            code_examples = service.generate_code_examples(sample_data.get('instance', {}))
+        except IntegrationServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'sample_data': sample_data,
+            'code_examples': code_examples
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting endpoint sample data: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def endpoint_integration_test(request, endpoint_id):
+    """
+    Run a health check or prediction test on an endpoint.
+
+    POST /api/deployed-endpoints/<id>/integration/test/
+
+    Request body:
+    {
+        "test_type": "health" | "predict",
+        "instance": {...}  // Required for predict
+    }
+
+    Returns test results with status and latency.
+    """
+    from .models import DeployedEndpoint
+    from .integration_service import IntegrationService, IntegrationServiceError
+
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            endpoint = DeployedEndpoint.objects.select_related(
+                'registered_model', 'deployed_training_run',
+                'deployed_training_run__feature_config',
+                'deployed_training_run__dataset'
+            ).get(
+                id=endpoint_id,
+                registered_model__ml_model=model_endpoint
+            )
+        except DeployedEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Endpoint {endpoint_id} not found'
+            }, status=404)
+
+        if not endpoint.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Endpoint is not active'
+            }, status=400)
+
+        # Parse request body
+        try:
+            body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON in request body'
+            }, status=400)
+
+        test_type = body.get('test_type', 'health')
+        instance = body.get('instance', {})
+
+        # Run the test
+        try:
+            service = IntegrationService(endpoint)
+
+            if test_type == 'health':
+                result = service.run_health_check()
+            elif test_type == 'predict':
+                if not instance:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Instance data required for prediction test'
+                    }, status=400)
+                result = service.run_prediction_test(instance)
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid test_type: {test_type}'
+                }, status=400)
+
+        except IntegrationServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'test_type': test_type,
+            'result': result
+        })
+
+    except Exception as e:
+        logger.exception(f"Error running endpoint test: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

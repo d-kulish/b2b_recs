@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-02-01 (In-app endpoint logs via Cloud Logging API)
+**Last Updated**: 2026-02-01 (Integrate Modal for endpoint testing and code examples)
 
 ---
 
@@ -2276,3 +2276,282 @@ Logs (newest first):
 | Permission denied | Missing IAM role | Grant `roles/logging.viewer` to service account |
 | Old logs showing | Caching or wrong query | Check filter matches Log Explorer exactly |
 | Audit logs appearing | Filter not applied | Ensure `_parse_entry()` skips AuditLog entries |
+
+---
+
+# Integrate Modal (2026-02-01)
+
+## Overview
+
+The Integrate Modal provides a one-stop interface for developers to test and integrate with deployed ML endpoints. It displays the expected input schema, allows quick validation with real BigQuery data, and provides code examples in multiple languages.
+
+### Key Features
+
+1. **Quick Validation** - Health check + prediction test with real data from BigQuery
+2. **Input Schema** - Expected fields extracted from FeatureConfig
+3. **Code Examples** - Python, JavaScript, cURL, Java examples with sample data
+
+### Modal Design
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Integrate: my-model-serving                            [Close]  │
+│ my-model (retrieval)                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ QUICK VALIDATION                                                │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Health Check: [Check]  Status: ✅ 200 OK (42ms)             │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Sample Request:                              [Refresh] [▶]  │ │
+│ │ {"customer_id": "CUST-123", "revenue": 5000, "date": 170..} │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Response: ✅ 200 OK (187ms)                                 │ │
+│ │ {"predictions": [{"product_ids": [...], "scores": [...]}]}  │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│ INPUT SCHEMA                                                    │
+│ ┌──────────────┬──────────┬────────────────────────────────┐   │
+│ │ Field        │ Type     │ Notes                          │   │
+│ │ customer_id  │ STRING   │ String identifier              │   │
+│ │ revenue      │ FLOAT64  │ Numeric value                  │   │
+│ │ date         │ INT64    │ Unix timestamp (converted)     │   │
+│ └──────────────┴──────────┴────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│ CODE EXAMPLES                                                   │
+│ [Python] [JavaScript] [cURL] [Java]                            │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ import requests                                    [Copy]   │ │
+│ │ url = "https://..."                                         │ │
+│ │ payload = {"instances": [{...}]}                            │ │
+│ │ response = requests.post(url, json=payload)                 │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Files Created
+
+| File | Purpose |
+|------|---------|
+| `ml_platform/training/integration_service.py` | Backend service class for schema, sample data, testing, code generation |
+| `templates/includes/_integrate_modal.html` | Modal HTML template with 3 sections |
+| `static/css/integrate_modal.css` | Modal styling (purple theme) |
+| `static/js/integrate_modal.js` | IIFE JavaScript module |
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/api.py` | Added 3 API endpoints for integration |
+| `ml_platform/training/urls.py` | Added 3 URL routes |
+| `static/js/endpoints_table.js` | Added "Integrate" button to action grid |
+| `static/css/cards.css` | Added `.card-action-btn.integrate` styling |
+| `templates/ml_platform/model_deployment.html` | Included modal template, CSS, JS |
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/deployed-endpoints/<id>/integration/` | Get schema, sample data, code examples |
+| GET | `/api/deployed-endpoints/<id>/integration/sample/` | Get new random sample from BigQuery |
+| POST | `/api/deployed-endpoints/<id>/integration/test/` | Run health check or prediction test |
+
+### GET /integration/ Response
+
+```json
+{
+  "success": true,
+  "integration": {
+    "endpoint": {
+      "id": 1,
+      "service_name": "my-model-serving",
+      "service_url": "https://...",
+      "model_name": "my-model",
+      "model_type": "retrieval",
+      "is_active": true,
+      "deployed_version": "v1"
+    },
+    "schema": {
+      "fields": [
+        {"name": "customer_id", "type": "STRING", "notes": "String identifier"},
+        {"name": "revenue", "type": "FLOAT64", "notes": "Numeric value"},
+        {"name": "date", "type": "INT64", "notes": "Unix timestamp (converted)"}
+      ]
+    },
+    "sample_data": {
+      "instance": {"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200}
+    },
+    "code_examples": {
+      "python": "import requests\n...",
+      "javascript": "fetch(url, {...})...",
+      "curl": "curl -X POST ...",
+      "java": "HttpClient client = ..."
+    }
+  }
+}
+```
+
+### POST /integration/test/ Request
+
+```json
+{
+  "test_type": "health"
+}
+```
+or
+```json
+{
+  "test_type": "predict",
+  "instance": {"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200}
+}
+```
+
+### POST /integration/test/ Response
+
+```json
+{
+  "success": true,
+  "test_type": "predict",
+  "result": {
+    "success": true,
+    "status_code": 200,
+    "latency_ms": 187,
+    "response": {
+      "predictions": [{"product_ids": [...], "scores": [...]}]
+    }
+  }
+}
+```
+
+## IntegrationService Class
+
+```python
+class IntegrationService:
+    """Service class for endpoint integration testing."""
+
+    def __init__(self, deployed_endpoint):
+        """Initialize with DeployedEndpoint instance."""
+        self.endpoint = deployed_endpoint
+        self.training_run = deployed_endpoint.deployed_training_run
+        self.feature_config = self.training_run.feature_config
+        self.dataset = self.training_run.dataset
+
+    def get_input_schema(self) -> List[Dict]:
+        """Extract schema from feature_config.buyer_model_features."""
+
+    def get_sample_data(self, count=1) -> Dict:
+        """Query BigQuery for random sample using for_tfx=True."""
+
+    def run_health_check(self) -> Dict:
+        """GET /v1/models/recommender - check endpoint health."""
+
+    def run_prediction_test(self, instance) -> Dict:
+        """POST /v1/models/recommender:predict - test prediction."""
+
+    def generate_code_examples(self, instance) -> Dict[str, str]:
+        """Generate Python, JavaScript, cURL, Java code examples."""
+
+    def get_integration_data(self) -> Dict:
+        """Get all integration data in one call (for modal load)."""
+```
+
+### Data Flow
+
+```
+DeployedEndpoint
+  → deployed_training_run (TrainingRun)
+    → feature_config (FeatureConfig)
+      → buyer_model_features (JSONField) → schema fields
+    → dataset (Dataset)
+      → BigQueryService.generate_query(for_tfx=True) → sample data
+```
+
+### Type Conversion (for_tfx=True)
+
+When extracting sample data, timestamps are converted to Unix epoch seconds:
+- `TIMESTAMP` → `INT64` (Unix seconds)
+- `DATE` → `INT64` (Unix seconds)
+- `DATETIME` → `INT64` (Unix seconds)
+
+## JavaScript API
+
+```javascript
+// Open modal for an endpoint
+IntegrateModal.open(endpointId);
+
+// Close modal
+IntegrateModal.close();
+
+// Get new random sample from BigQuery
+IntegrateModal.refreshSample();
+
+// Run health check (GET /v1/models/recommender)
+IntegrateModal.runHealthCheck();
+
+// Run prediction test with current sample
+IntegrateModal.runPredictionTest();
+
+// Switch code example language
+IntegrateModal.switchCodeTab('python');  // python, javascript, curl, java
+
+// Copy current code to clipboard
+IntegrateModal.copyCode();
+```
+
+## UI Components
+
+### Action Button
+
+The "Integrate" button is added to the endpoints table action grid:
+
+```
+┌──────────────┬──────────────┐
+│ Deploy/      │    View      │  ← Row 1
+│ Undeploy     │              │
+├──────────────┼──────────────┤
+│  Integrate   │ [Edit][Del]  │  ← Row 2 (Integrate only for active endpoints)
+└──────────────┴──────────────┘
+```
+
+Button styling:
+- Background: Purple (`#6366f1`)
+- Hover: Darker purple (`#4f46e5`)
+- Only visible for **active** endpoints
+
+### Code Tab Styling
+
+| Tab | Icon |
+|-----|------|
+| Python | `fab fa-python` |
+| JavaScript | `fab fa-js-square` |
+| cURL | `fas fa-terminal` |
+| Java | `fab fa-java` |
+
+## CSS Classes
+
+| Class | Description |
+|-------|-------------|
+| `.integrate-modal` | Modal container (max-width: 900px) |
+| `.integrate-modal-header` | Purple gradient header |
+| `.integrate-section` | White card section with border |
+| `.integrate-section-title` | Section header with icon |
+| `.integrate-validation-row` | Health check / sample request row |
+| `.integrate-sample-box` | Dark code display box |
+| `.integrate-schema-table` | Schema fields table |
+| `.integrate-code-tabs` | Language tab buttons |
+| `.integrate-code-container` | Code display with copy button |
+| `.integrate-btn.integrate` | Purple primary button |
+| `.card-action-btn.integrate` | Table action button (purple) |
+
+## Verification Steps
+
+1. Navigate to Deployment page (`/models/<id>/deployment/`)
+2. Verify "Integrate" button only shows for **active** endpoints
+3. Click "Integrate" → modal opens with schema and sample data
+4. Click "Check" → health check runs, shows status + latency
+5. Click "Run Test" → prediction test runs, shows response JSON
+6. Click "Refresh" → new sample appears
+7. Switch language tabs → code updates with same sample data
+8. Click "Copy" → code copied to clipboard
+9. Test error handling with inactive endpoint → appropriate error message

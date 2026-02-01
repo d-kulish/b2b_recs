@@ -298,4 +298,23 @@ urlpatterns = [
         api.endpoint_logs,
         name='endpoint_logs'
     ),
+
+    # ==========================================================================
+    # Endpoint Integration API endpoints
+    # ==========================================================================
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/integration/',
+        api.endpoint_integration,
+        name='endpoint_integration'
+    ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/integration/sample/',
+        api.endpoint_integration_sample,
+        name='endpoint_integration_sample'
+    ),
+    path(
+        'api/deployed-endpoints/<int:endpoint_id>/integration/test/',
+        api.endpoint_integration_test,
+        name='endpoint_integration_test'
+    ),
 ]

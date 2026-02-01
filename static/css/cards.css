@@ -746,6 +746,31 @@
     cursor: not-allowed;
 }
 
+/* Integrate Action Button (purple - distinguishes from View green) */
+.card-action-btn.integrate {
+    min-width: 64px;
+    height: 32px;
+    font-size: 11px;
+    font-weight: 600;
+    background-color: #6366f1;
+    color: #ffffff;
+    border: 2px solid #6366f1;
+    border-radius: 6px;
+}
+
+.card-action-btn.integrate:hover:not(:disabled) {
+    background-color: #4f46e5;
+    border-color: #4f46e5;
+}
+
+.card-action-btn.integrate:disabled {
+    background-color: #ffffff;
+    color: #6366f1;
+    border-color: #6366f1;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Badges Row (model type + deployment status side by side) */
 .ml-card-badges-row {
     display: flex;

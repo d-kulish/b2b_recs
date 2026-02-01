@@ -785,7 +785,7 @@ const EndpointsTable = (function() {
 
         // 2x2 Grid Layout matching Models Registry on Training page:
         // Row 1: [Deploy/Undeploy] [View]
-        // Row 2: [empty spacer]    [Edit][Delete] grouped
+        // Row 2: [Integrate]       [Edit][Delete] grouped
         return `
             <div class="ml-card-col-actions">
                 <div class="ml-card-actions-grid">
@@ -801,8 +801,13 @@ const EndpointsTable = (function() {
                         View
                     </button>
 
-                    <!-- Row 2: Spacer | Edit+Delete group -->
-                    <div></div>
+                    <!-- Row 2: Integrate | Edit+Delete group -->
+                    ${isActive ? `
+                        <button class="card-action-btn integrate"
+                                onclick="IntegrateModal.open(${endpoint.id})">
+                            Integrate
+                        </button>
+                    ` : '<div></div>'}
                     <div class="card-action-btn-group">
                         <button class="card-action-btn icon-only edit"
                                 onclick="EndpointsTable.openEditModal(${endpoint.id})"

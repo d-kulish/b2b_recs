@@ -1,0 +1,173 @@
+{% load static %}
+<!--
+    Integrate Modal Component
+
+    A modal for testing and integrating with deployed ML endpoints.
+    Shows Quick Validation, Input Schema, and Code Examples.
+
+    Usage:
+        { % include 'includes/_integrate_modal.html' % }
+
+    Required CSS:
+        <link rel="stylesheet" href="{ % static 'css/integrate_modal.css' % }?v=1">
+
+    Required JavaScript:
+        <script src="{ % static 'js/integrate_modal.js' % }?v=1"></script>
+
+    JavaScript API:
+        - IntegrateModal.open(endpointId) - Open modal for an endpoint
+        - IntegrateModal.close() - Close the modal
+        - IntegrateModal.refreshSample() - Get new sample data
+        - IntegrateModal.runHealthCheck() - Run health check
+        - IntegrateModal.runPredictionTest() - Run prediction test
+        - IntegrateModal.switchCodeTab(lang) - Switch code language
+        - IntegrateModal.copyCode() - Copy code to clipboard
+-->
+
+<!-- Integrate Modal -->
+<div id="integrateModal" class="modal-overlay hidden" onclick="IntegrateModal.handleOverlayClick(event)">
+    <div class="modal-container integrate-modal" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="integrate-modal-header">
+            <div class="integrate-modal-header-content">
+                <div class="integrate-modal-icon">
+                    <i class="fas fa-plug"></i>
+                </div>
+                <div class="integrate-modal-title-group">
+                    <h3 class="integrate-modal-title" id="integrateModalTitle">Integrate</h3>
+                    <span class="integrate-modal-subtitle" id="integrateModalSubtitle"></span>
+                </div>
+            </div>
+            <button class="integrate-modal-close" onclick="IntegrateModal.close()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Body with 3 Sections -->
+        <div class="integrate-modal-body">
+            <!-- Section 1: Quick Validation -->
+            <div id="integrateQuickValidation" class="integrate-section">
+                <div class="integrate-section-header">
+                    <h4 class="integrate-section-title">
+                        <i class="fas fa-check-double"></i>
+                        Quick Validation
+                    </h4>
+                </div>
+
+                <!-- Health Check Row -->
+                <div class="integrate-validation-row">
+                    <div class="integrate-validation-label">
+                        <span class="integrate-label-text">Health Check</span>
+                    </div>
+                    <div class="integrate-validation-action">
+                        <button class="integrate-btn integrate-btn-sm" onclick="IntegrateModal.runHealthCheck()" id="integrateHealthBtn">
+                            <i class="fas fa-heartbeat"></i> Check
+                        </button>
+                    </div>
+                    <div class="integrate-validation-result" id="integrateHealthResult">
+                        <span class="integrate-result-placeholder">Click to test endpoint health</span>
+                    </div>
+                </div>
+
+                <!-- Sample Request Row -->
+                <div class="integrate-validation-row integrate-validation-row-expanded">
+                    <div class="integrate-validation-label">
+                        <span class="integrate-label-text">Sample Request</span>
+                        <div class="integrate-label-actions">
+                            <button class="integrate-btn integrate-btn-icon" onclick="IntegrateModal.refreshSample()" title="Get new sample">
+                                <i class="fas fa-sync-alt" id="integrateSampleRefreshIcon"></i>
+                            </button>
+                            <button class="integrate-btn integrate-btn-primary integrate-btn-sm" onclick="IntegrateModal.runPredictionTest()" id="integratePredictBtn">
+                                <i class="fas fa-play"></i> Run Test
+                            </button>
+                        </div>
+                    </div>
+                    <div class="integrate-sample-box">
+                        <pre class="integrate-sample-code" id="integrateSampleData">{"loading": "..."}</pre>
+                    </div>
+                </div>
+
+                <!-- Prediction Response Row -->
+                <div class="integrate-validation-row integrate-validation-row-expanded" id="integratePredictResultRow" style="display: none;">
+                    <div class="integrate-validation-label">
+                        <span class="integrate-label-text">Response</span>
+                        <span class="integrate-result-status" id="integratePredictStatus"></span>
+                    </div>
+                    <div class="integrate-sample-box">
+                        <pre class="integrate-sample-code" id="integratePredictResult"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Input Schema -->
+            <div id="integrateInputSchema" class="integrate-section">
+                <div class="integrate-section-header">
+                    <h4 class="integrate-section-title">
+                        <i class="fas fa-table"></i>
+                        Input Schema
+                    </h4>
+                </div>
+                <div class="integrate-schema-table-container">
+                    <table class="integrate-schema-table">
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Type</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="integrateSchemaBody">
+                            <tr>
+                                <td colspan="3" class="integrate-loading">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading schema...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 3: Code Examples -->
+            <div id="integrateCodeExamples" class="integrate-section">
+                <div class="integrate-section-header">
+                    <h4 class="integrate-section-title">
+                        <i class="fas fa-code"></i>
+                        Code Examples
+                    </h4>
+                </div>
+
+                <!-- Language Tabs -->
+                <div class="integrate-code-tabs">
+                    <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
+                        <i class="fab fa-python"></i> Python
+                    </button>
+                    <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
+                        <i class="fab fa-js-square"></i> JavaScript
+                    </button>
+                    <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
+                        <i class="fas fa-terminal"></i> cURL
+                    </button>
+                    <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
+                        <i class="fab fa-java"></i> Java
+                    </button>
+                </div>
+
+                <!-- Code Display -->
+                <div class="integrate-code-container">
+                    <button class="integrate-copy-btn" onclick="IntegrateModal.copyCode()" title="Copy to clipboard">
+                        <i class="fas fa-copy" id="integrateCopyIcon"></i>
+                        <span id="integrateCopyText">Copy</span>
+                    </button>
+                    <pre class="integrate-code-block"><code id="integrateCodeDisplay" class="language-python">Loading...</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="integrate-modal-footer">
+            <button class="integrate-btn integrate-btn-secondary" onclick="IntegrateModal.close()">
+                Close
+            </button>
+        </div>
+    </div>
+</div>

@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
-<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 <style>
     /* =========================================================================
        Chapter Section Styles
@@ -3973,7 +3973,7 @@ function renderExpCard(exp) {
     const cancelBtn = `<button class="card-action-btn cancel" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>Cancel</button>`;
     // Delete button - disabled for running/submitting experiments (must cancel first)
     const canDelete = !isRunning;
-    const deleteBtn = `<button class="card-action-btn delete" onclick="deleteExpFromCard(event, ${exp.id})" title="Delete experiment" ${canDelete ? '' : 'disabled'}><i class="fas fa-trash"></i></button>`;
+    const deleteBtn = `<button class="card-action-btn icon-only delete" onclick="deleteExpFromCard(event, ${exp.id})" title="Delete experiment" ${canDelete ? '' : 'disabled'}><i class="fas fa-trash"></i></button>`;
 
     return `
         <div class="exp-card-new" onclick="openExpDetails(${exp.id})" data-exp-id="${exp.id}">
@@ -4004,14 +4004,17 @@ function renderExpCard(exp) {
                 <div class="exp-card-col-params">
                     ${renderMetricsRow(exp)}
                 </div>
-                <!-- Column 4: Actions (20%) -->
-                <div class="exp-card-col-actions">
-                    <div class="exp-card-actions-row">
+                <!-- Column 4: Actions (20%) - 2-column grid layout like training cards -->
+                <div class="ml-card-col-actions">
+                    <div class="ml-card-actions-grid">
+                        <div></div>
                         ${viewBtn}
+                        <div></div>
                         ${cancelBtn}
-                    </div>
-                    <div class="exp-card-actions-row">
-                        ${deleteBtn}
+                        <div></div>
+                        <div class="card-action-btn-group">
+                            ${deleteBtn}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -7574,8 +7577,8 @@ function openWizardWithSuggestion(featureConfigId, modelConfigId, suggestedParam
 <script src="https://d3js.org/d3.v7.min.js"></script>
 
 <!-- Pipeline DAG Visualization (extracted component) -->
-<script src="{% static 'js/pipeline_dag.js' %}?v=1"></script>
+<script src="{% static 'js/pipeline_dag.js' %}?v=2"></script>
 
 <!-- Reusable Experiment View Modal Module -->
-<script src="{% static 'js/exp_view_modal.js' %}?v=1"></script>
+<script src="{% static 'js/exp_view_modal.js' %}?v=3"></script>
 {% endblock %}

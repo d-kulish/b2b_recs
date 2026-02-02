@@ -1580,22 +1580,141 @@
 }
 
 /* ==========================================================================
-   Component Detail Panel (for Pipeline tab)
+   Component Detail Panel (for Pipeline tab) - Modern Design
    ========================================================================== */
 .exp-view-component-detail {
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid #111827;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-/* Single header row: Name | Status | Duration | Button */
-.exp-view-component-header {
+/* Component Logs Header */
+.component-logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+.component-logs-header-left {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid #e5e7eb;
+}
+
+.component-logs-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    border-radius: 10px;
+    color: white;
+    font-size: 16px;
+}
+
+.component-logs-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.component-logs-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.component-status-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.component-status-badge.pending {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.component-status-badge.running {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.component-status-badge.completed {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.component-status-badge.failed {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.component-status-badge.skipped {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.component-duration {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.component-duration i {
+    font-size: 11px;
+}
+
+.component-logs-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Component Logs Wrapper */
+.component-logs-wrapper {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    max-height: 200px;
+}
+
+.component-logs-wrapper .exp-view-logs-container {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Component Logs Footer */
+.component-logs-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Info banner variant for component notes */
+.component-logs-note {
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid #bae6fd;
+}
+
+/* Legacy classes kept for backward compatibility */
+.exp-view-component-header {
+    display: none;
 }
 
 .exp-view-component-name {
@@ -1619,11 +1738,6 @@
     display: flex;
     align-items: center;
     gap: 4px;
-}
-
-/* Load Logs button - uses .btn .btn-secondary .btn-sm classes */
-.exp-view-component-header .btn {
-    margin-left: auto;
 }
 
 /* Logs Container - No inner scroll, flows with modal */
@@ -1767,6 +1881,365 @@
 
 .exp-view-logs-note i {
     font-size: 12px;
+}
+
+/* ==========================================================================
+   Endpoint Logs Tab - Modern Design
+   ========================================================================== */
+.logs-tab-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 12px;
+}
+
+/* Header Section */
+.logs-header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+.logs-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logs-header-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-radius: 10px;
+    color: white;
+    font-size: 16px;
+}
+
+.logs-header-info h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.logs-service-name {
+    font-size: 12px;
+    color: #64748b;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.logs-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.logs-load-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.logs-load-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
+}
+
+.logs-load-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Info Banner */
+.logs-info-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #0369a1;
+}
+
+.logs-info-banner i {
+    color: #0284c7;
+    flex-shrink: 0;
+}
+
+/* Logs Content Wrapper */
+.logs-content-wrapper {
+    flex: 1;
+    min-height: 0;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.logs-content-wrapper .exp-view-logs-container {
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* Empty State */
+.logs-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.logs-empty-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    border-radius: 14px;
+    margin-bottom: 16px;
+}
+
+.logs-empty-icon i {
+    font-size: 24px;
+    color: #94a3b8;
+}
+
+.logs-empty-title {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.logs-empty-subtitle {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+}
+
+/* Loading State */
+.logs-loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    gap: 12px;
+    color: #3b82f6;
+}
+
+.logs-loading-state i {
+    font-size: 28px;
+}
+
+.logs-loading-state span {
+    font-size: 13px;
+    color: #64748b;
+}
+
+/* Error State */
+.logs-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.logs-error-icon {
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fef2f2;
+    border-radius: 14px;
+    margin-bottom: 16px;
+}
+
+.logs-error-icon i {
+    font-size: 24px;
+    color: #ef4444;
+}
+
+.logs-error-title {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #991b1b;
+}
+
+.logs-error-subtitle {
+    margin: 0;
+    font-size: 13px;
+    color: #dc2626;
+}
+
+/* Logs Count Header */
+.logs-count-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.logs-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 6px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* Log Entries List */
+.logs-entries-list {
+    padding: 4px 0;
+}
+
+.log-entry {
+    display: grid;
+    grid-template-columns: 8px 140px 1fr;
+    gap: 12px;
+    padding: 8px 14px;
+    font-size: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.15s ease;
+}
+
+.log-entry:hover {
+    background: #f8fafc;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-entry.error {
+    background: #fef2f2;
+}
+
+.log-entry.error:hover {
+    background: #fee2e2;
+}
+
+.log-entry.warning {
+    background: #fffbeb;
+}
+
+.log-entry.warning:hover {
+    background: #fef3c7;
+}
+
+.log-severity-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.log-severity-indicator.INFO,
+.log-severity-indicator.DEFAULT {
+    background: #22c55e;
+}
+
+.log-severity-indicator.WARNING {
+    background: #f59e0b;
+}
+
+.log-severity-indicator.ERROR {
+    background: #ef4444;
+}
+
+.log-severity-indicator.DEBUG {
+    background: #6b7280;
+}
+
+.log-timestamp {
+    color: #64748b;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.log-message {
+    color: #1e293b;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 11px;
+    word-break: break-word;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+/* Logs Footer */
+.logs-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 0 0;
+}
+
+.logs-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: #64748b;
+}
+
+.logs-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.logs-severity-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.logs-severity-dot.INFO {
+    background: #22c55e;
+}
+
+.logs-severity-dot.WARNING {
+    background: #f59e0b;
+}
+
+.logs-severity-dot.ERROR {
+    background: #ef4444;
 }
 
 /* ==========================================================================

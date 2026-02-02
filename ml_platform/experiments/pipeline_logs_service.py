@@ -41,8 +41,8 @@ class PipelineLogsService:
     }
 
     # Default configuration
-    DEFAULT_LOG_LIMIT = 50
-    LOG_RETENTION_DAYS = 7
+    DEFAULT_LOG_LIMIT = 100
+    LOG_RETENTION_DAYS = 30  # Match Cloud Logging default retention
     MAX_MESSAGE_LENGTH = 1000
 
     def __init__(self, project_id: str = None):
@@ -81,7 +81,7 @@ class PipelineLogsService:
         Args:
             quick_test: QuickTest instance with pipeline metadata
             component: Component name (Examples, Stats, Schema, Transform, Train)
-            limit: Maximum number of log entries (default: 50)
+            limit: Maximum number of log entries (default: 100)
 
         Returns:
             Dict with structure:

@@ -2521,38 +2521,59 @@ const ExpViewModal = (function() {
         overviewTab.innerHTML = overviewHtml;
     }
 
-    function renderEndpointTestTab() {
-        const container = document.getElementById('expViewTabTest');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="exp-view-endpoint-placeholder">
-                <i class="fas fa-flask"></i>
-                <p class="placeholder-title">Test Endpoint</p>
-                <p>Interactive endpoint testing is coming soon.</p>
-                <p style="color: #9ca3af; font-size: 12px; margin-top: 8px;">You will be able to send test requests and view responses directly here.</p>
-            </div>
-        `;
-    }
-
     function renderEndpointLogsTab(endpoint) {
         const container = document.getElementById('expViewTabLogs');
         if (!container) return;
 
+        const serviceName = endpoint.service_name || endpoint.name || 'Unknown';
+
         container.innerHTML = `
-            <div class="exp-view-content-card">
-                <div class="exp-view-card-header">
-                    <h4>Service Logs</h4>
-                    <button class="btn btn-secondary btn-sm" id="endpointLoadLogsBtn"
-                            onclick="ExpViewModal.loadEndpointLogs()">
-                        <i class="fas fa-sync-alt"></i>
-                        Load Logs
-                    </button>
+            <div class="logs-tab-content">
+                <!-- Logs Header Section -->
+                <div class="logs-header-section">
+                    <div class="logs-header-left">
+                        <div class="logs-header-icon">
+                            <i class="fas fa-stream"></i>
+                        </div>
+                        <div class="logs-header-info">
+                            <h4>Service Logs</h4>
+                            <span class="logs-service-name">${serviceName}</span>
+                        </div>
+                    </div>
+                    <div class="logs-header-actions">
+                        <button class="logs-load-btn" id="endpointLoadLogsBtn"
+                                onclick="ExpViewModal.loadEndpointLogs()">
+                            <i class="fas fa-sync-alt"></i>
+                            <span>Load Logs</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="exp-view-logs-container" id="endpointLogsContainer">
-                    <div class="exp-view-logs-empty">
-                        <i class="fas fa-file-alt"></i>
-                        <span>Click "Load Logs" to fetch recent entries</span>
+
+                <!-- Info Banner -->
+                <div class="logs-info-banner">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Displays the last 100 log entries from Cloud Run. Includes request logs, errors, and service health messages.</span>
+                </div>
+
+                <!-- Logs Container -->
+                <div class="logs-content-wrapper">
+                    <div class="exp-view-logs-container" id="endpointLogsContainer">
+                        <div class="logs-empty-state">
+                            <div class="logs-empty-icon">
+                                <i class="fas fa-terminal"></i>
+                            </div>
+                            <p class="logs-empty-title">No logs loaded</p>
+                            <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Footer with Legend -->
+                <div class="logs-footer">
+                    <div class="logs-legend">
+                        <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
+                        <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
+                        <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
                     </div>
                 </div>
             </div>
@@ -2569,51 +2590,69 @@ const ExpViewModal = (function() {
 
         // Show loading state
         container.innerHTML = `
-            <div class="exp-view-loading">
-                <i class="fas fa-spinner fa-spin"></i>
-                <span>Loading logs...</span>
+            <div class="logs-loading-state">
+                <i class="fas fa-circle-notch fa-spin"></i>
+                <span>Fetching logs from Cloud Run...</span>
             </div>
         `;
         btn.disabled = true;
+        btn.querySelector('i').classList.add('fa-spin');
 
         try {
             const response = await fetch(`/api/deployed-endpoints/${endpoint.id}/logs/?limit=100`);
             const data = await response.json();
 
             if (data.success && data.logs.available) {
-                // Render log entries
-                container.innerHTML = data.logs.logs.map(log => {
-                    // Map DEFAULT to INFO for styling (container logs without explicit severity)
-                    const severityClass = log.severity === 'DEFAULT' ? 'INFO' : log.severity.toUpperCase();
-                    const severityLabel = log.severity === 'DEFAULT' ? 'INFO' : log.severity;
-                    return `
-                        <div class="exp-view-log-entry">
-                            <span class="exp-view-log-severity ${severityClass}"></span>
-                            <span class="exp-view-log-time">${log.timestamp}</span>
-                            <span class="exp-view-log-message">${escapeHtml(log.message)}</span>
-                        </div>
-                    `;
-                }).join('');
+                const logCount = data.logs.logs.length;
+                // Render log entries with count header
+                container.innerHTML = `
+                    <div class="logs-count-header">
+                        <span class="logs-count-badge">${logCount}</span>
+                        <span>log entries</span>
+                    </div>
+                    <div class="logs-entries-list">
+                        ${data.logs.logs.map(log => {
+                            const severityClass = log.severity === 'DEFAULT' ? 'INFO' : log.severity.toUpperCase();
+                            return `
+                                <div class="log-entry ${severityClass.toLowerCase()}">
+                                    <span class="log-severity-indicator ${severityClass}"></span>
+                                    <span class="log-timestamp">${log.timestamp}</span>
+                                    <span class="log-message">${escapeHtml(log.message)}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
             } else {
                 // Show message
                 const message = data.logs?.message || data.error || 'No logs available';
                 container.innerHTML = `
-                    <div class="exp-view-logs-empty">
-                        <i class="fas fa-info-circle"></i>
-                        <span>${escapeHtml(message)}</span>
+                    <div class="logs-empty-state">
+                        <div class="logs-empty-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <p class="logs-empty-title">No logs available</p>
+                        <p class="logs-empty-subtitle">${escapeHtml(message)}</p>
                     </div>
                 `;
             }
         } catch (error) {
             console.error('Error loading endpoint logs:', error);
             container.innerHTML = `
-                <div class="exp-view-logs-error">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <span>Error loading logs. Please try again.</span>
+                <div class="logs-error-state">
+                    <div class="logs-error-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <p class="logs-error-title">Failed to load logs</p>
+                    <p class="logs-error-subtitle">Please try again or check your connection</p>
                 </div>
             `;
         } finally {
             btn.disabled = false;
+            const btnIcon = btn.querySelector('i');
+            if (btnIcon) {
+                btnIcon.classList.remove('fa-spin');
+            }
         }
     }
 
@@ -2794,7 +2833,7 @@ const ExpViewModal = (function() {
         } else if (state.mode === 'model') {
             visibleTabs = ['overview', 'versions', 'artifacts', 'deployment'];
         } else if (state.mode === 'endpoint') {
-            visibleTabs = ['overview', 'test', 'logs', 'versions'];
+            visibleTabs = ['overview', 'versions', 'logs'];
         } else {
             visibleTabs = config.showTabs;
         }
@@ -3031,9 +3070,6 @@ const ExpViewModal = (function() {
         } else if (state.mode === 'endpoint') {
             // Endpoint mode tabs
             const endpoint = state.currentEndpoint;
-            if (tabName === 'test' && endpoint) {
-                renderEndpointTestTab();
-            }
             if (tabName === 'logs' && endpoint) {
                 renderEndpointLogsTab(endpoint);
             }

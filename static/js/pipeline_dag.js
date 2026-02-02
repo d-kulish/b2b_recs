@@ -462,7 +462,7 @@ function selectDagComponent(componentId) {
     const statusEl = document.getElementById('expViewComponentStatus');
     if (statusEl) {
         statusEl.textContent = stage.status || 'pending';
-        statusEl.className = 'exp-view-component-status ' + (stage.status || 'pending');
+        statusEl.className = 'component-status-badge ' + (stage.status || 'pending');
     }
 
     const durationEl = document.getElementById('expViewComponentDurationText');
@@ -474,9 +474,12 @@ function selectDagComponent(componentId) {
     const logsContainer = document.getElementById('expViewLogsContainer');
     if (logsContainer) {
         logsContainer.innerHTML = `
-            <div class="exp-view-logs-empty">
-                <i class="fas fa-file-alt"></i>
-                <span>Click "Load Logs" to fetch recent entries</span>
+            <div class="logs-empty-state">
+                <div class="logs-empty-icon">
+                    <i class="fas fa-terminal"></i>
+                </div>
+                <p class="logs-empty-title">No logs loaded</p>
+                <p class="logs-empty-subtitle">Click "Load Logs" to fetch component output</p>
             </div>
         `;
     }
@@ -500,9 +503,9 @@ async function loadComponentLogs(componentId, experimentId, mode) {
     // Show loading state
     const componentName = TFX_PIPELINE.components.find(c => c.id === componentId)?.name || componentId;
     logsContainer.innerHTML = `
-        <div class="exp-view-logs-empty">
-            <i class="fas fa-spinner fa-spin"></i>
-            <span>Loading ${escapeHtml(componentName)} logs...</span>
+        <div class="logs-loading-state">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <span>Fetching ${escapeHtml(componentName)} logs...</span>
         </div>
     `;
 
@@ -516,25 +519,41 @@ async function loadComponentLogs(componentId, experimentId, mode) {
 
         if (data.success && data.logs?.available) {
             if (data.logs.logs && data.logs.logs.length > 0) {
+                const logCount = data.logs.logs.length;
                 // Show source indicator if using fallback
                 let sourceNote = '';
                 if (data.logs.note) {
-                    sourceNote = `<div class="exp-view-logs-note"><i class="fas fa-info-circle"></i> ${escapeHtml(data.logs.note)}</div>`;
+                    sourceNote = `<div class="logs-info-banner component-logs-note"><i class="fas fa-info-circle"></i> <span>${escapeHtml(data.logs.note)}</span></div>`;
                 }
 
-                // Log entries: severity icon | timestamp | message
-                logsContainer.innerHTML = sourceNote + data.logs.logs.map(log => `
-                    <div class="exp-view-log-entry">
-                        <span class="exp-view-log-severity ${log.severity}"></span>
-                        <span class="exp-view-log-time">${log.timestamp}</span>
-                        <span class="exp-view-log-message">${escapeHtml(log.message)}</span>
+                // Log entries with new styling
+                logsContainer.innerHTML = `
+                    ${sourceNote}
+                    <div class="logs-count-header">
+                        <span class="logs-count-badge">${logCount}</span>
+                        <span>log entries</span>
                     </div>
-                `).join('');
+                    <div class="logs-entries-list">
+                        ${data.logs.logs.map(log => {
+                            const severityClass = log.severity || 'INFO';
+                            return `
+                                <div class="log-entry ${severityClass.toLowerCase()}">
+                                    <span class="log-severity-indicator ${severityClass}"></span>
+                                    <span class="log-timestamp">${log.timestamp}</span>
+                                    <span class="log-message">${escapeHtml(log.message)}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
             } else {
                 logsContainer.innerHTML = `
-                    <div class="exp-view-logs-empty">
-                        <i class="fas fa-inbox"></i>
-                        <span>No log entries found</span>
+                    <div class="logs-empty-state">
+                        <div class="logs-empty-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <p class="logs-empty-title">No log entries</p>
+                        <p class="logs-empty-subtitle">This component has no log output</p>
                     </div>
                 `;
             }
@@ -542,15 +561,26 @@ async function loadComponentLogs(componentId, experimentId, mode) {
             // Show user-friendly message from backend
             const msg = data.logs?.message || 'Logs not available for this component';
             logsContainer.innerHTML = `
-                <div class="exp-view-logs-empty">
-                    <i class="fas fa-info-circle"></i>
-                    <span>${escapeHtml(msg)}</span>
+                <div class="logs-empty-state">
+                    <div class="logs-empty-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <p class="logs-empty-title">Logs unavailable</p>
+                    <p class="logs-empty-subtitle">${escapeHtml(msg)}</p>
                 </div>
             `;
         }
     } catch (error) {
         console.error('Error loading logs:', error);
-        logsContainer.innerHTML = '<div class="exp-view-logs-error"><i class="fas fa-exclamation-triangle"></i> Failed to load logs. Please try again.</div>';
+        logsContainer.innerHTML = `
+            <div class="logs-error-state">
+                <div class="logs-error-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <p class="logs-error-title">Failed to load logs</p>
+                <p class="logs-error-subtitle">Please try again or check your connection</p>
+            </div>
+        `;
     }
 }
 
@@ -568,13 +598,15 @@ function refreshComponentLogs(experimentId) {
     const btn = document.getElementById('expViewLoadLogsBtn');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        const btnIcon = btn.querySelector('i');
+        if (btnIcon) btnIcon.classList.add('fa-spin');
     }
 
     loadComponentLogs(selectedComponentId, expId).finally(() => {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+            const btnIcon = btn.querySelector('i');
+            if (btnIcon) btnIcon.classList.remove('fa-spin');
         }
     });
 }

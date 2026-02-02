@@ -2012,6 +2012,142 @@
     color: #9ca3af;
 }
 
+/* ==================== ETL Run Cards ==================== */
+
+/* Card Container */
+.run-cards-container {
+    max-height: 500px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.run-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.run-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Column Layout (4 columns: 30% | 25% | 25% | 20%) */
+.run-card-columns {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.run-card-col-info { width: 30%; min-width: 0; display: flex; align-items: flex-start; gap: 12px; }
+.run-card-col-config { width: 25%; min-width: 0; }
+.run-card-col-metrics { width: 25%; min-width: 0; display: flex; align-items: center; }
+.run-card-col-actions { width: 20%; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+/* Status Icon (upper-left) */
+.run-card-status {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.run-card-status.completed { background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); color: #16a34a; }
+.run-card-status.failed { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #dc2626; }
+.run-card-status.running { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); color: #2563eb; }
+.run-card-status.pending { background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); color: #6b7280; }
+.run-card-status.cancelled { background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); color: #6b7280; }
+.run-card-status.partial { background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%); color: #ea580c; }
+
+/* Info Column Text */
+.run-card-info-text { flex: 1; min-width: 0; }
+.run-card-name { font-weight: 600; font-size: 15px; color: #111827; margin-bottom: 2px; }
+.run-card-job-name { font-size: 13px; color: #374151; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-card-times { display: flex; gap: 12px; font-size: 11px; color: #9ca3af; margin-top: 4px; }
+.run-card-times span { color: #6b7280; }
+
+/* Config Column */
+.run-card-config-item { font-size: 12px; color: #374151; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-card-config-item:last-child { margin-bottom: 0; }
+.run-card-config-label { font-weight: 600; color: #6b7280; margin-right: 4px; }
+
+.run-card-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.run-card-type-badge.transactional { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+.run-card-type-badge.catalog { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+/* Metrics Column (Option A - Simple boxes) */
+.run-card-metrics-row { display: flex; gap: 8px; width: 100%; }
+
+.run-card-metric {
+    text-align: center;
+    flex: 1;
+    padding: 6px 4px;
+    background: #ffffff;
+    border: 1px solid #1f2937;
+    border-radius: 6px;
+}
+
+.run-card-metric-label { font-size: 10px; color: #1f2937; font-weight: 500; margin-bottom: 2px; }
+.run-card-metric-value { font-size: 13px; font-weight: 600; color: #1f2937; }
+.run-card-metric-value.empty { color: #9ca3af; }
+
+/* Progress Bar (2 stages: EXTRACT, LOAD) */
+.run-card-stages { width: 100%; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f3f4f6; }
+
+.run-stages-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #e5e7eb;
+}
+
+.run-stage-segment {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 500;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    transition: background-color 0.3s ease;
+}
+
+.run-stage-segment.completed { background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); }
+.run-stage-segment.running { background: linear-gradient(90deg, #6366f1 0%, #818cf8 50%, #6366f1 100%); background-size: 200% 100%; animation: run-stage-pulse 1.5s ease-in-out infinite; }
+.run-stage-segment.failed { background: #ef4444; }
+.run-stage-segment.pending { background: #d1d5db; color: #6b7280; }
+
+@keyframes run-stage-pulse {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+/* ==================== End ETL Run Cards ==================== */
+
 /* Connection Modal Button States */
 .btn {
     transition: all 0.3s ease;
@@ -2849,9 +2985,10 @@ document.addEventListener('DOMContentLoaded', function() {
 let allRunsData = [];
 let filteredRunsData = [];
 let runsCurrentPage = 1;
-const runsPerPage = 6;
+const runsPerPage = 5;
 let runsSearchQuery = '';
 let runsSearchTimeout;
+let runsActiveStatuses = [];
 
 function initRunsFilters() {
     // Load runs data from embedded JSON
@@ -3022,60 +3159,149 @@ function renderRunsTable() {
     const endIndex = startIndex + runsPerPage;
     const pageRuns = filteredRunsData.slice(startIndex, endIndex);
 
-    // Build table HTML
-    let html = `
-        <div class="overflow-x-auto">
-            <table class="w-full table-fixed">
-                <thead class="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Run ID</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 15%">ETL Job</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 18%">Connection</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 17%">Started</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 10%">Duration</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 8%">Rows</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase" style="width: 12%">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200">
-    `;
-
+    // Build cards HTML
+    let html = '<div class="run-cards-container">';
     for (const run of pageRuns) {
-        const rowClass = getRunRowClass(run.status);
-        const statusHtml = getRunStatusHtml(run.status);
-        const connectionHtml = getConnectionHtml(run.source_type, run.connection_name);
-        const startedAt = formatRunDate(run.started_at);
-        const duration = run.duration_seconds ? `${Math.round(run.duration_seconds)}s` : '—';
-        const rows = run.rows_extracted ? run.rows_extracted.toLocaleString() : '0';
-
-        html += `
-            <tr id="run-row-${run.id}" data-run-id="${run.id}" data-run-status="${run.status}" class="${rowClass}">
-                <td class="px-4 py-3 text-sm font-medium text-gray-900">#${run.id}</td>
-                <td class="px-4 py-3 text-sm text-gray-900">
-                    <span class="font-medium block truncate" title="${escapeHtml(run.job_name)}">${escapeHtml(run.job_name)}</span>
-                </td>
-                <td class="px-4 py-3 text-sm text-gray-600">${connectionHtml}</td>
-                <td class="px-4 py-3">${statusHtml}</td>
-                <td class="px-4 py-3 text-sm text-gray-600">${startedAt}</td>
-                <td class="px-4 py-3 text-sm text-gray-600">${duration}</td>
-                <td class="px-4 py-3 text-sm text-gray-600">${rows}</td>
-                <td class="px-4 py-3">
-                    <button onclick="viewRunDetails(${run.id})" class="text-blue-600 hover:text-blue-800 font-semibold text-sm">
-                        View Details
-                    </button>
-                </td>
-            </tr>
-        `;
+        html += renderRunCard(run);
     }
-
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
+    html += '</div>';
 
     container.innerHTML = html;
+}
+
+function renderRunCard(run) {
+    const statusIcons = {
+        'running': 'fa-spinner fa-spin',
+        'completed': 'fa-check',
+        'failed': 'fa-times',
+        'cancelled': 'fa-ban',
+        'pending': 'fa-clock',
+        'partial': 'fa-exclamation'
+    };
+    const icon = statusIcons[run.status] || 'fa-clock';
+
+    // Format times
+    const startTime = formatRunDate(run.started_at);
+    const duration = run.duration_seconds ? formatDuration(run.duration_seconds) : '-';
+
+    // Format metrics
+    const rowsExtracted = run.rows_extracted ? run.rows_extracted.toLocaleString() : '0';
+    const rowsLoaded = run.rows_loaded ? run.rows_loaded.toLocaleString() : '0';
+    const bytesProcessed = run.bytes_processed ? formatBytes(run.bytes_processed) : '0 B';
+
+    // Data source type (clean name without icons)
+    const sourceTypeDisplay = getSourceTypeDisplayName(run.source_type);
+
+    // Load type badge
+    const loadTypeBadge = run.load_type
+        ? `<span class="run-card-type-badge ${run.load_type}">${run.load_type === 'transactional' ? 'Transactional' : 'Catalog'}</span>`
+        : '';
+
+    // Stage progress bar
+    const stagesHtml = renderRunStagesBar(run);
+
+    return `
+        <div class="run-card" onclick="viewRunDetails(${run.id})" data-run-id="${run.id}">
+            <div class="run-card-columns">
+                <!-- Column 1: Run Info (30%) -->
+                <div class="run-card-col-info">
+                    <div class="run-card-status ${run.status}">
+                        <i class="fas ${icon}"></i>
+                    </div>
+                    <div class="run-card-info-text">
+                        <div class="run-card-name">Run #${run.id}</div>
+                        <div class="run-card-job-name" title="${escapeHtml(run.job_name)}">${escapeHtml(run.job_name)}</div>
+                        <div class="run-card-times">
+                            <div>Start: <span>${startTime}</span></div>
+                            <div>Duration: <span>${duration}</span></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Column 2: Config (25%) -->
+                <div class="run-card-col-config">
+                    <div class="run-card-config-item"><span class="run-card-config-label">Source:</span> ${sourceTypeDisplay}</div>
+                    <div class="run-card-config-item"><span class="run-card-config-label">Connection:</span> ${escapeHtml(run.connection_name) || '-'}</div>
+                    <div class="run-card-config-item"><span class="run-card-config-label">Dest table:</span> ${run.destination_table || '-'}</div>
+                    <div class="run-card-config-item" style="margin-top: 4px;">${loadTypeBadge}</div>
+                </div>
+                <!-- Column 3: Metrics (25%) -->
+                <div class="run-card-col-metrics">
+                    <div class="run-card-metrics-row">
+                        <div class="run-card-metric">
+                            <div class="run-card-metric-label">ROWS</div>
+                            <div class="run-card-metric-value">${rowsExtracted}</div>
+                        </div>
+                        <div class="run-card-metric">
+                            <div class="run-card-metric-label">LOADED</div>
+                            <div class="run-card-metric-value">${rowsLoaded}</div>
+                        </div>
+                        <div class="run-card-metric">
+                            <div class="run-card-metric-label">SIZE</div>
+                            <div class="run-card-metric-value">${bytesProcessed}</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Column 4: Actions (20%) -->
+                <div class="run-card-col-actions">
+                    <button class="card-action-btn view" onclick="event.stopPropagation(); viewRunDetails(${run.id})">View</button>
+                </div>
+            </div>
+            ${stagesHtml}
+        </div>
+    `;
+}
+
+function renderRunStagesBar(run) {
+    // Determine stage statuses based on timestamps
+    let extractStatus = 'pending';
+    let loadStatus = 'pending';
+
+    if (run.extraction_started_at) {
+        extractStatus = run.extraction_completed_at ? 'completed' : 'running';
+    }
+    if (run.loading_started_at) {
+        loadStatus = run.loading_completed_at ? 'completed' : 'running';
+    }
+    if (run.status === 'failed') {
+        // If failed, mark the running stage as failed
+        if (extractStatus === 'running') extractStatus = 'failed';
+        else if (loadStatus === 'running') loadStatus = 'failed';
+        else if (loadStatus === 'pending' && extractStatus === 'completed') loadStatus = 'failed';
+        else if (extractStatus === 'pending') extractStatus = 'failed';
+    }
+
+    return `
+        <div class="run-card-stages">
+            <div class="run-stages-bar">
+                <div class="run-stage-segment ${extractStatus}">Extract</div>
+                <div class="run-stage-segment ${loadStatus}">Load</div>
+            </div>
+        </div>
+    `;
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function getSourceTypeDisplayName(sourceType) {
+    const displayNames = {
+        'postgresql': 'PostgreSQL',
+        'mysql': 'MySQL',
+        'bigquery': 'BigQuery',
+        'gcs': 'GCP Buckets',
+        's3': 'AWS S3',
+        'firestore': 'Firestore',
+        'sqlserver': 'SQL Server',
+        'mongodb': 'MongoDB',
+        'snowflake': 'Snowflake',
+        'redshift': 'Redshift'
+    };
+    return displayNames[sourceType] || sourceType || '-';
 }
 
 function showRunsEmptyState() {

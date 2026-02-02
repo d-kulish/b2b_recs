@@ -380,6 +380,15 @@ def model_etl(request, model_id):
             'rows_extracted': run.total_rows_extracted or 0,
             'destination_table': destination_table,
             'load_type': load_type,
+            'completed_at': run.completed_at.isoformat() if run.completed_at else None,
+            'rows_loaded': run.rows_loaded or 0,
+            'bytes_processed': run.bytes_processed or 0,
+            'total_tables': run.total_tables or 0,
+            'successful_tables': run.successful_tables or 0,
+            'extraction_started_at': run.extraction_started_at.isoformat() if run.extraction_started_at else None,
+            'extraction_completed_at': run.extraction_completed_at.isoformat() if run.extraction_completed_at else None,
+            'loading_started_at': run.loading_started_at.isoformat() if run.loading_started_at else None,
+            'loading_completed_at': run.loading_completed_at.isoformat() if run.loading_completed_at else None,
         }
         runs_json_list.append(run_data)
 

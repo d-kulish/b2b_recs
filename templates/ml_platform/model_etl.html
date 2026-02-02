@@ -15,7 +15,12 @@
     <!-- ETL Dashboard -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
         <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold text-gray-900">ETL Dashboard</h2>
+            <div class="flex items-center gap-3">
+                <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
+                    <i class="fas fa-exchange-alt text-white text-lg"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">ETL Dashboard</h2>
+            </div>
             <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
                 <i class="fas fa-calendar mr-1"></i>
                 Last 30 days
@@ -227,69 +232,63 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <!-- End of etl-dashboard-grid -->
+    </div>
+    <!-- End of ETL Dashboard -->
 
-            <!-- Row 3: Recent ETL Runs Table (full width) -->
-            <div class="etl-runs-section mt-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-sm font-semibold text-gray-700">Recent Runs</h3>
-                </div>
+    <!-- ETL Runs Chapter -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
+                <i class="fas fa-history text-white text-lg"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900">ETL Runs</h2>
+        </div>
 
-                <!-- Filter Controls -->
-                <div class="flex flex-wrap items-center gap-3 mb-4 p-3 bg-white rounded-lg border border-black">
-                    <!-- Search Input -->
-                    <div class="relative flex-grow max-w-xs">
-                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="search"
-                               id="runsSearchInput"
-                               placeholder="Search by job name..."
-                               value="{{ search_query }}"
-                               autocomplete="off"
-                               class="w-full pl-10 pr-4 py-2 border border-black rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
+        <!-- Filter Bar -->
+        <div class="runs-filter-bar">
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Status</label>
+                <select id="runsStatusFilter" class="runs-filter-select" onchange="filterRuns()">
+                    <option value="">All</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Connection</label>
+                <select id="runsConnectionFilter" class="runs-filter-select" onchange="filterRuns()">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">ETL Job</label>
+                <select id="runsJobFilter" class="runs-filter-select" onchange="filterRuns()">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Destination Table</label>
+                <select id="runsDestTableFilter" class="runs-filter-select" onchange="filterRuns()">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Load Type</label>
+                <select id="runsLoadTypeFilter" class="runs-filter-select" onchange="filterRuns()">
+                    <option value="">All</option>
+                    <option value="transactional">Transactional</option>
+                    <option value="catalog">Catalog</option>
+                </select>
+            </div>
+            <input type="text" id="runsSearchInput" class="runs-search-input"
+                   placeholder="Search by job name..." onkeyup="debounceRunsSearch()">
+        </div>
 
-                    <!-- Clear Filters Button (hidden by default, shown via JS) -->
-                    <button type="button"
-                            id="clearRunsFiltersBtn"
-                            onclick="clearRunsFilters()"
-                            class="hidden px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-all border border-black">
-                        <i class="fas fa-times mr-1"></i>Clear Filters
-                    </button>
-
-                    <!-- Spacer to push status buttons to the right -->
-                    <div class="flex-grow"></div>
-
-                    <!-- Status Filter Buttons (aligned right) -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500 mr-1">Status:</span>
-                        <button type="button"
-                                id="filterBtn-completed"
-                                onclick="toggleRunsStatusFilter('completed')"
-                                class="status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center bg-green-100 text-green-700 hover:bg-green-200"
-                                data-status="completed"
-                                data-selected="false">
-                            <i class="fas fa-check-circle mr-1"></i>Completed
-                        </button>
-                        <button type="button"
-                                id="filterBtn-failed"
-                                onclick="toggleRunsStatusFilter('failed')"
-                                class="status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center bg-red-100 text-red-700 hover:bg-red-200"
-                                data-status="failed"
-                                data-selected="false">
-                            <i class="fas fa-times-circle mr-1"></i>Failed
-                        </button>
-                        <button type="button"
-                                id="filterBtn-cancelled"
-                                onclick="toggleRunsStatusFilter('cancelled')"
-                                class="status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                data-status="cancelled"
-                                data-selected="false">
-                            <i class="fas fa-ban mr-1"></i>Cancelled
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Embedded JSON data for client-side filtering -->
-                <script id="allRunsData" type="application/json">{{ all_runs_json|safe }}</script>
+        <!-- Embedded JSON data for client-side filtering -->
+        <script id="allRunsData" type="application/json">{{ all_runs_json|safe }}</script>
 
         <!-- Runs Table Container (rendered by JavaScript) -->
         <div id="runsTableContainer">
@@ -310,16 +309,17 @@
                 <i class="fas fa-times mr-1"></i>Clear All Filters
             </button>
         </div>
-            </div>
-            <!-- End of etl-runs-section -->
-        </div>
-        <!-- End of etl-dashboard-grid -->
     </div>
-    <!-- End of ETL Dashboard -->
+    <!-- End of ETL Runs -->
 
     <!-- ETL Setup Container: 2-Column Layout -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">ETL Setup</h2>
+        <div class="flex items-center gap-3 mb-6">
+            <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+                <i class="fas fa-cog text-white text-lg"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900">ETL Setup</h2>
+        </div>
 
         <!-- Grid: 2 columns, 50/50 split -->
         <div class="grid grid-cols-2 gap-0">
@@ -1948,6 +1948,70 @@
 </div>
 
 <style>
+/* Chapter Icon Style */
+.chapter-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+/* =========================================================================
+   ETL Runs Filter Bar Styles
+   ========================================================================= */
+.runs-filter-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.runs-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.runs-filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.runs-filter-select {
+    padding: 6px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+    min-width: 130px;
+}
+.runs-filter-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+.runs-search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+}
+.runs-search-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+.runs-search-input::placeholder {
+    color: #9ca3af;
+}
+
 /* Connection Modal Button States */
 .btn {
     transition: all 0.3s ease;
@@ -2786,8 +2850,8 @@ let allRunsData = [];
 let filteredRunsData = [];
 let runsCurrentPage = 1;
 const runsPerPage = 6;
-let runsActiveStatuses = [];
 let runsSearchQuery = '';
+let runsSearchTimeout;
 
 function initRunsFilters() {
     // Load runs data from embedded JSON
@@ -2801,96 +2865,103 @@ function initRunsFilters() {
         }
     }
 
-    // Initialize search input listener
-    const searchInput = document.getElementById('runsSearchInput');
-    if (searchInput) {
-        // Set initial value from URL if present
-        const urlParams = new URLSearchParams(window.location.search);
-        const searchParam = urlParams.get('search');
-        if (searchParam) {
-            searchInput.value = searchParam;
-            runsSearchQuery = searchParam;
-        }
-
-        // Initialize status filters from URL
-        const statusParam = urlParams.get('status');
-        if (statusParam) {
-            runsActiveStatuses = statusParam.split(',').filter(s => s);
-            updateStatusButtonStyles();
-        }
-
-        // Debounced search on input
-        let searchTimeout;
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(function() {
-                runsSearchQuery = searchInput.value.trim();
-                runsCurrentPage = 1;
-                applyRunsFiltersAndRender();
-            }, 200);
-        });
-
-        // Immediate search on Enter key
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                clearTimeout(searchTimeout);
-                runsSearchQuery = searchInput.value.trim();
-                runsCurrentPage = 1;
-                applyRunsFiltersAndRender();
-            }
-        });
-    }
+    // Populate dropdown filters from data
+    populateRunsFilterDropdowns();
 
     // Initial render
     applyRunsFiltersAndRender();
 }
 
-function toggleRunsStatusFilter(status) {
-    const index = runsActiveStatuses.indexOf(status);
-    if (index > -1) {
-        runsActiveStatuses.splice(index, 1);
-    } else {
-        runsActiveStatuses.push(status);
+function populateRunsFilterDropdowns() {
+    // Extract unique values from runs data
+    const connections = new Set();
+    const jobs = new Set();
+    const destTables = new Set();
+
+    allRunsData.forEach(run => {
+        if (run.connection_name) connections.add(run.connection_name);
+        if (run.job_name) jobs.add(run.job_name);
+        if (run.destination_table) destTables.add(run.destination_table);
+    });
+
+    // Populate Connection dropdown
+    const connectionSelect = document.getElementById('runsConnectionFilter');
+    if (connectionSelect) {
+        const sorted = Array.from(connections).sort();
+        sorted.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = val;
+            connectionSelect.appendChild(option);
+        });
     }
+
+    // Populate ETL Job dropdown
+    const jobSelect = document.getElementById('runsJobFilter');
+    if (jobSelect) {
+        const sorted = Array.from(jobs).sort();
+        sorted.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = val;
+            jobSelect.appendChild(option);
+        });
+    }
+
+    // Populate Destination Table dropdown
+    const destTableSelect = document.getElementById('runsDestTableFilter');
+    if (destTableSelect) {
+        const sorted = Array.from(destTables).sort();
+        sorted.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = val;
+            destTableSelect.appendChild(option);
+        });
+    }
+}
+
+function filterRuns() {
     runsCurrentPage = 1;
-    updateStatusButtonStyles();
     applyRunsFiltersAndRender();
 }
 
-function updateStatusButtonStyles() {
-    const statusConfigs = {
-        'completed': { selected: 'bg-green-500 text-white', unselected: 'bg-green-100 text-green-700 hover:bg-green-200' },
-        'failed': { selected: 'bg-red-500 text-white', unselected: 'bg-red-100 text-red-700 hover:bg-red-200' },
-        'cancelled': { selected: 'bg-gray-500 text-white', unselected: 'bg-gray-200 text-gray-700 hover:bg-gray-300' }
-    };
-
-    for (const [status, config] of Object.entries(statusConfigs)) {
-        const btn = document.getElementById(`filterBtn-${status}`);
-        if (btn) {
-            const isSelected = runsActiveStatuses.includes(status);
-            btn.dataset.selected = isSelected ? 'true' : 'false';
-            // Remove old classes and add new ones
-            btn.className = btn.className.replace(/bg-\S+/g, '').replace(/text-\S+/g, '').replace(/hover:\S+/g, '').trim();
-            btn.className = `status-filter-btn w-28 py-1.5 rounded-lg text-xs font-semibold border border-black transition-all text-center ${isSelected ? config.selected : config.unselected}`;
-        }
-    }
+function debounceRunsSearch() {
+    clearTimeout(runsSearchTimeout);
+    runsSearchTimeout = setTimeout(function() {
+        runsSearchQuery = document.getElementById('runsSearchInput').value.trim();
+        runsCurrentPage = 1;
+        applyRunsFiltersAndRender();
+    }, 200);
 }
 
 function clearRunsFilters() {
     runsSearchQuery = '';
-    runsActiveStatuses = [];
     runsCurrentPage = 1;
 
+    // Reset search input
     const searchInput = document.getElementById('runsSearchInput');
-    if (searchInput) {
-        searchInput.value = '';
-    }
+    if (searchInput) searchInput.value = '';
 
-    updateStatusButtonStyles();
+    // Reset all dropdowns
+    document.getElementById('runsStatusFilter').value = '';
+    document.getElementById('runsConnectionFilter').value = '';
+    document.getElementById('runsJobFilter').value = '';
+    document.getElementById('runsDestTableFilter').value = '';
+    document.getElementById('runsLoadTypeFilter').value = '';
+
     applyRunsFiltersAndRender();
 }
 
 function applyRunsFiltersAndRender() {
+    // Get filter values
+    const statusFilter = document.getElementById('runsStatusFilter')?.value || '';
+    const connectionFilter = document.getElementById('runsConnectionFilter')?.value || '';
+    const jobFilter = document.getElementById('runsJobFilter')?.value || '';
+    const destTableFilter = document.getElementById('runsDestTableFilter')?.value || '';
+    const loadTypeFilter = document.getElementById('runsLoadTypeFilter')?.value || '';
+    runsSearchQuery = document.getElementById('runsSearchInput')?.value.trim() || '';
+
     // Apply filters
     filteredRunsData = allRunsData.filter(run => {
         // Search filter
@@ -2902,24 +2973,32 @@ function applyRunsFiltersAndRender() {
         }
 
         // Status filter
-        if (runsActiveStatuses.length > 0) {
-            if (!runsActiveStatuses.includes(run.status)) {
-                return false;
-            }
+        if (statusFilter && run.status !== statusFilter) {
+            return false;
+        }
+
+        // Connection filter
+        if (connectionFilter && run.connection_name !== connectionFilter) {
+            return false;
+        }
+
+        // Job filter
+        if (jobFilter && run.job_name !== jobFilter) {
+            return false;
+        }
+
+        // Destination table filter
+        if (destTableFilter && run.destination_table !== destTableFilter) {
+            return false;
+        }
+
+        // Load type filter
+        if (loadTypeFilter && run.load_type !== loadTypeFilter) {
+            return false;
         }
 
         return true;
     });
-
-    // Show/hide clear filters button
-    const clearBtn = document.getElementById('clearRunsFiltersBtn');
-    if (clearBtn) {
-        if (runsSearchQuery || runsActiveStatuses.length > 0) {
-            clearBtn.classList.remove('hidden');
-        } else {
-            clearBtn.classList.add('hidden');
-        }
-    }
 
     // Render table and pagination
     renderRunsTable();

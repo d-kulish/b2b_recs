@@ -356,10 +356,19 @@ def model_etl(request, model_id):
     # Get all runs from last 30 days without server-side filtering
     all_runs_for_js = model.etl_runs.filter(
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
-    ).select_related('data_source', 'data_source__connection').order_by('-started_at')
+    ).select_related('data_source', 'data_source__connection').prefetch_related('data_source__tables').order_by('-started_at')
 
     runs_json_list = []
     for run in all_runs_for_js:
+        # Get destination_table and load_type from first table
+        destination_table = None
+        load_type = None
+        if run.data_source:
+            first_table = run.data_source.tables.first()
+            if first_table:
+                destination_table = first_table.dest_table_name
+                load_type = first_table.load_type
+
         run_data = {
             'id': run.id,
             'status': run.status,
@@ -369,6 +378,8 @@ def model_etl(request, model_id):
             'started_at': run.started_at.isoformat() if run.started_at else None,
             'duration_seconds': run.get_duration_seconds() if run.get_duration_seconds() else None,
             'rows_extracted': run.total_rows_extracted or 0,
+            'destination_table': destination_table,
+            'load_type': load_type,
         }
         runs_json_list.append(run_data)
 

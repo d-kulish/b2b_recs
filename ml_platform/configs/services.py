@@ -2633,13 +2633,15 @@ class RetrievalModel(tfrs.Model):
 
     def _generate_brute_force_serve_fn(self) -> str:
         """Generate brute-force serving function with raw tensor inputs for simple JSON interface."""
-        # Get primary product ID column for candidate indexing
+        # Get primary product ID column and type for candidate indexing
         # PRIORITY: Use is_primary_id flag from FeatureConfig (set by UI wizard)
         product_id_col = None
+        product_id_bq_type = 'STRING'  # Default type for vocabulary lookup
         for feature in self.product_features:
             if feature.get('is_primary_id'):
                 product_id_col = feature.get('display_name') or feature.get('column')
-                logger.info(f"Using product ID column from is_primary_id flag: {product_id_col}")
+                product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+                logger.info(f"Using product ID column from is_primary_id flag: {product_id_col} (type: {product_id_bq_type})")
                 break
 
         # FALLBACK: Auto-detection for backward compatibility with old configs
@@ -2649,13 +2651,15 @@ class RetrievalModel(tfrs.Model):
                 col = feature.get('display_name') or feature.get('column', '')
                 if 'product' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
                     product_id_col = col
-                    logger.info(f"Auto-detected product ID column by name pattern: {product_id_col}")
+                    product_id_bq_type = (feature.get('bq_type') or 'STRING').upper()
+                    logger.info(f"Auto-detected product ID column by name pattern: {product_id_col} (type: {product_id_bq_type})")
                     break
 
         # LAST RESORT: Use first product feature
         if not product_id_col and self.product_features:
             product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
-            logger.warning(f"Falling back to first product feature as ID: {product_id_col}")
+            product_id_bq_type = (self.product_features[0].get('bq_type') or 'STRING').upper()
+            logger.warning(f"Falling back to first product feature as ID: {product_id_col} (type: {product_id_bq_type})")
 
         # Generate dynamic signature from buyer features
         signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature()
@@ -3921,12 +3925,13 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info(f"Pre-computed embeddings for {{len(product_ids)}} products")
 
-        # Load original product IDs from vocabulary file for serving (ScaNN only)
-        original_product_ids = None
-        if RETRIEVAL_ALGORITHM == 'scann':
-            original_product_ids = _load_original_product_ids(
-                tf_transform_output, '{product_id_col}', '{product_id_bq_type}'
-            )
+        # Load original product IDs from vocabulary file for serving
+        # This maps vocabulary indices back to original product IDs (e.g., "367073001001")
+        # Required for BOTH brute-force and ScaNN serving models
+        original_product_ids = _load_original_product_ids(
+            tf_transform_output, '{product_id_col}', '{product_id_bq_type}'
+        )
+        logging.info(f"Loaded {{len(original_product_ids)}} original product IDs from vocabulary")
 
         # Build retrieval index based on configured algorithm
         use_scann = False
@@ -4013,7 +4018,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
             serving_model = ServingModel(
                 retrieval_model=model,
                 tf_transform_output=tf_transform_output,
-                product_ids=product_ids,
+                product_ids=original_product_ids,
                 product_embeddings=product_embeddings
             )
 
@@ -6294,6 +6299,13 @@ def run_fn(fn_args: tfx.components.FnArgs):
         product_ids, product_embeddings = _precompute_candidate_embeddings(model, candidates_dataset)
         logging.info(f"Pre-computed embeddings for {{len(product_ids)}} unique products")
 
+        # Load original product IDs from vocabulary file for serving
+        # This maps vocabulary indices back to original product IDs (e.g., "367073001001")
+        original_product_ids = _load_original_product_ids(
+            tf_transform_output, '{product_id_col}', 'STRING'
+        )
+        logging.info(f"Loaded {{len(original_product_ids)}} original product IDs from vocabulary")
+
         # =========================================================================
         # TEST SET EVALUATION - BOTH RETRIEVAL AND RANKING METRICS
         # =========================================================================
@@ -6374,7 +6386,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         serving_model = MultitaskServingModel(
             multitask_model=model,
             tf_transform_output=tf_transform_output,
-            product_ids=product_ids,
+            product_ids=original_product_ids,
             product_embeddings=product_embeddings,
             transform_params=transform_params
         )

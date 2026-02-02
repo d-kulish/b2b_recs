@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training and manages model deployment to Cloud Run.
 
-**Last Updated**: 2026-01-30 (Consolidated deployment documentation from training_deploy.md)
+**Last Updated**: 2026-02-02 (Fixed serving model returning vocabulary indices instead of product IDs)
 
 ---
 
@@ -3845,6 +3845,63 @@ The modal now shows only 4 tabs: **Overview**, **Versions**, **Artifacts**, **De
 **Root Cause:** `is_deployed` was derived from `deployed_endpoint.is_active` (current state) instead of `deployment_status` (pipeline result).
 
 **Fix:** Changed derivation to use `deployment_status == 'deployed'` for badge display, added `has_active_endpoint` for UI that needs current state.
+
+### Fix: Serving Model Returns Vocabulary Indices Instead of Product IDs (2026-02-02)
+
+**Problem:** Deployed retrieval model endpoints returned vocabulary indices (0, 1, 2, ..., N-1) instead of actual product IDs (e.g., "367073001001") in the `product_ids` field of predictions.
+
+**Symptom:** API response contained:
+```json
+{
+  "predictions": [{
+    "product_ids": [214, 341, 473, 649, 11, ...],
+    "scores": [83.87, 83.43, ...]
+  }]
+}
+```
+Instead of actual product IDs like `"367073001001"`, `"383033001001"`, etc.
+
+**Root Cause:** In `ml_platform/configs/services.py`, the `_precompute_candidate_embeddings()` function extracted product IDs from the **transformed** dataset where `tft.compute_and_apply_vocabulary()` had already converted original values to vocabulary indices. These indices were then passed to `ServingModel` and returned during inference.
+
+The `_load_original_product_ids()` function existed to load actual product IDs from the TFT vocabulary file, but it was **only called for ScaNN models**, not for brute-force retrieval models.
+
+**Data Flow (Before Fix):**
+```
+Original product_id: "367073001001"
+    ↓ TFT Transform (compute_and_apply_vocabulary)
+Transformed: 214 (vocabulary index)
+    ↓ _precompute_candidate_embeddings()
+product_ids = [214, 341, 473, ...]  ← Vocabulary indices!
+    ↓ ServingModel.__init__(product_ids=product_ids)
+    ↓ ServingModel.serve() → tf.gather(self.product_ids, top_indices)
+Output: [214, 341, 473, ...]  ← Wrong!
+```
+
+**Fix (4 changes in `ml_platform/configs/services.py`):**
+
+1. **`_generate_brute_force_serve_fn()`** - Added `product_id_bq_type` tracking alongside `product_id_col` to support vocabulary lookup for brute-force models.
+
+2. **Retrieval `run_fn()`** - Changed `_load_original_product_ids()` from conditional (ScaNN only) to unconditional loading for all retrieval models.
+
+3. **Retrieval `ServingModel` initialization** - Changed from `product_ids=product_ids` (vocab indices) to `product_ids=original_product_ids` (actual IDs).
+
+4. **Multitask `run_fn()`** - Added same fix for multitask models.
+
+**Data Flow (After Fix):**
+```
+Original product_id: "367073001001"
+    ↓ TFT Transform (compute_and_apply_vocabulary)
+Transformed: 214 (vocabulary index)
+    ↓ _load_original_product_ids() reads TFT vocabulary file
+original_product_ids = ["367073001001", "383033001001", ...]  ← Actual IDs!
+    ↓ ServingModel.__init__(product_ids=original_product_ids)
+    ↓ ServingModel.serve() → tf.gather(self.product_ids, top_indices)
+Output: ["367073001001", "383033001001", ...]  ← Correct!
+```
+
+**Affected Models:** All retrieval and multitask models using brute-force retrieval algorithm (not ScaNN).
+
+**Resolution:** Re-train models after deploying the fix. Existing deployed models have the buggy code baked in.
 
 ---
 

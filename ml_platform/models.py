@@ -544,6 +544,11 @@ class ETLRun(models.Model):
 
     # Job details
     cloud_run_execution_id = models.CharField(max_length=255, blank=True, help_text="Cloud Run Job execution ID")
+    cloud_run_execution_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Cloud Run Job execution name (e.g., 'etl-runner-abc123') for log queries"
+    )
     dataflow_job_id = models.CharField(
         max_length=255,
         blank=True,

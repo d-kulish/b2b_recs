@@ -1100,6 +1100,7 @@ def run_status(request, run_id):
             'bytes_processed': etl_run.bytes_processed,
             'error_message': etl_run.error_message,
             'cloud_run_execution_id': etl_run.cloud_run_execution_id,
+            'cloud_run_execution_name': etl_run.cloud_run_execution_name,
             'dataflow_job_id': etl_run.dataflow_job_id if etl_run.dataflow_job_id else None,
             'logs_url': etl_run.logs_url,
             # Timing breakdown
@@ -1148,6 +1149,40 @@ def run_status(request, run_id):
             'status': 'error',
             'message': str(e),
         }, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def run_logs(request, run_id):
+    """
+    Fetch Cloud Run Job logs for an ETL run.
+
+    Returns logs from Cloud Logging, queried by execution_name if available,
+    or by timestamp range as fallback.
+
+    Query params:
+        limit: Maximum number of log entries (default: 100)
+    """
+    from ml_platform.etl.etl_logs_service import EtlLogsService
+
+    try:
+        etl_run = get_object_or_404(ETLRun, id=run_id)
+
+        # Get limit from query params
+        limit = int(request.GET.get('limit', 100))
+
+        # Fetch logs using the service
+        service = EtlLogsService()
+        result = service.get_logs(etl_run, limit=limit)
+
+        return JsonResponse(result)
+
+    except Exception as e:
+        logger.exception(f"Error fetching logs for ETL run {run_id}: {e}")
+        return JsonResponse({
+            'available': False,
+            'message': f"Failed to fetch logs: {str(e)}"
+        }, status=500)
 
 
 # ============================================================================
@@ -2348,13 +2383,28 @@ def trigger_now(request, data_source_id):
 
             operation = client.run_job(request=exec_request)
 
-            # Update ETL run with operation name (execution ID will be populated by ETL runner)
-            # Note: operation.result() would block until completion, so we store operation name instead
+            # Extract operation name and execution name for logging/tracking
+            # Note: operation.result() would block until completion, so we extract from metadata
             operation_name = None
+            execution_name = None
+
             if hasattr(operation, 'operation') and hasattr(operation.operation, 'name'):
                 operation_name = operation.operation.name
 
+            # Extract execution name from operation metadata
+            # The metadata contains the Execution resource being created
+            try:
+                if hasattr(operation, 'metadata') and operation.metadata:
+                    # metadata.name format: projects/{project}/locations/{loc}/jobs/{job}/executions/{exec_name}
+                    metadata_name = getattr(operation.metadata, 'name', '')
+                    if metadata_name and '/executions/' in metadata_name:
+                        execution_name = metadata_name.split('/executions/')[-1]
+                        logger.info(f"Extracted execution_name from metadata: {execution_name}")
+            except Exception as meta_err:
+                logger.warning(f"Could not extract execution_name from metadata: {meta_err}")
+
             etl_run.cloud_run_execution_id = operation_name or 'triggered'
+            etl_run.cloud_run_execution_name = execution_name or ''
             etl_run.status = 'running'
             etl_run.save()
 
@@ -2362,7 +2412,8 @@ def trigger_now(request, data_source_id):
                 'status': 'success',
                 'message': f'ETL run triggered for "{data_source.name}"',
                 'run_id': etl_run.id,
-                'operation_name': operation_name
+                'operation_name': operation_name,
+                'execution_name': execution_name
             })
 
         except Exception as e:

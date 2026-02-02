@@ -574,6 +574,34 @@
                         <p id="runDetailsErrorMessage" class="text-sm text-red-700 font-mono whitespace-pre-wrap break-words"></p>
                     </div>
                 </div>
+
+                <!-- Logs Section -->
+                <div id="runDetailsLogsSection">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-semibold text-gray-500 uppercase">Logs</h4>
+                        <button id="runDetailsLoadLogsBtn" onclick="loadRunLogs()" class="text-xs px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors">
+                            <i class="fas fa-sync-alt mr-1"></i>
+                            Load Logs
+                        </button>
+                    </div>
+                    <div id="runDetailsLogsContainer" class="bg-gray-900 rounded-lg p-3 max-h-48 overflow-y-auto">
+                        <div id="runDetailsLogsEmpty" class="text-center py-4 text-gray-500">
+                            <i class="fas fa-file-alt text-2xl mb-2 text-gray-600"></i>
+                            <p class="text-sm">Click "Load Logs" to fetch recent log entries</p>
+                        </div>
+                        <div id="runDetailsLogsLoading" class="hidden text-center py-4">
+                            <i class="fas fa-spinner fa-spin text-xl text-indigo-400"></i>
+                            <p class="text-sm text-gray-400 mt-2">Fetching logs...</p>
+                        </div>
+                        <div id="runDetailsLogsContent" class="hidden font-mono text-xs space-y-1">
+                            <!-- Logs will be populated here -->
+                        </div>
+                        <div id="runDetailsLogsError" class="hidden text-center py-4 text-yellow-500">
+                            <i class="fas fa-exclamation-triangle text-xl mb-2"></i>
+                            <p id="runDetailsLogsErrorMsg" class="text-sm"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -4241,7 +4269,13 @@ async function deleteSource(sourceId) {
     }
 }
 
+// Store current run ID for logs fetching
+let currentRunDetailsId = null;
+
 function viewRunDetails(runId) {
+    // Store run ID for logs fetching
+    currentRunDetailsId = runId;
+
     // Show modal with loading state
     const modal = document.getElementById('runDetailsModal');
     const loadingDiv = document.getElementById('runDetailsLoading');
@@ -4254,6 +4288,13 @@ function viewRunDetails(runId) {
     document.getElementById('runDetailsSubtitle').textContent = 'Loading...';
     document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin text-gray-500"></i>';
     document.getElementById('runDetailsStatusIcon').className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-100';
+
+    // Reset logs section
+    document.getElementById('runDetailsLogsEmpty').classList.remove('hidden');
+    document.getElementById('runDetailsLogsLoading').classList.add('hidden');
+    document.getElementById('runDetailsLogsContent').classList.add('hidden');
+    document.getElementById('runDetailsLogsError').classList.add('hidden');
+    document.getElementById('runDetailsLogsContent').innerHTML = '';
 
     // Show modal
     modal.classList.remove('hidden');
@@ -4355,6 +4396,84 @@ function populateRunDetailsModal(data) {
 
 function closeRunDetailsModal() {
     document.getElementById('runDetailsModal').classList.add('hidden');
+    currentRunDetailsId = null;
+}
+
+function loadRunLogs() {
+    if (!currentRunDetailsId) {
+        console.error('No run ID set for logs fetching');
+        return;
+    }
+
+    const emptyDiv = document.getElementById('runDetailsLogsEmpty');
+    const loadingDiv = document.getElementById('runDetailsLogsLoading');
+    const contentDiv = document.getElementById('runDetailsLogsContent');
+    const errorDiv = document.getElementById('runDetailsLogsError');
+    const loadBtn = document.getElementById('runDetailsLoadLogsBtn');
+
+    // Show loading state
+    emptyDiv.classList.add('hidden');
+    contentDiv.classList.add('hidden');
+    errorDiv.classList.add('hidden');
+    loadingDiv.classList.remove('hidden');
+    loadBtn.disabled = true;
+
+    // Fetch logs from API
+    fetch(`/api/etl/runs/${currentRunDetailsId}/logs/`)
+        .then(response => response.json())
+        .then(data => {
+            loadingDiv.classList.add('hidden');
+            loadBtn.disabled = false;
+
+            if (data.available && data.logs && data.logs.length > 0) {
+                // Render logs
+                contentDiv.innerHTML = data.logs.map(log => {
+                    const severityClass = getSeverityClass(log.severity);
+                    return `<div class="flex gap-2 py-0.5 border-b border-gray-800 last:border-0">
+                        <span class="text-gray-500 flex-shrink-0">${escapeHtml(log.timestamp)}</span>
+                        <span class="${severityClass} flex-shrink-0 w-16">${escapeHtml(log.severity)}</span>
+                        <span class="text-gray-300 break-all">${escapeHtml(log.message)}</span>
+                    </div>`;
+                }).join('');
+                contentDiv.classList.remove('hidden');
+
+                // Show note if using timestamp range fallback
+                if (data.note) {
+                    const noteHtml = `<div class="text-yellow-500 text-xs mb-2 pb-2 border-b border-gray-700">
+                        <i class="fas fa-info-circle mr-1"></i>${escapeHtml(data.note)}
+                    </div>`;
+                    contentDiv.innerHTML = noteHtml + contentDiv.innerHTML;
+                }
+            } else {
+                // Show error/empty message
+                document.getElementById('runDetailsLogsErrorMsg').textContent = data.message || 'No logs available';
+                errorDiv.classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            loadingDiv.classList.add('hidden');
+            loadBtn.disabled = false;
+            document.getElementById('runDetailsLogsErrorMsg').textContent = `Failed to fetch logs: ${error}`;
+            errorDiv.classList.remove('hidden');
+        });
+}
+
+function getSeverityClass(severity) {
+    switch (severity) {
+        case 'ERROR':
+        case 'CRITICAL':
+        case 'ALERT':
+        case 'EMERGENCY':
+            return 'text-red-400';
+        case 'WARNING':
+            return 'text-yellow-400';
+        case 'INFO':
+            return 'text-blue-400';
+        case 'DEBUG':
+            return 'text-gray-500';
+        default:
+            return 'text-gray-400';
+    }
 }
 
 // Helper functions for formatting

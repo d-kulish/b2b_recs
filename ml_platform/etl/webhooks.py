@@ -84,10 +84,34 @@ def scheduler_webhook(request, data_source_id):
             # Execute the job
             operation = client.run_job(request=exec_request)
 
+            # Extract operation name and execution name for logging/tracking
+            operation_name = None
+            execution_name = None
+
+            if hasattr(operation, 'operation') and hasattr(operation.operation, 'name'):
+                operation_name = operation.operation.name
+
+            # Extract execution name from operation metadata
+            try:
+                if hasattr(operation, 'metadata') and operation.metadata:
+                    metadata_name = getattr(operation.metadata, 'name', '')
+                    if metadata_name and '/executions/' in metadata_name:
+                        execution_name = metadata_name.split('/executions/')[-1]
+                        logger.info(f"Scheduled ETL: extracted execution_name: {execution_name}")
+            except Exception as meta_err:
+                logger.warning(f"Could not extract execution_name from metadata: {meta_err}")
+
+            # Update ETL run with execution details
+            etl_run.cloud_run_execution_id = operation_name or 'triggered'
+            etl_run.cloud_run_execution_name = execution_name or ''
+            etl_run.status = 'running'
+            etl_run.save()
+
             return JsonResponse({
                 'status': 'success',
                 'message': 'ETL job triggered successfully',
-                'etl_run_id': etl_run.id
+                'etl_run_id': etl_run.id,
+                'execution_name': execution_name
             })
 
         except Exception as e:

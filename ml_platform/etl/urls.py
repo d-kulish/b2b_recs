@@ -30,6 +30,7 @@ urlpatterns = [
     # === ETL RUN APIs ===
     path('api/etl/runs/<int:run_id>/status/', api.run_status, name='api_etl_run_status'),
     path('api/etl/runs/<int:run_id>/update/', api.run_update, name='api_etl_run_update'),
+    path('api/etl/runs/<int:run_id>/logs/', api.run_logs, name='api_etl_run_logs'),
 
     # === ETL RUNNER APIs (Cloud Run Job interaction) ===
     path('api/etl/job-config/<int:data_source_id>/', api.job_config, name='api_etl_job_config'),

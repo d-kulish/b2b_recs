@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **ETL (Extract, Transform, Load)** domain in the ML Platform. The ETL domain manages data ingestion from external sources into BigQuery for model training.
 
-**Last Updated**: 2026-02-02 (v9 - Added ETL Run Cards with 4-stage pipeline and error classification)
+**Last Updated**: 2026-02-02 (v10 - Added in-app logs viewer for ETL runs)
 
 ---
 
@@ -2242,6 +2242,117 @@ run_data = {
     'loading_started_at': run.loading_started_at.isoformat() if run.loading_started_at else None,
     'loading_completed_at': run.loading_completed_at.isoformat() if run.loading_completed_at else None,
 }
+```
+
+#### ETL Run Logs
+
+The View modal includes a "Load Logs" feature that fetches Cloud Run Job logs from Cloud Logging. This allows users to debug ETL runs without needing direct access to GCP Console.
+
+**Log Query Strategy:**
+
+1. **Primary (by execution_name):** Most precise, uses the Cloud Run execution name
+   ```
+   resource.type = "cloud_run_job"
+   resource.labels.job_name = "etl-runner"
+   labels."run.googleapis.com/execution_name" = "{execution_name}"
+   resource.labels.location = "europe-central2"
+   severity >= DEFAULT
+   ```
+
+2. **Fallback (by timestamp range):** Used when execution_name is not available
+   ```
+   resource.type = "cloud_run_job"
+   resource.labels.job_name = "etl-runner"
+   resource.labels.location = "europe-central2"
+   timestamp >= "{started_at - 1 minute}"
+   timestamp <= "{completed_at + 5 minutes}"
+   severity >= DEFAULT
+   ```
+
+**Database Schema:**
+
+```python
+class ETLRun(models.Model):
+    # ... existing fields ...
+
+    # For log queries
+    cloud_run_execution_name = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Cloud Run Job execution name (e.g., 'etl-runner-abc123') for log queries"
+    )
+```
+
+**Service Implementation:**
+
+```python
+# ml_platform/etl/etl_logs_service.py
+
+class EtlLogsService:
+    """Fetches Cloud Run Job logs from Cloud Logging."""
+
+    def get_logs(self, etl_run, limit=100) -> Dict:
+        """
+        Returns:
+            {
+                'available': bool,
+                'logs': [{'timestamp': str, 'severity': str, 'message': str}, ...],
+                'count': int,
+                'source': 'execution' | 'timestamp_range',
+                'message': str  # Only if available=False
+            }
+        """
+```
+
+**API Endpoint:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/etl/runs/{run_id}/logs/` | Fetch logs for an ETL run |
+
+**Query Parameters:**
+- `limit` (optional): Maximum number of log entries (default: 100)
+
+**Response Example:**
+```json
+{
+    "available": true,
+    "logs": [
+        {"timestamp": "2026-02-02 14:30:15", "severity": "INFO", "message": "ETL RUN STARTED"},
+        {"timestamp": "2026-02-02 14:30:16", "severity": "INFO", "message": "PHASE: INIT completed"},
+        {"timestamp": "2026-02-02 14:30:17", "severity": "ERROR", "message": "ConfigurationError: Table not found"}
+    ],
+    "count": 3,
+    "source": "execution"
+}
+```
+
+**Frontend UI:**
+
+The View modal includes a logs section with:
+- "Load Logs" button to fetch logs on demand
+- Dark terminal-style display
+- Severity color coding:
+  - ERROR/CRITICAL/ALERT/EMERGENCY → Red
+  - WARNING → Yellow
+  - INFO → Blue
+  - DEBUG/DEFAULT → Gray
+
+**Execution Name Capture:**
+
+When an ETL job is triggered (manual or scheduled), the execution name is extracted from the Cloud Run Jobs API response:
+
+```python
+# ml_platform/etl/api.py - run_source()
+operation = client.run_job(request=exec_request)
+
+# Extract execution name from operation metadata
+if hasattr(operation, 'metadata') and operation.metadata:
+    metadata_name = getattr(operation.metadata, 'name', '')
+    if metadata_name and '/executions/' in metadata_name:
+        execution_name = metadata_name.split('/executions/')[-1]
+
+etl_run.cloud_run_execution_name = execution_name or ''
 ```
 
 ---

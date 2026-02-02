@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **ETL (Extract, Transform, Load)** domain in the ML Platform. The ETL domain manages data ingestion from external sources into BigQuery for model training.
 
-**Last Updated**: 2025-12-27 (v8 - Added Issue #6: CSV column mapping and TIMESTAMP parsing fixes)
+**Last Updated**: 2026-02-02 (v9 - Added ETL Run Cards with 4-stage pipeline and error classification)
 
 ---
 
@@ -1903,6 +1903,349 @@ Clicking "View Details" opens a modal with comprehensive run information:
 
 ---
 
+### ETL Run Cards
+
+The Recent Runs section displays ETL runs as **card-based tablets** providing at-a-glance status, metrics, and a 4-stage progress bar.
+
+#### Card Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ┌─────────────────────────────────────┐  ┌─────────────────────────────────┐│
+│ │ Daily Transactions               #567│  │ Weekly Products              #566││
+│ │ 🐘 Prod PostgreSQL                   │  │ ☁️ GCS Data Lake                 ││
+│ │ ✓ Completed    Dec 26, 9:00 AM  37s  │  │ ✓ Completed    Dec 25, 8:00  145s││
+│ │                                      │  │                                  ││
+│ │ ┌──────────┬──────────┬──────────┐  │  │ ┌──────────┬──────────┬────────┐││
+│ │ │  ROWS    │  BYTES   │  TABLES  │  │  │ │  ROWS    │  BYTES   │ TABLES │││
+│ │ │  15,420  │  2.4 MB  │    1     │  │  │ │  5,230   │  892 KB  │   1    │││
+│ │ └──────────┴──────────┴──────────┘  │  │ └──────────┴──────────┴────────┘││
+│ │                                      │  │                                  ││
+│ │ ┌────────┬────────┬────────┬──────┐ │  │ ┌────────┬────────┬──────┬─────┐││
+│ │ │  INIT  │VALIDATE│EXTRACT │ LOAD │ │  │ │  INIT  │VALIDATE│EXTRACT│LOAD│││
+│ │ │████████│████████│████████│██████│ │  │ │████████│████████│██████│████│││
+│ │ └────────┴────────┴────────┴──────┘ │  │ └────────┴────────┴──────┴─────┘││
+│ └─────────────────────────────────────┘  └─────────────────────────────────┘│
+│                                                                              │
+│ ┌─────────────────────────────────────┐  ┌─────────────────────────────────┐│
+│ │ Hourly Inventory                 #565│  │ Monthly Report              #564││
+│ │ 🐘 Prod PostgreSQL                   │  │ ☁️ BigQuery                      ││
+│ │ ✗ Failed       Dec 26, 2:30 PM  12s  │  │ ⊘ Cancelled  Dec 24, 6:00 AM  — ││
+│ │                                      │  │                                  ││
+│ │ ┌──────────┬──────────┬──────────┐  │  │ ┌──────────┬──────────┬────────┐││
+│ │ │  ROWS    │  BYTES   │  TABLES  │  │  │ │  ROWS    │  BYTES   │ TABLES │││
+│ │ │    0     │    —     │    0     │  │  │ │    0     │    —     │   0    │││
+│ │ └──────────┴──────────┴──────────┘  │  │ └──────────┴──────────┴────────┘││
+│ │                                      │  │                                  ││
+│ │ ┌────────┬────────┬────────┬──────┐ │  │ ┌────────┬────────┬──────┬─────┐││
+│ │ │  INIT  │VALIDATE│EXTRACT │ LOAD │ │  │ │  INIT  │VALIDATE│EXTRACT│LOAD│││
+│ │ │████████│████████│▓▓FAIL▓▓│░░░░░░│ │  │ │████████│░░░░░░░░│░░░░░░│░░░░│││
+│ │ └────────┴────────┴────────┴──────┘ │  │ └────────┴────────┴──────┴─────┘││
+│ └─────────────────────────────────────┘  └─────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Legend:
+████████ = Completed (purple gradient)
+▓▓▓▓▓▓▓▓ = Failed (red)
+░░░░░░░░ = Not reached (light gray)
+▒▒▒▒▒▒▒▒ = Running (animated pulse)
+```
+
+#### 4-Stage Pipeline Architecture
+
+ETL runs follow a 4-stage pipeline model for accurate progress tracking and error localization:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         ETL 4-Stage Pipeline                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌──────────┐    ┌───────────┐    ┌───────────┐    ┌──────────┐           │
+│   │   INIT   │───▶│  VALIDATE │───▶│  EXTRACT  │───▶│   LOAD   │           │
+│   │          │    │           │    │           │    │          │           │
+│   │ Config   │    │ BQ Table  │    │ Source    │    │ BigQuery │           │
+│   │ Loading  │    │ Exists?   │    │ Query     │    │ Write    │           │
+│   └──────────┘    └───────────┘    └───────────┘    └──────────┘           │
+│        │               │                │                │                  │
+│        ▼               ▼                ▼                ▼                  │
+│   init_completed  validation_    extraction_       loading_                 │
+│   _at             completed_at   started/          started/                 │
+│                                  completed_at      completed_at             │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Stage Details:**
+
+| Stage | Description | Timestamp Fields | Typical Duration |
+|-------|-------------|------------------|------------------|
+| **INIT** | Load configuration, establish connections, validate job config | `init_completed_at` | <1s |
+| **VALIDATE** | Verify BigQuery destination table exists and is accessible | `validation_completed_at` | 1-2s |
+| **EXTRACT** | Pull data from source (database, files, API) | `extraction_started_at`, `extraction_completed_at` | Variable |
+| **LOAD** | Write data to BigQuery | `loading_started_at`, `loading_completed_at` | Variable |
+
+#### Error Type Classification
+
+When an ETL run fails, the system classifies the error to identify which stage failed:
+
+```python
+# Error type constants (etl_runner/utils/error_handling.py)
+ERROR_TYPE_INIT = 'init'           # Configuration, credentials, connection setup
+ERROR_TYPE_VALIDATION = 'validation'  # Table doesn't exist, schema mismatch
+ERROR_TYPE_EXTRACTION = 'extraction'  # Query failed, source unavailable
+ERROR_TYPE_LOAD = 'load'           # BigQuery write failed
+ERROR_TYPE_UNKNOWN = 'unknown'     # Unclassified errors
+```
+
+**Error Classification Logic:**
+
+| Error Pattern | Classified As | Examples |
+|---------------|---------------|----------|
+| `ConfigurationError` exception | `init` | Missing required config, invalid source type |
+| "credentials", "authentication" in message | `init` | Invalid password, expired token |
+| "not found", "does not exist" | `validation` | BQ table missing, collection not found |
+| "destination table does not exist" | `validation` | BQ table not created yet |
+| `ExtractionError` exception | `extraction` | Query timeout, source offline |
+| "query failed", "source unavailable" | `extraction` | Database connection lost |
+| `LoadError` exception | `load` | BQ insert failed, quota exceeded |
+| "bigquery write/insert failed" | `load` | Schema mismatch during load |
+
+**Database Schema:**
+
+```python
+class ETLRun(models.Model):
+    # ... existing fields ...
+
+    ERROR_TYPE_CHOICES = [
+        ('init', 'Initialization'),
+        ('validation', 'Validation'),
+        ('extraction', 'Extraction'),
+        ('load', 'Load'),
+        ('unknown', 'Unknown'),
+    ]
+
+    error_type = models.CharField(
+        max_length=20,
+        choices=ERROR_TYPE_CHOICES,
+        blank=True,
+        help_text="Type of error that caused failure (init, validation, extraction, load)"
+    )
+
+    # 4-stage pipeline timestamps
+    init_completed_at = models.DateTimeField(null=True, blank=True)
+    validation_completed_at = models.DateTimeField(null=True, blank=True)
+    extraction_started_at = models.DateTimeField(null=True, blank=True)
+    extraction_completed_at = models.DateTimeField(null=True, blank=True)
+    loading_started_at = models.DateTimeField(null=True, blank=True)
+    loading_completed_at = models.DateTimeField(null=True, blank=True)
+```
+
+#### Progress Bar Rendering Logic
+
+The progress bar uses timestamps and `error_type` to determine stage colors:
+
+```javascript
+// templates/ml_platform/model_etl.html - renderRunStagesBar()
+
+function renderRunStagesBar(run) {
+    // Initialize all stages as pending
+    let initStatus = 'pending';
+    let validateStatus = 'pending';
+    let extractStatus = 'pending';
+    let loadStatus = 'pending';
+
+    // Determine status from timestamps
+    if (run.init_completed_at) initStatus = 'completed';
+    if (run.validation_completed_at) validateStatus = 'completed';
+    if (run.extraction_started_at) {
+        extractStatus = run.extraction_completed_at ? 'completed' : 'running';
+    }
+    if (run.loading_started_at) {
+        loadStatus = run.loading_completed_at ? 'completed' : 'running';
+    }
+
+    // Handle failed runs using error_type
+    if (run.status === 'failed') {
+        const errorType = run.error_type || '';
+
+        if (errorType === 'init') {
+            initStatus = 'failed';
+            validateStatus = 'not-reached';
+            extractStatus = 'not-reached';
+            loadStatus = 'not-reached';
+        } else if (errorType === 'validation') {
+            validateStatus = 'failed';
+            extractStatus = 'not-reached';
+            loadStatus = 'not-reached';
+        } else if (errorType === 'extraction') {
+            extractStatus = 'failed';
+            loadStatus = 'not-reached';
+        } else if (errorType === 'load') {
+            loadStatus = 'failed';
+        }
+        // else: fallback to timestamp-based detection
+    }
+
+    return `
+        <div class="run-stages-bar">
+            <div class="run-stage-segment ${initStatus}">Init</div>
+            <div class="run-stage-segment ${validateStatus}">Validate</div>
+            <div class="run-stage-segment ${extractStatus}">Extract</div>
+            <div class="run-stage-segment ${loadStatus}">Load</div>
+        </div>
+    `;
+}
+```
+
+#### CSS Styling
+
+```css
+/* Progress Bar (4 stages: INIT → VALIDATE → EXTRACT → LOAD) */
+.run-stages-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #e5e7eb;
+}
+
+.run-stage-segment {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 500;
+    color: white;
+    text-transform: uppercase;
+}
+
+.run-stage-segment.completed {
+    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+}
+.run-stage-segment.running {
+    background: linear-gradient(90deg, #6366f1 0%, #818cf8 50%, #6366f1 100%);
+    background-size: 200% 100%;
+    animation: run-stage-pulse 1.5s ease-in-out infinite;
+}
+.run-stage-segment.failed {
+    background: #ef4444;
+}
+.run-stage-segment.pending {
+    background: #d1d5db;
+    color: #6b7280;
+}
+.run-stage-segment.not-reached {
+    background: #e5e7eb;
+    color: #9ca3af;
+}
+```
+
+#### ETL Runner Phase Reporting
+
+The ETL runner reports timestamps at each phase transition:
+
+```python
+# etl_runner/main.py
+
+class ETLRunner:
+    def _report_phase_timestamp(self, phase: str):
+        """Report a phase timestamp to Django API."""
+        if self.etl_run_id:
+            self.config.update_etl_run_status(
+                etl_run_id=self.etl_run_id,
+                status='running',
+                **{f'{phase}_at': True}
+            )
+
+    def run(self):
+        self._current_phase = 'init'
+
+        # PHASE 1: INIT
+        # (config loaded in __init__)
+        self._report_phase_timestamp('init_completed')
+        self._current_phase = 'validation'
+
+        # PHASE 2: VALIDATE
+        if not self.loader.verify_table_exists():
+            raise ConfigurationError("Destination table does not exist")
+        self._report_phase_timestamp('validation_completed')
+        self._current_phase = 'extraction'
+
+        # PHASE 3: EXTRACT
+        self._report_phase_timestamp('extraction_started')
+        # ... extraction logic ...
+        self._report_phase_timestamp('extraction_completed')
+        self._current_phase = 'load'
+
+        # PHASE 4: LOAD
+        self._report_phase_timestamp('loading_started')
+        # ... loading logic ...
+        self._report_phase_timestamp('loading_completed')
+```
+
+**Error Handling with Phase Context:**
+
+```python
+# On failure, error is classified based on current phase
+except Exception as e:
+    phase_to_error_type = {
+        'init': ERROR_TYPE_INIT,
+        'validation': ERROR_TYPE_VALIDATION,
+        'extraction': ERROR_TYPE_EXTRACTION,
+        'load': ERROR_TYPE_LOAD,
+    }
+    error_type = phase_to_error_type.get(self._current_phase)
+    handle_etl_error(e, self.config, self.etl_run_id, error_type=error_type)
+```
+
+#### Bytes Processed Tracking
+
+ETL runs now track `bytes_processed` for KPI display:
+
+```python
+# In counting_generator() for each load method:
+def counting_generator(gen):
+    for df in gen:
+        self.total_rows_extracted += len(df)
+        # Track bytes processed (DataFrame memory usage)
+        self.total_bytes_processed += df.memory_usage(deep=True).sum()
+        yield df
+
+# For file sources, also add file size:
+self.total_bytes_processed += file_metadata.get('file_size_bytes', 0)
+```
+
+#### JSON Response Structure
+
+The view includes all fields needed for card rendering:
+
+```python
+# ml_platform/etl/views.py - runs_json_list
+run_data = {
+    'id': run.id,
+    'status': run.status,
+    'error_type': run.error_type or '',  # For failed run coloring
+    'job_name': run.data_source.name,
+    'connection_name': run.data_source.connection.name,
+    'source_type': run.data_source.source_type,
+    'started_at': run.started_at.isoformat(),
+    'duration_seconds': run.get_duration_seconds(),
+    'rows_extracted': run.total_rows_extracted,
+    'rows_loaded': run.rows_loaded,
+    'bytes_processed': run.bytes_processed,
+    # 4-stage pipeline timestamps
+    'init_completed_at': run.init_completed_at.isoformat() if run.init_completed_at else None,
+    'validation_completed_at': run.validation_completed_at.isoformat() if run.validation_completed_at else None,
+    'extraction_started_at': run.extraction_started_at.isoformat() if run.extraction_started_at else None,
+    'extraction_completed_at': run.extraction_completed_at.isoformat() if run.extraction_completed_at else None,
+    'loading_started_at': run.loading_started_at.isoformat() if run.loading_started_at else None,
+    'loading_completed_at': run.loading_completed_at.isoformat() if run.loading_completed_at else None,
+}
+```
+
+---
+
 ## Known Issues and Fixes
 
 This section documents bugs discovered during ETL system usage and their fixes.
@@ -2234,6 +2577,7 @@ print(f'selected_columns: {t.selected_columns}')
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v9 | 2026-02-02 | Added ETL Run Cards section with 4-stage pipeline (INIT→VALIDATE→EXTRACT→LOAD), error type classification, and bytes tracking |
 | v8 | 2025-12-27 | Added Issue #6 (CSV column mapping and TIMESTAMP parsing fixes for Dataflow) |
 | v7 | 2025-12-26 | Added Issue #4 (1GB schema limit) and Issue #5 (Dataflow OOM fix with native Beam I/O) |
 | v6 | 2025-12-26 | Added Known Issues and Fixes section (Dataflow row count, status tracking) |

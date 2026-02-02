@@ -2111,7 +2111,7 @@
 .run-card-metric-value { font-size: 13px; font-weight: 600; color: #1f2937; }
 .run-card-metric-value.empty { color: #9ca3af; }
 
-/* Progress Bar (2 stages: EXTRACT, LOAD) */
+/* Progress Bar (4 stages: INIT → VALIDATE → EXTRACT → LOAD) */
 .run-card-stages { width: 100%; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f3f4f6; }
 
 .run-stages-bar {
@@ -2128,7 +2128,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 500;
     color: white;
     text-transform: uppercase;
@@ -2140,6 +2140,7 @@
 .run-stage-segment.running { background: linear-gradient(90deg, #6366f1 0%, #818cf8 50%, #6366f1 100%); background-size: 200% 100%; animation: run-stage-pulse 1.5s ease-in-out infinite; }
 .run-stage-segment.failed { background: #ef4444; }
 .run-stage-segment.pending { background: #d1d5db; color: #6b7280; }
+.run-stage-segment.not-reached { background: #e5e7eb; color: #9ca3af; }
 
 @keyframes run-stage-pulse {
     0%, 100% { background-position: 0% 50%; }
@@ -3252,27 +3253,98 @@ function renderRunCard(run) {
 }
 
 function renderRunStagesBar(run) {
-    // Determine stage statuses based on timestamps
+    // 4-stage pipeline: INIT → VALIDATE → EXTRACT → LOAD
+    // Determine stage statuses based on timestamps and error_type
+    let initStatus = 'pending';
+    let validateStatus = 'pending';
     let extractStatus = 'pending';
     let loadStatus = 'pending';
 
+    // INIT stage: completed if init_completed_at is set
+    if (run.init_completed_at) {
+        initStatus = 'completed';
+    }
+
+    // VALIDATE stage: completed if validation_completed_at is set
+    if (run.validation_completed_at) {
+        validateStatus = 'completed';
+    }
+
+    // EXTRACT stage: determine from timestamps
     if (run.extraction_started_at) {
         extractStatus = run.extraction_completed_at ? 'completed' : 'running';
     }
+
+    // LOAD stage: determine from timestamps
     if (run.loading_started_at) {
         loadStatus = run.loading_completed_at ? 'completed' : 'running';
     }
+
+    // For running jobs, mark stages as 'running' appropriately
+    if (run.status === 'running') {
+        // Find the current running stage
+        if (loadStatus !== 'completed' && loadStatus !== 'running' && extractStatus === 'completed') {
+            loadStatus = 'running';
+        } else if (extractStatus !== 'completed' && extractStatus !== 'running' && validateStatus === 'completed') {
+            extractStatus = 'running';
+        } else if (validateStatus !== 'completed' && validateStatus !== 'running' && initStatus === 'completed') {
+            validateStatus = 'running';
+        } else if (initStatus !== 'completed') {
+            initStatus = 'running';
+        }
+    }
+
+    // Handle failed runs - use error_type to mark the correct stage as failed
     if (run.status === 'failed') {
-        // If failed, mark the running stage as failed
-        if (extractStatus === 'running') extractStatus = 'failed';
-        else if (loadStatus === 'running') loadStatus = 'failed';
-        else if (loadStatus === 'pending' && extractStatus === 'completed') loadStatus = 'failed';
-        else if (extractStatus === 'pending') extractStatus = 'failed';
+        const errorType = run.error_type || '';
+
+        // Mark stages after the failed one as "not-reached"
+        // Mark the failed stage based on error_type
+        if (errorType === 'init') {
+            initStatus = 'failed';
+            validateStatus = 'not-reached';
+            extractStatus = 'not-reached';
+            loadStatus = 'not-reached';
+        } else if (errorType === 'validation') {
+            initStatus = initStatus === 'completed' ? 'completed' : 'failed';
+            validateStatus = 'failed';
+            extractStatus = 'not-reached';
+            loadStatus = 'not-reached';
+        } else if (errorType === 'extraction') {
+            validateStatus = validateStatus === 'completed' ? 'completed' : 'pending';
+            extractStatus = 'failed';
+            loadStatus = 'not-reached';
+        } else if (errorType === 'load') {
+            extractStatus = extractStatus === 'completed' ? 'completed' : 'pending';
+            loadStatus = 'failed';
+        } else {
+            // Unknown error type - use timestamp-based detection (legacy fallback)
+            if (extractStatus === 'running') extractStatus = 'failed';
+            else if (loadStatus === 'running') loadStatus = 'failed';
+            else if (loadStatus === 'pending' && extractStatus === 'completed') loadStatus = 'failed';
+            else if (extractStatus === 'pending' && validateStatus === 'completed') extractStatus = 'failed';
+            else if (validateStatus === 'pending' && initStatus === 'completed') validateStatus = 'failed';
+            else if (initStatus === 'pending') initStatus = 'failed';
+
+            // Mark subsequent stages as not-reached
+            if (initStatus === 'failed') {
+                validateStatus = 'not-reached';
+                extractStatus = 'not-reached';
+                loadStatus = 'not-reached';
+            } else if (validateStatus === 'failed') {
+                extractStatus = 'not-reached';
+                loadStatus = 'not-reached';
+            } else if (extractStatus === 'failed') {
+                loadStatus = 'not-reached';
+            }
+        }
     }
 
     return `
         <div class="run-card-stages">
             <div class="run-stages-bar">
+                <div class="run-stage-segment ${initStatus}">Init</div>
+                <div class="run-stage-segment ${validateStatus}">Validate</div>
                 <div class="run-stage-segment ${extractStatus}">Extract</div>
                 <div class="run-stage-segment ${loadStatus}">Load</div>
             </div>

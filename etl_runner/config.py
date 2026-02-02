@@ -118,8 +118,15 @@ class Config:
                 - rows_extracted: Number of rows extracted
                 - rows_loaded: Number of rows loaded
                 - error_message: Error message if failed
+                - error_type: Type of error (init, validation, extraction, load, unknown)
                 - duration_seconds: Duration in seconds
                 - dataflow_job_id: Dataflow job ID for status tracking
+                - init_completed_at: Flag to mark init phase completed
+                - validation_completed_at: Flag to mark validation phase completed
+                - extraction_started_at: Flag to mark extraction started
+                - extraction_completed_at: Flag to mark extraction completed
+                - loading_started_at: Flag to mark loading started
+                - loading_completed_at: Flag to mark loading completed
 
         Returns:
             True if update successful, False otherwise

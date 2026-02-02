@@ -2131,7 +2131,15 @@ def run_update(request, run_id):
         if 'dataflow_job_id' in data:
             etl_run.dataflow_job_id = data['dataflow_job_id']
 
-        # Update phase timestamps if provided
+        # Update error_type if provided (for failed runs)
+        if 'error_type' in data:
+            etl_run.error_type = data['error_type']
+
+        # Update phase timestamps if provided (4-stage pipeline: INIT → VALIDATE → EXTRACT → LOAD)
+        if 'init_completed_at' in data:
+            etl_run.init_completed_at = timezone.now()
+        if 'validation_completed_at' in data:
+            etl_run.validation_completed_at = timezone.now()
         if 'extraction_started_at' in data:
             etl_run.extraction_started_at = timezone.now()
         if 'extraction_completed_at' in data:

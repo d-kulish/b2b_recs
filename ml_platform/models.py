@@ -513,6 +513,14 @@ class ETLRun(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
+    ERROR_TYPE_CHOICES = [
+        ('init', 'Initialization'),
+        ('validation', 'Validation'),
+        ('extraction', 'Extraction'),
+        ('load', 'Load'),
+        ('unknown', 'Unknown'),
+    ]
+
     etl_config = models.ForeignKey(ETLConfiguration, on_delete=models.CASCADE, related_name='runs')
     model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, related_name='etl_runs')
     data_source = models.ForeignKey(
@@ -525,6 +533,12 @@ class ETLRun(models.Model):
     )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    error_type = models.CharField(
+        max_length=20,
+        choices=ERROR_TYPE_CHOICES,
+        blank=True,
+        help_text="Type of error that caused failure (init, validation, extraction, load)"
+    )
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -536,7 +550,9 @@ class ETLRun(models.Model):
         help_text="Dataflow job ID for large-scale ETL runs (used for accurate status tracking)"
     )
 
-    # Detailed progress tracking (Phase 3)
+    # Detailed progress tracking (4-stage pipeline: INIT → VALIDATE → EXTRACT → LOAD)
+    init_completed_at = models.DateTimeField(null=True, blank=True, help_text="When initialization/config loading completed")
+    validation_completed_at = models.DateTimeField(null=True, blank=True, help_text="When BigQuery table validation completed")
     extraction_started_at = models.DateTimeField(null=True, blank=True, help_text="When data extraction started")
     extraction_completed_at = models.DateTimeField(null=True, blank=True, help_text="When data extraction completed")
     loading_started_at = models.DateTimeField(null=True, blank=True, help_text="When data loading started")

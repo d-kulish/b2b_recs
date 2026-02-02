@@ -26,7 +26,11 @@ from utils.error_handling import (
     validate_job_config,
     ExtractionError,
     LoadError,
-    ConfigurationError
+    ConfigurationError,
+    ERROR_TYPE_INIT,
+    ERROR_TYPE_VALIDATION,
+    ERROR_TYPE_EXTRACTION,
+    ERROR_TYPE_LOAD,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,9 +66,11 @@ class ETLRunner:
         # Metrics
         self.total_rows_extracted = 0
         self.total_rows_loaded = 0
+        self.total_bytes_processed = 0  # Track bytes for KPI display
         self.start_time = None
         self.end_time = None
         self.max_extracted_timestamp = None  # Track max timestamp for transactional loads
+        self._current_phase = 'init'  # Track current phase for error classification
 
     def _create_extractor(self):
         """
@@ -565,11 +571,18 @@ class ETLRunner:
                 batch_size=self.config.batch_size
             )
 
-            # Count extracted rows (generator wrapper)
+            # Count extracted rows and track bytes (generator wrapper)
             def counting_generator(gen):
                 for df in gen:
                     self.total_rows_extracted += len(df)
+                    # Track bytes processed (memory usage of DataFrame)
+                    self.total_bytes_processed += df.memory_usage(deep=True).sum()
                     yield df
+
+            # Mark extraction complete, loading starting
+            self._report_phase_timestamp('extraction_completed')
+            self._current_phase = 'load'
+            self._report_phase_timestamp('loading_started')
 
             # Load to BigQuery
             logger.info("Starting data load to BigQuery...")
@@ -628,12 +641,14 @@ class ETLRunner:
                 batch_size=self.config.batch_size
             )
 
-            # Count extracted rows and track max timestamp (generator wrapper)
+            # Count extracted rows, track max timestamp and bytes (generator wrapper)
             timestamp_col = self.job_config.get('timestamp_column')
 
             def counting_generator(gen):
                 for df in gen:
                     self.total_rows_extracted += len(df)
+                    # Track bytes processed (memory usage of DataFrame)
+                    self.total_bytes_processed += df.memory_usage(deep=True).sum()
                     # Track max timestamp for updating last_sync_value
                     if timestamp_col and timestamp_col in df.columns:
                         batch_max = df[timestamp_col].max()
@@ -641,6 +656,11 @@ class ETLRunner:
                             if self.max_extracted_timestamp is None or batch_max > self.max_extracted_timestamp:
                                 self.max_extracted_timestamp = batch_max
                     yield df
+
+            # Mark extraction complete, loading starting
+            self._report_phase_timestamp('extraction_completed')
+            self._current_phase = 'load'
+            self._report_phase_timestamp('loading_started')
 
             # Load to BigQuery
             logger.info("Starting incremental data load to BigQuery...")
@@ -706,6 +726,9 @@ class ETLRunner:
                 try:
                     df = self.extractor.extract_file(file_path)
                     self.total_rows_extracted += len(df)
+                    # Track bytes processed (memory usage + file size)
+                    self.total_bytes_processed += df.memory_usage(deep=True).sum()
+                    self.total_bytes_processed += file_metadata.get('file_size_bytes', 0)
                     all_dataframes.append(df)
                     files_processed.append(file_metadata)
 
@@ -726,6 +749,11 @@ class ETLRunner:
 
             # Rename columns to match BigQuery schema (original -> sanitized names)
             combined_df = self._rename_dataframe_columns(combined_df)
+
+            # Mark extraction complete, loading starting
+            self._report_phase_timestamp('extraction_completed')
+            self._current_phase = 'load'
+            self._report_phase_timestamp('loading_started')
 
             # Load to BigQuery (full replacement)
             logger.info("Starting data load to BigQuery...")
@@ -816,13 +844,24 @@ class ETLRunner:
 
             # Process files
             files_processed = []
+            first_file = True
 
             for df, file_metadata in file_generator:
                 self.total_rows_extracted += len(df)
+                # Track bytes processed
+                self.total_bytes_processed += df.memory_usage(deep=True).sum()
+                self.total_bytes_processed += file_metadata.get('file_size_bytes', 0)
 
                 logger.info(
                     f"Extracted {len(df):,} rows from {file_metadata['file_path']}"
                 )
+
+                # Mark extraction complete after first file (since we're streaming)
+                if first_file:
+                    self._report_phase_timestamp('extraction_completed')
+                    self._current_phase = 'load'
+                    self._report_phase_timestamp('loading_started')
+                    first_file = False
 
                 # Rename columns to match BigQuery schema (original -> sanitized names)
                 df = self._rename_dataframe_columns(df)
@@ -849,6 +888,10 @@ class ETLRunner:
 
             if not files_processed:
                 logger.info("No new or changed files to process")
+                # Mark all phases as completed even though no work was done
+                self._report_phase_timestamp('extraction_completed')
+                self._current_phase = 'load'
+                self._report_phase_timestamp('loading_started')
                 return {'total_rows': 0, 'batches_loaded': 0, 'files_processed': 0}
 
             logger.info(
@@ -1203,14 +1246,32 @@ class ETLRunner:
             logger.warning(f"Could not get BigQuery row count: {e}")
             return 0
 
+    def _report_phase_timestamp(self, phase: str):
+        """
+        Report a phase timestamp to Django API.
+
+        Args:
+            phase: Phase name (init_completed, validation_completed, extraction_started,
+                   extraction_completed, loading_started, loading_completed)
+        """
+        if self.etl_run_id:
+            self.config.update_etl_run_status(
+                etl_run_id=self.etl_run_id,
+                status='running',
+                **{f'{phase}_at': True}
+            )
+
     def run(self):
         """
         Execute ETL job based on load type.
+
+        4-stage pipeline: INIT → VALIDATE → EXTRACT → LOAD
 
         Returns:
             Dict with execution results
         """
         self.start_time = datetime.utcnow()
+        self._current_phase = 'init'
 
         logger.info("=" * 80)
         logger.info("ETL RUN STARTED")
@@ -1222,12 +1283,26 @@ class ETLRunner:
         logger.info("=" * 80)
 
         try:
-            # Verify BigQuery table exists
+            # =========================================================================
+            # PHASE 1: INIT - Configuration loaded, connections established
+            # =========================================================================
+            # (Already completed in __init__, report timestamp now)
+            logger.info("PHASE: INIT completed - configuration loaded")
+            self._report_phase_timestamp('init_completed')
+            self._current_phase = 'validation'
+
+            # =========================================================================
+            # PHASE 2: VALIDATE - Verify BigQuery table exists
+            # =========================================================================
+            logger.info("PHASE: VALIDATE - verifying BigQuery destination table")
             if not self.loader.verify_table_exists():
                 raise ConfigurationError(
                     f"Destination table does not exist: {self.loader.table_ref}. "
                     f"Please create the table first using the ETL wizard."
                 )
+            logger.info("PHASE: VALIDATE completed - destination table verified")
+            self._report_phase_timestamp('validation_completed')
+            self._current_phase = 'extraction'
 
             source_type = self.job_config['source_type']
             load_type = self.job_config['load_type']
@@ -1244,7 +1319,7 @@ class ETLRunner:
                     logger.info("SKIPPING ETL: No file changes detected")
                     logger.info("=" * 80)
 
-                    # Update status to completed with 0 rows
+                    # Update status to completed with 0 rows (all phases completed)
                     self.end_time = datetime.utcnow()
                     duration_seconds = int((self.end_time - self.start_time).total_seconds())
 
@@ -1255,7 +1330,11 @@ class ETLRunner:
                             data_source_id=self.data_source_id,
                             rows_extracted=0,
                             rows_loaded=0,
-                            duration_seconds=duration_seconds
+                            duration_seconds=duration_seconds,
+                            extraction_started_at=True,
+                            extraction_completed_at=True,
+                            loading_started_at=True,
+                            loading_completed_at=True,
                         )
 
                     return {
@@ -1282,6 +1361,12 @@ class ETLRunner:
             # Determine processing mode (standard vs dataflow)
             processing_mode = self.determine_processing_mode(files_to_process=files_to_process)
             logger.info(f"Selected processing mode: {processing_mode}")
+
+            # =========================================================================
+            # PHASE 3 & 4: EXTRACT → LOAD (handled by processing methods)
+            # =========================================================================
+            logger.info("PHASE: EXTRACT starting")
+            self._report_phase_timestamp('extraction_started')
 
             # Execute based on processing mode
             if processing_mode == 'dataflow':
@@ -1318,7 +1403,9 @@ class ETLRunner:
                     'data_source_id': self.data_source_id,
                     'rows_extracted': self.total_rows_extracted,
                     'rows_loaded': self.total_rows_loaded,
-                    'duration_seconds': duration_seconds
+                    'bytes_processed': self.total_bytes_processed,
+                    'duration_seconds': duration_seconds,
+                    'loading_completed_at': True,  # Mark final phase complete
                 }
 
                 # Include dataflow_job_id if this was a Dataflow execution
@@ -1341,6 +1428,7 @@ class ETLRunner:
             logger.info("ETL RUN COMPLETED SUCCESSFULLY")
             logger.info(f"Rows Extracted: {self.total_rows_extracted:,}")
             logger.info(f"Rows Loaded: {self.total_rows_loaded:,}")
+            logger.info(f"Bytes Processed: {self.total_bytes_processed:,}")
             logger.info(f"Duration: {duration_seconds} seconds")
             logger.info("=" * 80)
 
@@ -1348,6 +1436,7 @@ class ETLRunner:
                 'status': 'success',
                 'rows_extracted': self.total_rows_extracted,
                 'rows_loaded': self.total_rows_loaded,
+                'bytes_processed': self.total_bytes_processed,
                 'duration_seconds': duration_seconds
             }
 
@@ -1356,11 +1445,20 @@ class ETLRunner:
             self.end_time = datetime.utcnow()
             duration_seconds = int((self.end_time - self.start_time).total_seconds())
 
-            # Handle error
-            handle_etl_error(e, self.config, self.etl_run_id, self.data_source_id)
+            # Map current phase to error type
+            phase_to_error_type = {
+                'init': ERROR_TYPE_INIT,
+                'validation': ERROR_TYPE_VALIDATION,
+                'extraction': ERROR_TYPE_EXTRACTION,
+                'load': ERROR_TYPE_LOAD,
+            }
+            error_type = phase_to_error_type.get(self._current_phase, None)
+
+            # Handle error with proper classification
+            handle_etl_error(e, self.config, self.etl_run_id, self.data_source_id, error_type=error_type)
 
             logger.error("=" * 80)
-            logger.error("ETL RUN FAILED")
+            logger.error(f"ETL RUN FAILED in phase: {self._current_phase.upper()}")
             logger.error(f"Error: {str(e)}")
             logger.error(f"Duration before failure: {duration_seconds} seconds")
             logger.error("=" * 80)

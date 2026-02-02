@@ -372,6 +372,7 @@ def model_etl(request, model_id):
         run_data = {
             'id': run.id,
             'status': run.status,
+            'error_type': run.error_type or '',  # Error classification for failed runs
             'job_name': run.data_source.name if run.data_source else 'Unknown',
             'connection_name': run.data_source.connection.name if run.data_source and run.data_source.connection else None,
             'source_type': run.data_source.source_type if run.data_source else None,
@@ -385,6 +386,9 @@ def model_etl(request, model_id):
             'bytes_processed': run.bytes_processed or 0,
             'total_tables': run.total_tables or 0,
             'successful_tables': run.successful_tables or 0,
+            # 4-stage pipeline timestamps: INIT → VALIDATE → EXTRACT → LOAD
+            'init_completed_at': run.init_completed_at.isoformat() if run.init_completed_at else None,
+            'validation_completed_at': run.validation_completed_at.isoformat() if run.validation_completed_at else None,
             'extraction_started_at': run.extraction_started_at.isoformat() if run.extraction_started_at else None,
             'extraction_completed_at': run.extraction_completed_at.isoformat() if run.extraction_completed_at else None,
             'loading_started_at': run.loading_started_at.isoformat() if run.loading_started_at else None,

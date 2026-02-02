@@ -12,6 +12,23 @@ from functools import wraps
 logger = logging.getLogger(__name__)
 
 
+# Error type constants for classifying ETL failures
+ERROR_TYPE_INIT = 'init'           # Initialization errors (config, connection setup)
+ERROR_TYPE_VALIDATION = 'validation'  # Validation errors (table doesn't exist, schema mismatch)
+ERROR_TYPE_EXTRACTION = 'extraction'  # Extraction errors (query failed, source unavailable)
+ERROR_TYPE_LOAD = 'load'           # Load errors (BigQuery write failed)
+ERROR_TYPE_UNKNOWN = 'unknown'     # Unknown/unclassified errors
+
+# All valid error types
+VALID_ERROR_TYPES = [
+    ERROR_TYPE_INIT,
+    ERROR_TYPE_VALIDATION,
+    ERROR_TYPE_EXTRACTION,
+    ERROR_TYPE_LOAD,
+    ERROR_TYPE_UNKNOWN,
+]
+
+
 class ETLError(Exception):
     """Base exception for ETL errors"""
     pass
@@ -94,11 +111,67 @@ def retry_on_exception(
     return decorator
 
 
+def classify_error_type(error: Exception) -> str:
+    """
+    Classify an error into one of the error type categories.
+
+    Args:
+        error: Exception that occurred
+
+    Returns:
+        Error type constant (init, validation, extraction, load, unknown)
+    """
+    error_type = type(error).__name__
+    error_str = str(error).lower()
+
+    # Configuration/Initialization errors
+    if isinstance(error, ConfigurationError):
+        return ERROR_TYPE_INIT
+    if 'configuration' in error_str or 'config' in error_str:
+        return ERROR_TYPE_INIT
+    if 'credentials' in error_str or 'authentication' in error_str:
+        return ERROR_TYPE_INIT
+    if 'connection' in error_str and 'failed' in error_str:
+        return ERROR_TYPE_INIT
+
+    # Validation errors (table/schema doesn't exist)
+    if 'not found' in error_str or 'does not exist' in error_str:
+        return ERROR_TYPE_VALIDATION
+    if 'table' in error_str and ('missing' in error_str or 'invalid' in error_str):
+        return ERROR_TYPE_VALIDATION
+    if 'schema' in error_str and ('mismatch' in error_str or 'invalid' in error_str):
+        return ERROR_TYPE_VALIDATION
+    if 'destination table does not exist' in error_str:
+        return ERROR_TYPE_VALIDATION
+
+    # Extraction errors
+    if isinstance(error, ExtractionError):
+        return ERROR_TYPE_EXTRACTION
+    if 'extraction' in error_str or 'extract' in error_str:
+        return ERROR_TYPE_EXTRACTION
+    if 'query' in error_str and 'failed' in error_str:
+        return ERROR_TYPE_EXTRACTION
+    if 'source' in error_str and ('unavailable' in error_str or 'timeout' in error_str):
+        return ERROR_TYPE_EXTRACTION
+
+    # Load errors
+    if isinstance(error, LoadError):
+        return ERROR_TYPE_LOAD
+    if 'load' in error_str and ('failed' in error_str or 'error' in error_str):
+        return ERROR_TYPE_LOAD
+    if 'bigquery' in error_str and ('write' in error_str or 'insert' in error_str):
+        return ERROR_TYPE_LOAD
+
+    # Default to unknown
+    return ERROR_TYPE_UNKNOWN
+
+
 def handle_etl_error(
     error: Exception,
     config: Any,
     etl_run_id: Optional[int] = None,
-    data_source_id: Optional[int] = None
+    data_source_id: Optional[int] = None,
+    error_type: Optional[str] = None
 ) -> None:
     """
     Handle ETL error by logging and updating status in Django.
@@ -108,10 +181,15 @@ def handle_etl_error(
         config: Config instance
         etl_run_id: ETL run ID (optional)
         data_source_id: DataSource ID (optional, for updating last run info)
+        error_type: Explicit error type (if not provided, will be classified automatically)
     """
     error_message = f"{type(error).__name__}: {str(error)}"
 
-    logger.error(f"ETL error occurred: {error_message}", exc_info=True)
+    # Classify error type if not explicitly provided
+    if error_type is None:
+        error_type = classify_error_type(error)
+
+    logger.error(f"ETL error occurred [{error_type}]: {error_message}", exc_info=True)
 
     # Update ETL run status to failed
     if etl_run_id and config:
@@ -119,7 +197,8 @@ def handle_etl_error(
             etl_run_id=etl_run_id,
             status='failed',
             data_source_id=data_source_id,
-            error_message=error_message
+            error_message=error_message,
+            error_type=error_type
         )
 
 

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training and manages model deployment to Cloud Run.
 
-**Last Updated**: 2026-02-02 (Fixed serving model returning vocabulary indices instead of product IDs)
+**Last Updated**: 2026-02-02 (Fixed ranking/multitask serving to accept raw JSON inputs)
 
 ---
 
@@ -3902,6 +3902,94 @@ Output: ["367073001001", "383033001001", ...]  ← Correct!
 **Affected Models:** All retrieval and multitask models using brute-force retrieval algorithm (not ScaNN).
 
 **Resolution:** Re-train models after deploying the fix. Existing deployed models have the buggy code baked in.
+
+---
+
+### Fix: Ranking/Multitask Models Require Serialized tf.Example Instead of JSON (2026-02-02)
+
+**Problem:** Deployed ranking and multitask model endpoints returned HTTP 400 errors when called with TF Serving's standard JSON API format. The error message was:
+```
+{"error": "Failed to process element: 0 key: customer_id of 'instances' list. Error: INVALID_ARGUMENT: JSON object: does not have named input: customer_id"}
+```
+
+**Root Cause:** The `RankingServingModel` and `MultitaskServingModel` classes in `ml_platform/configs/services.py` were using `tf.io.parse_example()` to parse **serialized tf.Example protobufs**:
+
+```python
+# OLD (broken) - expects serialized protobufs, not JSON
+@tf.function(input_signature=[
+    tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+])
+def serve(self, serialized_examples):
+    parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+```
+
+TF Serving's REST API cannot automatically convert JSON to serialized tf.Example format, so all requests failed.
+
+Meanwhile, the **retrieval `ServingModel`** was already using the correct approach with raw tensor inputs:
+
+```python
+# CORRECT - accepts JSON directly
+@tf.function(input_signature=[
+    tf.TensorSpec(shape=[None], dtype=tf.string, name='customer_id'),
+    tf.TensorSpec(shape=[None], dtype=tf.int64, name='date'),
+    ...
+])
+def serve(self, customer_id, date, ...):
+    raw_features = {'customer_id': tf.expand_dims(customer_id, -1), ...}
+```
+
+**Fix (3 changes in `ml_platform/configs/services.py`):**
+
+1. **Added `_generate_raw_tensor_signature_ranking()`** - New helper method that generates TensorSpecs for BOTH buyer AND product features (ranking models need both to predict scores for specific user-product pairs).
+
+2. **Rewrote `_generate_serve_fn_ranking()`** - Now generates a `RankingServingModel` class that accepts raw JSON inputs with individual TensorSpecs for each feature, matching the retrieval model pattern.
+
+3. **Rewrote `_generate_serve_fn_multitask()`** - Now generates a `MultitaskServingModel` class with:
+   - `serve()` using buyer features only (for retrieval)
+   - `serve_ranking()` using buyer + product features (for ranking)
+
+**Before (broken):**
+```
+Client sends: {"instances": [{"customer_id": "123", "product_id": "456", ...}]}
+    ↓
+TF Serving expects: serialized tf.Example protobufs
+    ↓
+Result: HTTP 400 "does not have named input: customer_id"
+```
+
+**After (fixed):**
+```
+Client sends: {"instances": [{"customer_id": "123", "product_id": "456", ...}]}
+    ↓
+TF Serving maps JSON fields to individual TensorSpecs
+    ↓
+Model receives: customer_id=["123"], product_id=["456"], ...
+    ↓
+Result: {"predictions": [[0.85]], "predictions_normalized": [[0.42]]}
+```
+
+**Also fixed `IntegrationService`** (`ml_platform/training/integration_service.py`):
+- Added `_requires_product_features()` helper to check model type
+- Updated `get_input_schema()` to include product features for ranking/multitask models
+- Updated `get_sample_data()` to query both buyer and product features for ranking/multitask models
+
+**Affected Models:** All ranking and multitask models.
+
+**Resolution:** Re-train ranking/multitask models after deploying the fix. Existing deployed models have the old serving code baked in.
+
+**Example JSON request after fix:**
+```json
+{
+  "instances": [{
+    "customer_id": 140058286301,
+    "date": 1714262400,
+    "cust_value": 0.0,
+    "product_id": 338430001001,
+    "category": "DRY",
+    "sub_category": "ПЛИТКИ"
+  }]
+}
+```
 
 ---
 

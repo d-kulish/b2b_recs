@@ -2622,6 +2622,60 @@ class RetrievalModel(tfrs.Model):
 
         return signature_specs, param_names, raw_features_lines
 
+    def _generate_raw_tensor_signature_ranking(self) -> tuple:
+        """
+        Generate raw tensor input signature for ranking models.
+        Includes BOTH buyer AND product features.
+
+        Returns:
+            tuple: (signature_specs, param_names, raw_features_dict_lines)
+        """
+        signature_specs = []
+        param_names = []
+        raw_features_lines = []
+
+        # Type mapping: BigQuery type → TensorFlow dtype
+        type_mapping = {
+            'STRING': 'tf.string',
+            'BYTES': 'tf.string',
+            'INT64': 'tf.int64',
+            'INTEGER': 'tf.int64',
+            'FLOAT64': 'tf.float32',
+            'FLOAT': 'tf.float32',
+            'NUMERIC': 'tf.float32',
+            'TIMESTAMP': 'tf.int64',
+            'DATETIME': 'tf.int64',
+            'DATE': 'tf.string',
+        }
+
+        # Add buyer features
+        for feature in self.buyer_features:
+            col_name = feature.get('display_name') or feature.get('column')
+            bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
+
+            tf_dtype = type_mapping.get(bq_type, 'tf.string')
+
+            signature_specs.append(
+                f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
+            )
+            param_names.append(col_name)
+            raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
+
+        # Add product features (for ranking models)
+        for feature in self.product_features:
+            col_name = feature.get('display_name') or feature.get('column')
+            bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
+
+            tf_dtype = type_mapping.get(bq_type, 'tf.string')
+
+            signature_specs.append(
+                f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
+            )
+            param_names.append(col_name)
+            raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
+
+        return signature_specs, param_names, raw_features_lines
+
     def _generate_serve_fn(self) -> str:
         """Generate serving function for inference (dispatches to ScaNN or brute-force)."""
         # Dispatch to ScaNN or brute-force based on retrieval_algorithm
@@ -4389,18 +4443,32 @@ class RankingModel(tfrs.Model):
         return '\n'.join(lines)
 
     def _generate_serve_fn_ranking(self) -> str:
-        """Generate serving function for ranking model with inverse transform."""
-        return '''
+        """Generate serving function for ranking model with raw tensor inputs and inverse transform."""
+        # Generate dynamic signature from buyer AND product features
+        signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature_ranking()
+
+        # Build parameter list for serve method
+        params_str = ', '.join(param_names)
+
+        # Build input signature
+        signature_str = '\n'.join(signature_specs)
+
+        # Build raw_features dict
+        raw_features_str = '\n'.join(raw_features_lines)
+
+        return f'''
 # =============================================================================
-# SERVING FUNCTION (Ranking) with Inverse Transform
+# SERVING FUNCTION (Ranking) with Raw Tensor Inputs and Inverse Transform
 # =============================================================================
 
 class RankingServingModel(tf.keras.Model):
     """
     Wrapper for serving ranking model with inverse transform.
 
-    Input: Serialized tf.Examples containing buyer and product features
+    Input: Raw tensor inputs (buyer AND product features)
     Output: Predicted scores in ORIGINAL scale (not normalized)
+
+    Accepts simple JSON: {{"customer_id": "X", "product_id": "Y", "category": "Z", ...}}
 
     The inverse transform reverses: Normalize -> Log -> (Clip is implicit ceiling)
     """
@@ -4409,10 +4477,9 @@ class RankingServingModel(tf.keras.Model):
         super().__init__()
         self.ranking_model = ranking_model
         self.tft_layer = tf_transform_output.transform_features_layer()
-        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
 
         # Transform parameters for inverse transform
-        self.transform_params = transform_params or {}
+        self.transform_params = transform_params or {{}}
 
         # Extract transform flags from constants
         self.normalize_applied = NORMALIZE_APPLIED
@@ -4425,19 +4492,6 @@ class RankingServingModel(tf.keras.Model):
         self.norm_max = tf.constant(
             self.transform_params.get('norm_max', 1.0), dtype=tf.float32
         )
-
-        # Remove label and transform param columns from feature spec for serving
-        label_source_col = LABEL_KEY.replace('_target', '')
-        cols_to_remove = [
-            label_source_col,
-            f'{TARGET_COL}_clip_lower',
-            f'{TARGET_COL}_clip_upper',
-            f'{TARGET_COL}_norm_min',
-            f'{TARGET_COL}_norm_max',
-        ]
-        for col in cols_to_remove:
-            if col in self._raw_feature_spec:
-                del self._raw_feature_spec[col]
 
     def inverse_transform(self, predictions):
         """
@@ -4459,21 +4513,30 @@ class RankingServingModel(tf.keras.Model):
         return x
 
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+{signature_str}
     ])
-    def serve(self, serialized_examples):
+    def serve(self, {params_str}):
         """
-        Serving function: tf.Examples -> predicted scores in original scale.
+        Serving function: Raw tensor inputs -> predicted scores in original scale.
+
+        Example JSON request to TF Serving:
+        {{
+            "instances": [
+                {{{", ".join(f'"{p}": <value>' for p in param_names[:4])}...}}
+            ]
+        }}
 
         Returns:
             predictions: Predictions in original scale (e.g., actual sales value)
             predictions_normalized: Raw model output (0-1 if normalized)
         """
-        # Parse raw features
-        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        # Build raw features dict from inputs (buyer AND product features)
+        raw_features = {{
+{raw_features_str}
+        }}
 
-        # Apply transform preprocessing
-        transformed_features = self.tft_layer(parsed_features)
+        # Apply TFT preprocessing (vocabularies, normalization, etc.)
+        transformed_features = self.tft_layer(raw_features)
 
         # Get predictions (in transformed/normalized space)
         predictions_normalized = self.ranking_model(transformed_features)
@@ -4481,10 +4544,10 @@ class RankingServingModel(tf.keras.Model):
         # Apply inverse transform to get original scale
         predictions_original = self.inverse_transform(predictions_normalized)
 
-        return {
+        return {{
             'predictions': predictions_original,
             'predictions_normalized': predictions_normalized
-        }
+        }}
 '''
 
     def _generate_metrics_callback_ranking(self) -> str:
@@ -5478,7 +5541,7 @@ class MultitaskModel(tfrs.Model):
 '''
 
     def _generate_serve_fn_multitask(self) -> str:
-        """Generate dual serving functions for multitask model (retrieval + ranking)."""
+        """Generate dual serving functions for multitask model (retrieval + ranking) with raw tensor inputs."""
         # Get primary product ID column for candidate indexing
         product_id_col = None
         for feature in self.product_features:
@@ -5498,9 +5561,21 @@ class MultitaskModel(tfrs.Model):
         if not product_id_col and self.product_features:
             product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
 
+        # Generate signatures for retrieval (buyer features only)
+        retrieval_sig_specs, retrieval_params, retrieval_features = self._generate_raw_tensor_signature()
+        retrieval_params_str = ', '.join(retrieval_params)
+        retrieval_sig_str = '\n'.join(retrieval_sig_specs)
+        retrieval_features_str = '\n'.join(retrieval_features)
+
+        # Generate signatures for ranking (buyer + product features)
+        ranking_sig_specs, ranking_params, ranking_features = self._generate_raw_tensor_signature_ranking()
+        ranking_params_str = ', '.join(ranking_params)
+        ranking_sig_str = '\n'.join(ranking_sig_specs)
+        ranking_features_str = '\n'.join(ranking_features)
+
         return f'''
 # =============================================================================
-# SERVING FUNCTIONS (MULTITASK - Dual Signatures)
+# SERVING FUNCTIONS (MULTITASK - Dual Signatures with Raw Tensor Inputs)
 # =============================================================================
 
 class MultitaskServingModel(tf.keras.Model):
@@ -5508,8 +5583,10 @@ class MultitaskServingModel(tf.keras.Model):
     Serving model with dual signatures for multitask model.
 
     Signatures:
-    - serving_default (retrieval): Returns top-K product recommendations
-    - serve_ranking: Returns predicted scores for given user-product pairs
+    - serving_default (retrieval): Returns top-K product recommendations (buyer features only)
+    - serve_ranking: Returns predicted scores for given user-product pairs (buyer + product features)
+
+    Both signatures accept simple JSON inputs - no protobuf encoding needed.
 
     Typical production usage:
     1. Call serve() to get top-K candidates from entire catalog
@@ -5520,7 +5597,6 @@ class MultitaskServingModel(tf.keras.Model):
         super().__init__()
         self.multitask_model = multitask_model
         self.tft_layer = tf_transform_output.transform_features_layer()
-        self._raw_feature_spec = tf_transform_output.raw_feature_spec()
 
         # Pre-computed candidate data for retrieval
         self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
@@ -5540,19 +5616,22 @@ class MultitaskServingModel(tf.keras.Model):
         )
 
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+{retrieval_sig_str}
     ])
-    def serve(self, serialized_examples):
+    def serve(self, {retrieval_params_str}):
         """
         RETRIEVAL serving (default): Returns top-K product recommendations.
 
-        Use this for initial candidate retrieval from the full catalog.
+        Accepts buyer features only as raw JSON.
+        Example: {{"instances": [{{{", ".join(f'"{p}": <value>' for p in retrieval_params[:3])}...}}]}}
         """
-        # Parse raw features
-        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        # Build raw features dict from buyer inputs
+        raw_features = {{
+{retrieval_features_str}
+        }}
 
-        # Apply transform preprocessing
-        transformed_features = self.tft_layer(parsed_features)
+        # Apply TFT preprocessing
+        transformed_features = self.tft_layer(raw_features)
 
         # Get query embeddings
         query_embeddings = self.multitask_model.query_tower(transformed_features)
@@ -5576,25 +5655,29 @@ class MultitaskServingModel(tf.keras.Model):
         }}
 
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=[None], dtype=tf.string, name='examples')
+{ranking_sig_str}
     ])
-    def serve_ranking(self, serialized_examples):
+    def serve_ranking(self, {ranking_params_str}):
         """
         RANKING serving: Returns predicted scores for user-product pairs.
 
-        Use this to re-rank a set of candidates retrieved by serve().
-        Input examples should contain both user AND product features.
-        """
-        # Parse raw features
-        parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
+        Accepts buyer AND product features as raw JSON.
+        Example: {{"instances": [{{{", ".join(f'"{p}": <value>' for p in ranking_params[:4])}...}}]}}
 
-        # Apply transform preprocessing
-        transformed_features = self.tft_layer(parsed_features)
+        Use this to re-rank a set of candidates retrieved by serve().
+        """
+        # Build raw features dict from buyer AND product inputs
+        raw_features = {{
+{ranking_features_str}
+        }}
+
+        # Apply TFT preprocessing
+        transformed_features = self.tft_layer(raw_features)
 
         # Get rating predictions through the model's call() - uses rating head
         predictions_normalized = self.multitask_model(transformed_features)
 
-        # Apply inverse transform if needed (same as ranking model)
+        # Apply inverse transform if needed
         predictions_original = predictions_normalized
 
         if self.log_applied:

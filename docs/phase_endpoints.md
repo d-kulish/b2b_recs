@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-02-01 (Fixed Integrate Modal to send only buyer features to endpoint)
+**Last Updated**: 2026-02-02 (Fixed ranking model serving to accept raw JSON inputs instead of serialized tf.Example)
 
 ---
 

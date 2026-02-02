@@ -78,12 +78,30 @@ class IntegrationService:
         if not self.dataset:
             raise IntegrationServiceError("Training run has no dataset")
 
+        # Cache model type for feature selection logic
+        self.model_type = self.endpoint.registered_model.model_type
+
+    def _requires_product_features(self) -> bool:
+        """
+        Check if model requires product features for inference.
+
+        Retrieval models only need buyer (query) features - product embeddings
+        are pre-computed in the candidate index.
+
+        Ranking and Multitask models need BOTH buyer AND product features
+        to predict scores for specific (buyer, product) pairs.
+        """
+        return self.model_type in ('ranking', 'multitask')
+
     def get_input_schema(self) -> List[Dict]:
         """
-        Extract input schema from feature_config.buyer_model_features.
+        Extract input schema from feature_config.
+
+        For retrieval models: Only buyer_model_features (query features)
+        For ranking/multitask models: Both buyer AND product features
 
         Returns:
-            List of field definitions with name, type, and notes
+            List of field definitions with name, type, tower, and notes
         """
         fields = []
 
@@ -99,41 +117,48 @@ class IntegrationService:
                 col_name = col_key.split('.')[-1] if '.' in col_key else col_key
                 column_types[col_name] = stats.get('type', 'STRING')
 
-        for feature in buyer_features:
-            column = feature.get('column', '')
-            if not column:
-                continue
+        def add_features(features: List[Dict], tower: str):
+            """Helper to add features from a tower to the schema."""
+            for feature in features:
+                column = feature.get('column', '')
+                if not column:
+                    continue
 
-            # Get the original BigQuery type
-            original_type = column_types.get(column, 'STRING')
+                # Get the original BigQuery type
+                original_type = column_types.get(column, 'STRING')
 
-            # Map to display type (TFX converts timestamps to INT64)
-            display_type = self.TYPE_DISPLAY_MAP.get(original_type, original_type)
+                # Map to display type (TFX converts timestamps to INT64)
+                display_type = self.TYPE_DISPLAY_MAP.get(original_type, original_type)
 
-            # Add notes for converted types
-            notes = self.TYPE_NOTES.get(original_type, '')
-            if not notes:
-                # Add feature type notes
-                feature_type = feature.get('type', '')
-                if feature_type == 'string_embedding':
-                    notes = 'String identifier'
-                elif feature_type == 'numeric':
-                    notes = 'Numeric value'
-                elif feature_type == 'categorical':
-                    notes = 'Categorical'
-                else:
-                    notes = 'Required'
+                # Add notes for converted types
+                notes = self.TYPE_NOTES.get(original_type, '')
+                if not notes:
+                    # Add feature type notes
+                    feature_type = feature.get('type', '')
+                    if feature_type == 'string_embedding':
+                        notes = 'String identifier'
+                    elif feature_type == 'numeric':
+                        notes = 'Numeric value'
+                    elif feature_type == 'categorical':
+                        notes = 'Categorical'
+                    else:
+                        notes = 'Required'
 
-            fields.append({
-                'name': column,
-                'type': display_type,
-                'notes': notes
-            })
+                fields.append({
+                    'name': column,
+                    'type': display_type,
+                    'tower': tower,
+                    'notes': notes
+                })
 
-        # NOTE: Product model features are NOT included here because the model's
-        # serving signature only accepts buyer_model_features as inputs.
-        # Product features are used internally by the candidate tower during training,
-        # but inference only requires buyer (query) features.
+        # Always include buyer (query) features
+        add_features(buyer_features, 'buyer')
+
+        # For ranking/multitask models, also include product (candidate) features
+        # These models predict scores for specific (buyer, product) pairs
+        if self._requires_product_features():
+            product_features = self.feature_config.product_model_features or []
+            add_features(product_features, 'product')
 
         return fields
 
@@ -141,29 +166,43 @@ class IntegrationService:
         """
         Query BigQuery for random sample using for_tfx=True.
 
-        Only returns fields that are in buyer_model_features, since the model's
-        serving signature only accepts those as inputs.
+        For retrieval models: Only buyer_model_features
+        For ranking/multitask models: Both buyer AND product features
 
         Args:
             count: Number of samples to retrieve (default 1)
 
         Returns:
-            Dict with 'instance' containing sample feature values for buyer features only
+            Dict with 'instance' containing sample feature values
         """
         from ml_platform.datasets.services import BigQueryService, BigQueryServiceError
 
         try:
-            # Get the list of buyer feature columns - these are the only inputs
-            # the model's serving signature accepts
+            # Get the list of buyer feature columns
             buyer_features = self.feature_config.buyer_model_features or []
-            buyer_columns = {
+            required_columns = {
                 f.get('display_name') or f.get('column')
                 for f in buyer_features
                 if f.get('display_name') or f.get('column')
             }
 
-            if not buyer_columns:
+            if not required_columns:
                 return {'instance': {}, 'error': 'No buyer features configured'}
+
+            # For ranking/multitask models, also include product features
+            if self._requires_product_features():
+                product_features = self.feature_config.product_model_features or []
+                product_columns = {
+                    f.get('display_name') or f.get('column')
+                    for f in product_features
+                    if f.get('display_name') or f.get('column')
+                }
+                required_columns = required_columns.union(product_columns)
+
+                if not product_columns:
+                    logger.warning(
+                        f"Ranking/multitask model {self.model_type} has no product features configured"
+                    )
 
             # Get the model endpoint from the registered model
             model_endpoint = self.endpoint.registered_model.ml_model
@@ -190,13 +229,13 @@ class IntegrationService:
             if not rows:
                 return {'instance': {}, 'error': 'No data found'}
 
-            # Get the first row as a dict, filtering to only buyer feature columns
+            # Get the first row as a dict, filtering to required feature columns
             row = rows[0]
             instance = {}
 
             for field in result.schema:
-                # Only include columns that are buyer features (model inputs)
-                if field.name not in buyer_columns:
+                # Only include columns that are required features (model inputs)
+                if field.name not in required_columns:
                     continue
 
                 value = getattr(row, field.name, None)

@@ -1,162 +1,41 @@
 {% extends 'base_model.html' %}
+{% load static %}
 
 {% block title %}{{ model.name }} - Dashboard{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
+{% endblock %}
+
 {% block model_content %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-    <!-- Endpoint Status -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Endpoint Status</h3>
-        {% if model.is_endpoint_active %}
-        <div class="flex items-center text-green-600 mb-2">
-            <i class="fas fa-check-circle text-2xl mr-3"></i>
-            <span class="font-medium">Active</span>
+<!-- CHAPTER: ENDPOINTS -->
+<div id="endpointsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
+            <i class="fas fa-chart-line text-white text-2xl"></i>
         </div>
-        <p class="text-sm text-gray-600 mb-3">Endpoint is serving predictions</p>
-        {% if model.endpoint_url %}
-        <a href="{{ model.endpoint_url }}" target="_blank" class="text-sm text-blue-600 hover:text-blue-800">
-            <i class="fas fa-external-link-alt mr-1"></i>View Endpoint
-        </a>
-        {% endif %}
-        {% else %}
-        <div class="flex items-center text-gray-400 mb-2">
-            <i class="fas fa-times-circle text-2xl mr-3"></i>
-            <span class="font-medium">Inactive</span>
-        </div>
-        <p class="text-sm text-gray-600 mb-3">No active deployment</p>
-        <a href="{% url 'model_deployment' model.id %}" class="text-sm text-blue-600 hover:text-blue-800">
-            <i class="fas fa-rocket mr-1"></i>Deploy a model
-        </a>
-        {% endif %}
+        <h2 class="text-2xl font-bold text-gray-900">Endpoints</h2>
     </div>
 
-    <!-- Latest Training -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Latest Training</h3>
-        {% if model.last_trained_at %}
-        <div class="flex items-center text-blue-600 mb-2">
-            <i class="fas fa-calendar text-2xl mr-3"></i>
-            <span class="font-medium">{{ model.last_trained_at|date:"M d, Y" }}</span>
-        </div>
-        <p class="text-sm text-gray-600 mb-3">Last successful training</p>
-        {% if latest_experiment %}
-        <p class="text-sm text-gray-700">Recall@100: <span class="font-bold">{{ latest_experiment.recall_at_100|floatformat:2 }}%</span></p>
-        {% endif %}
-        {% else %}
-        <div class="flex items-center text-gray-400 mb-2">
-            <i class="fas fa-clock text-2xl mr-3"></i>
-            <span class="font-medium">Not Trained</span>
-        </div>
-        <p class="text-sm text-gray-600 mb-3">No training runs yet</p>
-        <a href="{% url 'model_training' model.id %}" class="text-sm text-blue-600 hover:text-blue-800">
-            <i class="fas fa-play mr-1"></i>Start training
-        </a>
-        {% endif %}
-    </div>
+    <!-- KPI Row (Summary Card + 4 Performance Cards) -->
+    <div id="endpointsKpiRow" class="model-dashboard-kpi-row"></div>
 
-    <!-- ETL Status -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">ETL Status</h3>
-        {% if etl_config and etl_config.is_enabled %}
-        <div class="flex items-center text-green-600 mb-2">
-            <i class="fas fa-sync text-2xl mr-3"></i>
-            <span class="font-medium">Enabled</span>
-        </div>
-        <p class="text-sm text-gray-600 mb-3">Schedule: {{ etl_config.get_schedule_type_display }}</p>
-        {% if latest_etl_run %}
-        <p class="text-sm text-gray-700">Last run: {{ latest_etl_run.created_at|date:"M d, Y H:i" }}</p>
-        {% endif %}
-        {% else %}
-        <div class="flex items-center text-yellow-600 mb-2">
-            <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
-            <span class="font-medium">Not Configured</span>
-        </div>
-        <p class="text-sm text-gray-600 mb-3">ETL not set up</p>
-        <a href="{% url 'model_etl' model.id %}" class="text-sm text-blue-600 hover:text-blue-800">
-            <i class="fas fa-cog mr-1"></i>Configure ETL
-        </a>
-        {% endif %}
-    </div>
+    <!-- Charts Grid -->
+    <div id="endpointsChartsGrid" class="model-dashboard-charts-grid"></div>
+
+    <!-- Tables Section -->
+    <div id="endpointsTablesSection" class="model-dashboard-tables-section"></div>
 </div>
+{% endblock %}
 
-<!-- Recent Pipeline Runs -->
-<div class="bg-white rounded-lg shadow mb-6">
-    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-        <h3 class="text-lg font-semibold text-gray-900">Recent Pipeline Runs</h3>
-        <a href="{% url 'model_training' model.id %}" class="text-blue-600 hover:text-blue-800 text-sm">
-            View all <i class="fas fa-arrow-right ml-1"></i>
-        </a>
-    </div>
-    <div class="overflow-x-auto">
-        {% if recent_runs %}
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run ID</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stage</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for run in recent_runs %}
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{{ run.id }}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                            {% if run.status == 'completed' %}bg-green-100 text-green-800
-                            {% elif run.status == 'running' %}bg-blue-100 text-blue-800
-                            {% elif run.status == 'failed' %}bg-red-100 text-red-800
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ run.get_status_display }}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {% if run.current_stage %}{{ run.get_current_stage_display }}{% else %}-{% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {% if run.started_at %}{{ run.started_at|date:"M d, H:i" }}{% else %}-{% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {% if run.completed_at %}{{ run.completed_at|date:"M d, H:i" }}{% else %}-{% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="px-6 py-12 text-center">
-            <i class="fas fa-inbox text-4xl text-gray-300 mb-2"></i>
-            <p class="text-gray-500">No pipeline runs yet</p>
-            <a href="{% url 'model_training' model.id %}" class="text-blue-600 hover:text-blue-800 text-sm mt-2 inline-block">
-                Start your first training run <i class="fas fa-arrow-right ml-1"></i>
-            </a>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="bg-white rounded-lg shadow p-6">
-    <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <a href="{% url 'model_training' model.id %}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition">
-            <i class="fas fa-play text-3xl text-blue-600 mb-2"></i>
-            <span class="text-sm font-medium text-gray-900">Start Training</span>
-        </a>
-        <a href="{% url 'model_configs' model.id %}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition">
-            <i class="fas fa-cubes text-3xl text-blue-600 mb-2"></i>
-            <span class="text-sm font-medium text-gray-900">Configs</span>
-        </a>
-        <a href="{% url 'model_experiments' model.id %}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition">
-            <i class="fas fa-flask text-3xl text-blue-600 mb-2"></i>
-            <span class="text-sm font-medium text-gray-900">View Experiments</span>
-        </a>
-        <a href="{% url 'model_deployment' model.id %}" class="flex flex-col items-center justify-center p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition">
-            <i class="fas fa-rocket text-3xl text-blue-600 mb-2"></i>
-            <span class="text-sm font-medium text-gray-900">Deploy Model</span>
-        </a>
-    </div>
-</div>
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    ModelDashboardEndpoints.init();
+    ModelDashboardEndpoints.load();
+});
+</script>
 {% endblock %}

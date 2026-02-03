@@ -7086,11 +7086,14 @@ class ConfigDashboardStatsService:
         Returns a hierarchical structure for the relationship diagram.
         """
         from django.db.models import Count
-        from ml_platform.models import Dataset, FeatureConfig, QuickTest
+        from ml_platform.models import Dataset, FeatureConfig, QuickTest, ModelConfig
 
         datasets = Dataset.objects.filter(
             model_endpoint=self.model
         ).prefetch_related('feature_configs').order_by('name')
+
+        # Track model configs used in experiments (built dynamically)
+        all_model_configs = {}
 
         relationships = []
 
@@ -7102,12 +7105,40 @@ class ConfigDashboardStatsService:
                     feature_config=fc, status='completed'
                 ).count()
 
+                # Get model configs used with this feature config
+                mc_ids = list(QuickTest.objects.filter(
+                    feature_config=fc
+                ).values_list('model_config_id', flat=True).distinct())
+
+                # Update model config tracking - build dict dynamically
+                for mc_id in mc_ids:
+                    if mc_id is None:
+                        continue
+                    if mc_id not in all_model_configs:
+                        # Fetch model config info
+                        try:
+                            mc = ModelConfig.objects.get(id=mc_id)
+                            all_model_configs[mc_id] = {
+                                'id': mc.id,
+                                'name': mc.name,
+                                'feature_config_ids': set(),
+                                'experiment_count': 0,
+                            }
+                        except ModelConfig.DoesNotExist:
+                            continue
+
+                    all_model_configs[mc_id]['feature_config_ids'].add(fc.id)
+                    all_model_configs[mc_id]['experiment_count'] += QuickTest.objects.filter(
+                        feature_config=fc, model_config_id=mc_id
+                    ).count()
+
                 feature_configs.append({
                     'id': fc.id,
                     'name': fc.name,
                     'config_type': fc.config_type,
                     'experiment_count': exp_count,
                     'completed_count': completed_count,
+                    'model_config_ids': [mid for mid in mc_ids if mid is not None],
                 })
 
             relationships.append({
@@ -7116,7 +7147,20 @@ class ConfigDashboardStatsService:
                 'feature_configs': feature_configs,
             })
 
-        return relationships
+        # Convert sets to lists for JSON serialization
+        model_configs_list = []
+        for mc in all_model_configs.values():
+            model_configs_list.append({
+                'id': mc['id'],
+                'name': mc['name'],
+                'feature_config_ids': list(mc['feature_config_ids']),
+                'experiment_count': mc['experiment_count'],
+            })
+
+        return {
+            'datasets': relationships,
+            'model_configs': model_configs_list,
+        }
 
     def _calculate_complexity(self, config_type: str, config) -> float:
         """

@@ -277,16 +277,15 @@
 
     .configs-dashboard-flow-container {
         display: flex;
-        align-items: flex-start;
-        gap: 60px;
-        padding: 20px 0;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px 0;
     }
 
-    .configs-dashboard-flow-column {
+    .configs-dashboard-flow-row {
         display: flex;
-        flex-direction: column;
+        align-items: center;
         gap: 12px;
-        min-width: 180px;
     }
 
     .configs-dashboard-flow-title {
@@ -295,18 +294,40 @@
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin-bottom: 8px;
-        text-align: center;
+        min-width: 120px;
+        flex-shrink: 0;
+    }
+
+    .configs-dashboard-flow-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        flex: 1;
+    }
+
+    .configs-dashboard-flow-arrow {
+        display: flex;
+        justify-content: center;
+        padding: 4px 0;
+        color: #9ca3af;
+    }
+
+    .configs-dashboard-flow-arrow i {
+        font-size: 14px;
     }
 
     .configs-dashboard-node {
         background: white;
         border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 10px 14px;
+        border-radius: 6px;
+        padding: 6px 10px;
         cursor: pointer;
         transition: all 0.2s ease;
         position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
     }
 
     .configs-dashboard-node:hover {
@@ -320,6 +341,60 @@
 
     .configs-dashboard-node.feature-config {
         border-left: 3px solid #10b981;
+    }
+
+    .configs-dashboard-node.model-config {
+        border-left: 3px solid #f59e0b;
+    }
+
+    .configs-dashboard-node .configs-dashboard-node-name {
+        font-weight: 500;
+        color: #374151;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .configs-dashboard-node .configs-dashboard-node-badge {
+        font-size: 10px;
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .configs-dashboard-node .configs-dashboard-node-badge.experiments {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    /* Lineage highlighting states */
+    .configs-dashboard-node.dimmed {
+        opacity: 0.3;
+        transform: scale(0.95);
+    }
+
+    .configs-dashboard-node.highlighted {
+        opacity: 1;
+        transform: scale(1.02);
+        box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
+        border-color: #6366f1;
+        z-index: 10;
+    }
+
+    .configs-dashboard-node.highlighted.dataset {
+        box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .configs-dashboard-node.highlighted.feature-config {
+        box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3);
+        border-color: #10b981;
+    }
+
+    .configs-dashboard-node.highlighted.model-config {
+        box-shadow: 0 2px 12px rgba(245, 158, 11, 0.3);
+        border-color: #f59e0b;
     }
 
     .configs-dashboard-node-name {
@@ -14669,11 +14744,17 @@ function cfg_renderCoverageMatrix(matrix) {
 
 /**
  * Render relationships diagram showing Dataset → FeatureConfig → Experiments flow.
+ * Compact horizontal layout with items wrapped in rows.
+ * Hover over items to see lineage connections highlighted.
  */
 function cfg_renderRelationships(relationships) {
     const container = document.getElementById('cfgRelationshipsDiagram');
 
-    if (!relationships.length) {
+    // Handle new data structure: { datasets: [...], model_configs: [...] }
+    const datasets = relationships.datasets || relationships;
+    const modelConfigs = relationships.model_configs || [];
+
+    if (!datasets.length) {
         container.innerHTML = `
             <div class="text-center py-8 text-gray-500">
                 <i class="fas fa-project-diagram text-2xl mb-2"></i>
@@ -14683,47 +14764,169 @@ function cfg_renderRelationships(relationships) {
         return;
     }
 
-    // Build flow diagram HTML
-    let html = '<div class="configs-dashboard-flow-container">';
+    // Collect all feature configs with dataset reference
+    const allFeatureConfigs = [];
+    datasets.forEach(rel => {
+        rel.feature_configs.forEach(fc => {
+            allFeatureConfigs.push({...fc, dataset_id: rel.dataset_id, dataset_name: rel.dataset_name});
+        });
+    });
 
-    // Datasets column
-    html += '<div class="configs-dashboard-flow-column">';
+    // Build horizontal flow diagram HTML
+    let html = '<div class="configs-dashboard-flow-container" id="cfgFlowContainer">';
+
+    // Row 1: Datasets
+    html += '<div class="configs-dashboard-flow-row">';
     html += '<div class="configs-dashboard-flow-title">Datasets</div>';
-    relationships.forEach(rel => {
+    html += '<div class="configs-dashboard-flow-items">';
+    datasets.forEach(rel => {
         const fcCount = rel.feature_configs.length;
+        const fcIds = rel.feature_configs.map(fc => fc.id).join(',');
         html += `
-            <div class="configs-dashboard-node dataset" onclick="cfg_scrollToDataset(${rel.dataset_id})" data-dataset-id="${rel.dataset_id}">
-                <div class="configs-dashboard-node-name" title="${rel.dataset_name}">${rel.dataset_name}</div>
-                <div class="configs-dashboard-node-meta">${fcCount} Feature Config${fcCount !== 1 ? 's' : ''}</div>
+            <div class="configs-dashboard-node dataset" data-ds-id="${rel.dataset_id}" data-fc-ids="${fcIds}" onclick="cfg_scrollToDataset(${rel.dataset_id})" title="${rel.dataset_name} - ${fcCount} Feature Config${fcCount !== 1 ? 's' : ''} (hover to see connections)">
+                <span class="configs-dashboard-node-name">${rel.dataset_name}</span>
+                <span class="configs-dashboard-node-badge">${fcCount}</span>
             </div>
         `;
     });
-    html += '</div>';
+    html += '</div></div>';
 
-    // Feature Configs column
-    html += '<div class="configs-dashboard-flow-column">';
+    // Arrow
+    html += '<div class="configs-dashboard-flow-arrow"><i class="fas fa-arrow-down"></i></div>';
+
+    // Row 2: Feature Configs
+    html += '<div class="configs-dashboard-flow-row">';
     html += '<div class="configs-dashboard-flow-title">Feature Configs</div>';
-    relationships.forEach(rel => {
-        rel.feature_configs.forEach(fc => {
-            const typeBadge = fc.config_type === 'retrieval' ?
-                '<span class="model-type-badge model-type-retrieval"><i class="fas fa-search"></i>Retrieval</span>' :
-                '<span class="model-type-badge model-type-ranking"><i class="fas fa-sort-amount-down"></i>Ranking</span>';
-            const expBadge = fc.experiment_count > 0 ?
-                `<span class="configs-dashboard-node-badge experiments"><i class="fas fa-flask"></i>${fc.completed_count}/${fc.experiment_count}</span>` : '';
+    html += '<div class="configs-dashboard-flow-items">';
+    allFeatureConfigs.forEach(fc => {
+        const typeIcon = fc.config_type === 'retrieval' ? 'fa-search' : 'fa-sort-amount-down';
+        const typeColor = fc.config_type === 'retrieval' ? '#10b981' : '#f59e0b';
+        const expText = fc.experiment_count > 0 ? `${fc.completed_count}/${fc.experiment_count}` : '0';
+        const mcIds = (fc.model_config_ids || []).join(',');
+        html += `
+            <div class="configs-dashboard-node feature-config" data-fc-id="${fc.id}" data-ds-id="${fc.dataset_id}" data-mc-ids="${mcIds}" onclick="cfg_scrollToFeatureConfig(${fc.id})" title="${fc.name} (${fc.config_type}) from ${fc.dataset_name} - ${fc.experiment_count} experiments (hover to see connections)">
+                <i class="fas ${typeIcon}" style="color: ${typeColor}; font-size: 10px;"></i>
+                <span class="configs-dashboard-node-name">${fc.name}</span>
+                <span class="configs-dashboard-node-badge experiments">${expText}</span>
+            </div>
+        `;
+    });
+    html += '</div></div>';
 
+    // Row 3: Model Configs (Experiments) - only if there are any
+    if (modelConfigs.length > 0) {
+        html += '<div class="configs-dashboard-flow-arrow"><i class="fas fa-arrow-down"></i></div>';
+        html += '<div class="configs-dashboard-flow-row">';
+        html += '<div class="configs-dashboard-flow-title">Model Configs</div>';
+        html += '<div class="configs-dashboard-flow-items">';
+        modelConfigs.forEach(mc => {
+            const fcIds = (mc.feature_config_ids || []).join(',');
             html += `
-                <div class="configs-dashboard-node feature-config" onclick="cfg_scrollToFeatureConfig(${fc.id})" data-fc-id="${fc.id}" data-dataset-id="${rel.dataset_id}">
-                    <div class="configs-dashboard-node-name" title="${fc.name}">${fc.name}</div>
-                    <div class="configs-dashboard-node-meta">${typeBadge}</div>
-                    ${expBadge}
+                <div class="configs-dashboard-node model-config" data-mc-id="${mc.id}" data-fc-ids="${fcIds}" onclick="cfg_scrollToModelConfig(${mc.id})" title="${mc.name} - ${mc.experiment_count} experiments (hover to see connections)">
+                    <span class="configs-dashboard-node-name">${mc.name}</span>
+                    <span class="configs-dashboard-node-badge experiments">${mc.experiment_count}</span>
                 </div>
             `;
         });
-    });
-    html += '</div>';
+        html += '</div></div>';
+    }
 
     html += '</div>';
     container.innerHTML = html;
+
+    // Add hover handlers for lineage highlighting
+    cfg_setupLineageHighlighting();
+}
+
+/**
+ * Setup hover handlers to highlight connected items in the flow diagram.
+ */
+function cfg_setupLineageHighlighting() {
+    const container = document.getElementById('cfgFlowContainer');
+    if (!container) return;
+
+    const allNodes = container.querySelectorAll('.configs-dashboard-node');
+
+    allNodes.forEach(node => {
+        node.addEventListener('mouseenter', () => {
+            // Dim all nodes first
+            allNodes.forEach(n => n.classList.add('dimmed'));
+
+            if (node.classList.contains('dataset')) {
+                // Highlight this dataset and its feature configs
+                node.classList.remove('dimmed');
+                node.classList.add('highlighted');
+                const fcIds = (node.dataset.fcIds || '').split(',').filter(Boolean);
+                fcIds.forEach(fcId => {
+                    const fcNode = container.querySelector(`.feature-config[data-fc-id="${fcId}"]`);
+                    if (fcNode) {
+                        fcNode.classList.remove('dimmed');
+                        fcNode.classList.add('highlighted');
+                        // Also highlight connected model configs
+                        const mcIds = (fcNode.dataset.mcIds || '').split(',').filter(Boolean);
+                        mcIds.forEach(mcId => {
+                            const mcNode = container.querySelector(`.model-config[data-mc-id="${mcId}"]`);
+                            if (mcNode) {
+                                mcNode.classList.remove('dimmed');
+                                mcNode.classList.add('highlighted');
+                            }
+                        });
+                    }
+                });
+            } else if (node.classList.contains('feature-config')) {
+                // Highlight this FC, its parent dataset, and connected model configs
+                node.classList.remove('dimmed');
+                node.classList.add('highlighted');
+                // Parent dataset
+                const dsId = node.dataset.dsId;
+                const dsNode = container.querySelector(`.dataset[data-ds-id="${dsId}"]`);
+                if (dsNode) {
+                    dsNode.classList.remove('dimmed');
+                    dsNode.classList.add('highlighted');
+                }
+                // Connected model configs
+                const mcIds = (node.dataset.mcIds || '').split(',').filter(Boolean);
+                mcIds.forEach(mcId => {
+                    const mcNode = container.querySelector(`.model-config[data-mc-id="${mcId}"]`);
+                    if (mcNode) {
+                        mcNode.classList.remove('dimmed');
+                        mcNode.classList.add('highlighted');
+                    }
+                });
+            } else if (node.classList.contains('model-config')) {
+                // Highlight this MC and connected feature configs (and their datasets)
+                node.classList.remove('dimmed');
+                node.classList.add('highlighted');
+                const fcIds = (node.dataset.fcIds || '').split(',').filter(Boolean);
+                fcIds.forEach(fcId => {
+                    const fcNode = container.querySelector(`.feature-config[data-fc-id="${fcId}"]`);
+                    if (fcNode) {
+                        fcNode.classList.remove('dimmed');
+                        fcNode.classList.add('highlighted');
+                        // Also highlight parent dataset
+                        const dsId = fcNode.dataset.dsId;
+                        const dsNode = container.querySelector(`.dataset[data-ds-id="${dsId}"]`);
+                        if (dsNode) {
+                            dsNode.classList.remove('dimmed');
+                            dsNode.classList.add('highlighted');
+                        }
+                    }
+                });
+            }
+        });
+
+        node.addEventListener('mouseleave', () => {
+            // Remove all highlighting
+            allNodes.forEach(n => {
+                n.classList.remove('dimmed');
+                n.classList.remove('highlighted');
+            });
+        });
+    });
+}
+
+function cfg_scrollToModelConfig(mcId) {
+    cfg_scrollToChapter('modelStructureChapter');
 }
 
 /**

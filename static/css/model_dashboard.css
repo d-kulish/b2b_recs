@@ -1030,3 +1030,334 @@
         padding: 10px 10px;
     }
 }
+
+/* =========================================================================
+   EXPERIMENTS CHAPTER STYLES
+   ========================================================================= */
+
+/* KPI + Trend Row (40% KPIs / 60% Chart) */
+.model-dashboard-experiments-kpi-trend-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.model-dashboard-experiments-kpi-trend-row .model-dashboard-experiments-model-sections {
+    flex: 0 0 40%;
+    max-width: 40%;
+}
+
+.model-dashboard-experiments-kpi-trend-row .model-dashboard-experiments-trend-panel {
+    flex: 0 0 59%;
+    max-width: 59%;
+}
+
+/* Model Type Sections Container */
+.model-dashboard-experiments-model-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Individual Model Type Section (Clickable KPI Card) */
+.model-dashboard-experiments-model-section {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.model-dashboard-experiments-model-section:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.model-dashboard-experiments-model-section.selected {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Model Section Header */
+.model-dashboard-experiments-model-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.model-dashboard-experiments-model-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.model-dashboard-experiments-model-icon i {
+    font-size: 14px;
+    color: white;
+}
+
+.model-dashboard-experiments-model-icon.retrieval {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+}
+
+.model-dashboard-experiments-model-icon.ranking {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.model-dashboard-experiments-model-icon.hybrid {
+    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+}
+
+.model-dashboard-experiments-model-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+}
+
+/* KPI Stack (horizontal row of metrics) */
+.model-dashboard-experiments-kpi-stack {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.model-dashboard-experiments-kpi-compact {
+    text-align: center;
+    padding: 6px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #fafafa;
+    min-width: 60px;
+    flex: 1;
+}
+
+.model-dashboard-experiments-kpi-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.model-dashboard-experiments-kpi-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #374151;
+    margin-top: 2px;
+}
+
+.model-dashboard-experiments-kpi-value.highlight {
+    color: #10b981;
+}
+
+/* Trend Panel */
+.model-dashboard-experiments-trend-panel {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.model-dashboard-experiments-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.model-dashboard-experiments-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.model-dashboard-experiments-section-subtitle {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.model-dashboard-experiments-chart-container {
+    height: 200px;
+    position: relative;
+}
+
+.model-dashboard-experiments-chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Empty State for Chart */
+.model-dashboard-experiments-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #9ca3af;
+    text-align: center;
+}
+
+.model-dashboard-experiments-empty i {
+    font-size: 32px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.model-dashboard-experiments-empty p {
+    font-size: 13px;
+    margin: 0;
+}
+
+/* Top Configurations Section */
+.model-dashboard-experiments-section {
+    margin-top: 24px;
+}
+
+.model-dashboard-experiments-table-container {
+    overflow-x: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: white;
+}
+
+.model-dashboard-experiments-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.model-dashboard-experiments-table th {
+    text-align: left;
+    padding: 12px 14px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.model-dashboard-experiments-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+    color: #4b5563;
+}
+
+.model-dashboard-experiments-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.model-dashboard-experiments-table tbody tr {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.model-dashboard-experiments-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+/* Rank Cell Styling */
+.model-dashboard-experiments-table .rank-cell {
+    font-weight: 700;
+    color: #6b7280;
+    text-align: center;
+}
+
+.model-dashboard-experiments-table .rank-1 {
+    color: #f59e0b;
+}
+
+.model-dashboard-experiments-table .rank-2 {
+    color: #9ca3af;
+}
+
+.model-dashboard-experiments-table .rank-3 {
+    color: #b45309;
+}
+
+/* Best Metric Highlight */
+.model-dashboard-experiments-table .metric-best {
+    color: #10b981;
+    font-weight: 600;
+}
+
+/* Table Empty State */
+.model-dashboard-experiments-table-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: #9ca3af;
+}
+
+.model-dashboard-experiments-table-empty i {
+    font-size: 28px;
+    margin-bottom: 8px;
+    display: block;
+    opacity: 0.5;
+}
+
+/* Responsive Design for Experiments Chapter */
+@media (max-width: 1100px) {
+    .model-dashboard-experiments-kpi-trend-row {
+        flex-direction: column;
+    }
+
+    .model-dashboard-experiments-kpi-trend-row .model-dashboard-experiments-model-sections,
+    .model-dashboard-experiments-kpi-trend-row .model-dashboard-experiments-trend-panel {
+        flex: 1 1 auto;
+        max-width: 100%;
+    }
+
+    .model-dashboard-experiments-model-sections {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .model-dashboard-experiments-model-section {
+        flex: 1;
+        min-width: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .model-dashboard-experiments-model-sections {
+        flex-direction: column;
+    }
+
+    .model-dashboard-experiments-model-section {
+        min-width: 100%;
+    }
+
+    .model-dashboard-experiments-kpi-stack {
+        flex-wrap: wrap;
+    }
+
+    .model-dashboard-experiments-kpi-compact {
+        min-width: 50px;
+    }
+
+    .model-dashboard-experiments-chart-container {
+        height: 180px;
+    }
+
+    .model-dashboard-experiments-table {
+        font-size: 12px;
+    }
+
+    .model-dashboard-experiments-table th,
+    .model-dashboard-experiments-table td {
+        padding: 10px 10px;
+    }
+}

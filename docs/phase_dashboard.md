@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2025-02-03 (Added ExpViewModal integration for View button)
+**Last Updated**: 2026-02-03 (Added Experiments chapter with KPIs, Metrics Trend chart, Top Configurations table)
 
 ---
 
@@ -259,6 +259,114 @@ ExpViewModal.configure({
 
 ---
 
+## Chapter 3: Experiments
+
+The Experiments chapter displays experiment analytics from the Experiments page, including model type KPIs, metrics trend chart, and top configurations table.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ [Flask Icon] Experiments                                                         │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌──────────────────────────┐  ┌───────────────────────────────────────────────┐│
+│  │ [🔍] RETRIEVAL  (selected)│  │ METRICS TREND                                ││
+│  │ Experiments: 23           │  │ Best Recall metrics over time                ││
+│  │ R@5: 0.055 | R@10: 0.088 │  │ ┌─────────────────────────────────────────┐  ││
+│  │ R@50: 0.213 | R@100: 0.317│  │ │   📈 Multi-line area chart              │  ││
+│  ├──────────────────────────┤  │ │   (R@100, R@50, R@10, R@5)              │  ││
+│  │ [📊] RANKING              │  │ │                                         │  ││
+│  │ Experiments: 3            │  │ └─────────────────────────────────────────┘  ││
+│  │ RMSE: 0.498 | Test: 0.500 │  │                                              ││
+│  │ MAE: 0.329 | Test: 0.329  │  └───────────────────────────────────────────────┘│
+│  ├──────────────────────────┤                                                   │
+│  │ [🔀] HYBRID               │                                                   │
+│  │ Experiments: 4            │                                                   │
+│  │ (40% width)               │                  (60% width)                      │
+│  └──────────────────────────┘                                                   │
+│                                                                                 │
+│  TOP CONFIGURATIONS                                                             │
+│  Best performing retrieval experiments (by R@100)                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │ # │ Experiment │ Dataset │ Feature │ Model │ LR  │Batch│Epochs│R@100│ Loss ││
+│  │───┼────────────┼─────────┼─────────┼───────┼─────┼─────┼──────┼─────┼──────││
+│  │ 1 │ Exp #62    │ old_... │cherng_v2│scann_v│0.001│1024 │ 50   │0.317│2555.7││
+│  │ 2 │ Exp #50    │ old_... │cherng_v2│chernig│0.001│1024 │ 50   │0.317│2730.8││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Model Type KPI Sections (40% width)
+
+Three clickable KPI containers that filter the dashboard content:
+
+| Section | Icon | Color | Metrics Displayed |
+|---------|------|-------|-------------------|
+| Retrieval | `fa-search` | Green (#10b981) | Experiments, R@5, R@10, R@50, R@100 |
+| Ranking | `fa-sort-amount-down` | Orange (#f59e0b) | Experiments, RMSE, Test RMSE, MAE, Test MAE |
+| Hybrid | `fa-layer-group` | Purple (#8b5cf6) | Experiments, RMSE, Test RMSE, R@50, R@100 |
+
+**Behavior**: Clicking a section highlights it with a blue border and reloads the Metrics Trend chart and Top Configurations table for that model type.
+
+### Metrics Trend Chart (60% width)
+
+Chart.js line chart showing best metrics over time:
+
+| Model Type | Lines | Colors | Fill Pattern |
+|------------|-------|--------|--------------|
+| Retrieval | R@100, R@50, R@10, R@5 | Green, Blue, Orange, Red | Cascading fill |
+| Ranking | RMSE, Test RMSE, MAE, Test MAE | Orange variants, Green variants | Area fill |
+| Hybrid | Recall (left Y-axis), RMSE (right Y-axis) | Mixed | Dual Y-axis |
+
+**Features**:
+- Legend in top-right corner
+- Tooltip showing experiment count
+- Responsive height (200px)
+- Empty state when < 2 data points
+
+### Top Configurations Table
+
+Table showing top 5 experiments ranked by primary metric:
+
+| Column | Retrieval | Ranking | Hybrid |
+|--------|-----------|---------|--------|
+| # | Rank (1-5) | Rank (1-5) | Rank (1-5) |
+| Experiment | Display name | Display name | Display name |
+| Dataset | Dataset name | Dataset name | Dataset name |
+| Feature | Feature config | Feature config | Feature config |
+| Model | Model config | Model config | Model config |
+| LR | Learning rate | Learning rate | Learning rate |
+| Metric 1 | Batch size | Batch size | R@100 |
+| Metric 2 | Epochs | Epochs | R@50 |
+| Metric 3 | R@100 (highlighted) | Test RMSE (highlighted) | Test RMSE |
+| Metric 4 | Loss | Test MAE | Test MAE |
+
+**Styling**:
+- Rank 1: Gold (#f59e0b)
+- Rank 2: Silver (#9ca3af)
+- Rank 3: Bronze (#b45309)
+- Best metric: Green highlight (#10b981)
+- Clickable rows open ExpViewModal
+
+### API Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/experiments/dashboard-stats/` | KPI data for all three model types |
+| `GET /api/experiments/metrics-trend/?model_type=X` | Trend data for chart |
+| `GET /api/experiments/top-configurations/?limit=5&model_type=X` | Top 5 configs table |
+
+### Modal Integration
+
+Table row clicks open `ExpViewModal.open(expId)` to display experiment details with tabs:
+- Overview (metrics, config summary)
+- Pipeline (DAG visualization)
+- Data Insights (statistics)
+- Training (loss curves, metrics charts)
+
+---
+
 ## File Structure
 
 ### Created Files
@@ -268,6 +376,7 @@ ExpViewModal.configure({
 | `templates/ml_platform/model_dashboard.html` | Django template with chapter structure |
 | `static/js/model_dashboard_endpoints.js` | IIFE module for Endpoints chapter |
 | `static/js/model_dashboard_models.js` | IIFE module for Models chapter |
+| `static/js/model_dashboard_experiments.js` | IIFE module for Experiments chapter |
 | `static/css/model_dashboard.css` | Styles with `.model-dashboard-` prefix |
 | `static/data/demo/model_dashboard_endpoints.json` | Demo data for Endpoints (sales demonstrations) |
 
@@ -457,6 +566,51 @@ Unlike the Endpoints chapter (which uses demo data), the Models chapter fetches 
 
 ---
 
+## JavaScript Module: ModelDashboardExperiments
+
+### Public API
+
+```javascript
+ModelDashboardExperiments.init(options)        // Initialize with optional config overrides
+ModelDashboardExperiments.load()               // Load KPIs, trend chart, and top configs
+ModelDashboardExperiments.refresh()            // Reload all data
+ModelDashboardExperiments.selectModelType(type) // Switch model type filter ('retrieval', 'ranking', 'hybrid')
+ModelDashboardExperiments.openExpDetails(expId) // Open ExpViewModal for experiment
+```
+
+### Configuration Options
+
+```javascript
+{
+    kpiTrendContainerId: '#experimentsKpiTrendRow',
+    topConfigsContainerId: '#experimentsTopConfigsSection',
+    endpoints: {
+        dashboardStats: '/api/experiments/dashboard-stats/',
+        metricsTrend: '/api/experiments/metrics-trend/',
+        topConfigurations: '/api/experiments/top-configurations/'
+    },
+    chartHeight: 200,
+    topConfigsLimit: 5
+}
+```
+
+### State Structure
+
+```javascript
+state = {
+    kpis: null,           // KPI data for all model types
+    loading: false,
+    initialized: false
+}
+// selectedModelType = 'retrieval' (module-level variable)
+```
+
+### Data Mode
+
+The Experiments chapter fetches **real data** from the `/api/experiments/` API endpoints, reusing the same endpoints as the Experiments Dashboard on the Experiments page.
+
+---
+
 ## CSS Architecture
 
 ### Class Naming Convention
@@ -568,6 +722,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-03 | 1.3 | Added Experiments chapter with KPIs, Metrics Trend chart, Top Configurations table |
 | 2025-02-03 | 1.2 | Added ExpViewModal integration for View button functionality |
 | 2025-02-03 | 1.1 | Added Models chapter with KPIs, calendar, filter bar, table |
 | 2025-02-03 | 1.0 | Initial Endpoints chapter implementation |

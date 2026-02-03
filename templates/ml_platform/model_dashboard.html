@@ -4,7 +4,7 @@
 {% block title %}{{ model.name }} - Dashboard{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 {% endblock %}
@@ -62,6 +62,23 @@
     <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
 </div>
 
+<!-- CHAPTER: EXPERIMENTS -->
+<div id="experimentsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #10b981, #34d399);">
+            <i class="fas fa-flask text-white text-2xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900">Experiments</h2>
+    </div>
+
+    <!-- KPI Sections (40%) + Metrics Trend (60%) -->
+    <div id="experimentsKpiTrendRow" class="model-dashboard-experiments-kpi-trend-row"></div>
+
+    <!-- Top Configurations Table -->
+    <div id="experimentsTopConfigsSection" class="model-dashboard-experiments-section"></div>
+</div>
+
 <!-- Experiment View Modal (Reusable Component) -->
 {% include 'includes/_exp_view_modal.html' %}
 {% endblock %}
@@ -72,23 +89,29 @@
 <script src="{% static 'js/schedule_calendar.js' %}"></script>
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
+<script src="{% static 'js/model_dashboard_experiments.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Configure ExpViewModal for model viewing
+    // Configure ExpViewModal for model/experiment viewing
     ExpViewModal.configure({
         showTabs: ['overview', 'versions', 'artifacts', 'deployment', 'lineage'],
         onClose: function() {
             ModelDashboardModels.refresh();
+            ModelDashboardExperiments.refresh();
         },
         onUpdate: function(data) {
             ModelDashboardModels.refresh();
+            ModelDashboardExperiments.refresh();
         }
     });
 
+    // Initialize and load all chapters
     ModelDashboardEndpoints.init();
     ModelDashboardEndpoints.load();
     ModelDashboardModels.init();
     ModelDashboardModels.load();
+    ModelDashboardExperiments.init();
+    ModelDashboardExperiments.load();
 });
 </script>
 {% endblock %}

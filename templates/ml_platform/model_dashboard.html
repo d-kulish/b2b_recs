@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 {% endblock %}
 
 {% block model_content %}
@@ -27,15 +28,51 @@
     <!-- Tables Section -->
     <div id="endpointsTablesSection" class="model-dashboard-tables-section"></div>
 </div>
+
+<!-- CHAPTER: MODELS -->
+<div id="modelsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
+            <i class="fas fa-cube text-white text-2xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900">Models</h2>
+    </div>
+
+    <!-- KPI Row (5 Cards) -->
+    <div id="modelsChapterKpiRow" class="model-dashboard-models-kpi-row"></div>
+
+    <!-- Training Activity Calendar -->
+    <div class="model-dashboard-models-calendar-wrapper">
+        <h4 class="model-dashboard-models-calendar-title">
+            <i class="fas fa-calendar-alt"></i>
+            Training Activity
+        </h4>
+        <div id="modelsChapterCalendar"></div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div id="modelsChapterFilterBar" class="model-dashboard-models-filter-bar"></div>
+
+    <!-- Models Table -->
+    <div id="modelsChapterTable"></div>
+
+    <!-- Empty State -->
+    <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/schedule_calendar.js' %}"></script>
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
+<script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     ModelDashboardEndpoints.init();
     ModelDashboardEndpoints.load();
+    ModelDashboardModels.init();
+    ModelDashboardModels.load();
 });
 </script>
 {% endblock %}

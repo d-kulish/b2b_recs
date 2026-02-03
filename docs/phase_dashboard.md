@@ -2,9 +2,9 @@
 # Phase: Dashboard Domain
 
 ## Document Purpose
-This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints.
+This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2025-02-03 (Initial documentation: Endpoints chapter implementation)
+**Last Updated**: 2025-02-03 (Added Models chapter implementation)
 
 ---
 
@@ -121,6 +121,115 @@ Tables displayed in a 2-column grid:
 
 ---
 
+## Chapter 2: Models
+
+The Models chapter displays registered models from Vertex AI Model Registry with KPIs, training activity calendar, filtering, and a paginated table. It mirrors the Models Registry from the Training page but excludes scheduling-related elements.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ [Cube Icon] Models                                                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐                   │
+│  │ 7       │ │ 0       │ │ 0       │ │ 7       │ │ 0       │                   │
+│  │ TOTAL   │ │DEPLOYED │ │OUTDATED │ │ IDLE    │ │SCHEDULED│                   │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘                   │
+│                                                                                 │
+│  [Calendar Icon] Training Activity                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │ DEC   JAN   FEB   MAR   APR   MAY   JUN   JUL   AUG                         ││
+│  │ Mon  ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢      ││
+│  │ Wed  ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢      ││
+│  │ Fri  ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ■ ■ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢      ││
+│  │ Sun  ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ■ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢      ││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  [Model Type ▼] [Deployment ▼] [Sort By ▼] [Search...                        ] │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │ # │ Model Name       │ Type     │ Deployment │ Version │ Metrics │Age│Action││
+│  │───┼──────────────────┼──────────┼────────────┼─────────┼─────────┼───┼──────││
+│  │ 1 │ model_name       │ Retrieval│ DEPLOYED   │ v1      │ R@5 ... │2d │ View ││
+│  │ 2 │ model_name       │ Ranking  │ IDLE       │ v1      │ RMSE... │5d │ View ││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  Showing 1-5 of 7 models                    [Previous] [1] [2] [Next]          │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### KPI Section (5 Cards)
+
+A row of 5 KPI cards displaying model statistics from the `/api/models/` endpoint:
+
+| KPI | Icon | Color | Description |
+|-----|------|-------|-------------|
+| Total Models | `fa-cube` | Purple (#8b5cf6) | Total registered models |
+| Deployed | `fa-rocket` | Green (#10b981) | Models currently deployed |
+| Outdated | `fa-exclamation-triangle` | Orange (#f59e0b) | Models with newer versions available |
+| Idle | `fa-pause-circle` | Gray (#6b7280) | Models not deployed |
+| Scheduled | `fa-clock` | Blue (#3b82f6) | Models with active training schedules |
+
+### Training Activity Calendar
+
+GitHub-style contribution calendar showing training activity over time. Uses the `ScheduleCalendar` component with data from `/api/training-schedules/calendar/`.
+
+**Features**:
+- Historical training runs (green squares)
+- Projected scheduled runs (blue dashed squares)
+- Today marker (blue outline)
+- Tooltip on hover showing activity details
+- Popover on click with run/schedule details
+
+### Filter Bar
+
+| Filter | Type | Options |
+|--------|------|---------|
+| Model Type | Dropdown | All Types, Retrieval, Ranking, Multitask |
+| Deployment | Dropdown | All, Deployed, Outdated, Idle |
+| Sort By | Dropdown | Latest, Oldest, Best Metrics, Name A-Z |
+| Search | Text Input | Debounced search (300ms) |
+
+### Models Table
+
+| Column | Content | Notes |
+|--------|---------|-------|
+| # | Row number | Calculated from pagination |
+| Model Name | Name + "Run #N" | Two-line cell |
+| Type | Badge | Retrieval (blue), Ranking (yellow), Multitask (purple) |
+| Deployment | Badge | Deployed (green pill), Outdated (orange pill), Idle (blue pill) |
+| Version | v{N} | Version badge |
+| Metrics | 4 values | Model-type specific with min-width alignment |
+| Age | Days | Color-coded: green (≤7d), orange (8-14d), red (>14d) |
+| Actions | Button | Green "View" button only |
+
+**Metrics by Model Type**:
+- **Retrieval**: R@5, R@10, R@50, R@100
+- **Ranking**: RMSE, Test RMSE, MAE, Test MAE
+- **Multitask**: R@50, R@100, RMSE, Test RMSE
+
+### Pagination
+
+Uses Tailwind CSS classes matching the Models Registry:
+- Active page: `bg-blue-600 text-white`
+- Inactive pages: `border-gray-300 hover:bg-blue-50`
+- Previous/Next buttons with disabled states
+- "Showing X-Y of Z models" text
+
+### API Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/models/` | Fetch models with filters, pagination, KPI data |
+| `GET /api/training-schedules/calendar/` | Fetch calendar data for heatmap |
+
+### Modal Integration
+
+- **ExpViewModal**: `ExpViewModal.openForModel(modelId)` - Opens on View button click or row click
+
+---
+
 ## File Structure
 
 ### Created Files
@@ -129,8 +238,16 @@ Tables displayed in a 2-column grid:
 |------|---------|
 | `templates/ml_platform/model_dashboard.html` | Django template with chapter structure |
 | `static/js/model_dashboard_endpoints.js` | IIFE module for Endpoints chapter |
+| `static/js/model_dashboard_models.js` | IIFE module for Models chapter |
 | `static/css/model_dashboard.css` | Styles with `.model-dashboard-` prefix |
-| `static/data/demo/model_dashboard_endpoints.json` | Demo data for sales demonstrations |
+| `static/data/demo/model_dashboard_endpoints.json` | Demo data for Endpoints (sales demonstrations) |
+
+### Dependencies
+
+| File | Purpose |
+|------|---------|
+| `static/js/schedule_calendar.js` | GitHub-style calendar component |
+| `static/css/schedule_calendar.css` | Calendar styles |
 
 ### Template Structure
 
@@ -142,37 +259,55 @@ Tables displayed in a 2-column grid:
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 {% endblock %}
 
 {% block model_content %}
 <!-- CHAPTER: ENDPOINTS -->
 <div id="endpointsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
-    <!-- Header -->
     <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl ...">
+        <div class="w-14 h-14 rounded-xl ..." style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
             <i class="fas fa-chart-line text-white text-2xl"></i>
         </div>
         <h2 class="text-2xl font-bold text-gray-900">Endpoints</h2>
     </div>
-
-    <!-- KPI Row -->
     <div id="endpointsKpiRow" class="model-dashboard-kpi-row"></div>
-
-    <!-- Charts Grid -->
     <div id="endpointsChartsGrid" class="model-dashboard-charts-grid"></div>
-
-    <!-- Tables Section -->
     <div id="endpointsTablesSection" class="model-dashboard-tables-section"></div>
+</div>
+
+<!-- CHAPTER: MODELS -->
+<div id="modelsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl ..." style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
+            <i class="fas fa-cube text-white text-2xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900">Models</h2>
+    </div>
+    <div id="modelsChapterKpiRow" class="model-dashboard-models-kpi-row"></div>
+    <div class="model-dashboard-models-calendar-wrapper">
+        <h4 class="model-dashboard-models-calendar-title">
+            <i class="fas fa-calendar-alt"></i> Training Activity
+        </h4>
+        <div id="modelsChapterCalendar"></div>
+    </div>
+    <div id="modelsChapterFilterBar" class="model-dashboard-models-filter-bar"></div>
+    <div id="modelsChapterTable"></div>
+    <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/schedule_calendar.js' %}"></script>
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
+<script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     ModelDashboardEndpoints.init();
     ModelDashboardEndpoints.load();
+    ModelDashboardModels.init();
+    ModelDashboardModels.load();
 });
 </script>
 {% endblock %}
@@ -219,6 +354,58 @@ const ENDPOINT_COLORS = [
     { primary: '#8b5cf6', light: 'rgba(139, 92, 246, 0.2)' }   // Purple
 ];
 ```
+
+---
+
+## JavaScript Module: ModelDashboardModels
+
+### Public API
+
+```javascript
+ModelDashboardModels.init(options)      // Initialize with optional config overrides
+ModelDashboardModels.load()             // Load and render data
+ModelDashboardModels.refresh()          // Reload without resetting filters
+ModelDashboardModels.setFilter(key, value)  // Set filter and refetch
+ModelDashboardModels.handleSearch(value)    // Debounced search handler
+ModelDashboardModels.viewDetails(modelId)   // Open ExpViewModal
+ModelDashboardModels.nextPage()         // Navigate to next page
+ModelDashboardModels.prevPage()         // Navigate to previous page
+ModelDashboardModels.goToPage(page)     // Navigate to specific page
+```
+
+### Configuration Options
+
+```javascript
+{
+    containerId: '#modelsChapter',
+    kpiContainerId: '#modelsChapterKpiRow',
+    calendarContainerId: '#modelsChapterCalendar',
+    filterBarId: '#modelsChapterFilterBar',
+    tableContainerId: '#modelsChapterTable',
+    emptyStateId: '#modelsChapterEmptyState',
+    endpoints: {
+        list: '/api/models/'
+    }
+}
+```
+
+### State Structure
+
+```javascript
+state = {
+    models: [],
+    kpi: { total: 0, deployed: 0, outdated: 0, idle: 0, scheduled: 0 },
+    pagination: { page: 1, pageSize: 5, totalCount: 0, totalPages: 1 },
+    filters: { modelType: 'all', status: 'all', sort: 'latest', search: '' },
+    loading: false,
+    searchDebounceTimer: null,
+    initialized: false
+}
+```
+
+### Data Mode
+
+Unlike the Endpoints chapter (which uses demo data), the Models chapter fetches **real data** from the `/api/models/` API endpoint with the same parameters as the Models Registry on the Training page.
 
 ---
 
@@ -323,10 +510,9 @@ All classes use `.model-dashboard-` prefix to avoid conflicts:
 
 The Dashboard page may expand to include additional chapters:
 
-1. **Training Metrics** - Loss curves, evaluation metrics, training history
-2. **Data Quality** - Feature drift, data distribution changes
-3. **A/B Testing** - Experiment results, variant comparison
-4. **Alerts** - Active alerts, alert history, notification settings
+1. **Data Quality** - Feature drift, data distribution changes
+2. **A/B Testing** - Experiment results, variant comparison
+3. **Alerts** - Active alerts, alert history, notification settings
 
 ---
 
@@ -334,4 +520,5 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-02-03 | 1.1 | Added Models chapter with KPIs, calendar, filter bar, table |
 | 2025-02-03 | 1.0 | Initial Endpoints chapter implementation |

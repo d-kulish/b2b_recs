@@ -312,143 +312,186 @@
     </div>
     <!-- End of ETL Runs -->
 
-    <!-- ETL Setup Container: 2-Column Layout -->
+    <!-- Connections Chapter -->
     <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center gap-3 mb-6">
-            <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
-                <i class="fas fa-cog text-white text-lg"></i>
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="chapter-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+                    <i class="fas fa-plug text-white text-lg"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Connections</h2>
             </div>
-            <h2 class="text-2xl font-bold text-gray-900">ETL Setup</h2>
+            <div class="btn-group">
+                <button onclick="refreshConnections()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;" title="Refresh and test all connections">
+                    <i class="fas fa-sync-alt"></i>Test Connections
+                </button>
+                <button onclick="openCreateConnectionModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
+                    <i class="fas fa-plus"></i>Connection
+                </button>
+            </div>
         </div>
 
-        <!-- Grid: 2 columns, 50/50 split -->
-        <div class="grid grid-cols-2 gap-0">
-
-            <!-- LEFT COLUMN: Connections -->
-            <div class="pr-3 border-r border-gray-200">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold text-gray-700">Connections</h3>
-                    <div class="btn-group">
-                        <button onclick="refreshConnections()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;" title="Refresh and test all connections">
-                            <i class="fas fa-sync-alt"></i>Test Connections
-                        </button>
-                        <button onclick="openCreateConnectionModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
-                            <i class="fas fa-plus"></i>Connection
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Search Input for Connections -->
-                <div class="mb-3">
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="search"
-                               id="connectionsSearch"
-                               name="etl-connection-filter-query"
-                               placeholder="Search connections..."
-                               autocomplete="off"
-                               data-lpignore="true"
-                               data-form-type="other"
-                               class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                               oninput="handleConnectionsSearch()">
-                    </div>
-                </div>
-
-                <!-- Connections List Container -->
-                <div id="connectionsList" class="space-y-3" style="min-height: 200px;">
-                    <!-- Connection cards will be inserted here by JavaScript -->
-                    <div class="card-empty-state">
-                        <p class="card-empty-state-title">No database connections configured</p>
-                        <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
-                    </div>
-                </div>
-
-                <!-- Connections Pagination -->
-                <div id="connectionsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
-                    <div id="connectionsShowingText" class="text-sm text-gray-600"></div>
-                    <div id="connectionsPaginationControls" class="flex items-center gap-1"></div>
-                </div>
+        <!-- Filter Bar for Connections -->
+        <div class="runs-filter-bar">
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Status</label>
+                <select id="connectionsStatusFilter" class="runs-filter-select" onchange="handleConnectionsFilters()">
+                    <option value="">All</option>
+                    <option value="success">Working</option>
+                    <option value="failed">Failed</option>
+                    <option value="unknown">Not Tested</option>
+                </select>
             </div>
-
-            <!-- RIGHT COLUMN: ETL Jobs -->
-            <div class="pl-3">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold text-gray-700">ETL Jobs</h3>
-                    <div class="btn-group">
-                        <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
-                            <i class="fas fa-plus"></i>ETL Job
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Search Input for ETL Jobs -->
-                <div class="mb-3">
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="search"
-                               id="pipelinesSearch"
-                               name="etl-pipeline-filter"
-                               placeholder="Search pipelines..."
-                               autocomplete="off"
-                               data-lpignore="true"
-                               data-form-type="other"
-                               class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                               oninput="handleJobsSearch()">
-                    </div>
-                </div>
-
-                <!-- ETL Jobs List Container -->
-                <div id="etlJobsList" class="space-y-3" style="min-height: 200px;">
-                    <!-- Job cards will be inserted here by JavaScript -->
-                    <div class="card-empty-state">
-                        <p class="card-empty-state-title">No ETL jobs configured</p>
-                        <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
-                    </div>
-                </div>
-
-                <!-- ETL Jobs Pagination -->
-                <div id="jobsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
-                    <div id="jobsShowingText" class="text-sm text-gray-600"></div>
-                    <div id="jobsPaginationControls" class="flex items-center gap-1"></div>
-                </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Type</label>
+                <select id="connectionsTypeFilter" class="runs-filter-select" onchange="handleConnectionsFilters()">
+                    <option value="">All</option>
+                    <option value="relational">Relational</option>
+                    <option value="cloud_storage">Cloud Storage</option>
+                    <option value="nosql">NoSQL</option>
+                </select>
             </div>
-
-            <!-- ETL Jobs Data (JSON for JavaScript) -->
-            <script type="application/json" id="etlJobsData">
-            [
-                {% for source in data_sources %}
-                {
-                    "id": {{ source.id }},
-                    "name": "{{ source.name|escapejs }}",
-                    "is_enabled": {{ source.is_enabled|yesno:"true,false" }},
-                    "schedule_type": "{{ source.schedule_type|default:'manual'|escapejs }}",
-                    "connection_name": "{{ source.connection.name|default:''|escapejs }}",
-                    "cloud_scheduler_job_name": "{{ source.cloud_scheduler_job_name|default:''|escapejs }}",
-                    "tables": [
-                        {% for table in source.tables.all %}
-                        {
-                            "source_table_name": "{{ table.source_table_name|escapejs }}",
-                            "dest_table_name": "{{ table.dest_table_name|escapejs }}",
-                            "schedule_minute": {{ table.schedule_minute|default:"0" }},
-                            "schedule_time": "{{ table.schedule_time|default:'09:00'|time:'H:i' }}",
-                            "schedule_day_of_week": {{ table.schedule_day_of_week|default:"0" }}
-                        }{% if not forloop.last %},{% endif %}
-                        {% endfor %}
-                    ],
-                    "last_run": {% with last_run=source.runs.first %}{% if last_run %}{
-                        "started_at": "{% timezone "Europe/Kiev" %}{{ last_run.started_at|date:'M d, H:i' }}{% endtimezone %}",
-                        "status": "{{ last_run.status }}"
-                    }{% else %}null{% endif %}{% endwith %}
-                }{% if not forloop.last %},{% endif %}
-                {% endfor %}
-            ]
-            </script>
-
+            <input type="text" id="connectionsSearch" class="runs-search-input"
+                   placeholder="Search connections..."
+                   autocomplete="off"
+                   data-lpignore="true"
+                   data-form-type="other"
+                   oninput="handleConnectionsSearch()">
         </div>
-        <!-- End of 2-column grid -->
 
+        <!-- Connections List Container -->
+        <div id="connectionsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" style="min-height: 120px;">
+            <!-- Connection cards will be inserted here by JavaScript -->
+            <div class="card-empty-state col-span-full">
+                <p class="card-empty-state-title">No database connections configured</p>
+                <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
+            </div>
+        </div>
+
+        <!-- Connections Pagination -->
+        <div id="connectionsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+            <div id="connectionsShowingText" class="text-sm text-gray-600"></div>
+            <div id="connectionsPaginationControls" class="flex items-center gap-1"></div>
+        </div>
     </div>
-    <!-- End of ETL Setup Container -->
+    <!-- End of Connections Chapter -->
+
+    <!-- ETL Jobs Chapter -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+                    <i class="fas fa-database text-white text-lg"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">ETL Jobs</h2>
+            </div>
+            <div class="btn-group">
+                <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
+                    <i class="fas fa-plus"></i>ETL Job
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Bar for ETL Jobs -->
+        <div class="runs-filter-bar">
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Status</label>
+                <select id="jobsStatusFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                    <option value="">All</option>
+                    <option value="active">Active</option>
+                    <option value="paused">Paused</option>
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Connection</label>
+                <select id="jobsConnectionFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                    <option value="">All</option>
+                    <!-- Populated dynamically by JavaScript -->
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Schedule</label>
+                <select id="jobsScheduleFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                    <option value="">All</option>
+                    <option value="manual">Manual</option>
+                    <option value="hourly">Hourly</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Destination Table</label>
+                <select id="jobsDestTableFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                    <option value="">All</option>
+                    <!-- Populated dynamically by JavaScript -->
+                </select>
+            </div>
+            <div class="runs-filter-group">
+                <label class="runs-filter-label">Load Type</label>
+                <select id="jobsLoadTypeFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                    <option value="">All</option>
+                    <option value="relational">Relational</option>
+                    <option value="nosql">NoSQL</option>
+                    <option value="cloud_storage">Cloud Storage</option>
+                </select>
+            </div>
+            <input type="text" id="jobsSearch" class="runs-search-input"
+                   placeholder="Search ETL jobs..."
+                   autocomplete="off"
+                   data-lpignore="true"
+                   data-form-type="other"
+                   oninput="handleJobsSearch()">
+        </div>
+
+        <!-- ETL Jobs List Container -->
+        <div id="etlJobsList" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start" style="min-height: 120px;">
+            <!-- Job cards will be inserted here by JavaScript -->
+            <div class="card-empty-state col-span-full">
+                <p class="card-empty-state-title">No ETL jobs configured</p>
+                <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
+            </div>
+        </div>
+
+        <!-- ETL Jobs Pagination -->
+        <div id="jobsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+            <div id="jobsShowingText" class="text-sm text-gray-600"></div>
+            <div id="jobsPaginationControls" class="flex items-center gap-1"></div>
+        </div>
+
+        <!-- ETL Jobs Data (JSON for JavaScript) -->
+        <script type="application/json" id="etlJobsData">
+        [
+            {% for source in data_sources %}
+            {
+                "id": {{ source.id }},
+                "name": "{{ source.name|escapejs }}",
+                "is_enabled": {{ source.is_enabled|yesno:"true,false" }},
+                "schedule_type": "{{ source.schedule_type|default:'manual'|escapejs }}",
+                "connection_name": "{{ source.connection.name|default:''|escapejs }}",
+                "source_type": "{{ source.connection.source_type|default:''|escapejs }}",
+                "cloud_scheduler_job_name": "{{ source.cloud_scheduler_job_name|default:''|escapejs }}",
+                "tables": [
+                    {% for table in source.tables.all %}
+                    {
+                        "source_table_name": "{{ table.source_table_name|escapejs }}",
+                        "dest_table_name": "{{ table.dest_table_name|escapejs }}",
+                        "schedule_minute": {{ table.schedule_minute|default:"0" }},
+                        "schedule_time": "{{ table.schedule_time|default:'09:00'|time:'H:i' }}",
+                        "schedule_day_of_week": {{ table.schedule_day_of_week|default:"0" }}
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                "last_run": {% with last_run=source.runs.first %}{% if last_run %}{
+                    "started_at": "{% timezone "Europe/Kiev" %}{{ last_run.started_at|date:'M d, H:i' }}{% endtimezone %}",
+                    "status": "{{ last_run.status }}"
+                }{% else %}null{% endif %}{% endwith %}
+            }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ]
+        </script>
+    </div>
+    <!-- End of ETL Jobs Chapter -->
 
 </div>
 
@@ -4521,17 +4564,26 @@ function calculateDuration(startIso, endIso) {
 // ============================================================================
 
 const ITEMS_PER_PAGE = 5;
+const CONNECTIONS_PER_PAGE = 6;  // 2 rows × 3 columns
+const JOBS_PER_PAGE = 6;         // 2 rows × 3 columns
 
 // Connections state
 let allConnections = [];
 let connectionsCurrentPage = 1;
 let connectionsSearchTerm = '';
+let connectionsTypeFilter = '';
+let connectionsStatusFilter = '';
 let connectionsSearchTimeout = null;
 
 // ETL Jobs state
 let allJobs = [];
 let jobsCurrentPage = 1;
 let jobsSearchTerm = '';
+let jobsStatusFilter = '';
+let jobsConnectionFilter = '';
+let jobsScheduleFilter = '';
+let jobsDestTableFilter = '';
+let jobsLoadTypeFilter = '';
 let jobsSearchTimeout = null;
 
 /**
@@ -4641,16 +4693,65 @@ function goToConnectionsPage(page) {
 
 function clearConnectionsSearch() {
     document.getElementById('connectionsSearch').value = '';
+    document.getElementById('connectionsTypeFilter').value = '';
+    document.getElementById('connectionsStatusFilter').value = '';
     connectionsSearchTerm = '';
+    connectionsTypeFilter = '';
+    connectionsStatusFilter = '';
     connectionsCurrentPage = 1;
     renderConnectionsList();
 }
 
-function filterConnections(connections, searchTerm) {
-    if (!searchTerm) return connections;
-    return connections.filter(conn =>
-        conn.name.toLowerCase().includes(searchTerm)
-    );
+function handleConnectionsFilters() {
+    connectionsTypeFilter = document.getElementById('connectionsTypeFilter').value;
+    connectionsStatusFilter = document.getElementById('connectionsStatusFilter').value;
+    connectionsCurrentPage = 1;
+    renderConnectionsList();
+}
+
+function getConnectionTypeCategory(sourceType) {
+    const storageTypes = ['gcs', 's3', 'azure_blob'];
+    const nosqlTypes = ['mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'];
+
+    if (storageTypes.includes(sourceType)) {
+        return 'cloud_storage';
+    } else if (nosqlTypes.includes(sourceType)) {
+        return 'nosql';
+    }
+    return 'relational';
+}
+
+function getConnectionStatus(connection) {
+    if (connection.last_test_status === 'success') return 'success';
+    if (connection.last_test_status === 'failed') return 'failed';
+    return 'unknown';
+}
+
+function filterConnections(connections, searchTerm, typeFilter, statusFilter) {
+    let filtered = connections;
+
+    // Filter by search term
+    if (searchTerm) {
+        filtered = filtered.filter(conn =>
+            conn.name.toLowerCase().includes(searchTerm)
+        );
+    }
+
+    // Filter by type
+    if (typeFilter) {
+        filtered = filtered.filter(conn =>
+            getConnectionTypeCategory(conn.source_type) === typeFilter
+        );
+    }
+
+    // Filter by status
+    if (statusFilter) {
+        filtered = filtered.filter(conn =>
+            getConnectionStatus(conn) === statusFilter
+        );
+    }
+
+    return filtered;
 }
 
 function renderConnectionsList() {
@@ -4662,17 +4763,18 @@ function renderConnectionsList() {
     // Sort connections by ID descending (newest first)
     const sorted = [...allConnections].sort((a, b) => b.id - a.id);
 
-    // Filter connections by search term
-    const filtered = filterConnections(sorted, connectionsSearchTerm);
+    // Filter connections by search term, type, and status
+    const filtered = filterConnections(sorted, connectionsSearchTerm, connectionsTypeFilter, connectionsStatusFilter);
 
-    // Check for no results with search
-    if (filtered.length === 0 && connectionsSearchTerm) {
+    // Check for no results with filters applied
+    const hasFilters = connectionsSearchTerm || connectionsTypeFilter || connectionsStatusFilter;
+    if (filtered.length === 0 && hasFilters) {
         container.innerHTML = `
-            <div class="card-empty-state">
-                <i class="fas fa-search text-gray-400 text-2xl mb-2"></i>
-                <p class="card-empty-state-title">No connections match "${connectionsSearchTerm}"</p>
+            <div class="card-empty-state col-span-full">
+                <i class="fas fa-filter text-gray-400 text-2xl mb-2"></i>
+                <p class="card-empty-state-title">No connections match the selected filters</p>
                 <p class="card-empty-state-text">
-                    <a href="javascript:void(0)" onclick="clearConnectionsSearch()" class="text-blue-600 hover:underline">Clear search</a>
+                    <a href="javascript:void(0)" onclick="clearConnectionsSearch()" class="text-blue-600 hover:underline">Clear filters</a>
                 </p>
             </div>
         `;
@@ -4683,7 +4785,7 @@ function renderConnectionsList() {
     // Check for no connections at all
     if (filtered.length === 0) {
         container.innerHTML = `
-            <div class="card-empty-state">
+            <div class="card-empty-state col-span-full">
                 <p class="card-empty-state-title">No database connections configured</p>
                 <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
             </div>
@@ -4693,8 +4795,8 @@ function renderConnectionsList() {
     }
 
     // Paginate
-    const start = (connectionsCurrentPage - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
+    const start = (connectionsCurrentPage - 1) * CONNECTIONS_PER_PAGE;
+    const end = start + CONNECTIONS_PER_PAGE;
     const paginated = filtered.slice(start, end);
 
     // Render cards
@@ -4707,9 +4809,9 @@ function renderConnectionsList() {
     autoTestConnections(paginated);
 
     // Update pagination controls
-    if (filtered.length > ITEMS_PER_PAGE) {
-        showingTextEl.innerHTML = generateShowingText(connectionsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'connections');
-        controlsEl.innerHTML = generatePaginationControls(connectionsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'goToConnectionsPage');
+    if (filtered.length > CONNECTIONS_PER_PAGE) {
+        showingTextEl.innerHTML = generateShowingText(connectionsCurrentPage, filtered.length, CONNECTIONS_PER_PAGE, 'connections');
+        controlsEl.innerHTML = generatePaginationControls(connectionsCurrentPage, filtered.length, CONNECTIONS_PER_PAGE, 'goToConnectionsPage');
         paginationContainer.classList.remove('hidden');
     } else {
         paginationContainer.classList.add('hidden');
@@ -4739,16 +4841,134 @@ function goToJobsPage(page) {
 
 function clearJobsSearch() {
     document.getElementById('jobsSearch').value = '';
+    document.getElementById('jobsStatusFilter').value = '';
+    document.getElementById('jobsConnectionFilter').value = '';
+    document.getElementById('jobsScheduleFilter').value = '';
+    document.getElementById('jobsDestTableFilter').value = '';
+    document.getElementById('jobsLoadTypeFilter').value = '';
     jobsSearchTerm = '';
+    jobsStatusFilter = '';
+    jobsConnectionFilter = '';
+    jobsScheduleFilter = '';
+    jobsDestTableFilter = '';
+    jobsLoadTypeFilter = '';
     jobsCurrentPage = 1;
     renderJobsList();
 }
 
-function filterJobs(jobs, searchTerm) {
-    if (!searchTerm) return jobs;
-    return jobs.filter(job =>
-        job.name.toLowerCase().includes(searchTerm)
-    );
+function handleJobsFilters() {
+    jobsStatusFilter = document.getElementById('jobsStatusFilter').value;
+    jobsConnectionFilter = document.getElementById('jobsConnectionFilter').value;
+    jobsScheduleFilter = document.getElementById('jobsScheduleFilter').value;
+    jobsDestTableFilter = document.getElementById('jobsDestTableFilter').value;
+    jobsLoadTypeFilter = document.getElementById('jobsLoadTypeFilter').value;
+    jobsCurrentPage = 1;
+    renderJobsList();
+}
+
+function populateJobsFilters() {
+    // Populate Connection filter
+    const connSelect = document.getElementById('jobsConnectionFilter');
+    if (connSelect) {
+        const connectionNames = [...new Set(allJobs.map(job => job.connection_name).filter(Boolean))];
+        connectionNames.sort();
+        connSelect.innerHTML = '<option value="">All</option>';
+        connectionNames.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            connSelect.appendChild(option);
+        });
+    }
+
+    // Populate Destination Table filter
+    const destSelect = document.getElementById('jobsDestTableFilter');
+    if (destSelect) {
+        const destTables = [];
+        allJobs.forEach(job => {
+            if (job.tables && job.tables.length > 0) {
+                job.tables.forEach(table => {
+                    if (table.dest_table_name && !destTables.includes(table.dest_table_name)) {
+                        destTables.push(table.dest_table_name);
+                    }
+                });
+            }
+        });
+        destTables.sort();
+        destSelect.innerHTML = '<option value="">All</option>';
+        destTables.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            destSelect.appendChild(option);
+        });
+    }
+}
+
+// Keep old function name for backwards compatibility
+function populateJobsConnectionFilter() {
+    populateJobsFilters();
+}
+
+function getJobLoadType(job) {
+    // Determine load type based on the job's source_type (inherited from connection)
+    const storageTypes = ['gcs', 's3', 'azure_blob'];
+    const nosqlTypes = ['mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'];
+    const sourceType = job.source_type || '';
+
+    if (storageTypes.includes(sourceType)) {
+        return 'cloud_storage';
+    } else if (nosqlTypes.includes(sourceType)) {
+        return 'nosql';
+    }
+    return 'relational';
+}
+
+function filterJobs(jobs, searchTerm, statusFilter, connectionFilter, scheduleFilter, destTableFilter, loadTypeFilter) {
+    let filtered = jobs;
+
+    // Filter by search term
+    if (searchTerm) {
+        filtered = filtered.filter(job =>
+            job.name.toLowerCase().includes(searchTerm)
+        );
+    }
+
+    // Filter by status (active/paused)
+    if (statusFilter) {
+        if (statusFilter === 'active') {
+            filtered = filtered.filter(job => job.is_enabled === true);
+        } else if (statusFilter === 'paused') {
+            filtered = filtered.filter(job => job.is_enabled === false);
+        }
+    }
+
+    // Filter by connection
+    if (connectionFilter) {
+        filtered = filtered.filter(job => job.connection_name === connectionFilter);
+    }
+
+    // Filter by schedule type
+    if (scheduleFilter) {
+        filtered = filtered.filter(job => job.schedule_type === scheduleFilter);
+    }
+
+    // Filter by destination table
+    if (destTableFilter) {
+        filtered = filtered.filter(job => {
+            if (job.tables && job.tables.length > 0) {
+                return job.tables.some(table => table.dest_table_name === destTableFilter);
+            }
+            return false;
+        });
+    }
+
+    // Filter by load type (based on connection's source_type)
+    if (loadTypeFilter) {
+        filtered = filtered.filter(job => getJobLoadType(job) === loadTypeFilter);
+    }
+
+    return filtered;
 }
 
 function renderJobCard(job) {
@@ -4872,17 +5092,18 @@ function renderJobsList() {
     // Sort jobs by ID descending (newest first)
     const sorted = [...allJobs].sort((a, b) => b.id - a.id);
 
-    // Filter jobs by search term
-    const filtered = filterJobs(sorted, jobsSearchTerm);
+    // Filter jobs by all criteria
+    const filtered = filterJobs(sorted, jobsSearchTerm, jobsStatusFilter, jobsConnectionFilter, jobsScheduleFilter, jobsDestTableFilter, jobsLoadTypeFilter);
 
-    // Check for no results with search
-    if (filtered.length === 0 && jobsSearchTerm) {
+    // Check for no results with filters applied
+    const hasFilters = jobsSearchTerm || jobsStatusFilter || jobsConnectionFilter || jobsScheduleFilter || jobsDestTableFilter || jobsLoadTypeFilter;
+    if (filtered.length === 0 && hasFilters) {
         container.innerHTML = `
-            <div class="card-empty-state">
-                <i class="fas fa-search text-gray-400 text-2xl mb-2"></i>
-                <p class="card-empty-state-title">No ETL jobs match "${jobsSearchTerm}"</p>
+            <div class="card-empty-state col-span-full">
+                <i class="fas fa-filter text-gray-400 text-2xl mb-2"></i>
+                <p class="card-empty-state-title">No ETL jobs match the selected filters</p>
                 <p class="card-empty-state-text">
-                    <a href="javascript:void(0)" onclick="clearJobsSearch()" class="text-blue-600 hover:underline">Clear search</a>
+                    <a href="javascript:void(0)" onclick="clearJobsSearch()" class="text-blue-600 hover:underline">Clear filters</a>
                 </p>
             </div>
         `;
@@ -4893,7 +5114,7 @@ function renderJobsList() {
     // Check for no jobs at all
     if (filtered.length === 0) {
         container.innerHTML = `
-            <div class="card-empty-state">
+            <div class="card-empty-state col-span-full">
                 <p class="card-empty-state-title">No ETL jobs configured</p>
                 <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
             </div>
@@ -4903,17 +5124,17 @@ function renderJobsList() {
     }
 
     // Paginate
-    const start = (jobsCurrentPage - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
+    const start = (jobsCurrentPage - 1) * JOBS_PER_PAGE;
+    const end = start + JOBS_PER_PAGE;
     const paginated = filtered.slice(start, end);
 
     // Render cards
     container.innerHTML = paginated.map(job => renderJobCard(job)).join('');
 
     // Update pagination controls
-    if (filtered.length > ITEMS_PER_PAGE) {
-        showingTextEl.innerHTML = generateShowingText(jobsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'jobs');
-        controlsEl.innerHTML = generatePaginationControls(jobsCurrentPage, filtered.length, ITEMS_PER_PAGE, 'goToJobsPage');
+    if (filtered.length > JOBS_PER_PAGE) {
+        showingTextEl.innerHTML = generateShowingText(jobsCurrentPage, filtered.length, JOBS_PER_PAGE, 'jobs');
+        controlsEl.innerHTML = generatePaginationControls(jobsCurrentPage, filtered.length, JOBS_PER_PAGE, 'goToJobsPage');
         paginationContainer.classList.remove('hidden');
     } else {
         paginationContainer.classList.add('hidden');
@@ -4926,13 +5147,14 @@ function loadETLJobs() {
         const dataEl = document.getElementById('etlJobsData');
         if (dataEl) {
             allJobs = JSON.parse(dataEl.textContent);
+            populateJobsConnectionFilter();
             renderJobsList();
         }
     } catch (error) {
         console.error('Error loading ETL jobs data:', error);
         const container = document.getElementById('etlJobsList');
         container.innerHTML = `
-            <div class="card-empty-state">
+            <div class="card-empty-state col-span-full">
                 <p class="card-empty-state-title" style="color: #ef4444;">Error loading ETL jobs</p>
                 <p class="card-empty-state-text">Please refresh the page</p>
             </div>

@@ -2822,7 +2822,10 @@ const ExpViewModal = (function() {
             visibleTabs = ['overview', 'versions', 'artifacts', 'deployment'];
         } else if (state.mode === 'endpoint') {
             visibleTabs = ['overview', 'versions', 'logs'];
+        } else if (state.mode === 'experiment') {
+            visibleTabs = ['overview', 'pipeline', 'data', 'training'];
         } else {
+            // Fallback to config for unknown modes
             visibleTabs = config.showTabs;
         }
 

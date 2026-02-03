@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2026-02-03 (Added Experiments chapter with KPIs, Metrics Trend chart, Top Configurations table)
+**Last Updated**: 2026-02-03 (Fixed ExpViewModal experiment mode tabs, added pipeline_dag.js and d3.js dependencies)
 
 ---
 
@@ -359,11 +359,17 @@ Table showing top 5 experiments ranked by primary metric:
 
 ### Modal Integration
 
-Table row clicks open `ExpViewModal.open(expId)` to display experiment details with tabs:
-- Overview (metrics, config summary)
-- Pipeline (DAG visualization)
-- Data Insights (statistics)
-- Training (loss curves, metrics charts)
+Table row clicks open `ExpViewModal.open(expId)` to display experiment details. The modal automatically shows experiment-specific tabs based on `state.mode`:
+
+**Tabs Displayed in Experiment Mode**:
+| Tab | Content |
+|-----|---------|
+| Overview | Dataset, features config, model config, metrics |
+| Pipeline | TFX pipeline DAG visualization (requires `pipeline_dag.js`) |
+| Data Insights | TFDV statistics, schema validation |
+| Training Runs | Loss curves, weight histograms (requires `d3.js`) |
+
+**Note**: The `ExpViewModal` handles tab visibility per mode in `updateVisibleTabs()`. Experiment mode tabs are hardcoded to `['overview', 'pipeline', 'data', 'training']` regardless of page-level `config.showTabs` setting.
 
 ---
 
@@ -388,7 +394,16 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details w
 | `static/css/schedule_calendar.css` | Calendar styles |
 | `static/js/exp_view_modal.js` | Model/experiment view modal with tabs |
 | `static/css/exp_view_modal.css` | Modal styling |
+| `static/js/pipeline_dag.js` | TFX pipeline DAG visualization |
+| `static/css/pipeline_dag.css` | Pipeline DAG styles |
 | `templates/includes/_exp_view_modal.html` | Modal HTML template |
+
+### External Libraries (CDN)
+
+| Library | Version | Purpose |
+|---------|---------|---------|
+| Chart.js | latest | Line charts, area charts |
+| D3.js | v7 | Weight distribution histograms in Training tab |
 
 ### Template Structure
 
@@ -399,43 +414,33 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details w
 {% block title %}{{ model.name }} - Dashboard{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=5">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
 {% endblock %}
 
 {% block model_content %}
 <!-- CHAPTER: ENDPOINTS -->
 <div id="endpointsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
-    <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl ..." style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
-            <i class="fas fa-chart-line text-white text-2xl"></i>
-        </div>
-        <h2 class="text-2xl font-bold text-gray-900">Endpoints</h2>
-    </div>
-    <div id="endpointsKpiRow" class="model-dashboard-kpi-row"></div>
-    <div id="endpointsChartsGrid" class="model-dashboard-charts-grid"></div>
-    <div id="endpointsTablesSection" class="model-dashboard-tables-section"></div>
+    ...
 </div>
 
 <!-- CHAPTER: MODELS -->
 <div id="modelsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    ...
+</div>
+
+<!-- CHAPTER: EXPERIMENTS -->
+<div id="experimentsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
     <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl ..." style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
-            <i class="fas fa-cube text-white text-2xl"></i>
+        <div class="w-14 h-14 rounded-xl ..." style="background: linear-gradient(135deg, #10b981, #34d399);">
+            <i class="fas fa-flask text-white text-2xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900">Models</h2>
+        <h2 class="text-2xl font-bold text-gray-900">Experiments</h2>
     </div>
-    <div id="modelsChapterKpiRow" class="model-dashboard-models-kpi-row"></div>
-    <div class="model-dashboard-models-calendar-wrapper">
-        <h4 class="model-dashboard-models-calendar-title">
-            <i class="fas fa-calendar-alt"></i> Training Activity
-        </h4>
-        <div id="modelsChapterCalendar"></div>
-    </div>
-    <div id="modelsChapterFilterBar" class="model-dashboard-models-filter-bar"></div>
-    <div id="modelsChapterTable"></div>
-    <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
+    <div id="experimentsKpiTrendRow" class="model-dashboard-experiments-kpi-trend-row"></div>
+    <div id="experimentsTopConfigsSection" class="model-dashboard-experiments-section"></div>
 </div>
 
 <!-- ExpViewModal (must be inside model_content block) -->
@@ -444,20 +449,26 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details w
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{% static 'js/exp_view_modal.js' %}?v=3"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="{% static 'js/pipeline_dag.js' %}?v=2"></script>
+<script src="{% static 'js/exp_view_modal.js' %}?v=4"></script>
 <script src="{% static 'js/schedule_calendar.js' %}"></script>
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
+<script src="{% static 'js/model_dashboard_experiments.js' %}?v=3"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Configure ExpViewModal for model viewing
+    // Configure ExpViewModal for model viewing (used by Models chapter)
+    // Note: Experiment mode tabs are hardcoded in updateVisibleTabs()
     ExpViewModal.configure({
         showTabs: ['overview', 'versions', 'artifacts', 'deployment', 'lineage'],
         onClose: function() {
             ModelDashboardModels.refresh();
+            ModelDashboardExperiments.refresh();
         },
         onUpdate: function(data) {
             ModelDashboardModels.refresh();
+            ModelDashboardExperiments.refresh();
         }
     });
 
@@ -465,6 +476,8 @@ document.addEventListener('DOMContentLoaded', function() {
     ModelDashboardEndpoints.load();
     ModelDashboardModels.init();
     ModelDashboardModels.load();
+    ModelDashboardExperiments.init();
+    ModelDashboardExperiments.load();
 });
 </script>
 {% endblock %}
@@ -722,6 +735,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-03 | 1.4 | Fixed ExpViewModal experiment mode tabs, added pipeline_dag.js and d3.js dependencies |
 | 2026-02-03 | 1.3 | Added Experiments chapter with KPIs, Metrics Trend chart, Top Configurations table |
 | 2025-02-03 | 1.2 | Added ExpViewModal integration for View button functionality |
 | 2025-02-03 | 1.1 | Added Models chapter with KPIs, calendar, filter bar, table |

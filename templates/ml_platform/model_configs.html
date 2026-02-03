@@ -8,6 +8,406 @@
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <style>
+    /* =========================================================================
+       CONFIGS DASHBOARD CHAPTER STYLES
+       ========================================================================= */
+
+    /* KPI Row Layout */
+    .configs-dashboard-kpi-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    /* Individual KPI Card */
+    .configs-dashboard-kpi-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .configs-dashboard-kpi-card:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .configs-dashboard-kpi-card.active {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .configs-dashboard-kpi-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .configs-dashboard-kpi-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .configs-dashboard-kpi-icon.datasets {
+        background: linear-gradient(135deg, #6366f1, #818cf8);
+    }
+
+    .configs-dashboard-kpi-icon.features {
+        background: linear-gradient(135deg, #10b981, #34d399);
+    }
+
+    .configs-dashboard-kpi-icon.models {
+        background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    }
+
+    .configs-dashboard-kpi-icon i {
+        color: white;
+        font-size: 18px;
+    }
+
+    .configs-dashboard-kpi-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .configs-dashboard-kpi-stats {
+        display: flex;
+        gap: 12px;
+    }
+
+    .configs-dashboard-kpi-stat {
+        flex: 1;
+        text-align: center;
+        padding: 10px 8px;
+        background: #f9fafb;
+        border-radius: 8px;
+    }
+
+    .configs-dashboard-kpi-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.2;
+    }
+
+    .configs-dashboard-kpi-value.active {
+        color: #10b981;
+    }
+
+    .configs-dashboard-kpi-value.unused {
+        color: #9ca3af;
+    }
+
+    .configs-dashboard-kpi-label {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+
+    /* Complexity Bar */
+    .configs-dashboard-complexity-row {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #f3f4f6;
+    }
+
+    .configs-dashboard-complexity-label {
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .configs-dashboard-complexity-bar {
+        height: 6px;
+        background: #e5e7eb;
+        border-radius: 3px;
+        overflow: hidden;
+        display: flex;
+    }
+
+    .configs-dashboard-complexity-segment {
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+
+    .configs-dashboard-complexity-segment.low {
+        background: #10b981;
+    }
+
+    .configs-dashboard-complexity-segment.medium {
+        background: #f59e0b;
+    }
+
+    .configs-dashboard-complexity-segment.high {
+        background: #ef4444;
+    }
+
+    /* Coverage Matrix Section */
+    .configs-dashboard-section {
+        margin-top: 24px;
+        padding-top: 24px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .configs-dashboard-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+
+    .configs-dashboard-section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .configs-dashboard-section-title i {
+        color: #6b7280;
+        font-size: 14px;
+    }
+
+    /* Coverage Matrix Table */
+    .configs-dashboard-matrix {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 2px;
+        font-size: 12px;
+    }
+
+    .configs-dashboard-matrix th {
+        padding: 8px 12px;
+        text-align: center;
+        font-weight: 500;
+        color: #6b7280;
+        background: #f9fafb;
+        border-radius: 6px;
+    }
+
+    .configs-dashboard-matrix th.row-header {
+        text-align: left;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .configs-dashboard-matrix td {
+        padding: 0;
+    }
+
+    .configs-dashboard-matrix-cell {
+        width: 100%;
+        height: 40px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: 500;
+        color: white;
+    }
+
+    .configs-dashboard-matrix-cell:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    /* Heat colors for coverage matrix */
+    .configs-dashboard-heat-0 {
+        background: #f3f4f6;
+        color: #9ca3af;
+    }
+
+    .configs-dashboard-heat-1 {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .configs-dashboard-heat-2 {
+        background: #93c5fd;
+        color: #1e40af;
+    }
+
+    .configs-dashboard-heat-3 {
+        background: #3b82f6;
+        color: white;
+    }
+
+    .configs-dashboard-heat-4 {
+        background: #1d4ed8;
+        color: white;
+    }
+
+    .configs-dashboard-matrix-cell-na {
+        background: repeating-linear-gradient(
+            45deg,
+            #f3f4f6,
+            #f3f4f6 4px,
+            #e5e7eb 4px,
+            #e5e7eb 8px
+        );
+        color: #9ca3af;
+        cursor: not-allowed;
+    }
+
+    /* Relationships Diagram */
+    .configs-dashboard-relationships {
+        min-height: 200px;
+        position: relative;
+        overflow-x: auto;
+    }
+
+    .configs-dashboard-flow-container {
+        display: flex;
+        align-items: flex-start;
+        gap: 60px;
+        padding: 20px 0;
+    }
+
+    .configs-dashboard-flow-column {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 180px;
+    }
+
+    .configs-dashboard-flow-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+        text-align: center;
+    }
+
+    .configs-dashboard-node {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .configs-dashboard-node:hover {
+        border-color: #6366f1;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+    }
+
+    .configs-dashboard-node.dataset {
+        border-left: 3px solid #6366f1;
+    }
+
+    .configs-dashboard-node.feature-config {
+        border-left: 3px solid #10b981;
+    }
+
+    .configs-dashboard-node-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: #374151;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .configs-dashboard-node-meta {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 4px;
+    }
+
+    .configs-dashboard-node-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        margin-top: 6px;
+    }
+
+    .configs-dashboard-node-badge.experiments {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    /* Connection lines (SVG) */
+    .configs-dashboard-connections {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+
+    .configs-dashboard-connection {
+        fill: none;
+        stroke: #d1d5db;
+        stroke-width: 2;
+    }
+
+    .configs-dashboard-connection.active {
+        stroke: #6366f1;
+        stroke-width: 2;
+    }
+
+    /* Empty State */
+    .configs-dashboard-empty {
+        text-align: center;
+        padding: 40px 20px;
+        color: #6b7280;
+    }
+
+    .configs-dashboard-empty i {
+        font-size: 48px;
+        color: #d1d5db;
+        margin-bottom: 16px;
+    }
+
+    .configs-dashboard-empty-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+
+    .configs-dashboard-empty-text {
+        font-size: 14px;
+        margin-bottom: 20px;
+    }
+
+    /* Loading State */
+    .configs-dashboard-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        color: #6b7280;
+    }
+
     /* Feature Config specific styles */
     .tensor-dim-bar {
         height: 8px;
@@ -3580,6 +3980,72 @@
 
 {% block model_content %}
 <div class="space-y-6">
+    <!-- =========================================================================== -->
+    <!-- CHAPTER 0: CONFIGS DASHBOARD -->
+    <!-- =========================================================================== -->
+    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-3">
+                <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);">
+                    <i class="fas fa-th-large"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Configs Dashboard</h2>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="cfgDashboardLoading" class="configs-dashboard-loading">
+            <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+            <span class="text-gray-500">Loading dashboard...</span>
+        </div>
+
+        <!-- Empty State -->
+        <div id="cfgDashboardEmpty" class="configs-dashboard-empty hidden">
+            <i class="fas fa-cubes"></i>
+            <p class="configs-dashboard-empty-title">No configurations yet</p>
+            <p class="configs-dashboard-empty-text">Create your first dataset to start building ML configurations</p>
+            <button onclick="ds_openWizard()" class="btn btn-primary">
+                <i class="fas fa-plus mr-2"></i>Create Dataset
+            </button>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="cfgDashboardContent" class="hidden">
+            <!-- KPI Row: 3 Cards (Datasets, Features, Models) -->
+            <div id="cfgKpiRow" class="configs-dashboard-kpi-row">
+                <!-- Dynamically populated by JavaScript -->
+            </div>
+
+            <!-- Coverage Matrix Section -->
+            <div id="cfgCoverageSection" class="configs-dashboard-section">
+                <div class="configs-dashboard-section-header">
+                    <h3 class="configs-dashboard-section-title">
+                        <i class="fas fa-th"></i>
+                        Coverage Matrix
+                    </h3>
+                    <span class="text-sm text-gray-500">FeatureConfig × ModelConfig experiment counts</span>
+                </div>
+                <div id="cfgCoverageMatrix" style="overflow-x: auto;">
+                    <!-- Dynamically populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Relationships Diagram Section -->
+            <div id="cfgRelationshipsSection" class="configs-dashboard-section">
+                <div class="configs-dashboard-section-header">
+                    <h3 class="configs-dashboard-section-title">
+                        <i class="fas fa-project-diagram"></i>
+                        Configuration Flow
+                    </h3>
+                    <span class="text-sm text-gray-500">Dataset → FeatureConfig → Experiments</span>
+                </div>
+                <div id="cfgRelationshipsDiagram" class="configs-dashboard-relationships">
+                    <!-- Dynamically populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- =========================================================================== -->
     <!-- CHAPTER 1: DATASETS -->
     <!-- =========================================================================== -->
@@ -13999,10 +14465,398 @@ function ds_closeNotification() {
 }
 
 // =============================================================================
+// CONFIGS DASHBOARD (cfg_ prefix)
+// =============================================================================
+
+// Dashboard state
+let cfg_state = {
+    data: null,
+    loading: false,
+};
+
+/**
+ * Load dashboard statistics and render all components.
+ */
+function cfg_loadDashboard() {
+    cfg_state.loading = true;
+    document.getElementById('cfgDashboardLoading').classList.remove('hidden');
+    document.getElementById('cfgDashboardEmpty').classList.add('hidden');
+    document.getElementById('cfgDashboardContent').classList.add('hidden');
+
+    fetch(`/api/models/${modelId}/configs/dashboard-stats/`)
+        .then(r => r.json())
+        .then(data => {
+            cfg_state.loading = false;
+            document.getElementById('cfgDashboardLoading').classList.add('hidden');
+
+            if (data.success) {
+                cfg_state.data = data.data;
+
+                // Check if empty
+                const hasData = data.data.datasets.total > 0 ||
+                               data.data.feature_configs.total > 0 ||
+                               data.data.model_configs.total > 0;
+
+                if (!hasData) {
+                    document.getElementById('cfgDashboardEmpty').classList.remove('hidden');
+                } else {
+                    document.getElementById('cfgDashboardContent').classList.remove('hidden');
+                    cfg_renderKpiCards(data.data);
+                    cfg_renderCoverageMatrix(data.data.coverage_matrix);
+                    cfg_renderRelationships(data.data.relationships);
+                }
+            } else {
+                console.error('Dashboard load failed:', data.error);
+                document.getElementById('cfgDashboardEmpty').classList.remove('hidden');
+            }
+        })
+        .catch(err => {
+            cfg_state.loading = false;
+            document.getElementById('cfgDashboardLoading').classList.add('hidden');
+            document.getElementById('cfgDashboardEmpty').classList.remove('hidden');
+            console.error('Error loading dashboard:', err);
+        });
+}
+
+/**
+ * Render 3 KPI cards for Datasets, Features, and Models.
+ */
+function cfg_renderKpiCards(stats) {
+    const container = document.getElementById('cfgKpiRow');
+    const ds = stats.datasets;
+    const fc = stats.feature_configs;
+    const mc = stats.model_configs;
+
+    container.innerHTML = `
+        <!-- Datasets KPI Card -->
+        <div class="configs-dashboard-kpi-card" onclick="cfg_scrollToChapter('datasetsChapter')">
+            <div class="configs-dashboard-kpi-header">
+                <div class="configs-dashboard-kpi-icon datasets">
+                    <i class="fas fa-database"></i>
+                </div>
+                <span class="configs-dashboard-kpi-title">Datasets</span>
+            </div>
+            <div class="configs-dashboard-kpi-stats">
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value">${ds.total}</div>
+                    <div class="configs-dashboard-kpi-label">Total</div>
+                </div>
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value active">${ds.active}</div>
+                    <div class="configs-dashboard-kpi-label">Active</div>
+                </div>
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value unused">${ds.unused}</div>
+                    <div class="configs-dashboard-kpi-label">Unused</div>
+                </div>
+            </div>
+            ${cfg_formatComplexityBar(ds.avg_complexity, 'dataset')}
+        </div>
+
+        <!-- Features KPI Card -->
+        <div class="configs-dashboard-kpi-card" onclick="cfg_scrollToChapter('featuresChapter')">
+            <div class="configs-dashboard-kpi-header">
+                <div class="configs-dashboard-kpi-icon features">
+                    <i class="fas fa-microchip"></i>
+                </div>
+                <span class="configs-dashboard-kpi-title">Feature Configs</span>
+            </div>
+            <div class="configs-dashboard-kpi-stats">
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value">${fc.total}</div>
+                    <div class="configs-dashboard-kpi-label">Total</div>
+                </div>
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value active">${fc.active}</div>
+                    <div class="configs-dashboard-kpi-label">Active</div>
+                </div>
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value unused">${fc.unused}</div>
+                    <div class="configs-dashboard-kpi-label">Unused</div>
+                </div>
+            </div>
+            ${cfg_formatComplexityBar(fc.avg_complexity, 'feature_config')}
+        </div>
+
+        <!-- Models KPI Card -->
+        <div class="configs-dashboard-kpi-card" onclick="cfg_scrollToChapter('modelStructureChapter')">
+            <div class="configs-dashboard-kpi-header">
+                <div class="configs-dashboard-kpi-icon models">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <span class="configs-dashboard-kpi-title">Model Configs</span>
+            </div>
+            <div class="configs-dashboard-kpi-stats">
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value">${mc.total}</div>
+                    <div class="configs-dashboard-kpi-label">Total</div>
+                </div>
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value active">${mc.used}</div>
+                    <div class="configs-dashboard-kpi-label">Used</div>
+                </div>
+                <div class="configs-dashboard-kpi-stat">
+                    <div class="configs-dashboard-kpi-value unused">${mc.unused}</div>
+                    <div class="configs-dashboard-kpi-label">Unused</div>
+                </div>
+            </div>
+            ${cfg_formatComplexityBar(mc.avg_complexity, 'model_config')}
+        </div>
+    `;
+}
+
+/**
+ * Render coverage matrix heatmap table.
+ */
+function cfg_renderCoverageMatrix(matrix) {
+    const container = document.getElementById('cfgCoverageMatrix');
+
+    // Check if we have data
+    if (!matrix.feature_configs.length || !matrix.model_configs.length) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-table text-2xl mb-2"></i>
+                <p>Create FeatureConfigs and ModelConfigs to see the coverage matrix</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Build lookup for cells
+    const cellLookup = {};
+    matrix.cells.forEach(cell => {
+        cellLookup[`${cell.feature_config_id}-${cell.model_config_id}`] = cell;
+    });
+
+    // Build table HTML
+    let html = '<table class="configs-dashboard-matrix">';
+
+    // Header row
+    html += '<thead><tr><th class="row-header"></th>';
+    matrix.model_configs.forEach(mc => {
+        const typeIcon = mc.model_type === 'retrieval' ? 'fa-search' :
+                        mc.model_type === 'ranking' ? 'fa-sort-amount-down' : 'fa-random';
+        html += `<th title="${mc.name}">${mc.name.substring(0, 12)}${mc.name.length > 12 ? '...' : ''}</th>`;
+    });
+    html += '</tr></thead>';
+
+    // Body rows
+    html += '<tbody>';
+    matrix.feature_configs.forEach(fc => {
+        html += `<tr>`;
+        html += `<th class="row-header" title="${fc.name} (${fc.dataset_name})">${fc.name.substring(0, 15)}${fc.name.length > 15 ? '...' : ''}</th>`;
+
+        matrix.model_configs.forEach(mc => {
+            const cell = cellLookup[`${fc.id}-${mc.id}`];
+            const isCompatible = cell ? cell.is_compatible : true;
+
+            if (!isCompatible) {
+                html += `<td><div class="configs-dashboard-matrix-cell configs-dashboard-matrix-cell-na" title="Incompatible: ${fc.config_type} FeatureConfig with ${mc.model_type} ModelConfig">N/A</div></td>`;
+            } else if (cell && cell.count > 0) {
+                const heatClass = cfg_getHeatClass(cell.count);
+                const recallText = cell.best_recall ? ` | Best: ${(cell.best_recall * 100).toFixed(1)}%` : '';
+                html += `<td><div class="configs-dashboard-matrix-cell ${heatClass}" onclick="cfg_openExperimentFilter(${fc.id}, ${mc.id})" title="${cell.count} experiments${recallText}">${cell.count}</div></td>`;
+            } else {
+                html += `<td><div class="configs-dashboard-matrix-cell configs-dashboard-heat-0" onclick="cfg_openQuickTest(${fc.id}, ${mc.id})" title="No experiments yet - Click to run Quick Test">0</div></td>`;
+            }
+        });
+        html += `</tr>`;
+    });
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render relationships diagram showing Dataset → FeatureConfig → Experiments flow.
+ */
+function cfg_renderRelationships(relationships) {
+    const container = document.getElementById('cfgRelationshipsDiagram');
+
+    if (!relationships.length) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-project-diagram text-2xl mb-2"></i>
+                <p>Create Datasets to see the configuration flow</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Build flow diagram HTML
+    let html = '<div class="configs-dashboard-flow-container">';
+
+    // Datasets column
+    html += '<div class="configs-dashboard-flow-column">';
+    html += '<div class="configs-dashboard-flow-title">Datasets</div>';
+    relationships.forEach(rel => {
+        const fcCount = rel.feature_configs.length;
+        html += `
+            <div class="configs-dashboard-node dataset" onclick="cfg_scrollToDataset(${rel.dataset_id})" data-dataset-id="${rel.dataset_id}">
+                <div class="configs-dashboard-node-name" title="${rel.dataset_name}">${rel.dataset_name}</div>
+                <div class="configs-dashboard-node-meta">${fcCount} Feature Config${fcCount !== 1 ? 's' : ''}</div>
+            </div>
+        `;
+    });
+    html += '</div>';
+
+    // Feature Configs column
+    html += '<div class="configs-dashboard-flow-column">';
+    html += '<div class="configs-dashboard-flow-title">Feature Configs</div>';
+    relationships.forEach(rel => {
+        rel.feature_configs.forEach(fc => {
+            const typeBadge = fc.config_type === 'retrieval' ?
+                '<span class="model-type-badge model-type-retrieval"><i class="fas fa-search"></i>Retrieval</span>' :
+                '<span class="model-type-badge model-type-ranking"><i class="fas fa-sort-amount-down"></i>Ranking</span>';
+            const expBadge = fc.experiment_count > 0 ?
+                `<span class="configs-dashboard-node-badge experiments"><i class="fas fa-flask"></i>${fc.completed_count}/${fc.experiment_count}</span>` : '';
+
+            html += `
+                <div class="configs-dashboard-node feature-config" onclick="cfg_scrollToFeatureConfig(${fc.id})" data-fc-id="${fc.id}" data-dataset-id="${rel.dataset_id}">
+                    <div class="configs-dashboard-node-name" title="${fc.name}">${fc.name}</div>
+                    <div class="configs-dashboard-node-meta">${typeBadge}</div>
+                    ${expBadge}
+                </div>
+            `;
+        });
+    });
+    html += '</div>';
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+/**
+ * Smooth scroll to a chapter section.
+ */
+function cfg_scrollToChapter(chapterId) {
+    // Map friendly IDs to actual element patterns
+    const chapterMap = {
+        'datasetsChapter': 'datasetsList',
+        'featuresChapter': 'configsList',
+        'modelStructureChapter': 'modelConfigsList'
+    };
+
+    const targetId = chapterMap[chapterId] || chapterId;
+    const target = document.getElementById(targetId);
+    if (target) {
+        // Scroll to the parent chapter section
+        const chapter = target.closest('.bg-white');
+        if (chapter) {
+            chapter.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+}
+
+function cfg_scrollToDataset(datasetId) {
+    // Scroll to datasets chapter and highlight the dataset
+    cfg_scrollToChapter('datasetsChapter');
+}
+
+function cfg_scrollToFeatureConfig(fcId) {
+    // Scroll to features chapter
+    cfg_scrollToChapter('featuresChapter');
+}
+
+/**
+ * Generate complexity bar HTML.
+ */
+function cfg_formatComplexityBar(score, type) {
+    // Thresholds based on type
+    let lowMax, medMax;
+    if (type === 'dataset') {
+        lowMax = 5;
+        medMax = 15;
+    } else if (type === 'feature_config') {
+        lowMax = 10;
+        medMax = 25;
+    } else {
+        lowMax = 8;
+        medMax = 15;
+    }
+
+    // Calculate percentages (capped at 100%)
+    const total = Math.max(score, medMax * 1.5);
+    const lowPct = Math.min((Math.min(score, lowMax) / total) * 100, 100);
+    const medPct = score > lowMax ? Math.min(((Math.min(score, medMax) - lowMax) / total) * 100, 100 - lowPct) : 0;
+    const highPct = score > medMax ? Math.min(((score - medMax) / total) * 100, 100 - lowPct - medPct) : 0;
+
+    const complexityLabel = score <= lowMax ? 'Low' : score <= medMax ? 'Medium' : 'High';
+
+    return `
+        <div class="configs-dashboard-complexity-row">
+            <div class="configs-dashboard-complexity-label">
+                <span>Avg Complexity</span>
+                <span>${score.toFixed(1)} (${complexityLabel})</span>
+            </div>
+            <div class="configs-dashboard-complexity-bar">
+                <div class="configs-dashboard-complexity-segment low" style="width: ${lowPct}%"></div>
+                <div class="configs-dashboard-complexity-segment medium" style="width: ${medPct}%"></div>
+                <div class="configs-dashboard-complexity-segment high" style="width: ${highPct}%"></div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Get heat color class based on experiment count.
+ */
+function cfg_getHeatClass(count) {
+    if (count === 0) return 'configs-dashboard-heat-0';
+    if (count === 1) return 'configs-dashboard-heat-1';
+    if (count <= 3) return 'configs-dashboard-heat-2';
+    if (count <= 5) return 'configs-dashboard-heat-3';
+    return 'configs-dashboard-heat-4';
+}
+
+/**
+ * Format relative time ago.
+ */
+function cfg_formatTimeAgo(dateString) {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return `${Math.floor(diffDays / 30)} months ago`;
+}
+
+/**
+ * Open experiments filtered by FeatureConfig and ModelConfig.
+ */
+function cfg_openExperimentFilter(fcId, mcId) {
+    // Navigate to experiments page with filter
+    window.location.href = `/models/${modelId}/experiments/?feature_config=${fcId}&model_config=${mcId}`;
+}
+
+/**
+ * Open Quick Test wizard with pre-selected configs.
+ */
+function cfg_openQuickTest(fcId, mcId) {
+    // Find the feature config to get required data
+    const fc = cfg_state.data?.feature_configs?.items?.find(f => f.id === fcId);
+    if (fc) {
+        // Store pre-selection in session storage for the wizard
+        sessionStorage.setItem('quickTestPreselect', JSON.stringify({
+            feature_config_id: fcId,
+            model_config_id: mcId
+        }));
+        // Navigate to experiments page and trigger quick test
+        window.location.href = `/models/${modelId}/experiments/`;
+    }
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
+    cfg_loadDashboard();  // Load Configs Dashboard
     ds_loadDatasets();  // Load datasets chapter
     fc_loadDatasets();  // Load datasets for Feature Config dropdown
     loadConfigs();

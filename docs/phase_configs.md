@@ -2,45 +2,54 @@
 # Phase: Configs Domain
 
 ## Document Purpose
-This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. The unified Configs page (`model_configs.html`) now contains three chapters:
-1. **Datasets** - Define WHAT data goes into training (migrated from model_dataset.html)
-2. **Feature Engineering** - Define HOW data is transformed (Feature Configs)
-3. **Model Structure** - Define neural network architecture (Model Configs)
+This document provides detailed specifications for implementing the **Configs** domain in the ML Platform. The unified Configs page (`model_configs.html`) now contains four chapters:
+1. **Configs Dashboard** - Overview of all configs with inventory, usage tracking, and relationships
+2. **Datasets** - Define WHAT data goes into training (migrated from model_dataset.html)
+3. **Feature Engineering** - Define HOW data is transformed (Feature Configs)
+4. **Model Structure** - Define neural network architecture (Model Configs)
 
-**Last Updated**: 2026-01-15 (Comprehensive documentation update: Model Structure chapter, JavaScript architecture, complete modal reference, consolidated API reference)
+**Last Updated**: 2026-02-03 (Implemented Configs Dashboard chapter)
 
 ---
 
-## Three-Chapter Page Structure (2026-01-12)
+## Four-Chapter Page Structure (2026-02-03)
 
-The Configs page (`model_configs.html`) now contains **three chapters** providing a unified workflow for ML configuration:
+The Configs page (`model_configs.html`) now contains **four chapters** providing a unified workflow for ML configuration:
 
 ```
 model_configs.html (unified page)
-├── Chapter 1: Datasets          ← NEW (migrated from model_dataset.html)
+├── Chapter 1: Configs Dashboard     ← NEW (2026-02-03)
+│   ├── Header: "Configs Overview" with dashboard icon
+│   ├── KPI Summary Row (3 cards: Datasets, Features, Models)
+│   ├── Usage Matrix (FeatureConfig × ModelConfig coverage)
+│   └── Config Relationships Diagram (Dataset → Feature → Experiments flow)
+│
+├── Chapter 2: Datasets              (migrated from model_dataset.html)
 │   ├── Header: "Datasets" with [New Dataset] button
 │   ├── Dataset list with filter bar (status, search)
 │   ├── Dataset cards showing tables, filters, row estimates
 │   └── Full 4-step wizard (Info → Tables → Schema → Filters)
 │
-├── Chapter 2: Feature Engineering
+├── Chapter 3: Feature Engineering
 │   ├── Header: "Features" with [New Feature Config] button
 │   ├── Feature Config list with tensor dimension summaries
 │   └── 2-step wizard (Basic Info → Feature Assignment)
 │
-└── Chapter 3: Model Structure
+└── Chapter 4: Model Structure
     ├── Header: "Model Structure" with [New Model Config] button
     ├── Model Config cards with architecture visualization
     └── 3-step wizard (Basic Info → Architecture → Training)
 ```
 
-**Why Three Chapters?**
-- **Logical workflow:** Define data (Datasets) → Configure transforms (Features) → Design architecture (Model Structure)
+**Why Four Chapters?**
+- **Overview first:** Configs Dashboard provides inventory and usage insights before diving into details
+- **Logical workflow:** Overview → Define data (Datasets) → Configure transforms (Features) → Design architecture (Model Structure)
 - **Reduced navigation:** No switching between pages when configuring features
 - **Shared context:** Dataset changes immediately visible when creating Feature Configs
 
 **JavaScript Namespacing:**
 Each chapter uses prefixed functions to prevent collisions:
+- `cfg_*` - Configs Dashboard functions (e.g., `cfg_loadDashboard()`, `cfg_renderKpiCards()`)
 - `ds_*` - Dataset chapter functions (e.g., `ds_loadDatasets()`, `ds_openWizard()`)
 - `fc_*` - Feature Config functions (e.g., `fc_loadConfigs()`, `fc_openWizard()`)
 - `mc_*` - Model Config functions (e.g., `mc_loadModelConfigs()`, `mc_openWizard()`)
@@ -53,9 +62,567 @@ See [datasets_migration.md](datasets_migration.md) for the full migration plan.
 
 ---
 
-## Datasets Chapter (Chapter 1) - Migrated 2026-01-12
+## Configs Dashboard Chapter (Chapter 1) - Implemented 2026-02-03 ✅
 
-The Datasets chapter was migrated from the standalone `model_dataset.html` page into `model_configs.html` as the first of three chapters. This provides a unified workflow for data → features → model configuration.
+The Configs Dashboard chapter provides an overview of all configuration objects (Datasets, FeatureConfigs, ModelConfigs) with inventory tracking, usage analytics, and relationship visualization. It appears as the first chapter on the Configs page, giving users immediate insight into their configuration landscape before they dive into creating or editing individual configs.
+
+**Implementation Status:** Complete
+- ✅ Backend service (`ConfigDashboardStatsService` in `ml_platform/configs/services.py`)
+- ✅ API endpoint (`/api/models/{model_id}/configs/dashboard-stats/`)
+- ✅ KPI Summary Row (3 cards with totals, active/unused, complexity bars)
+- ✅ Coverage Matrix (FeatureConfig × ModelConfig heatmap with experiment counts)
+- ✅ Configuration Flow diagram (Dataset → FeatureConfig relationships)
+- ✅ Empty state handling
+
+### Purpose & Use Cases
+
+| Use Case | Description |
+|----------|-------------|
+| **Inventory View** | Quick count of configs by type with active/unused breakdown |
+| **Usage Tracking** | See which configs are actively used in experiments |
+| **Coverage Analysis** | Identify untested FeatureConfig × ModelConfig combinations |
+| **Relationship Understanding** | Visualize how Dataset → FeatureConfig → Experiments connect |
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ [Dashboard Icon] Configs Overview                                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────────┐│
+│  │ 📊 DATASETS             │ │ ⚙️ FEATURES             │ │ 🏗️ MODELS           ││
+│  │      5 Total            │ │      8 Total            │ │      12 Total       ││
+│  │ [3 Active] [2 Unused]   │ │ [5 Active] [3 Unused]   │ │ [7 Used] [5 Unused] ││
+│  │ Complexity: ██░░ Med    │ │ Complexity: ███░ High   │ │ Complexity: █░░░ Low││
+│  │ Latest: 2 days ago      │ │ Latest: 1 day ago       │ │ Latest: 5 hours ago ││
+│  └─────────────────────────┘ └─────────────────────────┘ └─────────────────────┘│
+│                                                                                 │
+│  EXPERIMENT COVERAGE                                                            │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │              │ standard  │ deep      │ scann_v1  │ regularized│ minimal    ││
+│  │ cherng_v1    │ ████ 23   │ ███ 12    │ ██ 4      │ ░ 0        │ N/A       ││
+│  │ cherng_v2    │ ███ 8     │ █ 3       │ ░ 0       │ ░ 0        │ N/A       ││
+│  │ new_features │ █ 2       │ ░ 0       │ ░ 0       │ ░ 0        │ █ 1       ││
+│  │ 💡 3 untested compatible combinations available                             ││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  CONFIG RELATIONSHIPS                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │   DATASETS              FEATURE CONFIGS           EXPERIMENTS              ││
+│  │   ┌───────────┐         ┌─────────────┐                                    ││
+│  │   │ old_data  │────────▶│ cherng_v1   │─────────▶ 39 experiments           ││
+│  │   │ 5 tables  │────────▶│ cherng_v2   │─────────▶ 11 experiments           ││
+│  │   └───────────┘         └─────────────┘                                    ││
+│  │   ┌───────────┐         ┌─────────────┐                                    ││
+│  │   │ new_data  │────────▶│ new_features│─────────▶ 3 experiments            ││
+│  │   │ 2 tables  │─ ─ ─ ─ ▶│ test_fc     │─ ─ ─ ─ ─▶ 0 (unused)              ││
+│  │   └───────────┘         └─────────────┘                                    ││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Component 1: KPI Summary Row
+
+Three cards showing inventory and usage statistics for each config type.
+
+**Card Layout:**
+```
+┌─────────────────────────────┐
+│ [Icon] CONFIG TYPE          │
+│                             │
+│        N                    │
+│      Total                  │
+│                             │
+│ ┌─────────┐ ┌─────────┐    │
+│ │ X       │ │ Y       │    │
+│ │ Active  │ │ Unused  │    │
+│ │ 🟢      │ │ ⚪      │    │
+│ └─────────┘ └─────────┘    │
+│                             │
+│ Complexity: ███░ High       │
+│ Latest: X days ago          │
+└─────────────────────────────┘
+```
+
+**Metrics Definitions:**
+
+| Metric | Dataset | FeatureConfig | ModelConfig |
+|--------|---------|---------------|-------------|
+| **Total** | Count for this ModelEndpoint | Count for this ModelEndpoint | Count used in this ModelEndpoint's experiments |
+| **Active** | Used in experiment in last 30 days | Used in experiment in last 30 days | Used in experiment in last 30 days |
+| **Unused** | Never used OR not used in 30+ days | Never used OR not used in 30+ days | Never used OR not used in 30+ days |
+| **Latest** | Most recent created_at or updated_at | Most recent created_at or updated_at | Most recent created_at or updated_at |
+
+**Complexity Score Calculation:**
+
+| Config Type | Factors | Formula | Thresholds |
+|-------------|---------|---------|------------|
+| **Dataset** | Tables (T), Columns (C), Filters (F) | `score = T×2 + C×0.1 + F×1.5` | Low: 0-5, Med: 5-15, High: 15+ |
+| **FeatureConfig** | Features (F), Crosses (X), Tensor dims (D) | `score = F×1 + X×2 + D×0.01` | Low: 0-10, Med: 10-25, High: 25+ |
+| **ModelConfig** | Layers (L), Params estimate (P), Regularization (R) | `score = L×1 + log10(P)×2 + R×1` | Low: 0-8, Med: 8-15, High: 15+ |
+
+**Visual Complexity Bar:**
+- 4 segments: `█░░░` (Low), `██░░` (Medium), `███░` (High), `████` (Very High)
+- Color: Gray segments for empty, blue for filled
+
+**Interaction:**
+- Click card → smooth scroll to respective chapter (Datasets, Features, or Model Structure)
+
+### Component 2: Usage Matrix (Coverage Heatmap)
+
+Shows which FeatureConfig × ModelConfig combinations have been tested in experiments.
+
+**Matrix Structure:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ EXPERIMENT COVERAGE                                                              │
+│ Which config combinations have been tested?                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  Model Configs →                                                                │
+│  Feature        │ standard  │ deep      │ scann_v1  │ regularized│ minimal    │
+│  Configs ↓      │ (Retrieval)│(Retrieval)│(Retrieval)│ (Retrieval)│ (Ranking) │
+│  ───────────────┼───────────┼───────────┼───────────┼────────────┼────────────│
+│  cherng_v1      │ ████ 23   │ ███ 12    │ ██ 4      │ ░ 0        │ N/A       │
+│  (old_data)     │ R@100:0.31│ R@100:0.29│ R@100:0.32│            │           │
+│  [Retrieval]    │           │           │           │            │           │
+│  ───────────────┼───────────┼───────────┼───────────┼────────────┼────────────│
+│  cherng_v2      │ ███ 8     │ █ 3       │ ░ 0       │ ░ 0        │ N/A       │
+│  (old_data)     │ R@100:0.31│ R@100:0.28│           │            │           │
+│  [Retrieval]    │           │           │           │            │           │
+│  ───────────────┼───────────┼───────────┼───────────┼────────────┼────────────│
+│  new_features   │ █ 2       │ ░ 0       │ ░ 0       │ ░ 0        │ █ 1       │
+│  (new_data)     │ R@100:0.25│           │           │            │ RMSE:0.45 │
+│  [Ranking]      │           │           │           │            │           │
+│                                                                                 │
+│  Legend: ████ 10+ runs  ███ 5-9  ██ 2-4  █ 1  ░ untested  N/A = incompatible   │
+│                                                                                 │
+│  💡 Suggestion: 3 untested combinations could improve coverage                  │
+│     → cherng_v1 + regularized, cherng_v2 + scann_v1, cherng_v2 + regularized   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Cell Contents:**
+- **Experiment count**: Heat-colored bar + number
+- **Best metric**: Best R@100 (retrieval) or RMSE (ranking) achieved
+- **N/A indicator**: For incompatible combinations
+
+**Heat Colors:**
+| Count | Bar | Background |
+|-------|-----|------------|
+| 0 (untested) | `░` | Light gray (`bg-gray-100`) |
+| 1 | `█` | Light blue (`bg-blue-100`) |
+| 2-4 | `██` | Medium blue (`bg-blue-200`) |
+| 5-9 | `███` | Blue (`bg-blue-300`) |
+| 10+ | `████` | Dark blue (`bg-blue-400`) |
+
+**Compatibility Rules:**
+| FeatureConfig Type | Compatible ModelConfig Types | Incompatible |
+|--------------------|------------------------------|--------------|
+| Retrieval (no target_column) | Retrieval only | Ranking, Multitask |
+| Ranking (has target_column) | Retrieval, Ranking, Multitask | None |
+
+**Row Labels:**
+- FeatureConfig name
+- Parent dataset name (in parentheses, smaller text)
+- Config type badge: `[Retrieval]` or `[Ranking]`
+
+**Column Labels:**
+- ModelConfig name
+- Model type in parentheses
+
+**Suggestion Logic:**
+- Identifies untested but compatible combinations
+- Prioritizes: active FeatureConfigs × unused ModelConfigs
+- Shows up to 3 suggestions
+
+**Interactions:**
+- **Click tested cell**: Navigate to Experiments page with filter for that combination
+- **Click untested compatible cell**: Open Quick Test wizard pre-filled with that combination
+- **Click N/A cell**: Show tooltip explaining incompatibility
+
+### Component 3: Config Relationships Diagram
+
+Visual flow diagram showing Dataset → FeatureConfig → Experiments relationships.
+
+**Diagram Structure:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ CONFIG RELATIONSHIPS                                                             │
+│ How your configs connect to experiments                                          │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   DATASETS              FEATURE CONFIGS           EXPERIMENTS                   │
+│                                                                                 │
+│   ┌───────────┐         ┌─────────────┐                                        │
+│   │           │────────▶│ cherng_v1   │─────────▶ 39 experiments               │
+│   │ old_data  │         │ [Retrieval] │           Best: R@100 = 0.317          │
+│   │           │         └─────────────┘                                        │
+│   │ 5 tables  │                                                                │
+│   │ 14 cols   │         ┌─────────────┐                                        │
+│   │ 3 filters │────────▶│ cherng_v2   │─────────▶ 11 experiments               │
+│   │           │         │ [Retrieval] │           Best: R@100 = 0.312          │
+│   └───────────┘         └─────────────┘                                        │
+│        │                                                                        │
+│        │ Active (used in 30d)                                                   │
+│        ▼                                                                        │
+│   ┌───────────┐         ┌─────────────┐                                        │
+│   │           │────────▶│ new_features│─────────▶ 3 experiments                │
+│   │ new_data  │         │ [Ranking]   │           Best: RMSE = 0.45            │
+│   │           │         └─────────────┘                                        │
+│   │ 2 tables  │                                                                │
+│   │ 8 cols    │         ┌─────────────┐                                        │
+│   │ 1 filter  │─ ─ ─ ─ ▶│ test_fc     │─ ─ ─ ─ ─▶ 0 experiments               │
+│   └───────────┘         │ [Retrieval] │           (unused)                      │
+│        │                └─────────────┘                                        │
+│        │ Inactive                                                               │
+│                                                                                 │
+│   Legend: ────▶ Active (used in 30d)   ─ ─ ─▶ Inactive/Unused                  │
+│           [Retrieval] = Retrieval models only                                   │
+│           [Ranking] = Retrieval, Ranking, Multitask compatible                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Node Types:**
+
+| Node | Content | Visual |
+|------|---------|--------|
+| **Dataset** | Name, tables count, columns count, filters count | Rectangle with database icon |
+| **FeatureConfig** | Name, config type badge | Rectangle with gear icon |
+| **Experiments** | Count, best metric | Text label (no box) |
+
+**Connection Styles:**
+| Style | Meaning |
+|-------|---------|
+| Solid line (`────▶`) | Active - used in experiment in last 30 days |
+| Dashed line (`─ ─ ─▶`) | Inactive - no experiments or not used in 30+ days |
+
+**Implementation Approach:**
+- SVG-based rendering (matches existing Schema Builder pattern)
+- Nodes positioned in 3 columns: Datasets, FeatureConfigs, Experiments
+- Curved bezier lines connecting nodes (similar to Schema Builder joins)
+
+**Interactions:**
+- **Hover node**: Highlight connected paths
+- **Click Dataset node**: Smooth scroll to Datasets chapter
+- **Click FeatureConfig node**: Smooth scroll to Features chapter
+- **Click experiment count**: Navigate to Experiments page with filter
+
+### API Endpoint
+
+**Endpoint:** `GET /api/models/{model_id}/configs/dashboard-stats/`
+
+**Response Structure:**
+```json
+{
+  "datasets": {
+    "total": 5,
+    "active": 3,
+    "unused": 2,
+    "latest_update": "2026-02-01T10:30:00Z",
+    "avg_complexity": 8.5,
+    "items": [
+      {
+        "id": 1,
+        "name": "old_data",
+        "tables_count": 5,
+        "columns_count": 14,
+        "filters_count": 3,
+        "complexity_score": 12.4,
+        "experiment_count": 50,
+        "last_used_at": "2026-02-01T10:30:00Z",
+        "is_active": true
+      }
+    ]
+  },
+  "feature_configs": {
+    "total": 8,
+    "active": 5,
+    "unused": 3,
+    "latest_update": "2026-02-02T14:00:00Z",
+    "avg_complexity": 15.2,
+    "items": [
+      {
+        "id": 1,
+        "name": "cherng_v1",
+        "dataset_id": 1,
+        "dataset_name": "old_data",
+        "config_type": "retrieval",
+        "features_count": 8,
+        "crosses_count": 2,
+        "buyer_tensor_dim": 128,
+        "product_tensor_dim": 96,
+        "complexity_score": 18.2,
+        "experiment_count": 39,
+        "best_metric": {"recall_at_100": 0.317},
+        "last_used_at": "2026-02-01T08:00:00Z",
+        "is_active": true
+      }
+    ]
+  },
+  "model_configs": {
+    "total": 12,
+    "used": 7,
+    "unused": 5,
+    "latest_update": "2026-02-03T09:00:00Z",
+    "avg_complexity": 6.8,
+    "items": [
+      {
+        "id": 1,
+        "name": "standard",
+        "model_type": "retrieval",
+        "layers_count": 6,
+        "params_estimate": 45312,
+        "complexity_score": 8.5,
+        "experiment_count": 31,
+        "best_metric": {"recall_at_100": 0.317},
+        "last_used_at": "2026-02-01T10:30:00Z",
+        "is_used": true
+      }
+    ]
+  },
+  "coverage_matrix": {
+    "feature_configs": [
+      {"id": 1, "name": "cherng_v1", "dataset_name": "old_data", "config_type": "retrieval"},
+      {"id": 2, "name": "cherng_v2", "dataset_name": "old_data", "config_type": "retrieval"},
+      {"id": 3, "name": "new_features", "dataset_name": "new_data", "config_type": "ranking"}
+    ],
+    "model_configs": [
+      {"id": 1, "name": "standard", "model_type": "retrieval"},
+      {"id": 2, "name": "deep", "model_type": "retrieval"},
+      {"id": 3, "name": "scann_v1", "model_type": "retrieval"},
+      {"id": 4, "name": "regularized", "model_type": "retrieval"},
+      {"id": 5, "name": "minimal", "model_type": "ranking"}
+    ],
+    "cells": [
+      {
+        "feature_config_id": 1,
+        "model_config_id": 1,
+        "experiment_count": 23,
+        "best_metric": {"recall_at_100": 0.317},
+        "compatible": true
+      },
+      {
+        "feature_config_id": 1,
+        "model_config_id": 5,
+        "experiment_count": 0,
+        "best_metric": null,
+        "compatible": false,
+        "incompatibility_reason": "Retrieval FeatureConfig requires Retrieval ModelConfig"
+      }
+    ],
+    "suggestions": [
+      {
+        "feature_config_id": 1,
+        "feature_config_name": "cherng_v1",
+        "model_config_id": 4,
+        "model_config_name": "regularized",
+        "reason": "Untested compatible combination"
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "dataset_id": 1,
+      "dataset_name": "old_data",
+      "tables_count": 5,
+      "columns_count": 14,
+      "filters_count": 3,
+      "is_active": true,
+      "feature_configs": [
+        {
+          "id": 1,
+          "name": "cherng_v1",
+          "config_type": "retrieval",
+          "experiment_count": 39,
+          "best_metric": {"recall_at_100": 0.317},
+          "is_active": true
+        },
+        {
+          "id": 2,
+          "name": "cherng_v2",
+          "config_type": "retrieval",
+          "experiment_count": 11,
+          "best_metric": {"recall_at_100": 0.312},
+          "is_active": true
+        }
+      ]
+    },
+    {
+      "dataset_id": 2,
+      "dataset_name": "new_data",
+      "tables_count": 2,
+      "columns_count": 8,
+      "filters_count": 1,
+      "is_active": true,
+      "feature_configs": [
+        {
+          "id": 3,
+          "name": "new_features",
+          "config_type": "ranking",
+          "experiment_count": 3,
+          "best_metric": {"rmse": 0.45},
+          "is_active": true
+        },
+        {
+          "id": 4,
+          "name": "test_fc",
+          "config_type": "retrieval",
+          "experiment_count": 0,
+          "best_metric": null,
+          "is_active": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+### JavaScript Module
+
+**Namespace:** `cfg_` (for "configs dashboard")
+
+**State Variables:**
+```javascript
+let cfg_state = {
+    stats: null,           // Dashboard stats from API
+    loading: false,
+    initialized: false
+};
+```
+
+**Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `cfg_loadDashboard()` | Fetch stats and render all components |
+| `cfg_renderKpiCards(stats)` | Render the 3 KPI summary cards |
+| `cfg_renderCoverageMatrix(data)` | Render the usage matrix heatmap |
+| `cfg_renderRelationships(data)` | Render the SVG flow diagram |
+| `cfg_scrollToChapter(chapter)` | Smooth scroll to specified chapter |
+| `cfg_openExperimentFilter(fcId, mcId)` | Navigate to Experiments page with filter |
+| `cfg_openQuickTest(fcId, mcId)` | Open Quick Test wizard pre-filled |
+| `cfg_calculateComplexity(config, type)` | Calculate complexity score for a config |
+| `cfg_formatComplexityBar(score, type)` | Return HTML for complexity bar |
+| `cfg_getHeatColor(count)` | Return CSS class for cell heat color |
+
+### CSS Classes
+
+Following existing naming pattern with `.configs-dashboard-` prefix:
+
+```css
+/* KPI Cards */
+.configs-dashboard-kpi-row { }
+.configs-dashboard-kpi-card { }
+.configs-dashboard-kpi-count { }
+.configs-dashboard-kpi-active { }
+.configs-dashboard-kpi-unused { }
+.configs-dashboard-complexity-bar { }
+
+/* Coverage Matrix */
+.configs-dashboard-matrix { }
+.configs-dashboard-matrix-cell { }
+.configs-dashboard-matrix-cell-tested { }
+.configs-dashboard-matrix-cell-untested { }
+.configs-dashboard-matrix-cell-incompatible { }
+.configs-dashboard-heat-1 { }
+.configs-dashboard-heat-2 { }
+.configs-dashboard-heat-3 { }
+.configs-dashboard-heat-4 { }
+
+/* Relationships Diagram */
+.configs-dashboard-relationships { }
+.configs-dashboard-node { }
+.configs-dashboard-node-dataset { }
+.configs-dashboard-node-feature { }
+.configs-dashboard-connection { }
+.configs-dashboard-connection-active { }
+.configs-dashboard-connection-inactive { }
+```
+
+### HTML Template Structure
+
+```html
+<!-- CHAPTER 1: CONFIGS DASHBOARD -->
+<div id="configsDashboardChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center"
+             style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+            <i class="fas fa-th-large text-white text-2xl"></i>
+        </div>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Configs Overview</h2>
+            <p class="text-sm text-gray-500">Inventory, usage tracking, and relationships</p>
+        </div>
+    </div>
+
+    <!-- KPI Summary Row -->
+    <div id="cfgKpiRow" class="configs-dashboard-kpi-row mb-6">
+        <!-- Rendered by cfg_renderKpiCards() -->
+    </div>
+
+    <!-- Usage Matrix -->
+    <div id="cfgCoverageSection" class="mb-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">
+            <i class="fas fa-th text-blue-500 mr-2"></i>Experiment Coverage
+        </h3>
+        <p class="text-sm text-gray-500 mb-4">Which config combinations have been tested?</p>
+        <div id="cfgCoverageMatrix" class="configs-dashboard-matrix">
+            <!-- Rendered by cfg_renderCoverageMatrix() -->
+        </div>
+    </div>
+
+    <!-- Config Relationships -->
+    <div id="cfgRelationshipsSection">
+        <h3 class="text-lg font-semibold text-gray-800 mb-3">
+            <i class="fas fa-project-diagram text-purple-500 mr-2"></i>Config Relationships
+        </h3>
+        <p class="text-sm text-gray-500 mb-4">How your configs connect to experiments</p>
+        <div id="cfgRelationshipsDiagram" class="configs-dashboard-relationships">
+            <!-- Rendered by cfg_renderRelationships() -->
+        </div>
+    </div>
+</div>
+```
+
+### Implementation Priority
+
+| Priority | Component | Effort | Value | Status |
+|----------|-----------|--------|-------|--------|
+| 1 | KPI Summary Row | Low | High - quick inventory check | ✅ Done |
+| 2 | Usage Matrix | Medium | High - reveals coverage gaps | ✅ Done |
+| 3 | Relationships Diagram | Medium | Medium - visual understanding | ✅ Done |
+
+### Empty States
+
+**No Configs:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ [Dashboard Icon] Configs Overview                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│           📦 No configurations yet                              │
+│                                                                 │
+│   Get started by creating your first dataset, then build       │
+│   feature configs and model configs to run experiments.        │
+│                                                                 │
+│   [Create Dataset]                                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**No Experiments:**
+- KPI cards show counts but 0 Active
+- Coverage matrix shows all cells as untested (`░ 0`)
+- Relationships diagram shows connections but "0 experiments" labels
+
+---
+
+## Datasets Chapter (Chapter 2) - Migrated 2026-01-12
+
+The Datasets chapter was migrated from the standalone `model_dataset.html` page into `model_configs.html`. With the addition of the Configs Dashboard, it is now the second of four chapters. This provides a unified workflow for overview → data → features → model configuration.
 
 ### Dataset Cards
 
@@ -355,7 +922,7 @@ See [datasets_migration.md](datasets_migration.md) for complete bug fix details.
 
 ---
 
-## Model Structure Chapter (Chapter 3)
+## Model Structure Chapter (Chapter 4)
 
 The Model Structure chapter defines neural network architecture independently from feature engineering. This enables flexible experimentation with different architectures using the same feature set.
 
@@ -796,10 +1363,10 @@ let configState = {
 
 ### Dataset Manager Migration Complete (2026-01-12 - 2026-01-14)
 
-**Major Change:** The Dataset Manager UI has been migrated from `model_dataset.html` into `model_configs.html` as Chapter 1 of a three-chapter workflow.
+**Major Change:** The Dataset Manager UI has been migrated from `model_dataset.html` into `model_configs.html`. Originally Chapter 1 of a three-chapter workflow, now Chapter 2 after Configs Dashboard was added (2026-02-03).
 
 **What Changed:**
-- Datasets chapter now appears as the **first chapter** in the Configs page
+- Datasets chapter now appears as the **second chapter** in the Configs page (after Configs Dashboard)
 - **All dataset functionality preserved**: 4-step wizard, Schema Builder, filter modals, D3.js Pareto charts
 - **JavaScript namespaced** with `ds_` prefix to prevent collisions with `fc_` and `mc_` functions
 - **Navigation consolidated**: Single "Datasets & Configs" link in sidebar
@@ -819,7 +1386,7 @@ let configState = {
 - `ml_platform/datasets/urls.py` + `views.py` - Added URL redirect
 - `static/css/modals.css` - Added Schema Builder styles
 
-See the "Datasets Chapter (Chapter 1)" section above and [datasets_migration.md](datasets_migration.md) for full details.
+See the "Datasets Chapter (Chapter 2)" section above and [datasets_migration.md](datasets_migration.md) for full details.
 
 ---
 

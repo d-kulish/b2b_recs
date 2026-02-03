@@ -43,6 +43,10 @@ urlpatterns = [
     path('api/feature-configs/calculate-dims/',
          api.calculate_dimensions, name='api_configs_calculate_dims'),
 
+    # Dashboard stats API
+    path('api/models/<int:model_id>/configs/dashboard-stats/',
+         api.get_configs_dashboard_stats, name='api_configs_dashboard_stats'),
+
     # Dataset endpoints for configs
     path('api/models/<int:model_id>/configs/datasets/',
          api.list_datasets_for_model, name='api_configs_list_datasets'),

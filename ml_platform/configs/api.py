@@ -1863,3 +1863,35 @@ def check_feature_config_name(request):
             'success': False,
             'error': str(e),
         }, status=500)
+
+
+# =============================================================================
+# CONFIGS DASHBOARD STATS
+# =============================================================================
+
+@login_required
+@require_http_methods(["GET"])
+def get_configs_dashboard_stats(request, model_id):
+    """
+    Get dashboard statistics for the Configs page.
+
+    Returns inventory tracking, usage analytics, and relationship data
+    for Datasets, FeatureConfigs, and ModelConfigs.
+    """
+    try:
+        model = get_object_or_404(ModelEndpoint, id=model_id)
+
+        from .services import ConfigDashboardStatsService
+        service = ConfigDashboardStatsService(model)
+
+        return JsonResponse({
+            'success': True,
+            'data': service.get_stats(),
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting configs dashboard stats: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        }, status=500)

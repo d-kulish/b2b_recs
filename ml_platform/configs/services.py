@@ -6761,3 +6761,440 @@ def get_dataset_info_for_view(dataset) -> Dict[str, Any]:
         # BigQuery location
         'bq_location': dataset.bq_location,
     }
+
+
+# =============================================================================
+# CONFIG DASHBOARD STATS SERVICE
+# =============================================================================
+
+class ConfigDashboardStatsService:
+    """
+    Computes statistics for the Configs Dashboard chapter.
+
+    Provides inventory tracking, usage analytics, and relationship visualization
+    for Datasets, FeatureConfigs, and ModelConfigs.
+    """
+
+    def __init__(self, model_endpoint):
+        """
+        Initialize with a ModelEndpoint.
+
+        Args:
+            model_endpoint: ModelEndpoint instance
+        """
+        self.model = model_endpoint
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get complete dashboard statistics.
+
+        Returns:
+            Dict with datasets, feature_configs, model_configs, coverage_matrix, relationships
+        """
+        return {
+            'datasets': self._get_dataset_stats(),
+            'feature_configs': self._get_feature_config_stats(),
+            'model_configs': self._get_model_config_stats(),
+            'coverage_matrix': self._get_coverage_matrix(),
+            'relationships': self._get_relationships(),
+        }
+
+    def _get_dataset_stats(self) -> Dict[str, Any]:
+        """Get dataset inventory with active/unused breakdown."""
+        from django.db.models import Count, Max
+        from ml_platform.models import Dataset
+
+        datasets = Dataset.objects.filter(
+            model_endpoint=self.model
+        ).annotate(
+            feature_config_count=Count('feature_configs', distinct=True),
+            experiment_count=Count('feature_configs__quick_tests', distinct=True),
+            last_experiment_at=Max('feature_configs__quick_tests__created_at')
+        ).order_by('-updated_at')
+
+        items = []
+        total = 0
+        active = 0
+        unused = 0
+        complexity_sum = 0
+        latest_update = None
+
+        for ds in datasets:
+            total += 1
+            is_active = ds.experiment_count > 0
+            if is_active:
+                active += 1
+            else:
+                unused += 1
+
+            complexity = self._calculate_complexity('dataset', ds)
+            complexity_sum += complexity
+
+            if ds.updated_at and (latest_update is None or ds.updated_at > latest_update):
+                latest_update = ds.updated_at
+
+            items.append({
+                'id': ds.id,
+                'name': ds.name,
+                'is_active': is_active,
+                'feature_config_count': ds.feature_config_count,
+                'experiment_count': ds.experiment_count,
+                'complexity': complexity,
+                'last_experiment_at': ds.last_experiment_at.isoformat() if ds.last_experiment_at else None,
+                'updated_at': ds.updated_at.isoformat() if ds.updated_at else None,
+            })
+
+        return {
+            'total': total,
+            'active': active,
+            'unused': unused,
+            'avg_complexity': round(complexity_sum / total, 1) if total > 0 else 0,
+            'latest_update': latest_update.isoformat() if latest_update else None,
+            'items': items,
+        }
+
+    def _get_feature_config_stats(self) -> Dict[str, Any]:
+        """Get FeatureConfig inventory with complexity scores."""
+        from django.db.models import Count, Max
+        from ml_platform.models import FeatureConfig
+
+        configs = FeatureConfig.objects.filter(
+            dataset__model_endpoint=self.model
+        ).select_related('dataset').annotate(
+            experiment_count=Count('quick_tests', distinct=True),
+            last_experiment_at=Max('quick_tests__created_at')
+        ).order_by('-updated_at')
+
+        items = []
+        total = 0
+        active = 0
+        unused = 0
+        complexity_sum = 0
+        latest_update = None
+
+        for fc in configs:
+            total += 1
+            is_active = fc.experiment_count > 0
+            if is_active:
+                active += 1
+            else:
+                unused += 1
+
+            complexity = self._calculate_complexity('feature_config', fc)
+            complexity_sum += complexity
+
+            if fc.updated_at and (latest_update is None or fc.updated_at > latest_update):
+                latest_update = fc.updated_at
+
+            items.append({
+                'id': fc.id,
+                'name': fc.name,
+                'dataset_id': fc.dataset_id,
+                'dataset_name': fc.dataset.name,
+                'is_active': is_active,
+                'experiment_count': fc.experiment_count,
+                'complexity': complexity,
+                'buyer_tensor_dim': fc.buyer_tensor_dim or 0,
+                'product_tensor_dim': fc.product_tensor_dim or 0,
+                'last_experiment_at': fc.last_experiment_at.isoformat() if fc.last_experiment_at else None,
+                'updated_at': fc.updated_at.isoformat() if fc.updated_at else None,
+            })
+
+        return {
+            'total': total,
+            'active': active,
+            'unused': unused,
+            'avg_complexity': round(complexity_sum / total, 1) if total > 0 else 0,
+            'latest_update': latest_update.isoformat() if latest_update else None,
+            'items': items,
+        }
+
+    def _get_model_config_stats(self) -> Dict[str, Any]:
+        """Get ModelConfig usage stats."""
+        from django.db.models import Count, Max
+        from ml_platform.models import ModelConfig, QuickTest
+
+        # Get all model configs (global, not model-specific)
+        configs = ModelConfig.objects.all().annotate(
+            total_exp_count=Count('quick_tests', distinct=True),
+            last_experiment_at=Max('quick_tests__created_at')
+        ).order_by('-updated_at')
+
+        # Filter to those used with this model's experiments
+        model_experiments = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=self.model
+        ).values_list('model_config_id', flat=True).distinct()
+
+        model_experiment_ids = set(model_experiments)
+
+        items = []
+        total = 0
+        used = 0
+        unused = 0
+        complexity_sum = 0
+        latest_update = None
+
+        for mc in configs:
+            total += 1
+            is_used = mc.id in model_experiment_ids
+            if is_used:
+                used += 1
+            else:
+                unused += 1
+
+            complexity = self._calculate_complexity('model_config', mc)
+            complexity_sum += complexity
+
+            if mc.updated_at and (latest_update is None or mc.updated_at > latest_update):
+                latest_update = mc.updated_at
+
+            # Count experiments for THIS model only
+            model_exp_count = QuickTest.objects.filter(
+                feature_config__dataset__model_endpoint=self.model,
+                model_config=mc
+            ).count()
+
+            items.append({
+                'id': mc.id,
+                'name': mc.name,
+                'model_type': mc.model_type,
+                'is_used': is_used,
+                'experiment_count': model_exp_count,
+                'total_experiment_count': mc.total_exp_count,
+                'complexity': complexity,
+                'output_embedding_dim': mc.output_embedding_dim,
+                'last_experiment_at': mc.last_experiment_at.isoformat() if mc.last_experiment_at else None,
+                'updated_at': mc.updated_at.isoformat() if mc.updated_at else None,
+            })
+
+        return {
+            'total': total,
+            'used': used,
+            'unused': unused,
+            'avg_complexity': round(complexity_sum / total, 1) if total > 0 else 0,
+            'latest_update': latest_update.isoformat() if latest_update else None,
+            'items': items,
+        }
+
+    def _get_coverage_matrix(self) -> Dict[str, Any]:
+        """
+        Get FeatureConfig × ModelConfig experiment counts for coverage heatmap.
+
+        Returns matrix cells with experiment counts and best recall scores.
+        """
+        from django.db.models import Count, Max
+        from ml_platform.models import FeatureConfig, ModelConfig, QuickTest
+
+        # Get feature configs for this model
+        feature_configs = list(FeatureConfig.objects.filter(
+            dataset__model_endpoint=self.model
+        ).select_related('dataset').order_by('dataset__name', 'name'))
+
+        # Get all model configs
+        model_configs = list(ModelConfig.objects.all().order_by('name'))
+
+        # Get experiment data for all cells
+        experiments = QuickTest.objects.filter(
+            feature_config__dataset__model_endpoint=self.model,
+            status='completed'
+        ).values(
+            'feature_config_id', 'model_config_id'
+        ).annotate(
+            count=Count('id'),
+            best_recall=Max('recall_at_100')
+        )
+
+        # Build lookup dictionary
+        exp_lookup = {}
+        for exp in experiments:
+            key = (exp['feature_config_id'], exp['model_config_id'])
+            exp_lookup[key] = {
+                'count': exp['count'],
+                'best_recall': exp['best_recall']
+            }
+
+        # Build cells
+        cells = []
+        for fc in feature_configs:
+            for mc in model_configs:
+                key = (fc.id, mc.id)
+                exp_data = exp_lookup.get(key, {'count': 0, 'best_recall': None})
+
+                # Check compatibility
+                is_compatible = self._check_config_compatibility(fc, mc)
+
+                cells.append({
+                    'feature_config_id': fc.id,
+                    'model_config_id': mc.id,
+                    'count': exp_data['count'],
+                    'best_recall': exp_data['best_recall'],
+                    'is_compatible': is_compatible,
+                })
+
+        # Generate suggestions for unexplored combinations
+        suggestions = self._generate_coverage_suggestions(feature_configs, model_configs, exp_lookup)
+
+        return {
+            'feature_configs': [
+                {'id': fc.id, 'name': fc.name, 'dataset_name': fc.dataset.name, 'config_type': fc.config_type}
+                for fc in feature_configs
+            ],
+            'model_configs': [
+                {'id': mc.id, 'name': mc.name, 'model_type': mc.model_type}
+                for mc in model_configs
+            ],
+            'cells': cells,
+            'suggestions': suggestions,
+        }
+
+    def _check_config_compatibility(self, feature_config, model_config) -> bool:
+        """Check if a FeatureConfig is compatible with a ModelConfig."""
+        # Retrieval FeatureConfigs work with retrieval ModelConfigs
+        # Ranking FeatureConfigs need ranking/multitask ModelConfigs
+        fc_type = feature_config.config_type
+        mc_type = model_config.model_type
+
+        if fc_type == 'retrieval':
+            return mc_type in ['retrieval', 'multitask']
+        elif fc_type == 'ranking':
+            return mc_type in ['ranking', 'multitask']
+        return True
+
+    def _generate_coverage_suggestions(self, feature_configs, model_configs, exp_lookup) -> List[Dict[str, Any]]:
+        """Generate suggestions for unexplored but promising combinations."""
+        suggestions = []
+
+        for fc in feature_configs:
+            for mc in model_configs:
+                key = (fc.id, mc.id)
+                if key not in exp_lookup and self._check_config_compatibility(fc, mc):
+                    suggestions.append({
+                        'feature_config_id': fc.id,
+                        'feature_config_name': fc.name,
+                        'model_config_id': mc.id,
+                        'model_config_name': mc.name,
+                        'reason': 'Unexplored compatible combination',
+                    })
+
+        # Limit to top 5 suggestions
+        return suggestions[:5]
+
+    def _get_relationships(self) -> List[Dict[str, Any]]:
+        """
+        Get Dataset → FeatureConfig → Experiments flow data for visualization.
+
+        Returns a hierarchical structure for the relationship diagram.
+        """
+        from django.db.models import Count
+        from ml_platform.models import Dataset, FeatureConfig, QuickTest
+
+        datasets = Dataset.objects.filter(
+            model_endpoint=self.model
+        ).prefetch_related('feature_configs').order_by('name')
+
+        relationships = []
+
+        for ds in datasets:
+            feature_configs = []
+            for fc in ds.feature_configs.all():
+                exp_count = QuickTest.objects.filter(feature_config=fc).count()
+                completed_count = QuickTest.objects.filter(
+                    feature_config=fc, status='completed'
+                ).count()
+
+                feature_configs.append({
+                    'id': fc.id,
+                    'name': fc.name,
+                    'config_type': fc.config_type,
+                    'experiment_count': exp_count,
+                    'completed_count': completed_count,
+                })
+
+            relationships.append({
+                'dataset_id': ds.id,
+                'dataset_name': ds.name,
+                'feature_configs': feature_configs,
+            })
+
+        return relationships
+
+    def _calculate_complexity(self, config_type: str, config) -> float:
+        """
+        Calculate complexity score for a config.
+
+        Formulas:
+        - Dataset: T×2 + C×0.1 + F×1.5 (T=tables, C=columns, F=filters)
+        - FeatureConfig: F×1 + X×2 + D×0.01 (F=features, X=crosses, D=tensor_dim)
+        - ModelConfig: L×1 + log10(P)×2 + R×1 (L=layers, P=params, R=regularization)
+        """
+        import math
+
+        if config_type == 'dataset':
+            # Count tables
+            tables = 1  # primary table
+            if config.secondary_tables:
+                tables += len(config.secondary_tables) if isinstance(config.secondary_tables, list) else 1
+
+            # Count columns
+            columns = _count_selected_columns(config.selected_columns)
+
+            # Count filters
+            filters = 0
+            snapshot = config.summary_snapshot or {}
+            filters_applied = snapshot.get('filters_applied', {})
+            if filters_applied.get('dates'):
+                filters += 1
+            if filters_applied.get('customers'):
+                customer_filters = filters_applied.get('customers', {})
+                filters += len([k for k, v in customer_filters.items() if v])
+            if filters_applied.get('products'):
+                product_filters = filters_applied.get('products', {})
+                filters += len([k for k, v in product_filters.items() if v])
+
+            return round(tables * 2 + columns * 0.1 + filters * 1.5, 1)
+
+        elif config_type == 'feature_config':
+            # Count features
+            buyer_features = len(config.buyer_model_features or [])
+            product_features = len(config.product_model_features or [])
+            features = buyer_features + product_features
+
+            # Count crosses
+            buyer_crosses = len(config.buyer_model_crosses or [])
+            product_crosses = len(config.product_model_crosses or [])
+            crosses = buyer_crosses + product_crosses
+
+            # Tensor dimension
+            tensor_dim = (config.buyer_tensor_dim or 0) + (config.product_tensor_dim or 0)
+
+            return round(features * 1 + crosses * 2 + tensor_dim * 0.01, 1)
+
+        elif config_type == 'model_config':
+            # Count layers
+            buyer_layers = len(config.buyer_tower_layers or [])
+            product_layers = len(config.product_tower_layers or [])
+            rating_layers = len(config.rating_head_layers or [])
+            layers = buyer_layers + product_layers + rating_layers
+
+            # Estimate params (simplified)
+            params = 0
+            for layer in (config.buyer_tower_layers or []):
+                if layer.get('type') == 'dense':
+                    params += layer.get('units', 64) * 64  # rough estimate
+            for layer in (config.product_tower_layers or []):
+                if layer.get('type') == 'dense':
+                    params += layer.get('units', 64) * 64
+            params = max(params, 1)  # avoid log(0)
+
+            # Regularization count
+            reg = 0
+            for layer in (config.buyer_tower_layers or []):
+                if layer.get('l2_reg', 0) > 0:
+                    reg += 1
+            for layer in (config.product_tower_layers or []):
+                if layer.get('l2_reg', 0) > 0:
+                    reg += 1
+
+            return round(layers * 1 + math.log10(params) * 2 + reg * 1, 1)
+
+        return 0

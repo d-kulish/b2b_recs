@@ -179,28 +179,28 @@ const ModelDashboardExperiments = (function() {
                 return;
             }
 
-            state.kpis = data;
+            state.kpis = data.stats;
 
             // Update Retrieval KPIs
-            updateKpiValue('experiments_retrieval_count', data.retrieval?.count || 0);
-            updateKpiValue('experiments_retrieval_metric0', formatMetric(data.retrieval?.best_r5, 3));
-            updateKpiValue('experiments_retrieval_metric1', formatMetric(data.retrieval?.best_r10, 3));
-            updateKpiValue('experiments_retrieval_metric2', formatMetric(data.retrieval?.best_r50, 3));
-            updateKpiValue('experiments_retrieval_metric3', formatMetric(data.retrieval?.best_r100, 3));
+            updateKpiValue('experiments_retrieval_count', data.stats?.retrieval?.count || 0);
+            updateKpiValue('experiments_retrieval_metric0', formatMetric(data.stats?.retrieval?.best_r5, 3));
+            updateKpiValue('experiments_retrieval_metric1', formatMetric(data.stats?.retrieval?.best_r10, 3));
+            updateKpiValue('experiments_retrieval_metric2', formatMetric(data.stats?.retrieval?.best_r50, 3));
+            updateKpiValue('experiments_retrieval_metric3', formatMetric(data.stats?.retrieval?.best_r100, 3));
 
             // Update Ranking KPIs
-            updateKpiValue('experiments_ranking_count', data.ranking?.count || 0);
-            updateKpiValue('experiments_ranking_metric0', formatMetric(data.ranking?.best_rmse, 4));
-            updateKpiValue('experiments_ranking_metric1', formatMetric(data.ranking?.best_test_rmse, 4));
-            updateKpiValue('experiments_ranking_metric2', formatMetric(data.ranking?.best_mae, 4));
-            updateKpiValue('experiments_ranking_metric3', formatMetric(data.ranking?.best_test_mae, 4));
+            updateKpiValue('experiments_ranking_count', data.stats?.ranking?.count || 0);
+            updateKpiValue('experiments_ranking_metric0', formatMetric(data.stats?.ranking?.best_rmse, 4));
+            updateKpiValue('experiments_ranking_metric1', formatMetric(data.stats?.ranking?.best_test_rmse, 4));
+            updateKpiValue('experiments_ranking_metric2', formatMetric(data.stats?.ranking?.best_mae, 4));
+            updateKpiValue('experiments_ranking_metric3', formatMetric(data.stats?.ranking?.best_test_mae, 4));
 
             // Update Hybrid KPIs
-            updateKpiValue('experiments_hybrid_count', data.hybrid?.count || 0);
-            updateKpiValue('experiments_hybrid_metric0', formatMetric(data.hybrid?.best_rmse, 4));
-            updateKpiValue('experiments_hybrid_metric1', formatMetric(data.hybrid?.best_test_rmse, 4));
-            updateKpiValue('experiments_hybrid_metric2', formatMetric(data.hybrid?.best_r50, 3));
-            updateKpiValue('experiments_hybrid_metric3', formatMetric(data.hybrid?.best_r100, 3));
+            updateKpiValue('experiments_hybrid_count', data.stats?.hybrid?.count || 0);
+            updateKpiValue('experiments_hybrid_metric0', formatMetric(data.stats?.hybrid?.best_rmse, 4));
+            updateKpiValue('experiments_hybrid_metric1', formatMetric(data.stats?.hybrid?.best_test_rmse, 4));
+            updateKpiValue('experiments_hybrid_metric2', formatMetric(data.stats?.hybrid?.best_r50, 3));
+            updateKpiValue('experiments_hybrid_metric3', formatMetric(data.stats?.hybrid?.best_r100, 3));
 
         } catch (error) {
             console.error('Error loading KPIs:', error);

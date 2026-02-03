@@ -1629,11 +1629,10 @@ const ExpViewModal = (function() {
                 </div>
             `).join('');
 
-            // Build deployment status and button for header
+            // Build deployment status for header
             const isDeployed = v.model_status === 'deployed' && v.deployed_endpoint_info;
             const endpointInfo = v.deployed_endpoint_info;
             let deploymentStatusHtml;
-            let deployButtonHtml;
 
             if (isDeployed) {
                 deploymentStatusHtml = `
@@ -1642,22 +1641,12 @@ const ExpViewModal = (function() {
                         <span>Deployed to <span class="endpoint-name">${endpointInfo.service_name}</span></span>
                     </div>
                 `;
-                deployButtonHtml = `
-                    <button class="version-undeploy-btn" onclick="event.stopPropagation(); ExpViewModal.undeployVersion(${endpointInfo.id}, ${v.id})">
-                        Undeploy
-                    </button>
-                `;
             } else {
                 deploymentStatusHtml = `
                     <div class="version-deployment-status not-deployed">
                         <i class="fas fa-circle"></i>
                         <span>Not deployed</span>
                     </div>
-                `;
-                deployButtonHtml = `
-                    <button class="version-deploy-btn" onclick="event.stopPropagation(); ExpViewModal.deployVersion(${v.id})">
-                        Deploy
-                    </button>
                 `;
             }
 
@@ -1673,7 +1662,6 @@ const ExpViewModal = (function() {
                             <span class="version-date">${formatDate(v.registered_at)}</span>
                             ${deploymentStatusHtml}
                         </div>
-                        ${deployButtonHtml}
                     </div>
                     <div class="version-kpis">
                         ${kpiBoxesHtml}

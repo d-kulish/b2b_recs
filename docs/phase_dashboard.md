@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2025-02-03 (Added Models chapter implementation)
+**Last Updated**: 2025-02-03 (Added ExpViewModal integration for View button)
 
 ---
 
@@ -224,9 +224,38 @@ Uses Tailwind CSS classes matching the Models Registry:
 | `GET /api/models/` | Fetch models with filters, pagination, KPI data |
 | `GET /api/training-schedules/calendar/` | Fetch calendar data for heatmap |
 
-### Modal Integration
+### Modal Integration: ExpViewModal
 
-- **ExpViewModal**: `ExpViewModal.openForModel(modelId)` - Opens on View button click or row click
+The View button and table row clicks open the `ExpViewModal` in model mode to display comprehensive model details.
+
+**Integration Components**:
+- **CSS**: `exp_view_modal.css` - Modal styling
+- **HTML**: `_exp_view_modal.html` - Modal template (included inside `model_content` block)
+- **JS**: `exp_view_modal.js` - Modal logic with `openForModel()` method
+
+**Configuration** (in DOMContentLoaded):
+```javascript
+ExpViewModal.configure({
+    showTabs: ['overview', 'versions', 'artifacts', 'deployment', 'lineage'],
+    onClose: function() {
+        ModelDashboardModels.refresh();
+    },
+    onUpdate: function(data) {
+        ModelDashboardModels.refresh();
+    }
+});
+```
+
+**Tabs Displayed in Model Mode**:
+| Tab | Content |
+|-----|---------|
+| Overview | Dataset, features config, model config, metrics |
+| Versions | Version history with metrics comparison (read-only, no deploy buttons) |
+| Artifacts | GCS paths, Vertex AI resource names |
+| Deployment | Deploy/undeploy actions |
+| Lineage | Model lineage visualization |
+
+**API Called**: `GET /api/models/{modelId}/` - Fetches full model details for modal population
 
 ---
 
@@ -248,6 +277,9 @@ Uses Tailwind CSS classes matching the Models Registry:
 |------|---------|
 | `static/js/schedule_calendar.js` | GitHub-style calendar component |
 | `static/css/schedule_calendar.css` | Calendar styles |
+| `static/js/exp_view_modal.js` | Model/experiment view modal with tabs |
+| `static/css/exp_view_modal.css` | Modal styling |
+| `templates/includes/_exp_view_modal.html` | Modal HTML template |
 
 ### Template Structure
 
@@ -260,6 +292,7 @@ Uses Tailwind CSS classes matching the Models Registry:
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 {% endblock %}
 
 {% block model_content %}
@@ -295,15 +328,30 @@ Uses Tailwind CSS classes matching the Models Registry:
     <div id="modelsChapterTable"></div>
     <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
 </div>
+
+<!-- ExpViewModal (must be inside model_content block) -->
+{% include 'includes/_exp_view_modal.html' %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/exp_view_modal.js' %}?v=3"></script>
 <script src="{% static 'js/schedule_calendar.js' %}"></script>
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Configure ExpViewModal for model viewing
+    ExpViewModal.configure({
+        showTabs: ['overview', 'versions', 'artifacts', 'deployment', 'lineage'],
+        onClose: function() {
+            ModelDashboardModels.refresh();
+        },
+        onUpdate: function(data) {
+            ModelDashboardModels.refresh();
+        }
+    });
+
     ModelDashboardEndpoints.init();
     ModelDashboardEndpoints.load();
     ModelDashboardModels.init();
@@ -520,5 +568,6 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2025-02-03 | 1.2 | Added ExpViewModal integration for View button functionality |
 | 2025-02-03 | 1.1 | Added Models chapter with KPIs, calendar, filter bar, table |
 | 2025-02-03 | 1.0 | Initial Endpoints chapter implementation |

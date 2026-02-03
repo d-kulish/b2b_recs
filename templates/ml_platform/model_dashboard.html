@@ -6,6 +6,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 {% endblock %}
 
 {% block model_content %}
@@ -60,15 +61,30 @@
     <!-- Empty State -->
     <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
 </div>
+
+<!-- Experiment View Modal (Reusable Component) -->
+{% include 'includes/_exp_view_modal.html' %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/exp_view_modal.js' %}?v=3"></script>
 <script src="{% static 'js/schedule_calendar.js' %}"></script>
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Configure ExpViewModal for model viewing
+    ExpViewModal.configure({
+        showTabs: ['overview', 'versions', 'artifacts', 'deployment', 'lineage'],
+        onClose: function() {
+            ModelDashboardModels.refresh();
+        },
+        onUpdate: function(data) {
+            ModelDashboardModels.refresh();
+        }
+    });
+
     ModelDashboardEndpoints.init();
     ModelDashboardEndpoints.load();
     ModelDashboardModels.init();

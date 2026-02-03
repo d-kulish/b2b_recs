@@ -272,28 +272,55 @@ const ModelsRegistry = (function() {
         const container = document.querySelector(config.kpiContainerId);
         if (!container) return;
 
-        container.innerHTML = `
-            <div class="models-kpi-card">
-                <div class="models-kpi-value">${state.kpi.total}</div>
-                <div class="models-kpi-label">Total Models</div>
+        const kpiData = [
+            {
+                id: 'total',
+                icon: 'fa-cube',
+                iconClass: 'total',
+                label: 'Total Models',
+                value: state.kpi.total
+            },
+            {
+                id: 'deployed',
+                icon: 'fa-rocket',
+                iconClass: 'deployed',
+                label: 'Deployed',
+                value: state.kpi.deployed
+            },
+            {
+                id: 'outdated',
+                icon: 'fa-exclamation-triangle',
+                iconClass: 'outdated',
+                label: 'Outdated',
+                value: state.kpi.outdated
+            },
+            {
+                id: 'idle',
+                icon: 'fa-pause-circle',
+                iconClass: 'idle',
+                label: 'Idle',
+                value: state.kpi.idle
+            },
+            {
+                id: 'scheduled',
+                icon: 'fa-clock',
+                iconClass: 'scheduled',
+                label: 'Scheduled',
+                value: state.kpi.scheduled
+            }
+        ];
+
+        container.innerHTML = kpiData.map(item => `
+            <div class="models-kpi-card" data-kpi="${item.id}">
+                <div class="models-kpi-icon ${item.iconClass}">
+                    <i class="fas ${item.icon}"></i>
+                </div>
+                <div class="models-kpi-content">
+                    <div class="models-kpi-value">${item.value}</div>
+                    <div class="models-kpi-label">${item.label}</div>
+                </div>
             </div>
-            <div class="models-kpi-card">
-                <div class="models-kpi-value highlight-green">${state.kpi.deployed}</div>
-                <div class="models-kpi-label">Deployed</div>
-            </div>
-            <div class="models-kpi-card">
-                <div class="models-kpi-value highlight-orange">${state.kpi.outdated}</div>
-                <div class="models-kpi-label">Outdated</div>
-            </div>
-            <div class="models-kpi-card">
-                <div class="models-kpi-value highlight-blue">${state.kpi.idle}</div>
-                <div class="models-kpi-label">Idle</div>
-            </div>
-            <div class="models-kpi-card">
-                <div class="models-kpi-value highlight-orange">${state.kpi.scheduled}</div>
-                <div class="models-kpi-label">Scheduled</div>
-            </div>
-        `;
+        `).join('');
     }
 
     function renderFilterBar() {

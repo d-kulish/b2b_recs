@@ -538,8 +538,8 @@ const TrainingWizard = (function() {
             }
         }
 
-        // Update progress pills
-        const pills = document.querySelectorAll('.progress-step-pill');
+        // Update progress pills (scoped to wizard modal only)
+        const pills = document.querySelectorAll('#trainingWizardModal .progress-step-pill');
         pills.forEach((pill, index) => {
             pill.classList.remove('current', 'completed', 'future', 'hidden');
             if (state.editMode && index === 0) {

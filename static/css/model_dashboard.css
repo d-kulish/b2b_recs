@@ -49,34 +49,37 @@
 }
 
 /* =========================================================================
-   KPI Row: Grouped Summary Card + 2x2 Performance Cards Grid
+   KPI Row: Single Row with Serving Endpoints Group + 4 Performance Cards
    ========================================================================= */
 .model-dashboard-kpi-row {
-    display: grid;
-    grid-template-columns: 2fr 3fr;
-    gap: 16px;
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
     margin-bottom: 24px;
+    align-items: stretch;
 }
 
-/* Container for the 4 performance KPI cards in 2x2 grid */
+/* Container for the 4 performance KPI cards - takes 2/3 width */
 .model-dashboard-performance-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
+    display: flex;
+    flex-direction: row;
     gap: 12px;
+    flex: 0 0 calc(66.666% - 6px);
 }
 
 /* =========================================================================
-   Grouped Summary Card (spans first position)
+   Serving Endpoints Group (wraps first 3 KPIs: Total, Active, Inactive)
    ========================================================================= */
 .model-dashboard-summary-card {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
-    padding: 20px;
+    padding: 12px 20px;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     transition: all 0.2s ease;
+    flex: 0 0 calc(33.333% - 6px);
 }
 
 .model-dashboard-summary-card:hover {
@@ -86,25 +89,25 @@
 
 /* Title above the content */
 .model-dashboard-summary-title {
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
 }
 
 /* Row containing icon + 3 stats */
 .model-dashboard-summary-row {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
 }
 
 .model-dashboard-summary-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     background: linear-gradient(135deg, #6366f1, #818cf8);
     display: flex;
     align-items: center;
@@ -114,23 +117,23 @@
 
 .model-dashboard-summary-icon i {
     color: white;
-    font-size: 20px;
+    font-size: 14px;
 }
 
 .model-dashboard-summary-stats {
     display: flex;
+    gap: 8px;
     flex: 1;
-    gap: 12px;
 }
 
 .model-dashboard-summary-stat {
     text-align: center;
-    padding: 12px 20px;
+    padding: 8px 12px;
     border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    flex: 1;
+    border-radius: 6px;
     transition: all 0.2s ease;
     cursor: default;
+    flex: 1;
 }
 
 .model-dashboard-summary-stat:hover {
@@ -144,7 +147,7 @@
 }
 
 .model-dashboard-summary-value {
-    font-size: 28px;
+    font-size: 20px;
     font-weight: 700;
     color: #111827;
     line-height: 1.2;
@@ -159,26 +162,28 @@
 }
 
 .model-dashboard-summary-label {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 /* =========================================================================
-   Performance KPI Cards
+   Performance KPI Cards (inline in single row)
    ========================================================================= */
 .model-dashboard-kpi-card {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
-    padding: 16px;
+    padding: 10px 14px;
     display: flex;
-    align-items: flex-start;
-    gap: 12px;
+    align-items: center;
+    gap: 10px;
     transition: all 0.2s ease;
+    flex: 1;
+    min-width: 120px;
 }
 
 .model-dashboard-kpi-card:hover {
@@ -187,9 +192,9 @@
 }
 
 .model-dashboard-kpi-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -197,7 +202,7 @@
 }
 
 .model-dashboard-kpi-icon i {
-    font-size: 18px;
+    font-size: 14px;
     color: white;
 }
 
@@ -223,11 +228,11 @@
 }
 
 .model-dashboard-kpi-value {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
     color: #111827;
     line-height: 1.2;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
 }
 
 .model-dashboard-kpi-value.skeleton {
@@ -235,7 +240,7 @@
 }
 
 .model-dashboard-kpi-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
@@ -243,9 +248,9 @@
 }
 
 .model-dashboard-kpi-change {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .model-dashboard-kpi-change.positive {
@@ -456,14 +461,24 @@
 /* =========================================================================
    Responsive Design
    ========================================================================= */
-@media (max-width: 1200px) {
+@media (max-width: 1100px) {
     .model-dashboard-kpi-row {
-        grid-template-columns: 1fr;
+        flex-wrap: wrap;
+    }
+
+    .model-dashboard-summary-card {
+        flex: 0 0 auto;
     }
 
     .model-dashboard-performance-grid {
-        grid-template-columns: repeat(4, 1fr);
-        grid-template-rows: 1fr;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+    }
+
+    .model-dashboard-kpi-card {
+        flex: 1 1 calc(25% - 12px);
+        max-width: none;
+        min-width: 120px;
     }
 
     .model-dashboard-charts-grid {
@@ -476,17 +491,24 @@
 }
 
 @media (max-width: 900px) {
-    .model-dashboard-performance-grid {
-        grid-template-columns: repeat(2, 1fr);
-        grid-template-rows: repeat(2, 1fr);
+    .model-dashboard-summary-card {
+        flex: 1 1 100%;
+    }
+
+    .model-dashboard-kpi-card {
+        flex: 1 1 calc(50% - 12px);
     }
 }
 
 @media (max-width: 768px) {
+    .model-dashboard-kpi-row {
+        flex-direction: column;
+    }
+
     .model-dashboard-summary-row {
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
+        gap: 10px;
     }
 
     .model-dashboard-summary-icon {
@@ -495,15 +517,26 @@
 
     .model-dashboard-summary-stats {
         flex-direction: row;
-        gap: 8px;
+        gap: 6px;
     }
 
     .model-dashboard-summary-stat {
-        padding: 10px 12px;
+        padding: 6px 10px;
+        min-width: 55px;
     }
 
     .model-dashboard-summary-value {
-        font-size: 22px;
+        font-size: 18px;
+    }
+
+    .model-dashboard-performance-grid {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .model-dashboard-kpi-card {
+        flex: 1 1 100%;
+        max-width: none;
     }
 
     .model-dashboard-charts-grid {

@@ -241,73 +241,76 @@ Shows which FeatureConfig × ModelConfig combinations have been tested in experi
 - **Click tested cell**: Navigate to Experiments page with filter for that combination
 - **Click untested compatible cell**: Open Quick Test wizard pre-filled with that combination
 - **Click N/A cell**: Show tooltip explaining incompatibility
+- **Click column header (Model Config name)**: Search for config and scroll to Model Configs chapter
+- **Click row header (Feature Config name)**: Search for config and scroll to Feature Configs chapter
 
-### Component 3: Config Relationships Diagram
+**Collapsible Section:**
+- The Coverage Matrix section is collapsible (starts collapsed)
+- Click header to expand/collapse
+- Chevron icon rotates to indicate state
 
-Visual flow diagram showing Dataset → FeatureConfig → Experiments relationships.
+### Component 3: Configuration Flow Diagram
+
+Compact visual flow diagram showing Dataset → FeatureConfig → ModelConfig relationships.
 
 **Diagram Structure:**
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│ CONFIG RELATIONSHIPS                                                             │
-│ How your configs connect to experiments                                          │
+│ CONFIGURATION FLOW                                                         [▶]  │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│   DATASETS              FEATURE CONFIGS           EXPERIMENTS                   │
+│ DATASETS                                                                        │
+│ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐                    │
+│ │ old_data.. │ │ new_data.. │ │ test_v2    │ │ test_v4    │                    │
+│ │         3  │ │         1  │ │         1  │ │         2  │                    │
+│ └────────────┘ └────────────┘ └────────────┘ └────────────┘                    │
+│   (light blue background)                                                       │
 │                                                                                 │
-│   ┌───────────┐         ┌─────────────┐                                        │
-│   │           │────────▶│ cherng_v1   │─────────▶ 39 experiments               │
-│   │ old_data  │         │ [Retrieval] │           Best: R@100 = 0.317          │
-│   │           │         └─────────────┘                                        │
-│   │ 5 tables  │                                                                │
-│   │ 14 cols   │         ┌─────────────┐                                        │
-│   │ 3 filters │────────▶│ cherng_v2   │─────────▶ 11 experiments               │
-│   │           │         │ [Retrieval] │           Best: R@100 = 0.312          │
-│   └───────────┘         └─────────────┘                                        │
-│        │                                                                        │
-│        │ Active (used in 30d)                                                   │
-│        ▼                                                                        │
-│   ┌───────────┐         ┌─────────────┐                                        │
-│   │           │────────▶│ new_features│─────────▶ 3 experiments                │
-│   │ new_data  │         │ [Ranking]   │           Best: RMSE = 0.45            │
-│   │           │         └─────────────┘                                        │
-│   │ 2 tables  │                                                                │
-│   │ 8 cols    │         ┌─────────────┐                                        │
-│   │ 1 filter  │─ ─ ─ ─ ▶│ test_fc     │─ ─ ─ ─ ─▶ 0 experiments               │
-│   └───────────┘         │ [Retrieval] │           (unused)                      │
-│        │                └─────────────┘                                        │
-│        │ Inactive                                                               │
+│ FEATURE CONFIGS                                                                 │
+│ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐                    │
+│ │🔍cherng_v1 │ │🔍cherng_v2 │ │🔍feats_v3  │ │📊new_feat..│                    │
+│ │       7/8  │ │      14/14 │ │         0  │ │        3/5 │                    │
+│ └────────────┘ └────────────┘ └────────────┘ └────────────┘                    │
+│   (light green background)                                                      │
 │                                                                                 │
-│   Legend: ────▶ Active (used in 30d)   ─ ─ ─▶ Inactive/Unused                  │
-│           [Retrieval] = Retrieval models only                                   │
-│           [Ranking] = Retrieval, Ranking, Multitask compatible                  │
+│ MODEL CONFIGS                                                                   │
+│ ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐                    │
+│ │ hybrid_v1  │ │ scann_v1   │ │ chernigi.. │ │ model_v2   │                    │
+│ │        16  │ │         4  │ │        25  │ │         1  │                    │
+│ └────────────┘ └────────────┘ └────────────┘ └────────────┘                    │
+│   (light orange background)                                                     │
+│                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Node Types:**
+**Node Types (Tablets):**
 
 | Node | Content | Visual |
 |------|---------|--------|
-| **Dataset** | Name, tables count, columns count, filters count | Rectangle with database icon |
-| **FeatureConfig** | Name, config type badge | Rectangle with gear icon |
-| **Experiments** | Count, best metric | Text label (no box) |
+| **Dataset** | Truncated name (10 chars), FC count badge | Light blue tablet (130px fixed width) |
+| **FeatureConfig** | Type icon, truncated name, experiment count badge | Light green tablet (130px fixed width) |
+| **ModelConfig** | Truncated name, experiment count badge | Light orange tablet (130px fixed width) |
 
-**Connection Styles:**
-| Style | Meaning |
-|-------|---------|
-| Solid line (`────▶`) | Active - used in experiment in last 30 days |
-| Dashed line (`─ ─ ─▶`) | Inactive - no experiments or not used in 30+ days |
+**Layout:**
+- Compact vertical layout with 3 rows (Datasets → Feature Configs → Model Configs)
+- Each row has label on top, tablets below (wrapped if many)
+- Fixed-width tablets (130px) with truncated names (10 characters + "...")
+- Full name available in tooltip on hover
 
-**Implementation Approach:**
-- SVG-based rendering (matches existing Schema Builder pattern)
-- Nodes positioned in 3 columns: Datasets, FeatureConfigs, Experiments
-- Curved bezier lines connecting nodes (similar to Schema Builder joins)
+**Collapsible Section:**
+- The Configuration Flow section is collapsible (starts collapsed)
+- Click header to expand/collapse
+- Chevron icon rotates to indicate state
 
 **Interactions:**
-- **Hover node**: Highlight connected paths
-- **Click Dataset node**: Smooth scroll to Datasets chapter
-- **Click FeatureConfig node**: Smooth scroll to Features chapter
-- **Click experiment count**: Navigate to Experiments page with filter
+- **Hover tablet**: Highlight connected configs across all rows (lineage highlighting)
+  - Hover Dataset → highlights its Feature Configs and their Model Configs
+  - Hover Feature Config → highlights parent Dataset and connected Model Configs
+  - Hover Model Config → highlights connected Feature Configs and their Datasets
+- **Click tablet**: Search for config name and scroll to its chapter
+  - Click Dataset → sets search filter in Datasets chapter and scrolls there
+  - Click Feature Config → sets search filter in Features chapter and scrolls there
+  - Click Model Config → sets search filter in Model Configs chapter and scrolls there
 
 ### API Endpoint
 

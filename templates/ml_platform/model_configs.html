@@ -236,6 +236,16 @@
         background: transparent;
     }
 
+    .configs-dashboard-matrix th.clickable-header {
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .configs-dashboard-matrix th.clickable-header:hover {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
     .configs-dashboard-matrix td {
         padding: 0;
     }
@@ -14754,7 +14764,8 @@ function cfg_renderCoverageMatrix(matrix) {
     // Header row with model config names
     html += '<tr><th class="corner-empty" colspan="2"></th>';
     matrix.model_configs.forEach(mc => {
-        html += `<th title="${mc.name}">${mc.name.substring(0, 12)}${mc.name.length > 12 ? '...' : ''}</th>`;
+        const escapedName = mc.name.replace(/'/g, "\\'");
+        html += `<th class="clickable-header" title="${mc.name} (click to search)" onclick="cfg_scrollToModelConfig(${mc.id}, '${escapedName}')">${mc.name.substring(0, 12)}${mc.name.length > 12 ? '...' : ''}</th>`;
     });
     html += '</tr></thead>';
 
@@ -14768,7 +14779,8 @@ function cfg_renderCoverageMatrix(matrix) {
             html += `<th class="axis-label-vertical" rowspan="${numFeatureConfigs}">Feature Configs</th>`;
         }
 
-        html += `<th class="row-header" title="${fc.name} (${fc.dataset_name})">${fc.name.substring(0, 15)}${fc.name.length > 15 ? '...' : ''}</th>`;
+        const escapedFcName = fc.name.replace(/'/g, "\\'");
+        html += `<th class="row-header clickable-header" title="${fc.name} (${fc.dataset_name}) - click to search" onclick="cfg_scrollToFeatureConfig(${fc.id}, '${escapedFcName}')">${fc.name.substring(0, 15)}${fc.name.length > 15 ? '...' : ''}</th>`;
 
         matrix.model_configs.forEach(mc => {
             const cell = cellLookup[`${fc.id}-${mc.id}`];
@@ -14876,8 +14888,9 @@ function cfg_renderRelationships(relationships) {
         const fcCount = rel.feature_configs.length;
         const fcIds = rel.feature_configs.map(fc => fc.id).join(',');
         const truncatedName = cfg_truncateName(rel.dataset_name, 10);
+        const escapedName = rel.dataset_name.replace(/'/g, "\\'");
         html += `
-            <div class="configs-dashboard-node dataset" data-ds-id="${rel.dataset_id}" data-fc-ids="${fcIds}" onclick="cfg_scrollToDataset(${rel.dataset_id})" title="${rel.dataset_name} - ${fcCount} Feature Config${fcCount !== 1 ? 's' : ''} (hover to see connections)">
+            <div class="configs-dashboard-node dataset" data-ds-id="${rel.dataset_id}" data-fc-ids="${fcIds}" data-name="${rel.dataset_name}" onclick="cfg_scrollToDataset(${rel.dataset_id}, '${escapedName}')" title="${rel.dataset_name} - ${fcCount} Feature Config${fcCount !== 1 ? 's' : ''} (click to search)">
                 <span class="configs-dashboard-node-name">${truncatedName}</span>
                 <span class="configs-dashboard-node-badge">${fcCount}</span>
             </div>
@@ -14895,8 +14908,9 @@ function cfg_renderRelationships(relationships) {
         const expText = fc.experiment_count > 0 ? `${fc.completed_count}/${fc.experiment_count}` : '0';
         const mcIds = (fc.model_config_ids || []).join(',');
         const truncatedName = cfg_truncateName(fc.name, 10);
+        const escapedName = fc.name.replace(/'/g, "\\'");
         html += `
-            <div class="configs-dashboard-node feature-config" data-fc-id="${fc.id}" data-ds-id="${fc.dataset_id}" data-mc-ids="${mcIds}" onclick="cfg_scrollToFeatureConfig(${fc.id})" title="${fc.name} (${fc.config_type}) from ${fc.dataset_name} - ${fc.experiment_count} experiments (hover to see connections)">
+            <div class="configs-dashboard-node feature-config" data-fc-id="${fc.id}" data-ds-id="${fc.dataset_id}" data-mc-ids="${mcIds}" data-name="${fc.name}" onclick="cfg_scrollToFeatureConfig(${fc.id}, '${escapedName}')" title="${fc.name} (${fc.config_type}) from ${fc.dataset_name} - ${fc.experiment_count} experiments (click to search)">
                 <i class="fas ${typeIcon}" style="color: ${typeColor}; font-size: 10px;"></i>
                 <span class="configs-dashboard-node-name">${truncatedName}</span>
                 <span class="configs-dashboard-node-badge experiments">${expText}</span>
@@ -14913,8 +14927,9 @@ function cfg_renderRelationships(relationships) {
         modelConfigs.forEach(mc => {
             const fcIds = (mc.feature_config_ids || []).join(',');
             const truncatedName = cfg_truncateName(mc.name, 10);
+            const escapedName = mc.name.replace(/'/g, "\\'");
             html += `
-                <div class="configs-dashboard-node model-config" data-mc-id="${mc.id}" data-fc-ids="${fcIds}" onclick="cfg_scrollToModelConfig(${mc.id})" title="${mc.name} - ${mc.experiment_count} experiments (hover to see connections)">
+                <div class="configs-dashboard-node model-config" data-mc-id="${mc.id}" data-fc-ids="${fcIds}" data-name="${mc.name}" onclick="cfg_scrollToModelConfig(${mc.id}, '${escapedName}')" title="${mc.name} - ${mc.experiment_count} experiments (click to search)">
                     <span class="configs-dashboard-node-name">${truncatedName}</span>
                     <span class="configs-dashboard-node-badge experiments">${mc.experiment_count}</span>
                 </div>
@@ -15017,8 +15032,8 @@ function cfg_setupLineageHighlighting() {
     });
 }
 
-function cfg_scrollToModelConfig(mcId) {
-    cfg_scrollToChapter('modelStructureChapter');
+function cfg_scrollToModelConfig(mcId, name) {
+    cfg_searchAndScrollToChapter('modelStructureChapter', name, 'mcSearchInput', debounceMcSearch);
 }
 
 /**
@@ -15029,28 +15044,43 @@ function cfg_scrollToChapter(chapterId) {
     const chapterMap = {
         'datasetsChapter': 'datasetsList',
         'featuresChapter': 'configsList',
-        'modelStructureChapter': 'modelConfigsList'
+        'modelStructureChapter': 'modelConfigsGrid'
     };
 
     const targetId = chapterMap[chapterId] || chapterId;
     const target = document.getElementById(targetId);
     if (target) {
         // Scroll to the parent chapter section
-        const chapter = target.closest('.bg-white');
+        const chapter = target.closest('.bg-white') || target.closest('.chapter-section');
         if (chapter) {
             chapter.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
 }
 
-function cfg_scrollToDataset(datasetId) {
-    // Scroll to datasets chapter and highlight the dataset
-    cfg_scrollToChapter('datasetsChapter');
+/**
+ * Search for a config name and scroll to its chapter.
+ */
+function cfg_searchAndScrollToChapter(chapterId, searchName, searchInputId, searchFunction) {
+    // Set the search input value
+    const searchInput = document.getElementById(searchInputId);
+    if (searchInput && searchName) {
+        searchInput.value = searchName;
+        // Trigger the search
+        if (typeof searchFunction === 'function') {
+            searchFunction();
+        }
+    }
+    // Scroll to the chapter
+    cfg_scrollToChapter(chapterId);
 }
 
-function cfg_scrollToFeatureConfig(fcId) {
-    // Scroll to features chapter
-    cfg_scrollToChapter('featuresChapter');
+function cfg_scrollToDataset(datasetId, name) {
+    cfg_searchAndScrollToChapter('datasetsChapter', name, 'dsSearchInput', ds_debounceSearch);
+}
+
+function cfg_scrollToFeatureConfig(fcId, name) {
+    cfg_searchAndScrollToChapter('featuresChapter', name, 'searchInput', fc_debounceSearch);
 }
 
 /**
@@ -18721,7 +18751,7 @@ function filterConfigs() {
     loadConfigs();
 }
 
-function fc_fc_debounceSearch() {
+function fc_debounceSearch() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
         renderConfigs();

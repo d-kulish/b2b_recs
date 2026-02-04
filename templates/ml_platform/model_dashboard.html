@@ -4,7 +4,8 @@
 {% block title %}{{ model.name }} - Dashboard{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=5">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=7">
+<link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/pipeline_dag.css' %}?v=1">
@@ -138,26 +139,13 @@
 
     <!-- Content -->
     <div id="etlChapterContent" class="hidden">
-        <!-- KPI Row -->
-        <div id="etlChapterKpiRow" class="model-dashboard-etl-kpi-row"></div>
+        <!-- KPI Row - uses etl-kpi-row from cards.css -->
+        <div id="etlChapterKpiRow" class="etl-kpi-row"></div>
 
-        <!-- Row 2: Scheduled Jobs + Bubble Chart -->
-        <div id="etlChapterRow2" class="model-dashboard-etl-row-2">
-            <div id="etlScheduledSection" class="model-dashboard-etl-scheduled-section"></div>
-            <div id="etlChartSection" class="model-dashboard-etl-chart-section">
-                <div class="model-dashboard-etl-chart-header">
-                    <span class="model-dashboard-etl-chart-title">ETL Job Runs (Last 5 Days)</span>
-                    <div class="model-dashboard-etl-chart-legend">
-                        <span><span class="legend-dot completed"></span> Completed</span>
-                        <span><span class="legend-dot partial"></span> Partial</span>
-                        <span><span class="legend-dot failed"></span> Failed</span>
-                    </div>
-                </div>
-                <div id="etlBubbleChartContainer" class="relative">
-                    <svg id="etlBubbleChart" class="w-full"></svg>
-                    <div id="etlBubbleTooltip" class="model-dashboard-etl-tooltip hidden"></div>
-                </div>
-            </div>
+        <!-- Row 2: Scheduled Jobs (35%) + Bubble Chart (65%) - uses etl-dashboard-row-2 from cards.css -->
+        <div id="etlChapterRow2" class="etl-dashboard-row-2">
+            <div id="etlScheduledSection" class="etl-scheduled-section"></div>
+            <div id="etlChartSection" class="etl-chart-section"></div>
         </div>
     </div>
 </div>
@@ -176,7 +164,7 @@
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script src="{% static 'js/model_dashboard_experiments.js' %}?v=3"></script>
 <script src="{% static 'js/model_dashboard_configs.js' %}?v=1"></script>
-<script src="{% static 'js/model_dashboard_etl.js' %}?v=1"></script>
+<script src="{% static 'js/model_dashboard_etl.js' %}?v=5"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal for model/experiment viewing

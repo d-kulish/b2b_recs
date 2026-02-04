@@ -114,8 +114,8 @@ const ModelDashboardEtl = (function() {
                     } else {
                         renderKpiRow(data.data.kpi);
                         renderScheduledJobs(data.data.scheduled_jobs, 1);
+                        showContent();  // Show content first so chart container has dimensions
                         renderBubbleChart(data.data.bubble_chart);
-                        showContent();
                     }
                 } else {
                     console.error('ModelDashboardEtl: API error:', data.error);
@@ -138,74 +138,74 @@ const ModelDashboardEtl = (function() {
         const container = document.querySelector(config.kpiRowId);
 
         // Determine success rate color
-        let successRateColorClass = 'green';
+        let successRateColorClass = 'kpi-icon-green';
         if (kpi.success_rate < 70) {
-            successRateColorClass = 'red';
+            successRateColorClass = 'kpi-icon-red';
         } else if (kpi.success_rate < 90) {
-            successRateColorClass = 'yellow';
+            successRateColorClass = 'kpi-icon-yellow';
         }
 
         // Determine failed runs color
-        const failedColorClass = kpi.failed_runs > 0 ? 'red' : 'green';
+        const failedColorClass = kpi.failed_runs > 0 ? 'kpi-icon-red' : 'kpi-icon-green';
 
         container.innerHTML = `
-            <div class="model-dashboard-etl-kpi-card">
-                <div class="model-dashboard-etl-kpi-icon blue">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrapper kpi-icon-blue">
                     <i class="fas fa-play-circle"></i>
                 </div>
-                <div class="model-dashboard-etl-kpi-info">
-                    <div class="model-dashboard-etl-kpi-value">${kpi.total_runs}</div>
-                    <div class="model-dashboard-etl-kpi-label">Total Runs</div>
+                <div class="kpi-content">
+                    <span class="kpi-value">${kpi.total_runs}</span>
+                    <span class="kpi-label">Total Runs</span>
                 </div>
             </div>
 
-            <div class="model-dashboard-etl-kpi-card">
-                <div class="model-dashboard-etl-kpi-icon ${successRateColorClass}">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrapper ${successRateColorClass}">
                     <i class="fas fa-check-circle"></i>
                 </div>
-                <div class="model-dashboard-etl-kpi-info">
-                    <div class="model-dashboard-etl-kpi-value">${kpi.success_rate}%</div>
-                    <div class="model-dashboard-etl-kpi-label">Success Rate</div>
+                <div class="kpi-content">
+                    <span class="kpi-value">${kpi.success_rate}%</span>
+                    <span class="kpi-label">Success Rate</span>
                 </div>
             </div>
 
-            <div class="model-dashboard-etl-kpi-card">
-                <div class="model-dashboard-etl-kpi-icon green">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrapper kpi-icon-green">
                     <i class="fas fa-check-double"></i>
                 </div>
-                <div class="model-dashboard-etl-kpi-info">
-                    <div class="model-dashboard-etl-kpi-value">${kpi.successful_runs}</div>
-                    <div class="model-dashboard-etl-kpi-label">Successful Runs</div>
+                <div class="kpi-content">
+                    <span class="kpi-value">${kpi.successful_runs}</span>
+                    <span class="kpi-label">Successful Runs</span>
                 </div>
             </div>
 
-            <div class="model-dashboard-etl-kpi-card">
-                <div class="model-dashboard-etl-kpi-icon ${failedColorClass}">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrapper ${failedColorClass}">
                     <i class="fas fa-times-circle"></i>
                 </div>
-                <div class="model-dashboard-etl-kpi-info">
-                    <div class="model-dashboard-etl-kpi-value">${kpi.failed_runs}</div>
-                    <div class="model-dashboard-etl-kpi-label">Failed Runs</div>
+                <div class="kpi-content">
+                    <span class="kpi-value">${kpi.failed_runs}</span>
+                    <span class="kpi-label">Failed Runs</span>
                 </div>
             </div>
 
-            <div class="model-dashboard-etl-kpi-card">
-                <div class="model-dashboard-etl-kpi-icon purple">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrapper kpi-icon-purple">
                     <i class="fas fa-database"></i>
                 </div>
-                <div class="model-dashboard-etl-kpi-info">
-                    <div class="model-dashboard-etl-kpi-value">${formatNumber(kpi.total_rows_extracted)}</div>
-                    <div class="model-dashboard-etl-kpi-label">Rows Migrated</div>
+                <div class="kpi-content">
+                    <span class="kpi-value">${formatNumber(kpi.total_rows_extracted)}</span>
+                    <span class="kpi-label">Rows Migrated</span>
                 </div>
             </div>
 
-            <div class="model-dashboard-etl-kpi-card">
-                <div class="model-dashboard-etl-kpi-icon blue">
+            <div class="kpi-card">
+                <div class="kpi-icon-wrapper kpi-icon-blue">
                     <i class="fas fa-clock"></i>
                 </div>
-                <div class="model-dashboard-etl-kpi-info">
-                    <div class="model-dashboard-etl-kpi-value">${formatDuration(kpi.avg_duration_seconds)}</div>
-                    <div class="model-dashboard-etl-kpi-label">Avg Duration</div>
+                <div class="kpi-content">
+                    <span class="kpi-value">${formatDuration(kpi.avg_duration_seconds)}</span>
+                    <span class="kpi-label">Avg Duration</span>
                 </div>
             </div>
         `;
@@ -223,11 +223,8 @@ const ModelDashboardEtl = (function() {
 
         if (!jobs || jobs.length === 0) {
             container.innerHTML = `
-                <h3 class="model-dashboard-etl-scheduled-title">
-                    <i class="fas fa-calendar-alt"></i>
-                    Scheduled Jobs
-                </h3>
-                <div class="model-dashboard-etl-scheduled-empty">
+                <h3><i class="fas fa-calendar-alt mr-2 text-gray-400"></i>Scheduled Jobs</h3>
+                <div class="scheduled-empty-state">
                     <i class="fas fa-calendar-times"></i>
                     <p>No scheduled jobs</p>
                     <p class="text-xs mt-1">Create ETL jobs with schedules to see them here</p>
@@ -250,8 +247,8 @@ const ModelDashboardEtl = (function() {
                 : (job.next_run_time ? formatNextRun(job.next_run_time) : '<span class="text-gray-400">\u2014</span>');
 
             const stateBadge = job.is_paused
-                ? '<span class="model-dashboard-etl-badge-paused"><i class="fas fa-pause"></i> Paused</span>'
-                : '<span class="model-dashboard-etl-badge-enabled"><i class="fas fa-check"></i> Enabled</span>';
+                ? '<span class="badge-paused"><i class="fas fa-pause"></i> Paused</span>'
+                : '<span class="badge-enabled"><i class="fas fa-check"></i> Enabled</span>';
 
             return `
                 <tr>
@@ -263,17 +260,25 @@ const ModelDashboardEtl = (function() {
             `;
         }).join('');
 
-        // Build pagination if needed
+        // Build pagination with page numbers if needed
         let paginationHtml = '';
         if (totalPages > 1) {
             const prevDisabled = page === 1 ? 'disabled' : '';
             const nextDisabled = page === totalPages ? 'disabled' : '';
 
+            // Build page number buttons
+            let pageNumbersHtml = '';
+            for (let i = 1; i <= totalPages; i++) {
+                const isActive = i === page ? 'active' : '';
+                pageNumbersHtml += `<button class="page-btn ${isActive}" onclick="ModelDashboardEtl.goToScheduledJobsPage(${i})">${i}</button>`;
+            }
+
             paginationHtml = `
-                <div class="model-dashboard-etl-pagination">
+                <div class="scheduled-pagination">
                     <span class="page-info">${startIndex + 1}-${endIndex} of ${totalJobs}</span>
                     <div class="page-controls">
                         <button class="page-btn ${prevDisabled}" onclick="ModelDashboardEtl.goToScheduledJobsPage(${page - 1})" ${prevDisabled ? 'disabled' : ''}>Previous</button>
+                        ${pageNumbersHtml}
                         <button class="page-btn ${nextDisabled}" onclick="ModelDashboardEtl.goToScheduledJobsPage(${page + 1})" ${nextDisabled ? 'disabled' : ''}>Next</button>
                     </div>
                 </div>
@@ -281,12 +286,9 @@ const ModelDashboardEtl = (function() {
         }
 
         container.innerHTML = `
-            <h3 class="model-dashboard-etl-scheduled-title">
-                <i class="fas fa-calendar-alt"></i>
-                Scheduled Jobs
-            </h3>
-            <div class="model-dashboard-etl-scheduled-table-wrapper">
-                <table class="model-dashboard-etl-scheduled-table">
+            <h3><i class="fas fa-calendar-alt mr-2 text-gray-400"></i>Scheduled Jobs</h3>
+            <div class="scheduled-jobs-table-wrapper">
+                <table class="scheduled-jobs-table">
                     <thead>
                         <tr>
                             <th>Job Name</th>
@@ -311,19 +313,10 @@ const ModelDashboardEtl = (function() {
      */
     function renderBubbleChart(chartData) {
         const container = document.querySelector(config.chartSectionId);
-        const svgElement = d3.select(config.bubbleChartId);
-
-        // Clear previous content
-        svgElement.selectAll('*').remove();
-
-        const chartContainer = document.querySelector('#etlBubbleChartContainer');
-        if (!chartContainer) return;
-
-        const containerWidth = chartContainer.clientWidth;
+        if (!container) return;
 
         // Chart dimensions
         const margin = { top: 15, right: 30, bottom: 40, left: 130 };
-        const width = containerWidth - margin.left - margin.right;
         const height = 260;
 
         // Bubble size constraints
@@ -334,53 +327,83 @@ const ModelDashboardEtl = (function() {
         const runs = chartData.runs;
         const durationStats = chartData.duration_stats;
 
+        // Chart header HTML (shared between empty and data states)
+        const chartHeaderHtml = `
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-gray-700">ETL Job Runs (Last 5 Days)</h3>
+                <div class="flex items-center gap-4">
+                    <!-- Status Legend -->
+                    <div class="flex items-center gap-3 text-xs">
+                        <div class="flex items-center gap-1">
+                            <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                            <span class="text-gray-500">Success</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <div class="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
+                            <span class="text-gray-500">Partial</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                            <span class="text-gray-500">Failed</span>
+                        </div>
+                    </div>
+                    <!-- Fill Legend -->
+                    <div class="flex items-center gap-3 text-xs border-l border-gray-200 pl-4">
+                        <div class="flex items-center gap-1">
+                            <div class="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
+                            <span class="text-gray-500">Data loaded</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <div class="w-2.5 h-2.5 rounded-full border-2 border-gray-400 bg-white"></div>
+                            <span class="text-gray-500">No data</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
         // Check if we have data
         if (jobNames.length === 0 || runs.length === 0) {
             // Show empty state
             container.innerHTML = `
-                <div class="model-dashboard-etl-chart-header">
-                    <span class="model-dashboard-etl-chart-title">ETL Job Runs (Last 5 Days)</span>
-                    <div class="model-dashboard-etl-chart-legend">
-                        <span><span class="legend-dot completed"></span> Completed</span>
-                        <span><span class="legend-dot partial"></span> Partial</span>
-                        <span><span class="legend-dot failed"></span> Failed</span>
-                    </div>
-                </div>
+                ${chartHeaderHtml}
                 <div id="etlBubbleChartContainer" class="relative">
-                    <div class="model-dashboard-etl-chart-empty">
-                        <i class="fas fa-chart-scatter"></i>
-                        <p>No job runs in last 5 days</p>
+                    <div class="text-center py-12 bg-gray-50 rounded-lg">
+                        <i class="fas fa-chart-scatter text-gray-400 text-2xl mb-2"></i>
+                        <p class="text-gray-600 text-sm font-medium">No job runs</p>
+                        <p class="text-gray-400 text-xs mt-1">Run ETL jobs to see visualization</p>
                     </div>
-                    <div id="etlBubbleTooltip" class="model-dashboard-etl-tooltip hidden"></div>
+                    <div id="etlBubbleTooltip" class="etl-bubble-tooltip hidden"></div>
                 </div>
             `;
             return;
         }
 
-        // Re-render header with chart
+        // Render header and chart container first
         container.innerHTML = `
-            <div class="model-dashboard-etl-chart-header">
-                <span class="model-dashboard-etl-chart-title">ETL Job Runs (Last 5 Days)</span>
-                <div class="model-dashboard-etl-chart-legend">
-                    <span><span class="legend-dot completed"></span> Completed</span>
-                    <span><span class="legend-dot partial"></span> Partial</span>
-                    <span><span class="legend-dot failed"></span> Failed</span>
-                </div>
-            </div>
-            <div id="etlBubbleChartContainer" class="relative">
+            ${chartHeaderHtml}
+            <div id="etlBubbleChartContainer" class="relative flex-1">
                 <svg id="etlBubbleChart" class="w-full"></svg>
-                <div id="etlBubbleTooltip" class="model-dashboard-etl-tooltip hidden"></div>
+                <div id="etlBubbleTooltip" class="etl-bubble-tooltip hidden"></div>
             </div>
         `;
 
-        // Re-select SVG after re-render
-        const svg = d3.select('#etlBubbleChart');
-        const chartContainerNew = document.querySelector('#etlBubbleChartContainer');
-        const newContainerWidth = chartContainerNew.clientWidth;
-        const newWidth = newContainerWidth - margin.left - margin.right;
+        // Now get container width after it's in the DOM
+        const chartContainer = document.querySelector('#etlBubbleChartContainer');
+        const containerWidth = chartContainer.clientWidth;
 
+        // Guard: don't render if container is too narrow (hidden or very small)
+        if (containerWidth < 50) {
+            console.warn('ModelDashboardEtl: Chart container too narrow, skipping render');
+            return;
+        }
+
+        const width = containerWidth - margin.left - margin.right;
+
+        // Select SVG and set dimensions
+        const svg = d3.select('#etlBubbleChart');
         svg
-            .attr('width', newContainerWidth)
+            .attr('width', containerWidth)
             .attr('height', height + margin.top + margin.bottom);
 
         const g = svg.append('g')
@@ -394,7 +417,7 @@ const ModelDashboardEtl = (function() {
             .append('rect')
             .attr('x', 0)
             .attr('y', -maxRadius)
-            .attr('width', newWidth)
+            .attr('width', width)
             .attr('height', height + maxRadius * 2);
 
         // Parse date range
@@ -404,7 +427,7 @@ const ModelDashboardEtl = (function() {
         // X scale - time (5 days)
         const xScale = d3.scaleTime()
             .domain([startDate, endDate])
-            .range([0, newWidth]);
+            .range([0, width]);
 
         // Y scale - job names (categorical with padding)
         const yScale = d3.scaleBand()
@@ -441,7 +464,7 @@ const ModelDashboardEtl = (function() {
             const y = yScale(jobName) + yScale.bandwidth() / 2;
             g.append('line')
                 .attr('x1', 0)
-                .attr('x2', newWidth)
+                .attr('x2', width)
                 .attr('y1', y)
                 .attr('y2', y)
                 .attr('stroke', '#E5E7EB')

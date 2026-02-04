@@ -1564,299 +1564,18 @@
 
 /* =========================================================================
    CHAPTER: ETL
+   Uses classes from cards.css: etl-dashboard-row-2, etl-scheduled-section,
+   scheduled-jobs-table, badge-enabled/paused, scheduled-pagination, etl-chart-section
    ========================================================================= */
 
-/* KPI Row - 6 equal-width cards */
-.model-dashboard-etl-kpi-row {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 12px;
+/* KPI Row - uses .etl-kpi-row and .kpi-card classes from cards.css */
+/* Add margin-bottom to match other chapters */
+#etlChapterKpiRow {
     margin-bottom: 24px;
 }
 
-/* Individual KPI card */
-.model-dashboard-etl-kpi-card {
-    background: #f9fafb;
-    border-radius: 12px;
-    padding: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.model-dashboard-etl-kpi-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
-}
-
-.model-dashboard-etl-kpi-icon.blue { background: #dbeafe; color: #2563eb; }
-.model-dashboard-etl-kpi-icon.green { background: #dcfce7; color: #16a34a; }
-.model-dashboard-etl-kpi-icon.red { background: #fee2e2; color: #dc2626; }
-.model-dashboard-etl-kpi-icon.purple { background: #f3e8ff; color: #9333ea; }
-.model-dashboard-etl-kpi-icon.yellow { background: #fef3c7; color: #d97706; }
-
-.model-dashboard-etl-kpi-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.model-dashboard-etl-kpi-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: #111827;
-    line-height: 1;
-}
-
-.model-dashboard-etl-kpi-label {
-    font-size: 11px;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-top: 4px;
-}
-
-/* Row 2: Scheduled Jobs (45%) + Chart (55%) */
-.model-dashboard-etl-row-2 {
-    display: grid;
-    grid-template-columns: 45% 55%;
-    gap: 24px;
-}
-
-/* Scheduled Jobs Section */
-.model-dashboard-etl-scheduled-section {
-    background: #f9fafb;
-    border-radius: 12px;
-    padding: 16px;
-}
-
-.model-dashboard-etl-scheduled-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.model-dashboard-etl-scheduled-title i {
-    color: #9ca3af;
-}
-
-.model-dashboard-etl-scheduled-table-wrapper {
-    overflow-x: auto;
-}
-
-.model-dashboard-etl-scheduled-table {
-    width: 100%;
-    font-size: 13px;
-    border-collapse: collapse;
-}
-
-.model-dashboard-etl-scheduled-table th {
-    text-align: left;
-    padding: 8px 12px;
-    color: #6b7280;
-    font-weight: 500;
-    border-bottom: 1px solid #e5e7eb;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.model-dashboard-etl-scheduled-table td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #f3f4f6;
-}
-
-.model-dashboard-etl-scheduled-table td.job-name {
-    font-weight: 500;
-    color: #374151;
-    max-width: 120px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.model-dashboard-etl-scheduled-table td.job-schedule {
-    color: #6b7280;
-}
-
-.model-dashboard-etl-scheduled-table td.job-next-run {
-    color: #374151;
-}
-
-.model-dashboard-etl-badge-enabled {
-    background: #dcfce7;
-    color: #166534;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.model-dashboard-etl-badge-enabled i {
-    font-size: 9px;
-}
-
-.model-dashboard-etl-badge-paused {
-    background: #f3f4f6;
-    color: #4b5563;
-    padding: 2px 8px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.model-dashboard-etl-badge-paused i {
-    font-size: 9px;
-}
-
-.model-dashboard-etl-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #e5e7eb;
-    font-size: 12px;
-}
-
-.model-dashboard-etl-pagination .page-info {
-    color: #6b7280;
-}
-
-.model-dashboard-etl-pagination .page-controls {
-    display: flex;
-    gap: 8px;
-}
-
-.model-dashboard-etl-pagination .page-btn {
-    padding: 4px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: white;
-    color: #374151;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.model-dashboard-etl-pagination .page-btn:hover:not(.disabled):not(:disabled) {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-}
-
-.model-dashboard-etl-pagination .page-btn.disabled,
-.model-dashboard-etl-pagination .page-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.model-dashboard-etl-scheduled-empty {
-    text-align: center;
-    padding: 32px 16px;
-    color: #9ca3af;
-}
-
-.model-dashboard-etl-scheduled-empty i {
-    font-size: 32px;
-    margin-bottom: 8px;
-    display: block;
-    opacity: 0.5;
-}
-
-.model-dashboard-etl-scheduled-empty p {
-    margin: 0;
-    font-size: 13px;
-}
-
-/* Chart Section */
-.model-dashboard-etl-chart-section {
-    background: #f9fafb;
-    border-radius: 12px;
-    padding: 16px;
-}
-
-.model-dashboard-etl-chart-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-}
-
-.model-dashboard-etl-chart-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: #374151;
-}
-
-.model-dashboard-etl-chart-legend {
-    display: flex;
-    gap: 16px;
-    font-size: 11px;
-    color: #6b7280;
-}
-
-.model-dashboard-etl-chart-legend span {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.model-dashboard-etl-chart-legend .legend-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-}
-
-.model-dashboard-etl-chart-legend .legend-dot.completed {
-    background: #86EFAC;
-}
-
-.model-dashboard-etl-chart-legend .legend-dot.partial {
-    background: #FED7AA;
-}
-
-.model-dashboard-etl-chart-legend .legend-dot.failed {
-    background: #FCA5A5;
-}
-
-.model-dashboard-etl-chart-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 260px;
-    color: #9ca3af;
-    text-align: center;
-}
-
-.model-dashboard-etl-chart-empty i {
-    font-size: 48px;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-
-.model-dashboard-etl-chart-empty p {
-    margin: 0;
-    font-size: 13px;
-}
-
-.model-dashboard-etl-tooltip {
+/* Bubble Chart Tooltip */
+.etl-bubble-tooltip {
     position: absolute;
     background: #1f2937;
     color: white;
@@ -1869,27 +1588,27 @@
     line-height: 1.4;
 }
 
-.model-dashboard-etl-tooltip .font-semibold {
+.etl-bubble-tooltip .font-semibold {
     font-weight: 600;
 }
 
-.model-dashboard-etl-tooltip .text-gray-300 {
+.etl-bubble-tooltip .text-gray-300 {
     color: #d1d5db;
 }
 
-.model-dashboard-etl-tooltip .text-green-400 {
+.etl-bubble-tooltip .text-green-400 {
     color: #4ade80;
 }
 
-.model-dashboard-etl-tooltip .text-orange-400 {
+.etl-bubble-tooltip .text-orange-400 {
     color: #fb923c;
 }
 
-.model-dashboard-etl-tooltip .text-red-400 {
+.etl-bubble-tooltip .text-red-400 {
     color: #f87171;
 }
 
-.model-dashboard-etl-tooltip .mt-1 {
+.etl-bubble-tooltip .mt-1 {
     margin-top: 4px;
 }
 
@@ -1923,26 +1642,4 @@
     align-items: center;
     justify-content: center;
     padding: 48px 0;
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-    .model-dashboard-etl-kpi-row {
-        grid-template-columns: repeat(3, 1fr);
-    }
-}
-
-@media (max-width: 900px) {
-    .model-dashboard-etl-kpi-row {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    .model-dashboard-etl-row-2 {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 600px) {
-    .model-dashboard-etl-kpi-row {
-        grid-template-columns: 1fr;
-    }
 }

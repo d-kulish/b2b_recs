@@ -108,7 +108,7 @@
      CONFIRMATION MODAL (Reusable styled confirmation dialog)
      ============================================================================ -->
 <div id="confirmModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-sm">
+    <div class="modal-container" style="max-width: 28rem;">
         <div class="modal-header">
             <div id="confirmModalIcon" class="modal-header-icon warning">
                 <i class="fas fa-exclamation-triangle text-xl"></i>
@@ -121,10 +121,10 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button id="confirmModalConfirmBtn" class="btn-neu btn-neu-action btn-neu-cancel">
-                    <span class="btn-neu-inner">Confirm</span>
+                <button id="confirmModalConfirmBtn" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Ok</span>
                 </button>
-                <button id="confirmModalCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary">
+                <button id="confirmModalCancelBtn" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
@@ -188,7 +188,7 @@ const TrainingCards = (function() {
         // Update button text
         const confirmInner = confirmBtn.querySelector('.btn-neu-inner');
         const cancelInner = cancelBtn.querySelector('.btn-neu-inner');
-        if (confirmInner) confirmInner.textContent = options.confirmText || 'Confirm';
+        if (confirmInner) confirmInner.textContent = options.confirmText || 'Ok';
         if (cancelInner) cancelInner.textContent = options.cancelText || 'Cancel';
 
         // Set icon and button styling based on type
@@ -197,19 +197,38 @@ const TrainingCards = (function() {
         const iconElement = icon.querySelector('i');
         const baseClasses = 'btn-neu btn-neu-action';
 
-        if (type === 'danger') {
-            iconElement.className = 'fas fa-trash-alt text-xl';
-            confirmBtn.className = `${baseClasses} btn-neu-cancel`;
-        } else if (type === 'warning') {
-            iconElement.className = 'fas fa-exclamation-circle text-xl';
-            confirmBtn.className = `${baseClasses} btn-neu-warning`;
-        } else if (type === 'info') {
-            iconElement.className = 'fas fa-info-circle text-xl';
-            confirmBtn.className = `${baseClasses} btn-neu-nav-wide`;
-        } else if (type === 'success') {
-            iconElement.className = 'fas fa-check-circle text-xl';
-            confirmBtn.className = `${baseClasses} btn-neu-save`;
+        // Determine confirm button class (custom class takes precedence)
+        let confirmButtonClass = options.confirmButtonClass;
+        if (!confirmButtonClass) {
+            if (type === 'danger') {
+                iconElement.className = 'fas fa-trash-alt text-xl';
+                confirmButtonClass = 'btn-neu-cancel';
+            } else if (type === 'warning') {
+                iconElement.className = 'fas fa-exclamation-circle text-xl';
+                confirmButtonClass = 'btn-neu-warning';
+            } else if (type === 'info') {
+                iconElement.className = 'fas fa-info-circle text-xl';
+                confirmButtonClass = 'btn-neu-nav-wide';
+            } else if (type === 'success') {
+                iconElement.className = 'fas fa-check-circle text-xl';
+                confirmButtonClass = 'btn-neu-save';
+            }
+        } else {
+            // Set icon based on type even when custom button class is provided
+            if (type === 'danger') {
+                iconElement.className = 'fas fa-trash-alt text-xl';
+            } else if (type === 'warning') {
+                iconElement.className = 'fas fa-exclamation-circle text-xl';
+            } else if (type === 'info') {
+                iconElement.className = 'fas fa-info-circle text-xl';
+            } else if (type === 'success') {
+                iconElement.className = 'fas fa-check-circle text-xl';
+            }
         }
+        confirmBtn.className = `${baseClasses} ${confirmButtonClass}`;
+
+        // Set cancel button class (default: btn-neu-cancel for red)
+        cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-cancel'}`;
 
         // Hide/show cancel button
         cancelBtn.style.display = options.hideCancel ? 'none' : '';

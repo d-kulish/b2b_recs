@@ -4809,12 +4809,12 @@
 
 <!-- Dataset Delete Confirmation Modal -->
 <div id="dsDeleteModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-sm">
+    <div class="modal-container" style="max-width: 28rem;">
         <div class="modal-header">
             <div class="modal-header-icon danger">
                 <i class="fas fa-trash-alt"></i>
             </div>
-            <h3 class="modal-header-title">Delete Dataset</h3>
+            <h3 class="modal-header-title">Delete Dataset?</h3>
         </div>
         <div class="modal-body">
             <p class="text-gray-600">Are you sure you want to delete dataset <strong id="dsDeleteDatasetName"></strong>?</p>
@@ -4823,8 +4823,8 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="ds_confirmDelete()" class="btn-neu btn-neu-action btn-neu-danger">
-                    <span class="btn-neu-inner">Delete</span>
+                <button onclick="ds_confirmDelete()" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Ok</span>
                 </button>
                 <button onclick="ds_closeDeleteModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
@@ -5710,6 +5710,33 @@
                     <span class="btn-neu-inner">Apply</span>
                 </button>
                 <button onclick="ds_closeFilterColumnsModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Model Config Delete Confirmation Modal -->
+<div id="mcDeleteModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 28rem;">
+        <div class="modal-header">
+            <div class="modal-header-icon danger">
+                <i class="fas fa-trash-alt"></i>
+            </div>
+            <h3 class="modal-header-title">Delete Model Config?</h3>
+        </div>
+        <div class="modal-body">
+            <p class="text-gray-600">Are you sure you want to delete this model config?</p>
+            <p class="text-sm text-red-600 mt-2">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button onclick="mc_confirmDelete()" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Ok</span>
+                </button>
+                <button onclick="mc_closeDeleteModal()" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
@@ -6856,6 +6883,33 @@
             <div class="footer-right">
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="mc_closeCompareModal()">
                     <span class="btn-neu-inner">Close</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Config Delete Confirmation Modal -->
+<div id="ftDeleteModal" class="modal-overlay hidden">
+    <div class="modal-container" style="max-width: 28rem;">
+        <div class="modal-header">
+            <div class="modal-header-icon danger">
+                <i class="fas fa-trash-alt"></i>
+            </div>
+            <h3 class="modal-header-title">Delete Feature Config?</h3>
+        </div>
+        <div class="modal-body">
+            <p class="text-gray-600">Are you sure you want to delete feature config <strong id="ftDeleteConfigName"></strong>?</p>
+            <p class="text-sm text-red-600 mt-2">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer-wizard-neu">
+            <div class="footer-left"></div>
+            <div class="footer-right">
+                <button onclick="ft_confirmDelete()" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Ok</span>
+                </button>
+                <button onclick="ft_closeDeleteModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>
         </div>
@@ -18723,24 +18777,39 @@ function submitClone() {
     });
 }
 
+// Feature Config Delete Modal functions
+let ftDeleteConfigId = null;
+
 function deleteConfig(configId, configName) {
-    if (confirm(`Are you sure you want to delete "${configName}"?`)) {
-        fetch(`/api/feature-configs/${configId}/delete/`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRFToken': csrftoken
-            }
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                loadConfigs();
-                showSuccess('Config deleted');
-            } else {
-                showError(data.error || 'Failed to delete');
-            }
-        });
-    }
+    ftDeleteConfigId = configId;
+    document.getElementById('ftDeleteConfigName').textContent = configName;
+    document.getElementById('ftDeleteModal').classList.remove('hidden');
+}
+
+function ft_closeDeleteModal() {
+    document.getElementById('ftDeleteModal').classList.add('hidden');
+    ftDeleteConfigId = null;
+}
+
+function ft_confirmDelete() {
+    if (!ftDeleteConfigId) return;
+
+    fetch(`/api/feature-configs/${ftDeleteConfigId}/delete/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrftoken
+        }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            loadConfigs();
+            showSuccess('Config deleted');
+        } else {
+            showError(data.error || 'Failed to delete');
+        }
+        ft_closeDeleteModal();
+    });
 }
 
 // =============================================================================
@@ -22083,11 +22152,23 @@ function mc_renderSettingsCard(config) {
     `;
 }
 
-// Delete Model Config
-function deleteModelConfig(id) {
-    if (!confirm('Are you sure you want to delete this model config?')) return;
+// Model Config Delete Modal functions
+let mcDeleteConfigId = null;
 
-    fetch(`/api/model-configs/${id}/delete/`, {
+function deleteModelConfig(id) {
+    mcDeleteConfigId = id;
+    document.getElementById('mcDeleteModal').classList.remove('hidden');
+}
+
+function mc_closeDeleteModal() {
+    document.getElementById('mcDeleteModal').classList.add('hidden');
+    mcDeleteConfigId = null;
+}
+
+function mc_confirmDelete() {
+    if (!mcDeleteConfigId) return;
+
+    fetch(`/api/model-configs/${mcDeleteConfigId}/delete/`, {
         method: 'DELETE',
         headers: {
             'X-CSRFToken': getCookie('csrftoken')
@@ -22101,10 +22182,12 @@ function deleteModelConfig(id) {
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
+        mc_closeDeleteModal();
     })
     .catch(err => {
         console.error('Error deleting model config:', err);
         alert('Error deleting model config');
+        mc_closeDeleteModal();
     });
 }
 

@@ -1108,9 +1108,9 @@ const EndpointsTable = (function() {
 
         const serviceName = endpoint.service_name || 'this endpoint';
         showConfirmModal({
-            title: 'Undeploy Endpoint',
+            title: 'Undeploy Endpoint?',
             message: `Are you sure you want to undeploy <strong>${serviceName}</strong>?<br><br>This will delete the Cloud Run service.<br>The endpoint record will remain and can be re-deployed.`,
-            confirmText: 'Undeploy',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'warning',
             confirmButtonClass: 'btn-neu-save',      // Green button
@@ -1135,9 +1135,9 @@ const EndpointsTable = (function() {
         const configStr = `${deployConfig.cpu || '2'} vCPU, ${deployConfig.memory || '4Gi'}`;
 
         showConfirmModal({
-            title: 'Deploy Endpoint',
+            title: 'Deploy Endpoint?',
             message: `Deploy <strong>${serviceName}</strong>?<br><br>This will create the Cloud Run service with:<br>• Version: ${endpoint.deployed_version || 'v1'}<br>• Config: ${configStr}`,
-            confirmText: 'Deploy',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'info',
             confirmButtonClass: 'btn-neu-save',      // Green button
@@ -1158,9 +1158,9 @@ const EndpointsTable = (function() {
         }
 
         showConfirmModal({
-            title: 'Delete Endpoint',
+            title: 'Delete Endpoint?',
             message: 'Are you sure you want to delete this endpoint?<br><br><strong>This action cannot be undone.</strong>',
-            confirmText: 'Confirm',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'danger',
             confirmButtonClass: 'btn-neu-save',      // Green button

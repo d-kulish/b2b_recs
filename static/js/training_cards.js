@@ -1372,9 +1372,9 @@ const TrainingCards = (function() {
         const originalHtml = btn.innerHTML;
 
         showConfirmModal({
-            title: 'Cancel Training Run',
+            title: 'Cancel Training Run?',
             message: 'Are you sure you want to cancel this training run?<br><span class="text-sm text-gray-500 mt-2 block">This will stop the Vertex AI pipeline.</span>',
-            confirmText: 'Confirm',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'warning',
             confirmButtonClass: 'btn-neu-save',
@@ -1415,9 +1415,9 @@ const TrainingCards = (function() {
 
     function deleteRun(runId) {
         showConfirmModal({
-            title: 'Delete Training Run',
+            title: 'Delete Training Run?',
             message: 'Are you sure you want to delete this training run?<br><br><strong>This action cannot be undone.</strong>',
-            confirmText: 'Confirm',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'danger',
             confirmButtonClass: 'btn-neu-save',      // Green button
@@ -1474,9 +1474,9 @@ const TrainingCards = (function() {
 
     async function rerunRun(runId) {
         showConfirmModal({
-            title: 'Re-run Training',
+            title: 'Re-run Training?',
             message: 'Create a new training run with the same configuration?',
-            confirmText: 'Rerun',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'info',
             confirmButtonClass: 'btn-neu-save',      // Green button
@@ -2143,9 +2143,9 @@ const TrainingSchedules = (function() {
 
     function deleteSchedule(scheduleId) {
         TrainingCards.showConfirmModal({
-            title: 'Delete Schedule',
+            title: 'Delete Schedule?',
             message: 'Are you sure you want to delete this schedule?<br><br>This will permanently remove the schedule and its Cloud Scheduler job.',
-            confirmText: 'Delete',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'danger',
             confirmButtonClass: 'btn-neu-save',      // Green button
@@ -2177,9 +2177,9 @@ const TrainingSchedules = (function() {
 
     function triggerNow(scheduleId) {
         TrainingCards.showConfirmModal({
-            title: 'Run Training Now',
+            title: 'Run Training Now?',
             message: 'Are you sure you want to run this training immediately?<br><br>A new training run will be started.',
-            confirmText: 'Run',
+            confirmText: 'Ok',
             cancelText: 'Cancel',
             type: 'info',
             confirmButtonClass: 'btn-neu-save',      // Green button

@@ -1836,7 +1836,7 @@
      CONFIRMATION MODAL (Reusable styled confirmation dialog)
      ============================================================================ -->
 <div id="confirmModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-sm">
+    <div class="modal-container" style="max-width: 28rem;">
         <div class="modal-header">
             <div id="confirmModalIcon" class="modal-header-icon warning">
                 <i class="fas fa-exclamation-triangle text-xl"></i>
@@ -1849,10 +1849,10 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button id="confirmModalConfirmBtn" class="btn-neu btn-neu-action btn-neu-cancel">
-                    <span class="btn-neu-inner">Confirm</span>
+                <button id="confirmModalConfirmBtn" class="btn-neu btn-neu-action btn-neu-save">
+                    <span class="btn-neu-inner">Ok</span>
                 </button>
-                <button id="confirmModalCancelBtn" class="btn-neu btn-neu-action btn-neu-secondary">
+                <button id="confirmModalCancelBtn" class="btn-neu btn-neu-action btn-neu-cancel">
                     <span class="btn-neu-inner">Cancel</span>
                 </button>
             </div>

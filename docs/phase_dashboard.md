@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2026-02-03 (Fixed ExpViewModal experiment mode tabs, added pipeline_dag.js and d3.js dependencies)
+**Last Updated**: 2026-02-04 (Added Configs chapter with KPI cards for dataset, feature, and model configurations)
 
 ---
 
@@ -721,6 +721,143 @@ All classes use `.model-dashboard-` prefix to avoid conflicts:
 
 ---
 
+## Chapter 4: Configs
+
+The Configs chapter displays configuration inventory KPIs, showing counts and complexity metrics for Dataset Configs, Feature Configs, and Model Configs. This chapter uses the same API endpoint as the Configs Dashboard on the Configs page, ensuring data consistency.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ [Cogs Icon] Configs                                                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────────────┐ ┌─────────────────────────┐ ┌─────────────────────┐│
+│  │ Dataset Configs         │ │ Feature Configs         │ │ Model Configs       ││
+│  │                         │ │                         │ │                     ││
+│  │ [🗄️ cyan]              │ │ [⚙️ orange]             │ │ [📊 pink]           ││
+│  │                         │ │                         │ │                     ││
+│  │  ┌────┐ ┌────┐ ┌────┐  │ │  ┌────┐ ┌────┐ ┌────┐  │ │ ┌────┐ ┌────┐ ┌────┐││
+│  │  │ 6  │ │ 2  │ │ 4  │  │ │  │ 7  │ │ 4  │ │ 3  │  │ │ │ 15 │ │ 13 │ │ 2  │││
+│  │  │Tot │ │Act │ │Unu │  │ │  │Tot │ │Act │ │Unu │  │ │ │Tot │ │Used│ │Unu │││
+│  │  └────┘ └────┘ └────┘  │ │  └────┘ └────┘ └────┘  │ │ └────┘ └────┘ └────┘││
+│  │                         │ │                         │ │                     ││
+│  │ Avg Complexity          │ │ Avg Complexity          │ │ Avg Complexity      ││
+│  │ ████████░░░ 13.9 (Med)  │ │ ██████░░░░ 9.8 (Low)    │ │ █████████████ 22.8  ││
+│  │                         │ │                         │ │              (High) ││
+│  └─────────────────────────┘ └─────────────────────────┘ └─────────────────────┘│
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### KPI Cards (3 Cards)
+
+Three equal-width cards in a responsive grid layout:
+
+| Card | Icon | Gradient | Metrics |
+|------|------|----------|---------|
+| Dataset Configs | `fa-database` | Cyan (#0ea5e9 → #38bdf8) | Total, Active, Unused |
+| Feature Configs | `fa-microchip` | Orange (#f59e0b → #fbbf24) | Total, Active, Unused |
+| Model Configs | `fa-layer-group` | Pink (#ec4899 → #f472b6) | Total, Used, Unused |
+
+### Metric Definitions
+
+| Metric | Description | Color |
+|--------|-------------|-------|
+| Total | Total count of configs | Neutral (#111827) |
+| Active/Used | Configs used in at least one experiment | Green (#10b981) |
+| Unused | Configs never used in experiments | Gray (#9ca3af) |
+
+### Complexity Bar
+
+Each card includes a tri-color complexity bar showing average complexity:
+
+| Level | Color | Thresholds by Type |
+|-------|-------|-------------------|
+| Low | Green (#10b981) | Dataset: ≤5, Feature: ≤10, Model: ≤8 |
+| Medium | Orange (#f59e0b) | Dataset: 5-15, Feature: 10-25, Model: 8-15 |
+| High | Red (#ef4444) | Dataset: >15, Feature: >25, Model: >15 |
+
+### States
+
+| State | Condition | Display |
+|-------|-----------|---------|
+| Loading | API request in progress | Spinner with "Loading configs..." |
+| Empty | All totals are 0 | Empty state icon with message |
+| Content | At least one config exists | KPI cards grid |
+
+### API Endpoint
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/models/{model_id}/configs/dashboard-stats/` | KPI data (shared with Configs page) |
+
+### Response Structure
+
+```json
+{
+  "success": true,
+  "data": {
+    "datasets": {
+      "total": 6,
+      "active": 2,
+      "unused": 4,
+      "avg_complexity": 13.9
+    },
+    "feature_configs": {
+      "total": 7,
+      "active": 4,
+      "unused": 3,
+      "avg_complexity": 9.8
+    },
+    "model_configs": {
+      "total": 15,
+      "used": 13,
+      "unused": 2,
+      "avg_complexity": 22.8
+    }
+  }
+}
+```
+
+### JavaScript Module
+
+**File**: `static/js/model_dashboard_configs.js`
+**Pattern**: IIFE module (same as other chapters)
+
+```javascript
+const ModelDashboardConfigs = (function() {
+    return {
+        init: function(options) { /* Configure */ },
+        load: function() { /* Fetch and render */ },
+        refresh: function() { /* Reload data */ },
+        getState: function() { /* Debug access */ }
+    };
+})();
+```
+
+### CSS Classes
+
+All styles use `.model-dashboard-configs-*` prefix:
+
+| Class | Purpose |
+|-------|---------|
+| `.model-dashboard-configs-kpi-row` | 3-column grid container |
+| `.model-dashboard-configs-kpi-card` | Individual card styling |
+| `.model-dashboard-configs-kpi-icon` | Icon with gradient background |
+| `.model-dashboard-configs-kpi-stats` | Stats row container |
+| `.model-dashboard-configs-complexity-bar` | Tri-color progress bar |
+
+### Responsive Behavior
+
+| Breakpoint | Layout |
+|------------|--------|
+| > 900px | 3 columns side by side |
+| ≤ 900px | Single column (stacked) |
+| ≤ 600px | Stats and icon stack vertically |
+
+---
+
 ## Future Chapters (Planned)
 
 The Dashboard page may expand to include additional chapters:
@@ -735,6 +872,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-04 | 1.5 | Added Configs chapter with KPI cards for dataset, feature, and model configurations |
 | 2026-02-03 | 1.4 | Fixed ExpViewModal experiment mode tabs, added pipeline_dag.js and d3.js dependencies |
 | 2026-02-03 | 1.3 | Added Experiments chapter with KPIs, Metrics Trend chart, Top Configurations table |
 | 2025-02-03 | 1.2 | Added ExpViewModal integration for View button functionality |

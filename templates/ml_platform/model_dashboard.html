@@ -80,6 +80,33 @@
     <div id="experimentsTopConfigsSection" class="model-dashboard-experiments-section"></div>
 </div>
 
+<!-- CHAPTER: CONFIGS -->
+<div id="configsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    <!-- Header -->
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #6366f1, #818cf8);">
+            <i class="fas fa-cogs text-white text-2xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900">Configs</h2>
+    </div>
+
+    <!-- Loading State -->
+    <div id="configsChapterLoading" class="model-dashboard-configs-loading">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+        <span class="text-gray-500">Loading configs...</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="configsChapterEmpty" class="model-dashboard-configs-empty hidden">
+        <i class="fas fa-cubes"></i>
+        <p class="model-dashboard-configs-empty-title">No configurations yet</p>
+        <p class="model-dashboard-configs-empty-text">Configuration data will appear here once datasets, features, and models are created.</p>
+    </div>
+
+    <!-- KPI Row (3 Cards: Datasets, Features, Models) -->
+    <div id="configsChapterKpiRow" class="model-dashboard-configs-kpi-row hidden"></div>
+</div>
+
 <!-- Experiment View Modal (Reusable Component) -->
 {% include 'includes/_exp_view_modal.html' %}
 {% endblock %}
@@ -93,6 +120,7 @@
 <script src="{% static 'js/model_dashboard_endpoints.js' %}?v=2"></script>
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script src="{% static 'js/model_dashboard_experiments.js' %}?v=3"></script>
+<script src="{% static 'js/model_dashboard_configs.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal for model/experiment viewing
@@ -115,6 +143,8 @@ document.addEventListener('DOMContentLoaded', function() {
     ModelDashboardModels.load();
     ModelDashboardExperiments.init();
     ModelDashboardExperiments.load();
+    ModelDashboardConfigs.init();
+    ModelDashboardConfigs.load();
 });
 </script>
 {% endblock %}

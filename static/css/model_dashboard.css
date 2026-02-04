@@ -1363,3 +1363,201 @@
         padding: 10px 10px;
     }
 }
+
+/* =========================================================================
+   CHAPTER: CONFIGS - KPI Cards
+   ========================================================================= */
+
+/* KPI Row Layout - 3 equal columns */
+.model-dashboard-configs-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+/* Individual KPI Card */
+.model-dashboard-configs-kpi-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.model-dashboard-configs-kpi-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.model-dashboard-configs-kpi-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+}
+
+.model-dashboard-configs-kpi-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.model-dashboard-configs-kpi-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.model-dashboard-configs-kpi-icon.datasets {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+}
+
+.model-dashboard-configs-kpi-icon.features {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+}
+
+.model-dashboard-configs-kpi-icon.models {
+    background: linear-gradient(135deg, #ec4899, #f472b6);
+}
+
+.model-dashboard-configs-kpi-icon i {
+    color: white;
+    font-size: 18px;
+}
+
+.model-dashboard-configs-kpi-stats {
+    display: flex;
+    gap: 12px;
+    flex: 1;
+}
+
+.model-dashboard-configs-kpi-stat {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.model-dashboard-configs-kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.2;
+}
+
+.model-dashboard-configs-kpi-value.active {
+    color: #10b981;
+}
+
+.model-dashboard-configs-kpi-value.unused {
+    color: #9ca3af;
+}
+
+.model-dashboard-configs-kpi-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+/* Complexity Bar */
+.model-dashboard-configs-complexity-row {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.model-dashboard-configs-complexity-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.model-dashboard-configs-complexity-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+}
+
+.model-dashboard-configs-complexity-segment {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.model-dashboard-configs-complexity-segment.low {
+    background: #10b981;
+}
+
+.model-dashboard-configs-complexity-segment.medium {
+    background: #f59e0b;
+}
+
+.model-dashboard-configs-complexity-segment.high {
+    background: #ef4444;
+}
+
+/* Loading state */
+.model-dashboard-configs-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 0;
+}
+
+/* Empty state */
+.model-dashboard-configs-empty {
+    text-align: center;
+    padding: 48px 24px;
+}
+
+.model-dashboard-configs-empty i {
+    font-size: 48px;
+    color: #d1d5db;
+    margin-bottom: 16px;
+}
+
+.model-dashboard-configs-empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.model-dashboard-configs-empty-text {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+/* Responsive: Stack on smaller screens */
+@media (max-width: 900px) {
+    .model-dashboard-configs-kpi-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .model-dashboard-configs-kpi-stats {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .model-dashboard-configs-kpi-content {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .model-dashboard-configs-kpi-icon {
+        align-self: flex-start;
+        margin-bottom: 12px;
+    }
+}

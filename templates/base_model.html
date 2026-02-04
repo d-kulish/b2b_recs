@@ -2,71 +2,39 @@
 
 {% block main_class %}{% endblock %}
 
+{% load static %}
+
 {% block content %}
-<div class="flex bg-dotted" style="height: calc(100vh - 64px);">
+<div class="flex bg-dotted" style="height: 100vh;">
     <!-- Main Content Area -->
     <div class="flex-1 flex flex-col relative" style="z-index: 10;">
         <!-- Fixed Model Info Tablet -->
         <div class="p-6 pb-0 overflow-y-auto" style="scrollbar-gutter: stable;">
             <div class="max-w-[88rem] mx-auto">
-                <div class="
-                    {% if model.is_endpoint_active %}bg-green-50
-                    {% elif model.status == 'failed' %}bg-red-50
-                    {% else %}bg-blue-50{% endif %}
-                    border border-black rounded-xl p-6 shadow-lg">
+                <div class="bg-white border border-black rounded-xl px-6 py-3 shadow-lg">
+                    <!-- Single Row: Logo | Model Name | Status | Dates | Description -->
+                    <div class="flex items-center gap-6">
+                        <!-- Logo with Recs Studio text beneath -->
+                        <a href="{% url 'system_dashboard' %}" class="flex flex-col items-center hover:opacity-80 transition flex-shrink-0 mr-4">
+                            <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-[70px] w-auto">
+                            <span class="text-sm font-bold text-gray-700 mt-1">Recs Studio</span>
+                        </a>
 
-                    <div class="grid grid-cols-4 gap-6 items-center">
-                        <!-- Container 1: Model Name -->
-                        <div class="col-span-1 flex items-center">
-                            <h1 class="text-3xl font-bold
+                        <!-- Model Name and Description (30% width) -->
+                        <div class="flex-shrink-0" style="width: 30%;">
+                            <h1 class="text-5xl font-bold truncate
                                 {% if model.is_endpoint_active %}text-green-900
                                 {% elif model.status == 'failed' %}text-red-900
                                 {% else %}text-blue-900{% endif %}">
-                                {% if model.name|length > 30 %}
-                                    {{ model.name|slice:":30" }}...
-                                {% else %}
-                                    {{ model.name }}
-                                {% endif %}
+                                {{ model.name }}
                             </h1>
-                        </div>
-
-                        <!-- Container 2: Status Badge -->
-                        <div class="col-span-1 flex flex-col items-start justify-center">
-                            <span class="px-4 py-2 rounded-lg text-sm font-semibold shadow-sm
-                                {% if model.is_endpoint_active %}bg-green-100 text-green-800
-                                {% elif model.status == 'failed' %}bg-red-100 text-red-800
-                                {% else %}bg-blue-100 text-blue-800{% endif %}">
-                                {% if model.is_endpoint_active %}
-                                    <i class="fas fa-check-circle mr-1"></i>Deployed
-                                {% elif model.status == 'failed' %}
-                                    <i class="fas fa-times-circle mr-1"></i>Failed
+                            <p class="text-sm text-gray-600 mt-1 truncate">
+                                {% if model.description %}
+                                    {{ model.description }}
                                 {% else %}
-                                    <i class="fas fa-circle mr-1"></i>{{ model.get_status_display }}
+                                    <span class="italic text-gray-400">No description</span>
                                 {% endif %}
-                            </span>
-                        </div>
-
-                        <!-- Container 3: Dates Stacked -->
-                        <div class="col-span-1 flex flex-col gap-1 text-sm text-gray-700">
-                            <div>
-                                <span class="font-semibold">Created at:</span>
-                                <span>{{ model.created_at|date:"M d, Y" }}</span>
-                            </div>
-                            <div>
-                                <span class="font-semibold">Deployed at:</span>
-                                {% if model.last_deployed_at %}
-                                <span>{{ model.last_deployed_at|date:"M d, Y" }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Container 4: Description -->
-                        <div class="col-span-1 text-sm text-gray-600">
-                            {% if model.description %}
-                                {{ model.description|truncatewords:15 }}
-                            {% else %}
-                                <span class="italic text-gray-400">No description</span>
-                            {% endif %}
+                            </p>
                         </div>
                     </div>
                 </div>

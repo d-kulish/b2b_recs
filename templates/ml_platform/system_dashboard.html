@@ -1,6 +1,28 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}System Dashboard - B2B ML Platform{% endblock %}
+{% block title %}System Dashboard - Recs Studio{% endblock %}
+
+{% block header %}
+<div class="bg-blue-50 border-b border-gray-300 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+        <div class="flex justify-between items-center">
+            <a href="{% url 'system_dashboard' %}" class="flex items-center gap-3 hover:opacity-80 transition">
+                <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-10 w-auto">
+                <span class="text-lg font-bold text-gray-800">Recs Studio</span>
+            </a>
+            <div class="flex items-center space-x-4 text-gray-700">
+                <span>
+                    <i class="fas fa-user mr-2"></i>{{ user.username }}
+                </span>
+                <a href="{% url 'logout' %}" class="hover:text-gray-900 transition">
+                    <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4">

@@ -40,11 +40,17 @@
         box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     }
 
-    .configs-dashboard-kpi-header {
+    .configs-dashboard-kpi-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 12px;
+    }
+
+    .configs-dashboard-kpi-content {
         display: flex;
         align-items: center;
         gap: 12px;
-        margin-bottom: 16px;
     }
 
     .configs-dashboard-kpi-icon {
@@ -74,15 +80,10 @@
         font-size: 18px;
     }
 
-    .configs-dashboard-kpi-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #374151;
-    }
-
     .configs-dashboard-kpi-stats {
         display: flex;
         gap: 12px;
+        flex: 1;
     }
 
     .configs-dashboard-kpi-stat {
@@ -206,6 +207,33 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    .configs-dashboard-matrix th.axis-label {
+        background: transparent;
+        font-size: 11px;
+        font-weight: 600;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .configs-dashboard-matrix th.axis-label-vertical {
+        background: transparent;
+        font-size: 11px;
+        font-weight: 600;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        transform: rotate(180deg);
+        padding: 12px 6px;
+        vertical-align: middle;
+    }
+
+    .configs-dashboard-matrix th.corner-empty {
+        background: transparent;
     }
 
     .configs-dashboard-matrix td {
@@ -4100,10 +4128,8 @@
             <div id="cfgCoverageSection" class="configs-dashboard-section">
                 <div class="configs-dashboard-section-header">
                     <h3 class="configs-dashboard-section-title">
-                        <i class="fas fa-th"></i>
-                        Coverage Matrix
+                        COVERAGE MATRIX (experiment counts)
                     </h3>
-                    <span class="text-sm text-gray-500">FeatureConfig × ModelConfig experiment counts</span>
                 </div>
                 <div id="cfgCoverageMatrix" style="overflow-x: auto;">
                     <!-- Dynamically populated by JavaScript -->
@@ -14619,24 +14645,24 @@ function cfg_renderKpiCards(stats) {
     container.innerHTML = `
         <!-- Datasets KPI Card -->
         <div class="configs-dashboard-kpi-card" onclick="cfg_scrollToChapter('datasetsChapter')">
-            <div class="configs-dashboard-kpi-header">
+            <div class="configs-dashboard-kpi-title">Dataset Configs</div>
+            <div class="configs-dashboard-kpi-content">
                 <div class="configs-dashboard-kpi-icon datasets">
                     <i class="fas fa-database"></i>
                 </div>
-                <span class="configs-dashboard-kpi-title">Dataset Configs</span>
-            </div>
-            <div class="configs-dashboard-kpi-stats">
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value">${ds.total}</div>
-                    <div class="configs-dashboard-kpi-label">Total</div>
-                </div>
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value active">${ds.active}</div>
-                    <div class="configs-dashboard-kpi-label">Active</div>
-                </div>
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value unused">${ds.unused}</div>
-                    <div class="configs-dashboard-kpi-label">Unused</div>
+                <div class="configs-dashboard-kpi-stats">
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value">${ds.total}</div>
+                        <div class="configs-dashboard-kpi-label">Total</div>
+                    </div>
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value active">${ds.active}</div>
+                        <div class="configs-dashboard-kpi-label">Active</div>
+                    </div>
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value unused">${ds.unused}</div>
+                        <div class="configs-dashboard-kpi-label">Unused</div>
+                    </div>
                 </div>
             </div>
             ${cfg_formatComplexityBar(ds.avg_complexity, 'dataset')}
@@ -14644,24 +14670,24 @@ function cfg_renderKpiCards(stats) {
 
         <!-- Features KPI Card -->
         <div class="configs-dashboard-kpi-card" onclick="cfg_scrollToChapter('featuresChapter')">
-            <div class="configs-dashboard-kpi-header">
+            <div class="configs-dashboard-kpi-title">Feature Configs</div>
+            <div class="configs-dashboard-kpi-content">
                 <div class="configs-dashboard-kpi-icon features">
                     <i class="fas fa-microchip"></i>
                 </div>
-                <span class="configs-dashboard-kpi-title">Feature Configs</span>
-            </div>
-            <div class="configs-dashboard-kpi-stats">
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value">${fc.total}</div>
-                    <div class="configs-dashboard-kpi-label">Total</div>
-                </div>
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value active">${fc.active}</div>
-                    <div class="configs-dashboard-kpi-label">Active</div>
-                </div>
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value unused">${fc.unused}</div>
-                    <div class="configs-dashboard-kpi-label">Unused</div>
+                <div class="configs-dashboard-kpi-stats">
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value">${fc.total}</div>
+                        <div class="configs-dashboard-kpi-label">Total</div>
+                    </div>
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value active">${fc.active}</div>
+                        <div class="configs-dashboard-kpi-label">Active</div>
+                    </div>
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value unused">${fc.unused}</div>
+                        <div class="configs-dashboard-kpi-label">Unused</div>
+                    </div>
                 </div>
             </div>
             ${cfg_formatComplexityBar(fc.avg_complexity, 'feature_config')}
@@ -14669,24 +14695,24 @@ function cfg_renderKpiCards(stats) {
 
         <!-- Models KPI Card -->
         <div class="configs-dashboard-kpi-card" onclick="cfg_scrollToChapter('modelStructureChapter')">
-            <div class="configs-dashboard-kpi-header">
+            <div class="configs-dashboard-kpi-title">Model Configs</div>
+            <div class="configs-dashboard-kpi-content">
                 <div class="configs-dashboard-kpi-icon models">
                     <i class="fas fa-layer-group"></i>
                 </div>
-                <span class="configs-dashboard-kpi-title">Model Configs</span>
-            </div>
-            <div class="configs-dashboard-kpi-stats">
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value">${mc.total}</div>
-                    <div class="configs-dashboard-kpi-label">Total</div>
-                </div>
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value active">${mc.used}</div>
-                    <div class="configs-dashboard-kpi-label">Used</div>
-                </div>
-                <div class="configs-dashboard-kpi-stat">
-                    <div class="configs-dashboard-kpi-value unused">${mc.unused}</div>
-                    <div class="configs-dashboard-kpi-label">Unused</div>
+                <div class="configs-dashboard-kpi-stats">
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value">${mc.total}</div>
+                        <div class="configs-dashboard-kpi-label">Total</div>
+                    </div>
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value active">${mc.used}</div>
+                        <div class="configs-dashboard-kpi-label">Used</div>
+                    </div>
+                    <div class="configs-dashboard-kpi-stat">
+                        <div class="configs-dashboard-kpi-value unused">${mc.unused}</div>
+                        <div class="configs-dashboard-kpi-label">Unused</div>
+                    </div>
                 </div>
             </div>
             ${cfg_formatComplexityBar(mc.avg_complexity, 'model_config')}
@@ -14718,21 +14744,31 @@ function cfg_renderCoverageMatrix(matrix) {
     });
 
     // Build table HTML
+    const numModelConfigs = matrix.model_configs.length;
+    const numFeatureConfigs = matrix.feature_configs.length;
     let html = '<table class="configs-dashboard-matrix">';
 
-    // Header row
-    html += '<thead><tr><th class="row-header"></th>';
+    // Label row for "MODEL CONFIGS"
+    html += '<thead>';
+    html += `<tr><th class="corner-empty" colspan="2"></th><th class="axis-label" colspan="${numModelConfigs}">Model Configs</th></tr>`;
+
+    // Header row with model config names
+    html += '<tr><th class="corner-empty" colspan="2"></th>';
     matrix.model_configs.forEach(mc => {
-        const typeIcon = mc.model_type === 'retrieval' ? 'fa-search' :
-                        mc.model_type === 'ranking' ? 'fa-sort-amount-down' : 'fa-random';
         html += `<th title="${mc.name}">${mc.name.substring(0, 12)}${mc.name.length > 12 ? '...' : ''}</th>`;
     });
     html += '</tr></thead>';
 
-    // Body rows
+    // Body rows with vertical "FEATURE CONFIGS" label
     html += '<tbody>';
-    matrix.feature_configs.forEach(fc => {
+    matrix.feature_configs.forEach((fc, index) => {
         html += `<tr>`;
+
+        // Add vertical label only on first row, spanning all feature config rows
+        if (index === 0) {
+            html += `<th class="axis-label-vertical" rowspan="${numFeatureConfigs}">Feature Configs</th>`;
+        }
+
         html += `<th class="row-header" title="${fc.name} (${fc.dataset_name})">${fc.name.substring(0, 15)}${fc.name.length > 15 ? '...' : ''}</th>`;
 
         matrix.model_configs.forEach(mc => {

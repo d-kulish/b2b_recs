@@ -2579,3 +2579,280 @@ def record_processed_file(request, data_source_id):
             'status': 'error',
             'message': str(e)
         }, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def etl_dashboard_stats(request, model_id):
+    """
+    API endpoint for ETL Dashboard chapter on the main Dashboard page.
+    Returns KPIs, scheduled jobs, and bubble chart data.
+
+    This endpoint reuses the same computation logic as the ETL page view
+    to ensure data consistency.
+    """
+    from datetime import timedelta
+    from django.db.models import Q, Sum, Count
+    import os
+
+    model = get_object_or_404(ModelEndpoint, id=model_id)
+
+    # Get or create ETL configuration
+    try:
+        etl_config = model.etl_config
+    except ETLConfiguration.DoesNotExist:
+        # No ETL config - return empty state
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'kpi': {
+                    'total_runs': 0,
+                    'completed_runs': 0,
+                    'failed_runs': 0,
+                    'successful_runs': 0,
+                    'success_rate': 0,
+                    'total_rows_extracted': 0,
+                    'avg_duration_seconds': 0,
+                },
+                'scheduled_jobs': [],
+                'scheduled_jobs_total': 0,
+                'bubble_chart': {
+                    'runs': [],
+                    'job_names': [],
+                    'date_range': {
+                        'start': timezone.now().isoformat(),
+                        'end': timezone.now().isoformat(),
+                    },
+                    'duration_stats': {
+                        'min': 1,
+                        'max': 1,
+                    },
+                },
+            }
+        })
+
+    data_sources = etl_config.data_sources.all().select_related('connection').prefetch_related('tables')
+
+    # =========================================================================
+    # KPI Dashboard Aggregations (Last 30 Days)
+    # =========================================================================
+    cutoff_date = timezone.now() - timedelta(days=30)
+    kpi_runs = model.etl_runs.filter(started_at__gte=cutoff_date)
+
+    # Aggregate metrics
+    kpi_aggregates = kpi_runs.aggregate(
+        total_runs=Count('id'),
+        completed_runs=Count('id', filter=Q(status='completed')),
+        failed_runs=Count('id', filter=Q(status='failed')),
+        partial_runs=Count('id', filter=Q(status='partial')),
+        total_rows_extracted=Sum('total_rows_extracted'),
+    )
+
+    # Calculate average duration from timestamps
+    completed_runs_with_times = kpi_runs.filter(
+        status__in=['completed', 'partial'],
+        started_at__isnull=False,
+        completed_at__isnull=False
+    )
+
+    avg_duration_seconds = 0
+    if completed_runs_with_times.exists():
+        total_duration = 0
+        count = 0
+        for run in completed_runs_with_times:
+            if run.started_at and run.completed_at:
+                duration = (run.completed_at - run.started_at).total_seconds()
+                if duration > 0:
+                    total_duration += duration
+                    count += 1
+        if count > 0:
+            avg_duration_seconds = total_duration / count
+
+    # Calculate success rate
+    total_runs = kpi_aggregates['total_runs'] or 0
+    completed_runs = kpi_aggregates['completed_runs'] or 0
+    partial_runs = kpi_aggregates['partial_runs'] or 0
+    successful_runs = completed_runs + partial_runs
+    success_rate = round((successful_runs / total_runs * 100), 1) if total_runs > 0 else 0
+
+    kpi_data = {
+        'total_runs': total_runs,
+        'completed_runs': completed_runs,
+        'failed_runs': kpi_aggregates['failed_runs'] or 0,
+        'successful_runs': successful_runs,
+        'success_rate': success_rate,
+        'total_rows_extracted': kpi_aggregates['total_rows_extracted'] or 0,
+        'avg_duration_seconds': round(avg_duration_seconds),
+    }
+
+    # =========================================================================
+    # Scheduled Jobs
+    # =========================================================================
+    scheduled_jobs_list = []
+
+    scheduled_sources = data_sources.filter(
+        schedule_type__in=['hourly', 'daily', 'weekly', 'monthly'],
+        cloud_scheduler_job_name__isnull=False
+    ).exclude(cloud_scheduler_job_name='')
+
+    if scheduled_sources.exists():
+        from django.conf import settings
+
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+        if project_id:
+            try:
+                from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+                scheduler_manager = CloudSchedulerManager(project_id=project_id, region=region)
+
+                enabled_jobs = []
+                paused_jobs = []
+
+                for source in scheduled_sources:
+                    # Get schedule display string
+                    schedule_display = _get_schedule_display_api(source)
+
+                    # Fetch status from Cloud Scheduler
+                    try:
+                        status = scheduler_manager.get_schedule_status(source.cloud_scheduler_job_name)
+                        next_run_time = status.get('next_run_time') if status.get('success') else None
+                        state = status.get('state', 'UNKNOWN') if status.get('success') else 'UNKNOWN'
+                        is_paused = state == 'PAUSED'
+                    except Exception:
+                        next_run_time = None
+                        state = 'UNKNOWN'
+                        is_paused = not source.is_enabled
+
+                    job_info = {
+                        'id': source.id,
+                        'name': source.name,
+                        'schedule_type': source.schedule_type,
+                        'schedule_display': schedule_display,
+                        'next_run_time': next_run_time.isoformat() if next_run_time else None,
+                        'state': state,
+                        'is_paused': is_paused,
+                    }
+
+                    if is_paused:
+                        paused_jobs.append(job_info)
+                    else:
+                        enabled_jobs.append(job_info)
+
+                # Sort: enabled by next_run_time, paused alphabetically
+                from datetime import datetime as dt
+                far_future = dt(2099, 12, 31)
+                enabled_jobs.sort(key=lambda x: x['next_run_time'] or far_future.isoformat())
+                paused_jobs.sort(key=lambda x: x['name'].lower())
+
+                scheduled_jobs_list = enabled_jobs + paused_jobs
+
+            except ImportError:
+                pass
+            except Exception:
+                pass
+
+    # =========================================================================
+    # Bubble Chart Data (Last 5 Days)
+    # =========================================================================
+    bubble_cutoff_date = timezone.now() - timedelta(days=5)
+    all_runs_5_days = model.etl_runs.filter(
+        started_at__gte=bubble_cutoff_date,
+        status__in=['completed', 'partial', 'failed']
+    ).select_related('data_source').order_by('started_at')
+
+    bubble_runs = []
+    all_job_names = set()
+    durations = []
+
+    for run in all_runs_5_days:
+        if not run.data_source or not run.started_at:
+            continue
+
+        job_name = run.data_source.name
+        duration = run.get_duration_seconds() or 0
+        rows_loaded = run.total_rows_extracted or 0
+
+        if run.status == 'completed':
+            status = 'completed'
+        elif run.status == 'partial':
+            status = 'partial'
+        else:
+            status = 'failed'
+
+        all_job_names.add(job_name)
+        if duration > 0:
+            durations.append(duration)
+
+        bubble_runs.append({
+            'job_name': job_name,
+            'started_at': run.started_at.isoformat(),
+            'duration': duration,
+            'status': status,
+            'rows_loaded': rows_loaded,
+        })
+
+    min_duration = min(durations) if durations else 1
+    max_duration = max(durations) if durations else 1
+
+    now = timezone.now()
+    start_date = (now - timedelta(days=4)).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
+
+    sorted_job_names = sorted(list(all_job_names))
+
+    bubble_chart_data = {
+        'runs': bubble_runs,
+        'job_names': sorted_job_names,
+        'date_range': {
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat(),
+        },
+        'duration_stats': {
+            'min': min_duration,
+            'max': max_duration,
+        },
+    }
+
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'kpi': kpi_data,
+            'scheduled_jobs': scheduled_jobs_list,
+            'scheduled_jobs_total': len(scheduled_jobs_list),
+            'bubble_chart': bubble_chart_data,
+        }
+    })
+
+
+def _get_schedule_display_api(source):
+    """
+    Convert schedule_type and related fields to human-readable format.
+    Examples: "Daily 08:00", "Hourly :15", "Weekly Mon 09:00"
+    """
+    schedule_type = source.schedule_type
+
+    # Try to get schedule details from first table
+    first_table = source.tables.first()
+    time_str = ""
+    if first_table and first_table.schedule_time:
+        time_str = first_table.schedule_time.strftime('%H:%M')
+
+    if schedule_type == 'hourly':
+        minute = first_table.schedule_minute if first_table and first_table.schedule_minute is not None else 0
+        return f"Hourly :{minute:02d}"
+    elif schedule_type == 'daily':
+        return f"Daily {time_str}" if time_str else "Daily"
+    elif schedule_type == 'weekly':
+        day = first_table.schedule_day_of_week if first_table and first_table.schedule_day_of_week is not None else 0
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        day_name = days[day] if 0 <= day <= 6 else 'Mon'
+        return f"Weekly {day_name} {time_str}" if time_str else f"Weekly {day_name}"
+    elif schedule_type == 'monthly':
+        day = first_table.schedule_day_of_month if first_table and first_table.schedule_day_of_month is not None else 1
+        if 10 <= day % 100 <= 20:
+            suffix = 'th'
+        else:
+            suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+        return f"Monthly {day}{suffix} {time_str}" if time_str else f"Monthly {day}{suffix}"
+    return "Manual"

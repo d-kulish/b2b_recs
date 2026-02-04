@@ -107,6 +107,61 @@
     <div id="configsChapterKpiRow" class="model-dashboard-configs-kpi-row hidden"></div>
 </div>
 
+<!-- CHAPTER: ETL -->
+<div id="etlChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm"
+                 style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
+                <i class="fas fa-exchange-alt text-white text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900">ETL</h2>
+        </div>
+        <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+            <i class="fas fa-calendar mr-1"></i>Last 30 days
+        </span>
+    </div>
+
+    <!-- Loading State -->
+    <div id="etlChapterLoading" class="model-dashboard-etl-loading">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+        <span class="text-gray-500">Loading ETL data...</span>
+    </div>
+
+    <!-- Empty State -->
+    <div id="etlChapterEmpty" class="model-dashboard-etl-empty hidden">
+        <i class="fas fa-exchange-alt"></i>
+        <p class="model-dashboard-etl-empty-title">No ETL jobs configured</p>
+        <p class="model-dashboard-etl-empty-text">Configure ETL jobs on the ETL page to see data here.</p>
+    </div>
+
+    <!-- Content -->
+    <div id="etlChapterContent" class="hidden">
+        <!-- KPI Row -->
+        <div id="etlChapterKpiRow" class="model-dashboard-etl-kpi-row"></div>
+
+        <!-- Row 2: Scheduled Jobs + Bubble Chart -->
+        <div id="etlChapterRow2" class="model-dashboard-etl-row-2">
+            <div id="etlScheduledSection" class="model-dashboard-etl-scheduled-section"></div>
+            <div id="etlChartSection" class="model-dashboard-etl-chart-section">
+                <div class="model-dashboard-etl-chart-header">
+                    <span class="model-dashboard-etl-chart-title">ETL Job Runs (Last 5 Days)</span>
+                    <div class="model-dashboard-etl-chart-legend">
+                        <span><span class="legend-dot completed"></span> Completed</span>
+                        <span><span class="legend-dot partial"></span> Partial</span>
+                        <span><span class="legend-dot failed"></span> Failed</span>
+                    </div>
+                </div>
+                <div id="etlBubbleChartContainer" class="relative">
+                    <svg id="etlBubbleChart" class="w-full"></svg>
+                    <div id="etlBubbleTooltip" class="model-dashboard-etl-tooltip hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Experiment View Modal (Reusable Component) -->
 {% include 'includes/_exp_view_modal.html' %}
 {% endblock %}
@@ -121,6 +176,7 @@
 <script src="{% static 'js/model_dashboard_models.js' %}?v=1"></script>
 <script src="{% static 'js/model_dashboard_experiments.js' %}?v=3"></script>
 <script src="{% static 'js/model_dashboard_configs.js' %}?v=1"></script>
+<script src="{% static 'js/model_dashboard_etl.js' %}?v=1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal for model/experiment viewing
@@ -145,6 +201,8 @@ document.addEventListener('DOMContentLoaded', function() {
     ModelDashboardExperiments.load();
     ModelDashboardConfigs.init();
     ModelDashboardConfigs.load();
+    ModelDashboardEtl.init();
+    ModelDashboardEtl.load();
 });
 </script>
 {% endblock %}

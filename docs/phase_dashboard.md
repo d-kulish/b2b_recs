@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2026-02-04 (Added Configs chapter with KPI cards for dataset, feature, and model configurations)
+**Last Updated**: 2026-02-04 (Added ETL chapter with KPIs, scheduled jobs table, and bubble chart)
 
 ---
 
@@ -383,6 +383,8 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details. 
 | `static/js/model_dashboard_endpoints.js` | IIFE module for Endpoints chapter |
 | `static/js/model_dashboard_models.js` | IIFE module for Models chapter |
 | `static/js/model_dashboard_experiments.js` | IIFE module for Experiments chapter |
+| `static/js/model_dashboard_configs.js` | IIFE module for Configs chapter |
+| `static/js/model_dashboard_etl.js` | IIFE module for ETL chapter |
 | `static/css/model_dashboard.css` | Styles with `.model-dashboard-` prefix |
 | `static/data/demo/model_dashboard_endpoints.json` | Demo data for Endpoints (sales demonstrations) |
 
@@ -858,6 +860,182 @@ All styles use `.model-dashboard-configs-*` prefix:
 
 ---
 
+## Chapter 5: ETL
+
+The ETL chapter displays ETL Dashboard data including KPIs, scheduled jobs, and a bubble chart of recent runs. This chapter uses the same API endpoint pattern as the ETL page to ensure data consistency.
+
+### Visual Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ [Exchange Icon] ETL                                      Last 30 days           │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐             │
+│  │  12    │ │ 91.7%  │ │  11    │ │   1    │ │ 45.2K  │ │  2m 15s│             │
+│  │ Total  │ │Success │ │Success-│ │ Failed │ │ Rows   │ │  Avg   │             │
+│  │ Runs   │ │ Rate   │ │ful    │ │ Runs   │ │Migrated│ │Duration│             │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘             │
+│                                                                                 │
+│  ┌────────────────────────────────────┐ ┌───────────────────────────────────────┐│
+│  │ Scheduled Jobs                     │ │ ETL Job Runs (Last 5 Days)            ││
+│  │                                    │ │ ● Completed ● Partial ● Failed       ││
+│  │ Job Name  │ Schedule │ Next │State │ │                                       ││
+│  │───────────┼──────────┼──────┼──────│ │   job1 ─────●────●────●────────────  ││
+│  │ sync_data │ Daily    │ Feb 5│ ✓    │ │   job2 ──●─────────●──●────────────  ││
+│  │ users_etl │ Hourly   │ 14:00│ ⏸    │ │   job3 ────●──────────●───────────── ││
+│  │                                    │ │                                       ││
+│  │ 1-5 of 8         [Prev] [Next]    │ │   Feb 1  Feb 2  Feb 3  Feb 4  Feb 5   ││
+│  └────────────────────────────────────┘ └───────────────────────────────────────┘│
+│               (45% width)                              (55% width)               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### KPI Section (6 Cards)
+
+A row of 6 KPI cards displaying ETL statistics from the last 30 days:
+
+| KPI | Icon | Color | Description |
+|-----|------|-------|-------------|
+| Total Runs | `fa-play-circle` | Blue (#2563eb) | Total ETL runs in period |
+| Success Rate | `fa-check-circle` | Conditional | Percentage of successful runs (green ≥90%, yellow 70-90%, red <70%) |
+| Successful Runs | `fa-check-double` | Green (#16a34a) | Count of completed + partial runs |
+| Failed Runs | `fa-times-circle` | Conditional | Count of failed runs (green if 0, red otherwise) |
+| Rows Migrated | `fa-database` | Purple (#9333ea) | Total rows extracted |
+| Avg Duration | `fa-clock` | Blue (#2563eb) | Average run duration |
+
+### Scheduled Jobs Table
+
+Table displaying scheduled ETL jobs with client-side pagination (5 per page):
+
+| Column | Description |
+|--------|-------------|
+| Job Name | ETL job name (truncated at 18 chars) |
+| Schedule | Human-readable schedule (e.g., "Daily 08:00", "Hourly :15") |
+| Next Run | Next scheduled run time, or "—" if paused |
+| State | Badge showing Enabled (green) or Paused (gray) |
+
+**Sorting**: Enabled jobs sorted by next run time, paused jobs sorted alphabetically. Enabled jobs appear first.
+
+### Bubble Chart (D3.js)
+
+Interactive bubble chart showing individual ETL runs over the last 5 days:
+
+| Encoding | Description |
+|----------|-------------|
+| X-axis | Time (5-day window) |
+| Y-axis | Job name (categorical) |
+| Bubble size | Duration (log scale) |
+| Bubble color | Status: completed (green), partial (orange), failed (red) |
+| Bubble fill | Filled if rows loaded > 0, outline only if no data |
+
+**Interactivity**:
+- Hover: Tooltip showing job name, time, duration, rows, status
+- Responsive: Redraws on window resize
+
+### States
+
+| State | Condition | Display |
+|-------|-----------|---------|
+| Loading | API request in progress | Spinner with "Loading ETL data..." |
+| Empty | No runs and no scheduled jobs | Empty state icon with message |
+| Content | At least one run or scheduled job | Full dashboard |
+
+### API Endpoint
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/models/{model_id}/etl/dashboard-stats/` | KPI, scheduled jobs, and bubble chart data |
+
+### Response Structure
+
+```json
+{
+  "success": true,
+  "data": {
+    "kpi": {
+      "total_runs": 12,
+      "completed_runs": 10,
+      "failed_runs": 1,
+      "successful_runs": 11,
+      "success_rate": 91.7,
+      "total_rows_extracted": 45200,
+      "avg_duration_seconds": 135
+    },
+    "scheduled_jobs": [
+      {
+        "id": 1,
+        "name": "sync_data",
+        "schedule_type": "daily",
+        "schedule_display": "Daily 08:00",
+        "next_run_time": "2026-02-05T08:00:00Z",
+        "state": "ENABLED",
+        "is_paused": false
+      }
+    ],
+    "scheduled_jobs_total": 8,
+    "bubble_chart": {
+      "runs": [...],
+      "job_names": ["job1", "job2", "job3"],
+      "date_range": {
+        "start": "2026-02-01T00:00:00Z",
+        "end": "2026-02-04T23:59:59Z"
+      },
+      "duration_stats": {
+        "min": 30,
+        "max": 600
+      }
+    }
+  }
+}
+```
+
+### JavaScript Module
+
+**File**: `static/js/model_dashboard_etl.js`
+**Pattern**: IIFE module (same as other chapters)
+
+```javascript
+const ModelDashboardEtl = (function() {
+    return {
+        init: function(options) { /* Configure */ },
+        load: function() { /* Fetch and render */ },
+        refresh: function() { /* Reload data */ },
+        goToScheduledJobsPage: function(page) { /* Pagination */ },
+        getState: function() { /* Debug access */ }
+    };
+})();
+```
+
+### CSS Classes
+
+All styles use `.model-dashboard-etl-*` prefix:
+
+| Class | Purpose |
+|-------|---------|
+| `.model-dashboard-etl-kpi-row` | 6-column grid container for KPIs |
+| `.model-dashboard-etl-kpi-card` | Individual KPI card styling |
+| `.model-dashboard-etl-row-2` | 45%/55% split for jobs table and chart |
+| `.model-dashboard-etl-scheduled-section` | Scheduled jobs table container |
+| `.model-dashboard-etl-chart-section` | Bubble chart container |
+| `.model-dashboard-etl-tooltip` | Bubble chart hover tooltip |
+
+### Responsive Behavior
+
+| Breakpoint | KPI Row | Row 2 |
+|------------|---------|-------|
+| > 1200px | 6 columns | 45%/55% split |
+| 900-1200px | 3 columns | 45%/55% split |
+| 600-900px | 2 columns | Single column (stacked) |
+| < 600px | 1 column | Single column (stacked) |
+
+### Dependencies
+
+- **D3.js v7**: Already loaded on dashboard page (used by Experiments chapter)
+- **Font Awesome**: Icon library (already included)
+
+---
+
 ## Future Chapters (Planned)
 
 The Dashboard page may expand to include additional chapters:
@@ -872,6 +1050,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-04 | 1.6 | Added ETL chapter with KPIs, scheduled jobs table, and bubble chart |
 | 2026-02-04 | 1.5 | Added Configs chapter with KPI cards for dataset, feature, and model configurations |
 | 2026-02-03 | 1.4 | Fixed ExpViewModal experiment mode tabs, added pipeline_dag.js and d3.js dependencies |
 | 2026-02-03 | 1.3 | Added Experiments chapter with KPIs, Metrics Trend chart, Top Configurations table |

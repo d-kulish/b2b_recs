@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/models/<int:model_id>/etl/check-name/', api.check_job_name, name='api_etl_check_job_name'),
     path('api/models/<int:model_id>/etl/toggle/', api.toggle_enabled, name='api_etl_toggle_enabled'),
     path('api/models/<int:model_id>/etl/run/', api.run_now, name='api_etl_run_now'),
+    path('api/models/<int:model_id>/etl/dashboard-stats/', api.etl_dashboard_stats, name='api_etl_dashboard_stats'),
 
     # === ETL SOURCE APIs ===
     path('api/etl/sources/<int:source_id>/', api.get_source, name='api_etl_get_source'),

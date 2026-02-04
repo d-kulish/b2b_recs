@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/cards.css' %}">
-<link rel="stylesheet" href="{% static 'css/endpoints_table.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/endpoints_table.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
@@ -22,7 +22,10 @@
             <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
                 <i class="fas fa-rocket text-white text-lg"></i>
             </div>
-            <h2 class="text-lg font-bold text-gray-900">Serving Endpoints</h2>
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Serving Endpoints</h2>
+                <p class="chapter-subtitle">Manage deployed models and versions</p>
+            </div>
         </div>
     </div>
 
@@ -62,7 +65,10 @@
             <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
                 <i class="fas fa-chart-line text-white text-lg"></i>
             </div>
-            <h2 class="text-lg font-bold text-gray-900">Endpoints Dashboard</h2>
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Endpoints Dashboard</h2>
+                <p class="chapter-subtitle">Monitor performance and traffic metrics</p>
+            </div>
         </div>
         <button id="dashboardRefreshBtn" class="dashboard-refresh-btn" disabled>
             <i class="fas fa-sync-alt"></i> Refresh

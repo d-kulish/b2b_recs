@@ -960,6 +960,13 @@
         font-size: 18px;
     }
 
+    /* Chapter Subtitle */
+    .chapter-subtitle {
+        font-size: 13px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+
     /* Training Empty State */
     .training-empty-state {
         display: flex;
@@ -1711,7 +1718,10 @@
             <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
                 <i class="fas fa-cogs text-white text-lg"></i>
             </div>
-            <h2 class="text-lg font-bold text-gray-900">Training Runs</h2>
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Training Runs</h2>
+                <p class="chapter-subtitle">Launch and monitor model training jobs</p>
+            </div>
         </div>
         <button onclick="TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 140px;">
             <i class="fas fa-plus"></i> New Model
@@ -1764,7 +1774,10 @@
             <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
                 <i class="fas fa-cube text-white text-lg"></i>
             </div>
-            <h2 class="text-lg font-bold text-gray-900">Models Registry</h2>
+            <div>
+                <h2 class="text-lg font-bold text-gray-900">Models Registry</h2>
+                <p class="chapter-subtitle">View and deploy registered models</p>
+            </div>
         </div>
     </div>
 

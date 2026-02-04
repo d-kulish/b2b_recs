@@ -4,7 +4,7 @@
 {% block title %}{{ model.name }} - Dashboard{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=7">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=8">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
@@ -19,7 +19,10 @@
         <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
             <i class="fas fa-chart-line text-white text-2xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900">Endpoints</h2>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Endpoints</h2>
+            <p class="chapter-subtitle">Monitor serving performance and traffic</p>
+        </div>
     </div>
 
     <!-- KPI Row (Summary Card + 4 Performance Cards) -->
@@ -39,7 +42,10 @@
         <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
             <i class="fas fa-cube text-white text-2xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900">Models</h2>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Models</h2>
+            <p class="chapter-subtitle">Track registered models and deployments</p>
+        </div>
     </div>
 
     <!-- KPI Row (5 Cards) -->
@@ -71,7 +77,10 @@
         <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #10b981, #34d399);">
             <i class="fas fa-flask text-white text-2xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900">Experiments</h2>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Experiments</h2>
+            <p class="chapter-subtitle">Analyze experiment results and metrics</p>
+        </div>
     </div>
 
     <!-- KPI Sections (40%) + Metrics Trend (60%) -->
@@ -88,7 +97,10 @@
         <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #6366f1, #818cf8);">
             <i class="fas fa-cogs text-white text-2xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900">Configs</h2>
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Configs</h2>
+            <p class="chapter-subtitle">Track configuration inventory and usage</p>
+        </div>
     </div>
 
     <!-- Loading State -->
@@ -117,7 +129,10 @@
                  style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
                 <i class="fas fa-exchange-alt text-white text-2xl"></i>
             </div>
-            <h2 class="text-2xl font-bold text-gray-900">ETL</h2>
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">ETL</h2>
+                <p class="chapter-subtitle">Monitor data pipeline jobs and runs</p>
+            </div>
         </div>
         <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
             <i class="fas fa-calendar mr-1"></i>Last 30 days

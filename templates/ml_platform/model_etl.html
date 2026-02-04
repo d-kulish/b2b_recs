@@ -19,7 +19,10 @@
                 <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
                     <i class="fas fa-exchange-alt text-white text-lg"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-gray-900">ETL Dashboard</h2>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">ETL Dashboard</h2>
+                    <p class="chapter-subtitle">Monitor pipeline health and performance</p>
+                </div>
             </div>
             <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
                 <i class="fas fa-calendar mr-1"></i>
@@ -243,7 +246,10 @@
             <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
                 <i class="fas fa-history text-white text-lg"></i>
             </div>
-            <h2 class="text-2xl font-bold text-gray-900">ETL Runs</h2>
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">ETL Runs</h2>
+                <p class="chapter-subtitle">Track extraction history and logs</p>
+            </div>
         </div>
 
         <!-- Filter Bar -->
@@ -319,7 +325,10 @@
                 <div class="chapter-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
                     <i class="fas fa-plug text-white text-lg"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-gray-900">Connections</h2>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">Connections</h2>
+                    <p class="chapter-subtitle">Manage database and storage credentials</p>
+                </div>
             </div>
             <div class="btn-group">
                 <button onclick="refreshConnections()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;" title="Refresh and test all connections">
@@ -383,7 +392,10 @@
                 <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
                     <i class="fas fa-database text-white text-lg"></i>
                 </div>
-                <h2 class="text-2xl font-bold text-gray-900">ETL Jobs</h2>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900">ETL Jobs</h2>
+                    <p class="chapter-subtitle">Configure data extraction pipelines</p>
+                </div>
             </div>
             <div class="btn-group">
                 <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
@@ -2028,6 +2040,13 @@
     align-items: center;
     justify-content: center;
     font-size: 18px;
+}
+
+/* Chapter Subtitle */
+.chapter-subtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 2px;
 }
 
 /* =========================================================================

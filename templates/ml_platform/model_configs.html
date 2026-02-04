@@ -306,14 +306,15 @@
     .configs-dashboard-flow-container {
         display: flex;
         flex-direction: column;
-        gap: 16px;
-        padding: 16px 0;
+        gap: 12px;
+        padding: 12px 0;
     }
 
     .configs-dashboard-flow-row {
         display: flex;
-        align-items: center;
-        gap: 12px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
     }
 
     .configs-dashboard-flow-title {
@@ -322,15 +323,14 @@
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        min-width: 120px;
-        flex-shrink: 0;
     }
 
     .configs-dashboard-flow-items {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-        flex: 1;
+        width: 100%;
+        padding-left: 0;
     }
 
     .configs-dashboard-flow-arrow {
@@ -338,6 +338,7 @@
         justify-content: center;
         padding: 4px 0;
         color: #9ca3af;
+        width: 100%;
     }
 
     .configs-dashboard-flow-arrow i {
@@ -345,10 +346,9 @@
     }
 
     .configs-dashboard-node {
-        background: white;
-        border: 1px solid #e5e7eb;
+        border: none;
         border-radius: 6px;
-        padding: 6px 10px;
+        padding: 8px 12px;
         cursor: pointer;
         transition: all 0.2s ease;
         position: relative;
@@ -356,29 +356,33 @@
         align-items: center;
         gap: 6px;
         font-size: 12px;
+        width: 130px;
+        box-sizing: border-box;
     }
 
     .configs-dashboard-node:hover {
-        border-color: #6366f1;
-        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+        filter: brightness(0.95);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .configs-dashboard-node.dataset {
-        border-left: 3px solid #6366f1;
+        background: #dbeafe;
+        color: #1e40af;
     }
 
     .configs-dashboard-node.feature-config {
-        border-left: 3px solid #10b981;
+        background: #dcfce7;
+        color: #166534;
     }
 
     .configs-dashboard-node.model-config {
-        border-left: 3px solid #f59e0b;
+        background: #ffedd5;
+        color: #9a3412;
     }
 
     .configs-dashboard-node .configs-dashboard-node-name {
         font-weight: 500;
-        color: #374151;
-        max-width: 150px;
+        flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -388,13 +392,12 @@
         font-size: 10px;
         padding: 2px 5px;
         border-radius: 4px;
-        background: #f3f4f6;
-        color: #6b7280;
+        background: rgba(255, 255, 255, 0.6);
+        font-weight: 600;
     }
 
     .configs-dashboard-node .configs-dashboard-node-badge.experiments {
-        background: #fef3c7;
-        color: #92400e;
+        background: rgba(255, 255, 255, 0.6);
     }
 
     /* Lineage highlighting states */
@@ -406,23 +409,19 @@
     .configs-dashboard-node.highlighted {
         opacity: 1;
         transform: scale(1.02);
-        box-shadow: 0 2px 12px rgba(99, 102, 241, 0.25);
-        border-color: #6366f1;
         z-index: 10;
     }
 
     .configs-dashboard-node.highlighted.dataset {
-        box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+        box-shadow: 0 2px 12px rgba(59, 130, 246, 0.4);
     }
 
     .configs-dashboard-node.highlighted.feature-config {
-        box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3);
-        border-color: #10b981;
+        box-shadow: 0 2px 12px rgba(34, 197, 94, 0.4);
     }
 
     .configs-dashboard-node.highlighted.model-config {
-        box-shadow: 0 2px 12px rgba(245, 158, 11, 0.3);
-        border-color: #f59e0b;
+        box-shadow: 0 2px 12px rgba(251, 146, 60, 0.4);
     }
 
     .configs-dashboard-node-name {
@@ -4124,29 +4123,29 @@
                 <!-- Dynamically populated by JavaScript -->
             </div>
 
-            <!-- Coverage Matrix Section -->
-            <div id="cfgCoverageSection" class="configs-dashboard-section">
-                <div class="configs-dashboard-section-header">
-                    <h3 class="configs-dashboard-section-title">
-                        COVERAGE MATRIX (experiment counts)
-                    </h3>
+            <!-- Coverage Matrix Section (Collapsible) -->
+            <div class="filter-subchapter" id="cfgCoverageSection">
+                <div class="subchapter-header-tablet" onclick="cfg_toggleSection('coverage')">
+                    <span class="subchapter-title">COVERAGE MATRIX (experiment counts)</span>
+                    <i id="cfgCoverageChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                 </div>
-                <div id="cfgCoverageMatrix" style="overflow-x: auto;">
-                    <!-- Dynamically populated by JavaScript -->
+                <div id="cfgCoverageContent" class="subchapter-content-outside hidden">
+                    <div id="cfgCoverageMatrix" style="overflow-x: auto;">
+                        <!-- Dynamically populated by JavaScript -->
+                    </div>
                 </div>
             </div>
 
-            <!-- Relationships Diagram Section -->
-            <div id="cfgRelationshipsSection" class="configs-dashboard-section">
-                <div class="configs-dashboard-section-header">
-                    <h3 class="configs-dashboard-section-title">
-                        <i class="fas fa-project-diagram"></i>
-                        Configuration Flow
-                    </h3>
-                    <span class="text-sm text-gray-500">Dataset → FeatureConfig → Experiments</span>
+            <!-- Configuration Flow Section (Collapsible) -->
+            <div class="filter-subchapter" id="cfgRelationshipsSection">
+                <div class="subchapter-header-tablet" onclick="cfg_toggleSection('flow')">
+                    <span class="subchapter-title">CONFIGURATION FLOW</span>
+                    <i id="cfgFlowChevron" class="fas fa-chevron-right subchapter-chevron"></i>
                 </div>
-                <div id="cfgRelationshipsDiagram" class="configs-dashboard-relationships">
-                    <!-- Dynamically populated by JavaScript -->
+                <div id="cfgFlowContent" class="subchapter-content-outside hidden">
+                    <div id="cfgRelationshipsDiagram" class="configs-dashboard-relationships">
+                        <!-- Dynamically populated by JavaScript -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -14793,6 +14792,50 @@ function cfg_renderCoverageMatrix(matrix) {
 }
 
 /**
+ * Track expanded state of collapsible sections.
+ */
+let cfg_expandedSections = {
+    coverage: false,
+    flow: false
+};
+
+/**
+ * Toggle collapsible section visibility.
+ */
+function cfg_toggleSection(sectionName) {
+    cfg_expandedSections[sectionName] = !cfg_expandedSections[sectionName];
+
+    const sectionMap = {
+        coverage: { content: 'cfgCoverageContent', chevron: 'cfgCoverageChevron' },
+        flow: { content: 'cfgFlowContent', chevron: 'cfgFlowChevron' }
+    };
+
+    const section = sectionMap[sectionName];
+    if (!section) return;
+
+    const content = document.getElementById(section.content);
+    const chevron = document.getElementById(section.chevron);
+
+    if (content && chevron) {
+        if (cfg_expandedSections[sectionName]) {
+            content.classList.remove('hidden');
+            chevron.classList.add('expanded');
+        } else {
+            content.classList.add('hidden');
+            chevron.classList.remove('expanded');
+        }
+    }
+}
+
+/**
+ * Truncate a name to a maximum length with ellipsis.
+ */
+function cfg_truncateName(name, maxLength = 10) {
+    if (name.length <= maxLength) return name;
+    return name.substring(0, maxLength) + '...';
+}
+
+/**
  * Render relationships diagram showing Dataset → FeatureConfig → Experiments flow.
  * Compact horizontal layout with items wrapped in rows.
  * Hover over items to see lineage connections highlighted.
@@ -14832,17 +14875,15 @@ function cfg_renderRelationships(relationships) {
     datasets.forEach(rel => {
         const fcCount = rel.feature_configs.length;
         const fcIds = rel.feature_configs.map(fc => fc.id).join(',');
+        const truncatedName = cfg_truncateName(rel.dataset_name, 10);
         html += `
             <div class="configs-dashboard-node dataset" data-ds-id="${rel.dataset_id}" data-fc-ids="${fcIds}" onclick="cfg_scrollToDataset(${rel.dataset_id})" title="${rel.dataset_name} - ${fcCount} Feature Config${fcCount !== 1 ? 's' : ''} (hover to see connections)">
-                <span class="configs-dashboard-node-name">${rel.dataset_name}</span>
+                <span class="configs-dashboard-node-name">${truncatedName}</span>
                 <span class="configs-dashboard-node-badge">${fcCount}</span>
             </div>
         `;
     });
     html += '</div></div>';
-
-    // Arrow
-    html += '<div class="configs-dashboard-flow-arrow"><i class="fas fa-arrow-down"></i></div>';
 
     // Row 2: Feature Configs
     html += '<div class="configs-dashboard-flow-row">';
@@ -14853,10 +14894,11 @@ function cfg_renderRelationships(relationships) {
         const typeColor = fc.config_type === 'retrieval' ? '#10b981' : '#f59e0b';
         const expText = fc.experiment_count > 0 ? `${fc.completed_count}/${fc.experiment_count}` : '0';
         const mcIds = (fc.model_config_ids || []).join(',');
+        const truncatedName = cfg_truncateName(fc.name, 10);
         html += `
             <div class="configs-dashboard-node feature-config" data-fc-id="${fc.id}" data-ds-id="${fc.dataset_id}" data-mc-ids="${mcIds}" onclick="cfg_scrollToFeatureConfig(${fc.id})" title="${fc.name} (${fc.config_type}) from ${fc.dataset_name} - ${fc.experiment_count} experiments (hover to see connections)">
                 <i class="fas ${typeIcon}" style="color: ${typeColor}; font-size: 10px;"></i>
-                <span class="configs-dashboard-node-name">${fc.name}</span>
+                <span class="configs-dashboard-node-name">${truncatedName}</span>
                 <span class="configs-dashboard-node-badge experiments">${expText}</span>
             </div>
         `;
@@ -14865,15 +14907,15 @@ function cfg_renderRelationships(relationships) {
 
     // Row 3: Model Configs (Experiments) - only if there are any
     if (modelConfigs.length > 0) {
-        html += '<div class="configs-dashboard-flow-arrow"><i class="fas fa-arrow-down"></i></div>';
         html += '<div class="configs-dashboard-flow-row">';
         html += '<div class="configs-dashboard-flow-title">Model Configs</div>';
         html += '<div class="configs-dashboard-flow-items">';
         modelConfigs.forEach(mc => {
             const fcIds = (mc.feature_config_ids || []).join(',');
+            const truncatedName = cfg_truncateName(mc.name, 10);
             html += `
                 <div class="configs-dashboard-node model-config" data-mc-id="${mc.id}" data-fc-ids="${fcIds}" onclick="cfg_scrollToModelConfig(${mc.id})" title="${mc.name} - ${mc.experiment_count} experiments (hover to see connections)">
-                    <span class="configs-dashboard-node-name">${mc.name}</span>
+                    <span class="configs-dashboard-node-name">${truncatedName}</span>
                     <span class="configs-dashboard-node-badge experiments">${mc.experiment_count}</span>
                 </div>
             `;

@@ -64,6 +64,7 @@ const ExpViewModal = (function() {
             trainingRunHistogramData: '/api/training-runs/{id}/histogram-data/'
         },
         showTabs: ['overview', 'pipeline', 'data', 'training'],
+        showVersionDeployButtons: false,  // Show Deploy/Undeploy buttons in Versions tab
         onClose: null,
         onUpdate: null
     };
@@ -1629,10 +1630,11 @@ const ExpViewModal = (function() {
                 </div>
             `).join('');
 
-            // Build deployment status for header
+            // Build deployment status and button for header
             const isDeployed = v.model_status === 'deployed' && v.deployed_endpoint_info;
             const endpointInfo = v.deployed_endpoint_info;
             let deploymentStatusHtml;
+            let deployButtonHtml = '';
 
             if (isDeployed) {
                 deploymentStatusHtml = `
@@ -1641,6 +1643,14 @@ const ExpViewModal = (function() {
                         <span>Deployed to <span class="endpoint-name">${endpointInfo.service_name}</span></span>
                     </div>
                 `;
+                // Show Undeploy button only if configured
+                if (config.showVersionDeployButtons) {
+                    deployButtonHtml = `
+                        <button class="version-undeploy-btn" onclick="event.stopPropagation(); ExpViewModal.undeployVersion(${endpointInfo.id}, ${v.id})">
+                            Undeploy
+                        </button>
+                    `;
+                }
             } else {
                 deploymentStatusHtml = `
                     <div class="version-deployment-status not-deployed">
@@ -1648,6 +1658,14 @@ const ExpViewModal = (function() {
                         <span>Not deployed</span>
                     </div>
                 `;
+                // Show Deploy button only if configured
+                if (config.showVersionDeployButtons) {
+                    deployButtonHtml = `
+                        <button class="version-deploy-btn" onclick="event.stopPropagation(); ExpViewModal.deployVersion(${v.id})">
+                            Deploy
+                        </button>
+                    `;
+                }
             }
 
             return `
@@ -1662,6 +1680,7 @@ const ExpViewModal = (function() {
                             <span class="version-date">${formatDate(v.registered_at)}</span>
                             ${deploymentStatusHtml}
                         </div>
+                        ${deployButtonHtml}
                     </div>
                     <div class="version-kpis">
                         ${kpiBoxesHtml}

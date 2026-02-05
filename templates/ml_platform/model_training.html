@@ -1917,6 +1917,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal with endpoints and callbacks
     ExpViewModal.configure({
         showTabs: ['overview', 'pipeline', 'data', 'training'],
+        showVersionDeployButtons: true,  // Enable Deploy/Undeploy in Versions tab
         onClose: function() {
             // Refresh training cards when modal closes in case status changed
             if (trainingCardsInitialized) {

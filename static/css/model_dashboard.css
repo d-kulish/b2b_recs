@@ -1808,3 +1808,30 @@
         display: none;
     }
 }
+
+/* ===== Header User Profile Icon ===== */
+.header-user-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid white;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.header-user-icon:hover {
+    border-color: #6366f1;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+    transform: scale(1.05);
+}
+
+.header-user-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: white;
+}

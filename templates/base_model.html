@@ -6,7 +6,7 @@
 
 {% block extra_css %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=23">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=25">
 {% endblock %}
 
 {% block content %}
@@ -91,6 +91,13 @@
                                     <div class="header-kpi-change positive" id="headerKpiLatencyChange"></div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- User Profile Icon (pushed to far right) -->
+                        <div class="ml-auto flex-shrink-0">
+                            <a href="#" class="header-user-icon" title="User Profile">
+                                <img src="{% static 'images/person_icon.webp' %}" alt="User Profile">
+                            </a>
                         </div>
                     </div>
                 </div>

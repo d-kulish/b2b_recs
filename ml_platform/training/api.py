@@ -4004,7 +4004,9 @@ def models_list(request):
         )
 
         # Calculate KPIs using Cloud Run deployment status
-        deployed_count = sum(1 for m in latest_models if get_model_status(m) == 'deployed')
+        # 'deployed' counts models with ANY version deployed (includes outdated)
+        # 'outdated' counts models where deployed version is not the latest
+        deployed_count = sum(1 for m in latest_models if get_model_status(m) in ('deployed', 'outdated'))
         outdated_count = sum(1 for m in latest_models if get_model_status(m) == 'outdated')
         idle_count = sum(1 for m in latest_models if get_model_status(m) == 'idle')
 

@@ -44,4 +44,11 @@ urlpatterns = [
     path('api/models/<int:model_id>/start-etl/', views.api_start_etl, name='api_start_etl'),
     path('api/models/<int:model_id>/deploy/', views.api_deploy_model, name='api_deploy_model'),
     path('api/pipeline-runs/<int:run_id>/status/', views.api_pipeline_run_status, name='api_pipeline_run_status'),
+
+    # =========================================================================
+    # SYSTEM-LEVEL API ENDPOINTS
+    # =========================================================================
+    path('api/system/kpis/', views.api_system_kpis, name='api_system_kpis'),
+    path('api/system/charts/', views.api_system_charts, name='api_system_charts'),
+    path('api/system/recent-activity/', views.api_system_recent_activity, name='api_system_recent_activity'),
 ]

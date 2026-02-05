@@ -48,7 +48,7 @@ The starting page is intentionally **different** from model pages to provide cle
 
 Three collapsible chapters displayed vertically:
 
-1. **System Details** - Project configuration and infrastructure overview
+1. **System Details** - Platform metrics, charts, and recent activity
 2. **Your Models** - Manage ML models and endpoints
 3. **Billing** - Usage tracking and subscription details
 
@@ -108,15 +108,48 @@ Three collapsible chapters displayed vertically:
 
 ## Chapter 1: System Details
 
-Displays project configuration information in a 2-column grid.
+Displays user-centric metrics with 8 dynamic KPIs, 4 charts, and a recent activity table.
 
-**Fields (static/hardcoded):**
-- Project ID: `b2b-recs`
-- Region: `europe-central2 (Warsaw)`
+### KPI Cards (2 rows of 4)
 
-**Fields (dynamic from context):**
-- Total Models: `{{ total_models }}`
-- Active Endpoints: `{{ active_models }}`
+**Row 1:**
+| KPI | Icon | Color | ID | Data Source |
+|-----|------|-------|----|-------------|
+| Models | `fa-cube` | Purple | `kpiModels` | `ModelEndpoint.objects.count()` |
+| Live Endpoints | `fa-rocket` | Green | `kpiLiveEndpoints` | `DeployedEndpoint.objects.filter(is_active=True).count()` |
+| Training Runs (30d) | `fa-graduation-cap` | Blue | `kpiTrainingRuns` | `TrainingRun` count last 30 days |
+| Success Rate | `fa-check-circle` | Green | `kpiSuccessRate` | Completed / Total finished * 100 |
+
+**Row 2:**
+| KPI | Icon | Color | ID | Data Source |
+|-----|------|-------|----|-------------|
+| Experiments (30d) | `fa-flask` | Orange | `kpiExperiments` | `QuickTest` count last 30 days |
+| ETL Runs (24h) | `fa-sync-alt` | Blue | `kpiEtlRuns` | `ETLRun` count last 24 hours |
+| Data Tables | `fa-table` | Purple | `kpiDataTables` | BigQuery tables count |
+| Data Volume | `fa-database` | Pink | `kpiDataVolume` | Sum of table sizes in GB |
+
+### Charts Grid (2x2)
+
+| Chart | Type | Data Source | Period |
+|-------|------|-------------|--------|
+| Training Activity | Line | TrainingRun (started/completed/failed) | 30 days |
+| Model Performance | Line | TrainingRun (best/avg Recall@100) | 30 days |
+| Endpoint Requests | Area | Placeholder (future: request logging) | 7 days |
+| ETL Health | Stacked Bar | ETLRun (completed/failed) | 14 days |
+
+### Recent Activity Table
+
+Displays last 5 activities merged from:
+- `TrainingRun` - Training started/completed/failed
+- `QuickTest` - Experiment completed/failed
+- `ETLRun` - ETL completed/failed
+- `DeployedEndpoint` - Deployment events
+
+**Columns:**
+- Type (with icon)
+- Status (badge)
+- Model name
+- Time ago
 
 ---
 
@@ -165,9 +198,88 @@ Displays subscription and usage information.
 
 ---
 
+## API Endpoints
+
+### `GET /api/system/kpis/`
+
+Returns 8 system KPIs.
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": {
+        "models": 5,
+        "live_endpoints": 2,
+        "training_runs_30d": 15,
+        "training_success_rate": 87.5,
+        "experiments_30d": 23,
+        "etl_runs_24h": 3,
+        "data_tables": 12,
+        "data_volume_gb": 4.56
+    }
+}
+```
+
+### `GET /api/system/charts/`
+
+Returns 4 chart datasets.
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": {
+        "training_activity": {
+            "labels": ["2026-01-15", "2026-01-16", ...],
+            "started": [2, 1, ...],
+            "completed": [1, 2, ...],
+            "failed": [0, 0, ...]
+        },
+        "model_performance": {
+            "labels": ["2026-01-15", ...],
+            "best": [85.5, 86.2, ...],
+            "avg": [78.3, 79.1, ...]
+        },
+        "endpoint_requests": {
+            "labels": ["2026-01-29", ...],
+            "requests": [0, 0, ...]
+        },
+        "etl_health": {
+            "labels": ["2026-01-22", ...],
+            "completed": [3, 2, ...],
+            "failed": [0, 1, ...]
+        }
+    }
+}
+```
+
+### `GET /api/system/recent-activity/`
+
+Returns last 5 activities merged from multiple sources.
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": [
+        {
+            "type": "Training",
+            "status": "completed",
+            "model": "product-recs",
+            "time": "2026-02-05T10:30:00Z",
+            "time_ago": "2h ago"
+        },
+        ...
+    ]
+}
+```
+
+---
+
 ## JavaScript
 
-Single function for chapter toggle:
+### Toggle Function
 
 ```javascript
 function toggleChapter(header) {
@@ -176,10 +288,29 @@ function toggleChapter(header) {
 }
 ```
 
-**Behavior:**
-- Clicking chapter header toggles `open` class
-- Chevron rotates 90° when open
-- Content expands/collapses with CSS transition
+### SystemDashboard Module
+
+IIFE module that manages dashboard data loading:
+
+```javascript
+const SystemDashboard = (function() {
+    // Chart instances for cleanup
+    let charts = {};
+
+    // Public methods
+    return {
+        loadKPIs,        // Fetch and populate KPI values
+        loadCharts,      // Fetch and render Chart.js charts
+        loadRecentActivity  // Fetch and render activity table
+    };
+})();
+```
+
+**Key Features:**
+- Destroys charts before recreating (prevents memory leaks)
+- Graceful fallbacks for missing data ("No data available")
+- Status badge color mapping
+- Time ago formatting
 
 ---
 
@@ -199,6 +330,18 @@ The view provides these context variables:
 
 - **Tailwind CSS** 3.4.10 (CDN)
 - **Font Awesome** 6.4.0 (CDN)
+- **Chart.js** 4.4.0 (CDN)
+
+---
+
+## Graceful Fallbacks
+
+| Scenario | Behavior |
+|----------|----------|
+| BigQuery unavailable | `data_tables: 0`, `data_volume_gb: 0` |
+| No training data | Charts show "No data available" |
+| Empty activity | Table shows "No recent activity" |
+| API error | KPIs show "0", console error logged |
 
 ---
 
@@ -208,4 +351,5 @@ The view provides these context variables:
 - [ ] Real billing data from subscription service
 - [ ] User profile dropdown menu
 - [ ] Quick actions in header
-- [ ] Recent activity feed
+- [x] ~~Recent activity feed~~ (Implemented)
+- [ ] Real endpoint request metrics (currently placeholder)

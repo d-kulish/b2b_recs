@@ -5,15 +5,21 @@ This module contains:
 - System Dashboard (landing page)
 - Model/Endpoint creation and page views
 - Core API endpoints (training, deployment, pipeline status)
+- System-level API endpoints (KPIs, charts, activity)
 
 ETL-related views and APIs have been migrated to ml_platform.etl
 Connection-related APIs have been migrated to ml_platform.connections
 """
+from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
+from django.utils import timezone
+from django.db.models import Count, Avg, Max
+from django.db.models.functions import TruncDate
+from django.conf import settings
 from .models import (
     ModelEndpoint,
     ETLConfiguration,
@@ -24,7 +30,9 @@ from .models import (
     TrainedModel,
     Deployment,
     SystemMetrics,
+    QuickTest,
 )
+from .training.models import TrainingRun, DeployedEndpoint
 
 
 # ============================================================================
@@ -324,3 +332,302 @@ def api_pipeline_run_status(request, run_id):
         'completed_at': pipeline_run.completed_at.isoformat() if pipeline_run.completed_at else None,
         'error_message': pipeline_run.error_message,
     })
+
+
+# ============================================================================
+# SYSTEM-LEVEL API ENDPOINTS
+# ============================================================================
+
+@login_required
+def api_system_kpis(request):
+    """
+    API endpoint returning 8 system KPIs for the dashboard.
+    """
+    try:
+        now = timezone.now()
+        cutoff_30d = now - timedelta(days=30)
+        cutoff_24h = now - timedelta(hours=24)
+
+        # Basic counts
+        models_count = ModelEndpoint.objects.count()
+        live_endpoints = DeployedEndpoint.objects.filter(is_active=True).count()
+
+        # Training stats (30 days)
+        training_runs_30d = TrainingRun.objects.filter(created_at__gte=cutoff_30d)
+        training_runs_count = training_runs_30d.count()
+
+        # Success rate calculation
+        completed_count = training_runs_30d.filter(status='completed').count()
+        total_finished = training_runs_30d.filter(
+            status__in=['completed', 'failed', 'cancelled', 'not_blessed']
+        ).count()
+        success_rate = round((completed_count / total_finished) * 100, 1) if total_finished > 0 else 0
+
+        # Experiments (30 days)
+        experiments_30d = QuickTest.objects.filter(created_at__gte=cutoff_30d).count()
+
+        # ETL runs (24 hours)
+        etl_runs_24h = ETLRun.objects.filter(started_at__gte=cutoff_24h).count()
+
+        # BigQuery data stats (with graceful fallback)
+        data_tables = 0
+        data_volume_gb = 0
+        try:
+            from .utils.bigquery_manager import BigQueryTableManager
+            project_id = getattr(settings, 'GCP_PROJECT_ID', 'b2b-recs')
+            bq_manager = BigQueryTableManager(project_id=project_id)
+            tables_result = bq_manager.list_tables()
+            if tables_result.get('success'):
+                tables = tables_result.get('tables', [])
+                data_tables = len(tables)
+                total_bytes = sum(t.get('num_bytes', 0) or 0 for t in tables)
+                data_volume_gb = round(total_bytes / (1024 ** 3), 2)
+        except Exception:
+            pass
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'models': models_count,
+                'live_endpoints': live_endpoints,
+                'training_runs_30d': training_runs_count,
+                'training_success_rate': success_rate,
+                'experiments_30d': experiments_30d,
+                'etl_runs_24h': etl_runs_24h,
+                'data_tables': data_tables,
+                'data_volume_gb': data_volume_gb,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+def api_system_charts(request):
+    """
+    API endpoint returning 4 chart datasets for the dashboard.
+    """
+    try:
+        now = timezone.now()
+        cutoff_30d = now - timedelta(days=30)
+        cutoff_14d = now - timedelta(days=14)
+        cutoff_7d = now - timedelta(days=7)
+
+        # 1. Training Activity (30 days) - line chart
+        training_by_day = TrainingRun.objects.filter(
+            created_at__gte=cutoff_30d
+        ).annotate(
+            date=TruncDate('created_at')
+        ).values('date', 'status').annotate(
+            count=Count('id')
+        ).order_by('date')
+
+        training_activity = {}
+        for row in training_by_day:
+            date_str = row['date'].strftime('%Y-%m-%d')
+            if date_str not in training_activity:
+                training_activity[date_str] = {'started': 0, 'completed': 0, 'failed': 0}
+            status = row['status']
+            if status in ['pending', 'submitting', 'running', 'scheduled']:
+                training_activity[date_str]['started'] += row['count']
+            elif status == 'completed':
+                training_activity[date_str]['completed'] += row['count']
+            elif status in ['failed', 'cancelled', 'not_blessed']:
+                training_activity[date_str]['failed'] += row['count']
+
+        training_labels = sorted(training_activity.keys())
+        training_data = {
+            'labels': training_labels,
+            'started': [training_activity.get(d, {}).get('started', 0) for d in training_labels],
+            'completed': [training_activity.get(d, {}).get('completed', 0) for d in training_labels],
+            'failed': [training_activity.get(d, {}).get('failed', 0) for d in training_labels],
+        }
+
+        # 2. Model Performance (best/avg Recall@100 trend)
+        perf_by_day = TrainingRun.objects.filter(
+            created_at__gte=cutoff_30d,
+            recall_at_100__isnull=False
+        ).annotate(
+            date=TruncDate('created_at')
+        ).values('date').annotate(
+            best_recall=Max('recall_at_100'),
+            avg_recall=Avg('recall_at_100')
+        ).order_by('date')
+
+        perf_labels = [row['date'].strftime('%Y-%m-%d') for row in perf_by_day]
+        model_performance = {
+            'labels': perf_labels,
+            'best': [round(row['best_recall'] * 100, 2) if row['best_recall'] else 0 for row in perf_by_day],
+            'avg': [round(row['avg_recall'] * 100, 2) if row['avg_recall'] else 0 for row in perf_by_day],
+        }
+
+        # 3. Endpoint Requests (7 days) - placeholder data for now
+        endpoint_labels = [(now - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(6, -1, -1)]
+        endpoint_requests = {
+            'labels': endpoint_labels,
+            'requests': [0] * 7,  # Placeholder - would need request logging to populate
+        }
+
+        # 4. ETL Health (14 days) - stacked bar
+        etl_by_day = ETLRun.objects.filter(
+            started_at__gte=cutoff_14d
+        ).annotate(
+            date=TruncDate('started_at')
+        ).values('date', 'status').annotate(
+            count=Count('id')
+        ).order_by('date')
+
+        etl_health = {}
+        for row in etl_by_day:
+            if row['date']:
+                date_str = row['date'].strftime('%Y-%m-%d')
+                if date_str not in etl_health:
+                    etl_health[date_str] = {'completed': 0, 'failed': 0}
+                if row['status'] == 'completed':
+                    etl_health[date_str]['completed'] += row['count']
+                elif row['status'] in ['failed', 'partial']:
+                    etl_health[date_str]['failed'] += row['count']
+
+        etl_labels = sorted(etl_health.keys())
+        etl_data = {
+            'labels': etl_labels,
+            'completed': [etl_health.get(d, {}).get('completed', 0) for d in etl_labels],
+            'failed': [etl_health.get(d, {}).get('failed', 0) for d in etl_labels],
+        }
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'training_activity': training_data,
+                'model_performance': model_performance,
+                'endpoint_requests': endpoint_requests,
+                'etl_health': etl_data,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e),
+        }, status=500)
+
+
+def _time_ago(dt):
+    """Convert datetime to human-readable time ago string."""
+    if not dt:
+        return ''
+    now = timezone.now()
+    diff = now - dt
+    seconds = diff.total_seconds()
+
+    if seconds < 60:
+        return 'just now'
+    elif seconds < 3600:
+        minutes = int(seconds / 60)
+        return f'{minutes}m ago'
+    elif seconds < 86400:
+        hours = int(seconds / 3600)
+        return f'{hours}h ago'
+    else:
+        days = int(seconds / 86400)
+        return f'{days}d ago'
+
+
+@login_required
+def api_system_recent_activity(request):
+    """
+    API endpoint returning recent activity merged from multiple sources.
+    """
+    try:
+        activities = []
+
+        # Training runs (last 10)
+        training_runs = TrainingRun.objects.select_related('ml_model').order_by('-created_at')[:10]
+        for run in training_runs:
+            status_map = {
+                'pending': 'pending',
+                'submitting': 'pending',
+                'scheduled': 'pending',
+                'running': 'running',
+                'completed': 'completed',
+                'deployed': 'completed',
+                'failed': 'failed',
+                'cancelled': 'failed',
+                'not_blessed': 'failed',
+                'deploy_failed': 'failed',
+            }
+            activities.append({
+                'type': 'Training',
+                'status': status_map.get(run.status, 'pending'),
+                'model': run.ml_model.name if run.ml_model else run.name,
+                'time': run.created_at.isoformat(),
+                'time_ago': _time_ago(run.created_at),
+            })
+
+        # Quick tests (last 10)
+        quick_tests = QuickTest.objects.select_related('feature_config__model_endpoint').order_by('-created_at')[:10]
+        for qt in quick_tests:
+            status_map = {
+                'pending': 'pending',
+                'submitting': 'pending',
+                'running': 'running',
+                'completed': 'completed',
+                'failed': 'failed',
+                'cancelled': 'failed',
+            }
+            model_name = ''
+            if qt.feature_config and qt.feature_config.model_endpoint:
+                model_name = qt.feature_config.model_endpoint.name
+            activities.append({
+                'type': 'Experiment',
+                'status': status_map.get(qt.status, 'pending'),
+                'model': model_name,
+                'time': qt.created_at.isoformat(),
+                'time_ago': _time_ago(qt.created_at),
+            })
+
+        # ETL runs (last 10)
+        etl_runs = ETLRun.objects.select_related('model_endpoint').order_by('-created_at')[:10]
+        for run in etl_runs:
+            status_map = {
+                'pending': 'pending',
+                'running': 'running',
+                'completed': 'completed',
+                'partial': 'completed',
+                'failed': 'failed',
+                'cancelled': 'failed',
+            }
+            activities.append({
+                'type': 'ETL',
+                'status': status_map.get(run.status, 'pending'),
+                'model': run.model_endpoint.name if run.model_endpoint else '',
+                'time': run.created_at.isoformat(),
+                'time_ago': _time_ago(run.created_at),
+            })
+
+        # Deployed endpoints (last 10)
+        deployments = DeployedEndpoint.objects.select_related('registered_model').order_by('-updated_at')[:10]
+        for dep in deployments:
+            activities.append({
+                'type': 'Deployment',
+                'status': 'completed' if dep.is_active else 'failed',
+                'model': dep.registered_model.model_name if dep.registered_model else dep.service_name,
+                'time': dep.updated_at.isoformat(),
+                'time_ago': _time_ago(dep.updated_at),
+            })
+
+        # Sort all activities by time and take top 5
+        activities.sort(key=lambda x: x['time'], reverse=True)
+        activities = activities[:5]
+
+        return JsonResponse({
+            'success': True,
+            'data': activities
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e),
+        }, status=500)

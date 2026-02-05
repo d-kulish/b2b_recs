@@ -133,6 +133,120 @@
             color: #6b7280;
         }
 
+        /* System Dashboard KPI Groups */
+        .system-kpi-groups {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .system-kpi-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.2s ease;
+        }
+
+        .system-kpi-card:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .system-kpi-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+        }
+
+        .system-kpi-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .system-kpi-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .system-kpi-icon.inference { background: linear-gradient(135deg, #10b981, #34d399); }
+        .system-kpi-icon.training { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+        .system-kpi-icon.data { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+
+        .system-kpi-icon i {
+            color: white;
+            font-size: 18px;
+        }
+
+        .system-kpi-stats {
+            display: flex;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .system-kpi-stat {
+            flex: 1;
+            text-align: center;
+            padding: 10px 8px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .system-kpi-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #111827;
+            line-height: 1.2;
+        }
+
+        .system-kpi-value.good { color: #10b981; }
+        .system-kpi-value.warning { color: #f59e0b; }
+        .system-kpi-value.inactive { color: #9ca3af; }
+
+        .system-kpi-label {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .system-kpi-bar-row {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+        }
+
+        .system-kpi-bar-label {
+            font-size: 11px;
+            color: #6b7280;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .system-kpi-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .system-kpi-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .system-kpi-bar-fill.good { background: #10b981; }
+        .system-kpi-bar-fill.warning { background: #f59e0b; }
+        .system-kpi-bar-fill.danger { background: #ef4444; }
+
         .chapter-title-text {
             display: flex;
             flex-direction: column;
@@ -496,81 +610,104 @@
                         </div>
                     </div>
                     <div class="chapter-divider"></div>
-                    <!-- Row 1: 4 KPIs -->
-                    <div class="chapter-kpi-row">
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon purple">
-                                <i class="fas fa-cube"></i>
+                    <!-- KPI Groups: 3 Cards -->
+                    <div class="system-kpi-groups">
+                        <!-- Inference Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Inference</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon inference">
+                                    <i class="fas fa-rocket"></i>
+                                </div>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiActiveEndpoints">--</div>
+                                        <div class="system-kpi-label">Active Endpoints</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiRequests">--</div>
+                                        <div class="system-kpi-label">Requests (7d)</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiLatency">--</div>
+                                        <div class="system-kpi-label">Latency</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiModels">--</span>
-                                <span class="chapter-kpi-label">Models</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon green">
-                                <i class="fas fa-rocket"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiLiveEndpoints">--</span>
-                                <span class="chapter-kpi-label">Live Endpoints</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon blue">
-                                <i class="fas fa-graduation-cap"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiTrainingRuns">--</span>
-                                <span class="chapter-kpi-label">Training Runs (30d)</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon green">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiSuccessRate">--</span>
-                                <span class="chapter-kpi-label">Success Rate</span>
+                            <div class="system-kpi-bar-row">
+                                <div class="system-kpi-bar-label">
+                                    <span>Avg Latency</span>
+                                    <span id="kpiLatencyStatus">--</span>
+                                </div>
+                                <div class="system-kpi-bar">
+                                    <div class="system-kpi-bar-fill good" id="kpiLatencyBar" style="width: 0%"></div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <!-- Row 2: 4 KPIs -->
-                    <div class="chapter-kpi-row" style="margin-top: 12px;">
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon orange">
-                                <i class="fas fa-flask"></i>
+
+                        <!-- Training Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Training</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon training">
+                                    <i class="fas fa-graduation-cap"></i>
+                                </div>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiTrainingRuns">--</div>
+                                        <div class="system-kpi-label">Runs (30d)</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiSuccessRate">--</div>
+                                        <div class="system-kpi-label">Success Rate</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiExperiments">--</div>
+                                        <div class="system-kpi-label">Experiments (30d)</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiExperiments">--</span>
-                                <span class="chapter-kpi-label">Experiments (30d)</span>
+                            <div class="system-kpi-bar-row">
+                                <div class="system-kpi-bar-label">
+                                    <span>Success Rate</span>
+                                    <span id="kpiSuccessStatus">--</span>
+                                </div>
+                                <div class="system-kpi-bar">
+                                    <div class="system-kpi-bar-fill good" id="kpiSuccessBar" style="width: 0%"></div>
+                                </div>
                             </div>
                         </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon blue">
-                                <i class="fas fa-sync-alt"></i>
+
+                        <!-- Data Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Data</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon data">
+                                    <i class="fas fa-database"></i>
+                                </div>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiEtlRuns">--</div>
+                                        <div class="system-kpi-label">ETL Runs (24h)</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiDataTables">--</div>
+                                        <div class="system-kpi-label">Data Tables</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value" id="kpiDataVolume">--</div>
+                                        <div class="system-kpi-label">Data Volume</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiEtlRuns">--</span>
-                                <span class="chapter-kpi-label">ETL Runs (24h)</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon purple">
-                                <i class="fas fa-table"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiDataTables">--</span>
-                                <span class="chapter-kpi-label">Data Tables</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon pink">
-                                <i class="fas fa-database"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="kpiDataVolume">--</span>
-                                <span class="chapter-kpi-label">Data Volume</span>
+                            <div class="system-kpi-bar-row">
+                                <div class="system-kpi-bar-label">
+                                    <span>Storage Used</span>
+                                    <span id="kpiVolumeStatus">--</span>
+                                </div>
+                                <div class="system-kpi-bar">
+                                    <div class="system-kpi-bar-fill good" id="kpiVolumeBar" style="width: 0%"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -881,22 +1018,30 @@
                     if (result.success && result.data) {
                         const d = result.data;
 
-                        // Update KPI values
-                        setText('kpiModels', d.models);
-                        setText('kpiLiveEndpoints', d.live_endpoints);
-                        setTextWithClass('kpiLiveEndpoints', d.live_endpoints > 0 ? 'active' : '');
+                        // Inference Group
+                        setText('kpiActiveEndpoints', d.live_endpoints);
+                        setClass('kpiActiveEndpoints', d.live_endpoints > 0 ? 'good' : 'inactive');
+                        setText('kpiRequests', formatNumber(d.requests_7d || 0));
+                        setText('kpiLatency', (d.avg_latency_ms || 0) + 'ms');
+                        updateLatencyBar(d.avg_latency_ms || 0);
+
+                        // Training Group
                         setText('kpiTrainingRuns', d.training_runs_30d);
                         setText('kpiSuccessRate', d.training_success_rate + '%');
-                        setTextWithClass('kpiSuccessRate', d.training_success_rate >= 80 ? 'active' : '');
+                        setClass('kpiSuccessRate', d.training_success_rate >= 80 ? 'good' : (d.training_success_rate >= 50 ? 'warning' : ''));
                         setText('kpiExperiments', d.experiments_30d);
+                        updateSuccessBar(d.training_success_rate);
+
+                        // Data Group
                         setText('kpiEtlRuns', d.etl_runs_24h);
                         setText('kpiDataTables', d.data_tables);
                         setText('kpiDataVolume', d.data_volume_gb + ' GB');
+                        updateVolumeBar(d.data_volume_gb);
                     }
                 } catch (error) {
                     console.error('Failed to load KPIs:', error);
-                    // Set fallback values
-                    ['kpiModels', 'kpiLiveEndpoints', 'kpiTrainingRuns', 'kpiSuccessRate',
+                    // Set fallback values for all IDs
+                    ['kpiActiveEndpoints', 'kpiRequests', 'kpiLatency', 'kpiTrainingRuns', 'kpiSuccessRate',
                      'kpiExperiments', 'kpiEtlRuns', 'kpiDataTables', 'kpiDataVolume'].forEach(id => {
                         setText(id, '0');
                     });
@@ -908,9 +1053,61 @@
                 if (el) el.textContent = value;
             }
 
-            function setTextWithClass(id, className) {
+            function setClass(id, className) {
                 const el = document.getElementById(id);
-                if (el && className) el.classList.add(className);
+                if (el && className) {
+                    el.classList.remove('good', 'warning', 'inactive');
+                    el.classList.add(className);
+                }
+            }
+
+            function formatNumber(num) {
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return num.toString();
+            }
+
+            function updateLatencyBar(ms) {
+                const bar = document.getElementById('kpiLatencyBar');
+                const status = document.getElementById('kpiLatencyStatus');
+                if (!bar || !status) return;
+
+                let pct, label, colorClass;
+                if (ms === 0) {
+                    pct = 0; label = 'No data'; colorClass = 'good';
+                } else if (ms < 100) {
+                    pct = 30; label = 'Good'; colorClass = 'good';
+                } else if (ms < 500) {
+                    pct = 60; label = 'Moderate'; colorClass = 'warning';
+                } else {
+                    pct = 90; label = 'High'; colorClass = 'danger';
+                }
+
+                bar.style.width = pct + '%';
+                bar.className = 'system-kpi-bar-fill ' + colorClass;
+                status.textContent = label;
+            }
+
+            function updateSuccessBar(rate) {
+                const bar = document.getElementById('kpiSuccessBar');
+                const status = document.getElementById('kpiSuccessStatus');
+                if (!bar || !status) return;
+
+                bar.style.width = rate + '%';
+                bar.className = 'system-kpi-bar-fill ' + (rate >= 80 ? 'good' : (rate >= 50 ? 'warning' : 'danger'));
+                status.textContent = rate >= 80 ? 'Good' : (rate >= 50 ? 'Moderate' : 'Low');
+            }
+
+            function updateVolumeBar(gb) {
+                const bar = document.getElementById('kpiVolumeBar');
+                const status = document.getElementById('kpiVolumeStatus');
+                if (!bar || !status) return;
+
+                // Assume 100GB as reference max
+                const pct = Math.min((gb / 100) * 100, 100);
+                bar.style.width = pct + '%';
+                bar.className = 'system-kpi-bar-fill ' + (pct < 70 ? 'good' : (pct < 90 ? 'warning' : 'danger'));
+                status.textContent = gb.toFixed(1) + ' GB';
             }
 
             // Load Charts

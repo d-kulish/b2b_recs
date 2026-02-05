@@ -396,6 +396,9 @@ def api_system_kpis(request):
                 'etl_runs_24h': etl_runs_24h,
                 'data_tables': data_tables,
                 'data_volume_gb': data_volume_gb,
+                # Placeholder fields for future implementation
+                'requests_7d': 0,
+                'avg_latency_ms': 0,
             }
         })
     except Exception as e:

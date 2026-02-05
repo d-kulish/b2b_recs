@@ -108,25 +108,35 @@ Three collapsible chapters displayed vertically:
 
 ## Chapter 1: System Details
 
-Displays user-centric metrics with 8 dynamic KPIs, 4 charts, and a recent activity table.
+Displays user-centric metrics with 3 grouped KPI cards, 4 charts, and a recent activity table.
 
-### KPI Cards (2 rows of 4)
+### KPI Groups (3 Cards)
 
-**Row 1:**
-| KPI | Icon | Color | ID | Data Source |
-|-----|------|-------|----|-------------|
-| Models | `fa-cube` | Purple | `kpiModels` | `ModelEndpoint.objects.count()` |
-| Live Endpoints | `fa-rocket` | Green | `kpiLiveEndpoints` | `DeployedEndpoint.objects.filter(is_active=True).count()` |
-| Training Runs (30d) | `fa-graduation-cap` | Blue | `kpiTrainingRuns` | `TrainingRun` count last 30 days |
-| Success Rate | `fa-check-circle` | Green | `kpiSuccessRate` | Completed / Total finished * 100 |
+The KPIs are organized into 3 themed cards with icons, stats, and progress bars:
 
-**Row 2:**
-| KPI | Icon | Color | ID | Data Source |
-|-----|------|-------|----|-------------|
-| Experiments (30d) | `fa-flask` | Orange | `kpiExperiments` | `QuickTest` count last 30 days |
-| ETL Runs (24h) | `fa-sync-alt` | Blue | `kpiEtlRuns` | `ETLRun` count last 24 hours |
-| Data Tables | `fa-table` | Purple | `kpiDataTables` | BigQuery tables count |
-| Data Volume | `fa-database` | Pink | `kpiDataVolume` | Sum of table sizes in GB |
+**Inference Card (Green icon):**
+| KPI | ID | Data Source |
+|-----|----|-------------|
+| Active Endpoints | `kpiActiveEndpoints` | `DeployedEndpoint.objects.filter(is_active=True).count()` |
+| Requests (7d) | `kpiRequests` | Placeholder (0) |
+| Latency | `kpiLatency` | Placeholder (0ms) |
+| Progress Bar | `kpiLatencyBar`, `kpiLatencyStatus` | Latency status indicator |
+
+**Training Card (Blue icon):**
+| KPI | ID | Data Source |
+|-----|----|-------------|
+| Runs (30d) | `kpiTrainingRuns` | `TrainingRun` count last 30 days |
+| Success Rate | `kpiSuccessRate` | Completed / Total finished * 100 |
+| Experiments (30d) | `kpiExperiments` | `QuickTest` count last 30 days |
+| Progress Bar | `kpiSuccessBar`, `kpiSuccessStatus` | Success rate percentage |
+
+**Data Card (Purple icon):**
+| KPI | ID | Data Source |
+|-----|----|-------------|
+| ETL Runs (24h) | `kpiEtlRuns` | `ETLRun` count last 24 hours |
+| Data Tables | `kpiDataTables` | BigQuery tables count |
+| Data Volume | `kpiDataVolume` | Sum of table sizes in GB |
+| Progress Bar | `kpiVolumeBar`, `kpiVolumeStatus` | Storage used indicator (100GB max)
 
 ### Charts Grid (2x2)
 
@@ -202,7 +212,7 @@ Displays subscription and usage information.
 
 ### `GET /api/system/kpis/`
 
-Returns 8 system KPIs.
+Returns system KPIs for the 3 grouped cards.
 
 **Response:**
 ```json
@@ -216,7 +226,9 @@ Returns 8 system KPIs.
         "experiments_30d": 23,
         "etl_runs_24h": 3,
         "data_tables": 12,
-        "data_volume_gb": 4.56
+        "data_volume_gb": 4.56,
+        "requests_7d": 0,
+        "avg_latency_ms": 0
     }
 }
 ```

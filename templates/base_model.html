@@ -4,6 +4,11 @@
 
 {% load static %}
 
+{% block extra_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=23">
+{% endblock %}
+
 {% block content %}
 <div class="flex bg-dotted" style="height: 100vh;">
     <!-- Main Content Area -->
@@ -35,6 +40,57 @@
                                     <span class="italic text-gray-400">No description</span>
                                 {% endif %}
                             </p>
+                        </div>
+
+                        <!-- Header KPI Section (after model name) -->
+                        <div class="flex items-center gap-3 flex-shrink-0 ml-6">
+                            <!-- KPI: Serving Endpoints -->
+                            <div id="headerKpiEndpoints" class="header-kpi-card">
+                                <div class="header-kpi-icon endpoints">
+                                    <i class="fas fa-rocket"></i>
+                                </div>
+                                <div class="header-kpi-content">
+                                    <div class="header-kpi-value" id="headerKpiEndpointsValue">--</div>
+                                    <div class="header-kpi-label">Endpoints Active</div>
+                                    <div class="header-kpi-subtitle" id="headerKpiEndpointsSubtitle"></div>
+                                </div>
+                            </div>
+
+                            <!-- KPI: Total Models -->
+                            <div id="headerKpiModels" class="header-kpi-card">
+                                <div class="header-kpi-icon models">
+                                    <i class="fas fa-cube"></i>
+                                </div>
+                                <div class="header-kpi-content">
+                                    <div class="header-kpi-value" id="headerKpiModelsValue">--</div>
+                                    <div class="header-kpi-label">Total Models</div>
+                                    <div class="header-kpi-subtitle" id="headerKpiModelsSubtitle"></div>
+                                </div>
+                            </div>
+
+                            <!-- KPI: Requests (7D) -->
+                            <div id="headerKpiRequests" class="header-kpi-card">
+                                <div class="header-kpi-icon requests">
+                                    <i class="fas fa-chart-bar"></i>
+                                </div>
+                                <div class="header-kpi-content">
+                                    <div class="header-kpi-value" id="headerKpiRequestsValue">--</div>
+                                    <div class="header-kpi-label">Requests (7D)</div>
+                                    <div class="header-kpi-change positive" id="headerKpiRequestsChange"></div>
+                                </div>
+                            </div>
+
+                            <!-- KPI: Latency (P95) -->
+                            <div id="headerKpiLatency" class="header-kpi-card">
+                                <div class="header-kpi-icon latency">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="header-kpi-content">
+                                    <div class="header-kpi-value" id="headerKpiLatencyValue">--</div>
+                                    <div class="header-kpi-label">Latency (P95)</div>
+                                    <div class="header-kpi-change positive" id="headerKpiLatencyChange"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -79,4 +135,115 @@
         </main>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+/**
+ * Header KPI Loader
+ * Loads and displays KPI data in the model header
+ */
+(function() {
+    'use strict';
+
+    // Demo data (same as model_dashboard modules)
+    const DEMO_DATA = {
+        endpoints: {
+            total: 4,
+            active: 0,
+            inactive: 4
+        },
+        models: {
+            total: 7,
+            deployed: 0
+        },
+        total_requests: 47250,
+        total_requests_change_pct: 12.3,
+        latency_p95_ms: 142,
+        latency_change_ms: -8
+    };
+
+    function formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    }
+
+    function loadHeaderKpis() {
+        // Endpoints KPI
+        const endpointsValueEl = document.getElementById('headerKpiEndpointsValue');
+        const endpointsSubtitleEl = document.getElementById('headerKpiEndpointsSubtitle');
+
+        if (endpointsValueEl) {
+            const active = DEMO_DATA.endpoints.active;
+            const total = DEMO_DATA.endpoints.total;
+            endpointsValueEl.textContent = active;
+            // Color based on active count
+            if (active > 0) {
+                endpointsValueEl.classList.add('active');
+            } else if (total > 0) {
+                endpointsValueEl.classList.add('inactive');
+            }
+        }
+
+        if (endpointsSubtitleEl) {
+            endpointsSubtitleEl.textContent = 'of ' + DEMO_DATA.endpoints.total + ' total';
+        }
+
+        // Models KPI
+        const modelsValueEl = document.getElementById('headerKpiModelsValue');
+        const modelsSubtitleEl = document.getElementById('headerKpiModelsSubtitle');
+
+        if (modelsValueEl) {
+            modelsValueEl.textContent = DEMO_DATA.models.total;
+        }
+
+        if (modelsSubtitleEl) {
+            modelsSubtitleEl.textContent = DEMO_DATA.models.deployed + ' deployed';
+        }
+
+        // Requests KPI
+        const requestsValueEl = document.getElementById('headerKpiRequestsValue');
+        const requestsChangeEl = document.getElementById('headerKpiRequestsChange');
+
+        if (requestsValueEl) {
+            requestsValueEl.textContent = formatNumber(DEMO_DATA.total_requests);
+        }
+
+        if (requestsChangeEl && DEMO_DATA.total_requests_change_pct !== undefined) {
+            const pct = DEMO_DATA.total_requests_change_pct;
+            const sign = pct >= 0 ? '+' : '';
+            requestsChangeEl.textContent = sign + pct.toFixed(1) + '%';
+            requestsChangeEl.className = 'header-kpi-change ' + (pct >= 0 ? 'positive' : 'negative');
+        }
+
+        // Latency KPI
+        const latencyValueEl = document.getElementById('headerKpiLatencyValue');
+        const latencyChangeEl = document.getElementById('headerKpiLatencyChange');
+
+        if (latencyValueEl) {
+            latencyValueEl.textContent = DEMO_DATA.latency_p95_ms + 'ms';
+        }
+
+        if (latencyChangeEl && DEMO_DATA.latency_change_ms !== undefined) {
+            const change = DEMO_DATA.latency_change_ms;
+            const sign = change >= 0 ? '+' : '';
+            latencyChangeEl.textContent = sign + change + 'ms';
+            // For latency, negative is good (faster)
+            latencyChangeEl.className = 'header-kpi-change ' + (change <= 0 ? 'positive' : 'negative');
+        }
+    }
+
+    // Load on DOMContentLoaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadHeaderKpis);
+    } else {
+        loadHeaderKpis();
+    }
+})();
+</script>
 {% endblock %}

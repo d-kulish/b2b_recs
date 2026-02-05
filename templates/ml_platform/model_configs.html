@@ -5,6 +5,7 @@
 {% block title %}{{ model.name }} - Configs{% endblock %}
 
 {% block extra_css %}
+{{ block.super }}
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <style>

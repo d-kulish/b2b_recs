@@ -4,6 +4,7 @@
 {% block title %}{{ model.name }} - Dashboard{% endblock %}
 
 {% block extra_css %}
+{{ block.super }}
 <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=15">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
@@ -170,6 +171,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="{% static 'js/pipeline_dag.js' %}?v=2"></script>

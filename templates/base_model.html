@@ -153,13 +153,15 @@
  *
  * Data Sources:
  * - Endpoints KPI: Real data from /api/deployed-endpoints/
- * - Models, Requests, Latency: Demo data (APIs not yet implemented)
+ * - Models KPI: Real data from /api/models/
+ * - Requests, Latency: Demo data (APIs not yet implemented)
  */
 (function() {
     'use strict';
 
-    // API endpoint for real endpoints KPI data
+    // API endpoints for real KPI data
     const ENDPOINTS_API_URL = '/api/deployed-endpoints/';
+    const MODELS_API_URL = '/api/models/';
 
     // Demo data for KPIs without real APIs yet
     const DEMO_DATA = {
@@ -211,10 +213,37 @@
         }
     }
 
+    /**
+     * Fetch real models KPI data from the API.
+     * Returns {total, deployed} or null on failure.
+     */
+    async function fetchModelsKpi() {
+        try {
+            const response = await fetch(MODELS_API_URL);
+            if (!response.ok) throw new Error('Failed to fetch models data');
+            const data = await response.json();
+
+            if (data.success && data.kpi) {
+                return {
+                    total: data.kpi.total || 0,
+                    deployed: data.kpi.deployed || 0
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch models KPI:', error);
+            return null;
+        }
+    }
+
     async function loadHeaderKpis() {
-        // Fetch real endpoints KPI data from API
-        const realEndpoints = await fetchEndpointsKpi();
+        // Fetch real KPI data from APIs in parallel
+        const [realEndpoints, realModels] = await Promise.all([
+            fetchEndpointsKpi(),
+            fetchModelsKpi()
+        ]);
         const endpoints = realEndpoints || DEMO_DATA.endpoints;
+        const models = realModels || DEMO_DATA.models;
 
         // Endpoints KPI (real data)
         const endpointsValueEl = document.getElementById('headerKpiEndpointsValue');
@@ -237,16 +266,16 @@
             endpointsSubtitleEl.textContent = 'of ' + endpoints.total + ' total';
         }
 
-        // Models KPI (demo data - no API yet)
+        // Models KPI (real data from /api/models/)
         const modelsValueEl = document.getElementById('headerKpiModelsValue');
         const modelsSubtitleEl = document.getElementById('headerKpiModelsSubtitle');
 
         if (modelsValueEl) {
-            modelsValueEl.textContent = DEMO_DATA.models.total;
+            modelsValueEl.textContent = models.total;
         }
 
         if (modelsSubtitleEl) {
-            modelsSubtitleEl.textContent = DEMO_DATA.models.deployed + ' deployed';
+            modelsSubtitleEl.textContent = models.deployed + ' deployed';
         }
 
         // Requests KPI (demo data - no API yet)

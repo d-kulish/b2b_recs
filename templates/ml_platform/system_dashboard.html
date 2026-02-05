@@ -1,170 +1,562 @@
-{% extends 'base.html' %}
 {% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recs Studio</title>
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #ffffff;
+            min-height: 100vh;
+        }
 
-{% block title %}System Dashboard - Recs Studio{% endblock %}
 
-{% block header %}
-<div class="bg-blue-50 border-b border-gray-300 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 py-4">
-        <div class="flex justify-between items-center">
-            <a href="{% url 'system_dashboard' %}" class="flex items-center gap-3 hover:opacity-80 transition">
-                <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-10 w-auto">
-                <span class="text-lg font-bold text-gray-800">Recs Studio</span>
-            </a>
-            <div class="flex items-center space-x-4 text-gray-700">
-                <span>
-                    <i class="fas fa-user mr-2"></i>{{ user.username }}
-                </span>
-                <a href="{% url 'logout' %}" class="hover:text-gray-900 transition">
-                    <i class="fas fa-sign-out-alt mr-1"></i>Logout
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+        /* Collapsible chapter container */
+        .chapter-container {
+            border: 2px solid #1f2937;
+            border-radius: 16px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
 
-{% block content %}
-<div class="max-w-7xl mx-auto px-4">
-    <div class="mb-8">
-        <div class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900">System Dashboard</h1>
-                <p class="text-gray-600 mt-2">Manage all your ML models and endpoints</p>
-            </div>
-            <a href="{% url 'create_model_endpoint' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
-                <i class="fas fa-plus mr-2"></i>
-                Create Model/Endpoint
-            </a>
-        </div>
+        .chapter-container:last-child {
+            margin-bottom: 0;
+        }
 
-        <!-- Summary Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-project-diagram text-4xl text-blue-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-600 text-sm">Total Models</p>
-                        <p class="text-3xl font-bold text-gray-900">{{ total_models }}</p>
-                    </div>
+        .chapter-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 24px 28px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .chapter-header:hover {
+            background-color: #f9fafb;
+        }
+
+        .chapter-title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .chapter-title-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .chapter-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .chapter-subtitle {
+            font-size: 14px;
+            font-weight: 400;
+            color: #6b7280;
+        }
+
+        .chapter-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .chapter-icon.system {
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+            color: white;
+        }
+
+        .chapter-icon.models {
+            background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+            color: white;
+        }
+
+        .chapter-icon.billing {
+            background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+            color: white;
+        }
+
+        .chapter-toggle {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            font-size: 18px;
+            transition: transform 0.3s ease;
+        }
+
+        .chapter-container.open .chapter-toggle {
+            transform: rotate(90deg);
+        }
+
+        .chapter-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .chapter-container.open .chapter-content {
+            max-height: 1000px;
+            transition: max-height 0.5s ease-in;
+        }
+
+        .chapter-content-inner {
+            padding: 0 24px 24px 24px;
+        }
+
+        /* Model cards */
+        .models-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .model-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .model-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+        }
+
+        .model-info {
+            flex: 1;
+        }
+
+        .model-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .model-description {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .model-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+            color: #9ca3af;
+        }
+
+        .model-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-draft {
+            background-color: #f3f4f6;
+            color: #4b5563;
+        }
+
+        .status-inactive {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-failed {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* View arrow */
+        .view-arrow {
+            color: #3b82f6;
+            font-size: 20px;
+            opacity: 0;
+            transform: translateX(-8px);
+            transition: all 0.2s ease;
+        }
+
+        .model-card:hover .view-arrow {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Create button */
+        .create-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: #3b82f6;
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 500;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            margin-top: 16px;
+        }
+
+        .create-button:hover {
+            background-color: #2563eb;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 24px;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            color: #d1d5db;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-text {
+            font-size: 18px;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        /* Info cards for System Details and Billing */
+        .info-card {
+            background: #ffffff;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-label {
+            font-size: 13px;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        .info-value {
+            font-size: 15px;
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        .info-value.highlight {
+            color: #3b82f6;
+        }
+
+        /* Billing specific */
+        .billing-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .billing-summary:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .billing-summary:first-child {
+            padding-top: 0;
+        }
+
+        .billing-label {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .billing-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .billing-value.free {
+            color: #10b981;
+        }
+
+        .plan-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+        }
+
+        /* Header User Profile Icon - identical to model page */
+        .header-user-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            background: transparent;
+        }
+
+        .header-user-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .header-user-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: transparent;
+        }
+    </style>
+</head>
+<body>
+    <!-- Page wrapper - identical structure to model pages (base_model.html) -->
+    <div class="p-6 pb-0">
+        <div class="max-w-[88rem] mx-auto">
+            <!-- Header row with logo, project name, and user icon - using exact same structure as model page -->
+            <div class="px-6 py-3 flex items-center gap-6">
+                <!-- Logo -->
+                <div class="flex flex-col items-center w-fit flex-shrink-0 mr-4">
+                    <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-[70px] w-auto">
+                    <span class="text-sm font-bold text-gray-700 mt-1">Recs Studio</span>
                 </div>
-            </div>
 
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-check-circle text-4xl text-green-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-600 text-sm">Active Models</p>
-                        <p class="text-3xl font-bold text-gray-900">{{ active_models }}</p>
-                    </div>
+                <!-- Project ID - styled like model name on model pages -->
+                <div class="flex-shrink-0">
+                    <h1 class="text-5xl font-bold text-blue-900">b2b-recs</h1>
                 </div>
-            </div>
 
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-spinner text-4xl text-yellow-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-600 text-sm">Running Jobs</p>
-                        <p class="text-3xl font-bold text-gray-900">{{ recent_runs }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white rounded-lg shadow p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-chart-line text-4xl text-purple-600"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-gray-600 text-sm">Total Predictions</p>
-                        <p class="text-3xl font-bold text-gray-900">{% if latest_metrics %}{{ latest_metrics.total_predictions|default:0 }}{% else %}0{% endif %}</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Models List -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-bold text-gray-900">Models / Endpoints</h2>
-            </div>
-            <div class="overflow-x-auto">
-                {% if models %}
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Trained</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        {% for model in models %}
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-900">{{ model.name }}</div>
-                                        <div class="text-sm text-gray-500">{{ model.description|truncatewords:10 }}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                    {% if model.status == 'active' %}bg-green-100 text-green-800
-                                    {% elif model.status == 'draft' %}bg-gray-100 text-gray-800
-                                    {% elif model.status == 'inactive' %}bg-yellow-100 text-yellow-800
-                                    {% else %}bg-red-100 text-red-800{% endif %}">
-                                    {{ model.get_status_display }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                {% if model.is_endpoint_active %}
-                                <span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Active</span>
-                                {% else %}
-                                <span class="text-gray-400"><i class="fas fa-times-circle mr-1"></i>Inactive</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {% if model.last_trained_at %}
-                                {{ model.last_trained_at|date:"M d, Y" }}
-                                {% else %}
-                                <span class="text-gray-400">Never</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {{ model.created_at|date:"M d, Y" }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <a href="{% url 'model_dashboard' model.id %}" class="text-blue-600 hover:text-blue-900">
-                                    View <i class="fas fa-arrow-right ml-1"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <div class="px-6 py-12 text-center">
-                    <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
-                    <p class="text-gray-500 text-lg mb-4">No models/endpoints created yet</p>
-                    <a href="{% url 'create_model_endpoint' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center">
-                        <i class="fas fa-plus mr-2"></i>
-                        Create Your First Model
+                <!-- User Profile Icon (pushed to far right) - identical to model page -->
+                <div class="ml-auto flex-shrink-0">
+                    <a href="#" class="header-user-icon" title="User Profile">
+                        <img src="{% static 'images/person_icon.webp' %}" alt="User Profile">
                     </a>
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <!-- Main Content -->
+    <div class="py-12 px-6">
+        <div class="max-w-[88rem] mx-auto px-6">
+            <!-- Chapter 1: System Details -->
+            <div class="chapter-container open" data-chapter="system">
+                <div class="chapter-header" onclick="toggleChapter(this)">
+                    <div class="chapter-title-wrapper">
+                        <div class="chapter-icon system">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <div class="chapter-title-text">
+                            <span class="chapter-title">System Details</span>
+                            <span class="chapter-subtitle">Project configuration and infrastructure overview</span>
+                        </div>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+                <div class="chapter-content">
+                    <div class="chapter-content-inner">
+                        <div class="info-card">
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <span class="info-label">Project ID</span>
+                                    <span class="info-value">b2b-recs</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Region</span>
+                                    <span class="info-value">europe-central2 (Warsaw)</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Total Models</span>
+                                    <span class="info-value highlight">{{ total_models }}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Active Endpoints</span>
+                                    <span class="info-value highlight">{{ active_models }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chapter 2: Your Models -->
+            <div class="chapter-container open" data-chapter="models">
+                <div class="chapter-header" onclick="toggleChapter(this)">
+                    <div class="chapter-title-wrapper">
+                        <div class="chapter-icon models">
+                            <i class="fas fa-cube"></i>
+                        </div>
+                        <div class="chapter-title-text">
+                            <span class="chapter-title">Your Models</span>
+                            <span class="chapter-subtitle">Manage ML models and endpoints</span>
+                        </div>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+                <div class="chapter-content">
+                    <div class="chapter-content-inner">
+                        {% if models %}
+                        <div class="models-grid">
+                            {% for model in models %}
+                            <a href="{% url 'model_dashboard' model.id %}" class="model-card">
+                                <div class="model-info">
+                                    <div class="model-name">{{ model.name }}</div>
+                                    {% if model.description %}
+                                    <div class="model-description">{{ model.description|truncatewords:15 }}</div>
+                                    {% endif %}
+                                    <div class="model-meta">
+                                        <span class="status-badge
+                                            {% if model.status == 'active' %}status-active
+                                            {% elif model.status == 'draft' %}status-draft
+                                            {% elif model.status == 'inactive' %}status-inactive
+                                            {% else %}status-failed{% endif %}">
+                                            {{ model.get_status_display }}
+                                        </span>
+                                        <span class="model-meta-item">
+                                            <i class="far fa-calendar"></i>
+                                            {{ model.created_at|date:"M d, Y" }}
+                                        </span>
+                                        {% if model.last_trained_at %}
+                                        <span class="model-meta-item">
+                                            <i class="fas fa-brain"></i>
+                                            Last trained {{ model.last_trained_at|date:"M d, Y" }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right view-arrow"></i>
+                            </a>
+                            {% endfor %}
+                        </div>
+
+                        <a href="{% url 'create_model_endpoint' %}" class="create-button">
+                            <i class="fas fa-plus"></i>
+                            Create New Model
+                        </a>
+                        {% else %}
+                        <div class="empty-state">
+                            <i class="fas fa-cube empty-state-icon"></i>
+                            <p class="empty-state-text">No models created yet</p>
+                            <a href="{% url 'create_model_endpoint' %}" class="create-button">
+                                <i class="fas fa-plus"></i>
+                                Create Your First Model
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chapter 3: Billing -->
+            <div class="chapter-container open" data-chapter="billing">
+                <div class="chapter-header" onclick="toggleChapter(this)">
+                    <div class="chapter-title-wrapper">
+                        <div class="chapter-icon billing">
+                            <i class="fas fa-credit-card"></i>
+                        </div>
+                        <div class="chapter-title-text">
+                            <span class="chapter-title">Billing</span>
+                            <span class="chapter-subtitle">Usage tracking and subscription details</span>
+                        </div>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+                <div class="chapter-content">
+                    <div class="chapter-content-inner">
+                        <div class="info-card">
+                            <div class="billing-summary">
+                                <span class="billing-label">Current Plan</span>
+                                <span class="plan-badge">
+                                    <i class="fas fa-crown"></i>
+                                    Pro
+                                </span>
+                            </div>
+                            <div class="billing-summary">
+                                <span class="billing-label">Billing Period</span>
+                                <span class="billing-value">Feb 1 - Feb 28, 2026</span>
+                            </div>
+                            <div class="billing-summary">
+                                <span class="billing-label">Training Hours Used</span>
+                                <span class="billing-value">12.5 / 100 hrs</span>
+                            </div>
+                            <div class="billing-summary">
+                                <span class="billing-label">API Requests</span>
+                                <span class="billing-value">47,250 / Unlimited</span>
+                            </div>
+                            <div class="billing-summary">
+                                <span class="billing-label">Current Charges</span>
+                                <span class="billing-value free">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleChapter(header) {
+            const container = header.closest('.chapter-container');
+            container.classList.toggle('open');
+        }
+    </script>
+</body>
+</html>

@@ -3,7 +3,10 @@
  *
  * Manages the Endpoints chapter on the Model Dashboard page.
  * Displays grouped summary card, KPIs, charts, and tables for endpoint observability.
- * Supports demo mode with artificial data for sales demonstrations.
+ *
+ * Data Sources:
+ * - Serving Endpoints KPIs (Total/Active/Inactive): Real data from /api/deployed-endpoints/
+ * - Performance KPIs, Charts, Tables: Demo data for sales demonstrations (APIs not yet implemented)
  *
  * Usage:
  *     ModelDashboardEndpoints.init({
@@ -19,7 +22,9 @@ const ModelDashboardEndpoints = (function() {
     // CONFIGURATION & STATE
     // =============================================================================
 
-    const DEMO_MODE = true;
+    // Demo mode only affects charts and tables (no APIs exist yet)
+    // KPIs always use real data from the deployed-endpoints API
+    const DEMO_MODE_CHARTS = true;
     const DEMO_DATA_URL = '/static/data/demo/model_dashboard_endpoints.json';
 
     const config = {
@@ -27,7 +32,9 @@ const ModelDashboardEndpoints = (function() {
         kpiContainerId: '#endpointsKpiRow',
         chartsContainerId: '#endpointsChartsGrid',
         tablesContainerId: '#endpointsTablesSection',
-        chartHeight: 220
+        chartHeight: 220,
+        // API endpoint for real KPI data (same as EndpointsTable uses)
+        endpointsApiUrl: '/api/deployed-endpoints/'
     };
 
     let state = {
@@ -150,9 +157,37 @@ const ModelDashboardEndpoints = (function() {
     ];
 
     // =============================================================================
-    // DEMO DATA LOADING
+    // DATA LOADING
     // =============================================================================
 
+    /**
+     * Fetch real KPI data from the deployed-endpoints API.
+     * Returns endpoints_summary with total, active, inactive counts.
+     */
+    async function fetchEndpointsKpi() {
+        try {
+            const response = await fetch(config.endpointsApiUrl);
+            if (!response.ok) throw new Error('Failed to fetch endpoints data');
+            const data = await response.json();
+
+            if (data.success && data.kpi) {
+                // Map API response to expected endpoints_summary structure
+                return {
+                    total: data.kpi.total || 0,
+                    active: data.kpi.active || 0,
+                    inactive: data.kpi.inactive || 0
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch endpoints KPI:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Load demo data for charts and tables (no real APIs exist yet).
+     */
     async function loadDemoData() {
         if (state.demoData) return state.demoData;
 
@@ -940,17 +975,57 @@ const ModelDashboardEndpoints = (function() {
             init();
         }
 
-        if (DEMO_MODE) {
-            const data = await loadDemoData();
-            if (data) {
-                renderKPIsWithData(data);
-                renderChartsWithData(data);
-                renderTablesWithData(data);
-                return;
-            }
+        // Always fetch real KPI data from the API
+        const realKpi = await fetchEndpointsKpi();
+
+        // Load demo data for charts and tables (no real APIs exist yet)
+        let demoData = null;
+        if (DEMO_MODE_CHARTS) {
+            demoData = await loadDemoData();
         }
 
-        // Fallback to skeleton UI
+        // Build merged data object with real KPIs + demo charts/tables
+        if (realKpi || demoData) {
+            const mergedData = {
+                // Use real KPI data, fallback to demo if API fails
+                endpoints_summary: realKpi || (demoData ? demoData.endpoints_summary : { total: 0, active: 0, inactive: 0 }),
+                // Use demo data for performance KPIs (no real API)
+                kpi_summary: demoData ? demoData.kpi_summary : {
+                    total_requests: 0,
+                    total_requests_change_pct: 0,
+                    avg_latency_p95_ms: 0,
+                    avg_latency_change_ms: 0,
+                    error_rate_pct: 0,
+                    error_rate_trend: '-',
+                    peak_instances: 0,
+                    avg_instances: 0
+                },
+                // Charts and tables use demo data
+                endpoints: demoData ? demoData.endpoints : [],
+                request_volume: demoData ? demoData.request_volume : null,
+                latency_distribution: demoData ? demoData.latency_distribution : null,
+                container_instances: demoData ? demoData.container_instances : null,
+                error_rate: demoData ? demoData.error_rate : null,
+                cold_start_latency: demoData ? demoData.cold_start_latency : null,
+                resource_utilization: demoData ? demoData.resource_utilization : null,
+                endpoint_performance: demoData ? demoData.endpoint_performance : [],
+                peak_periods: demoData ? demoData.peak_periods : []
+            };
+
+            renderKPIsWithData(mergedData);
+
+            // Only render charts and tables if we have demo data
+            if (demoData) {
+                renderChartsWithData(mergedData);
+                renderTablesWithData(mergedData);
+            } else {
+                renderSkeletonCharts();
+                renderSkeletonTables();
+            }
+            return;
+        }
+
+        // Fallback to skeleton UI if both fail
         renderSkeletonKPIs();
         renderSkeletonCharts();
         renderSkeletonTables();
@@ -958,8 +1033,8 @@ const ModelDashboardEndpoints = (function() {
 
     function refresh() {
         destroyCharts();
-        state.demoData = null;
-        load();
+        state.demoData = null;  // Clear demo data cache to force reload
+        load();  // Will fetch fresh KPI data from API
     }
 
     // Expose public API

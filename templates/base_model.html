@@ -150,16 +150,23 @@
 /**
  * Header KPI Loader
  * Loads and displays KPI data in the model header
+ *
+ * Data Sources:
+ * - Endpoints KPI: Real data from /api/deployed-endpoints/
+ * - Models, Requests, Latency: Demo data (APIs not yet implemented)
  */
 (function() {
     'use strict';
 
-    // Demo data (same as model_dashboard modules)
+    // API endpoint for real endpoints KPI data
+    const ENDPOINTS_API_URL = '/api/deployed-endpoints/';
+
+    // Demo data for KPIs without real APIs yet
     const DEMO_DATA = {
         endpoints: {
-            total: 4,
+            total: 0,
             active: 0,
-            inactive: 4
+            inactive: 0
         },
         models: {
             total: 7,
@@ -180,16 +187,45 @@
         return num.toString();
     }
 
-    function loadHeaderKpis() {
-        // Endpoints KPI
+    /**
+     * Fetch real endpoints KPI data from the API.
+     * Returns {total, active, inactive} or null on failure.
+     */
+    async function fetchEndpointsKpi() {
+        try {
+            const response = await fetch(ENDPOINTS_API_URL);
+            if (!response.ok) throw new Error('Failed to fetch endpoints data');
+            const data = await response.json();
+
+            if (data.success && data.kpi) {
+                return {
+                    total: data.kpi.total || 0,
+                    active: data.kpi.active || 0,
+                    inactive: data.kpi.inactive || 0
+                };
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch endpoints KPI:', error);
+            return null;
+        }
+    }
+
+    async function loadHeaderKpis() {
+        // Fetch real endpoints KPI data from API
+        const realEndpoints = await fetchEndpointsKpi();
+        const endpoints = realEndpoints || DEMO_DATA.endpoints;
+
+        // Endpoints KPI (real data)
         const endpointsValueEl = document.getElementById('headerKpiEndpointsValue');
         const endpointsSubtitleEl = document.getElementById('headerKpiEndpointsSubtitle');
 
         if (endpointsValueEl) {
-            const active = DEMO_DATA.endpoints.active;
-            const total = DEMO_DATA.endpoints.total;
+            const active = endpoints.active;
+            const total = endpoints.total;
             endpointsValueEl.textContent = active;
             // Color based on active count
+            endpointsValueEl.classList.remove('active', 'inactive');
             if (active > 0) {
                 endpointsValueEl.classList.add('active');
             } else if (total > 0) {
@@ -198,10 +234,10 @@
         }
 
         if (endpointsSubtitleEl) {
-            endpointsSubtitleEl.textContent = 'of ' + DEMO_DATA.endpoints.total + ' total';
+            endpointsSubtitleEl.textContent = 'of ' + endpoints.total + ' total';
         }
 
-        // Models KPI
+        // Models KPI (demo data - no API yet)
         const modelsValueEl = document.getElementById('headerKpiModelsValue');
         const modelsSubtitleEl = document.getElementById('headerKpiModelsSubtitle');
 
@@ -213,7 +249,7 @@
             modelsSubtitleEl.textContent = DEMO_DATA.models.deployed + ' deployed';
         }
 
-        // Requests KPI
+        // Requests KPI (demo data - no API yet)
         const requestsValueEl = document.getElementById('headerKpiRequestsValue');
         const requestsChangeEl = document.getElementById('headerKpiRequestsChange');
 
@@ -228,7 +264,7 @@
             requestsChangeEl.className = 'header-kpi-change ' + (pct >= 0 ? 'positive' : 'negative');
         }
 
-        // Latency KPI
+        // Latency KPI (demo data - no API yet)
         const latencyValueEl = document.getElementById('headerKpiLatencyValue');
         const latencyChangeEl = document.getElementById('headerKpiLatencyChange');
 

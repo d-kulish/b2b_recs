@@ -399,7 +399,7 @@ def api_system_kpis(request):
                 'data_tables': data_tables,
                 'data_volume_gb': data_volume_gb,
                 # Placeholder fields for future implementation
-                'requests_7d': 0,
+                'requests_30d': 0,
                 'avg_latency_ms': 0,
             }
         })
@@ -528,14 +528,10 @@ def api_system_resource_charts(request):
     """
     try:
         cutoff_30d = timezone.now().date() - timedelta(days=30)
-        cutoff_14d = timezone.now().date() - timedelta(days=14)
-        cutoff_7d = timezone.now().date() - timedelta(days=7)
 
         snapshots_30d = list(
             ResourceMetrics.objects.filter(date__gte=cutoff_30d).order_by('date')
         )
-        snapshots_14d = [s for s in snapshots_30d if s.date >= cutoff_14d]
-        snapshots_7d = [s for s in snapshots_30d if s.date >= cutoff_7d]
 
         # Latest snapshot for current-state charts
         latest = snapshots_30d[-1] if snapshots_30d else None
@@ -563,12 +559,12 @@ def api_system_resource_charts(request):
 
         # 2. BQ Jobs & Bytes Billed (14d) - dual axis
         bq_jobs = {'labels': [], 'completed': [], 'failed': [], 'bytes_billed_gb': []}
-        if snapshots_14d:
-            bq_jobs['labels'] = [s.date.isoformat() for s in snapshots_14d]
-            bq_jobs['completed'] = [s.bq_jobs_completed for s in snapshots_14d]
-            bq_jobs['failed'] = [s.bq_jobs_failed for s in snapshots_14d]
+        if snapshots_30d:
+            bq_jobs['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            bq_jobs['completed'] = [s.bq_jobs_completed for s in snapshots_30d]
+            bq_jobs['failed'] = [s.bq_jobs_failed for s in snapshots_30d]
             bq_jobs['bytes_billed_gb'] = [
-                round(s.bq_bytes_billed / (1024**3), 2) for s in snapshots_14d
+                round(s.bq_bytes_billed / (1024**3), 2) for s in snapshots_30d
             ]
 
         # 3. Cloud Run Services Status (latest snapshot) - horizontal bar
@@ -578,11 +574,11 @@ def api_system_resource_charts(request):
             cloud_run_services['total'] = len(latest.cloud_run_services)
             cloud_run_services['active'] = latest.cloud_run_active_services
 
-        # 4. Cloud Run Request Volume (7d)
+        # 4. Cloud Run Request Volume (30d)
         cloud_run_requests = {'labels': [], 'requests': []}
-        if snapshots_7d:
-            cloud_run_requests['labels'] = [s.date.isoformat() for s in snapshots_7d]
-            cloud_run_requests['requests'] = [s.cloud_run_total_requests for s in snapshots_7d]
+        if snapshots_30d:
+            cloud_run_requests['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            cloud_run_requests['requests'] = [s.cloud_run_total_requests for s in snapshots_30d]
 
         # 5. DB Size Trend (30d) - line chart
         db_size = {'labels': [], 'size_mb': [], 'top_tables': []}

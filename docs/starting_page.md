@@ -118,7 +118,7 @@ The KPIs are organized into 3 themed cards with icons, stats, and progress bars:
 | KPI | ID | Data Source |
 |-----|----|-------------|
 | Active Endpoints | `kpiActiveEndpoints` | `DeployedEndpoint.objects.filter(is_active=True).count()` |
-| Requests (7d) | `kpiRequests` | Sum of `cloud_run_total_requests` over last 7 days |
+| Requests (30d) | `kpiRequests` | Sum of `cloud_run_total_requests` over last 30 days |
 | Latency | `kpiLatency` | Placeholder (0ms) |
 | Progress Bar | `kpiLatencyBar`, `kpiLatencyStatus` | Latency status indicator |
 
@@ -147,14 +147,14 @@ Data is sourced from the `ResourceMetrics` model (daily snapshots collected by `
 | Chart | Type | Data Source | Period |
 |-------|------|-------------|--------|
 | Storage by Table | Stacked Bar | `bq_table_details` per-table bytes | 30 days |
-| Jobs & Bytes Billed | Bar + Line (dual-axis) | `bq_jobs_completed`, `bq_jobs_failed`, `bq_bytes_billed` | 14 days |
+| Jobs & Bytes Billed | Bar + Line (dual-axis) | `bq_jobs_completed`, `bq_jobs_failed`, `bq_bytes_billed` | 30 days |
 
 **Column 2: Cloud Run** (Green palette, `#34a853`)
 
 | Chart | Type | Data Source | Period |
 |-------|------|-------------|--------|
 | Services Status | Horizontal Bar | `cloud_run_services` (latest snapshot) | Current |
-| Request Volume | Line (filled) | `cloud_run_total_requests` via Cloud Monitoring API | 7 days |
+| Request Volume | Line (filled) | `cloud_run_total_requests` via Cloud Monitoring API | 30 days |
 
 **Column 3: Database & Storage** (Purple palette, `#9333ea`)
 
@@ -250,7 +250,7 @@ Returns system KPIs for the 3 grouped cards.
         "etl_runs_24h": 3,
         "data_tables": 12,
         "data_volume_gb": 4.56,
-        "requests_7d": 0,
+        "requests_30d": 0,
         "avg_latency_ms": 0
     }
 }

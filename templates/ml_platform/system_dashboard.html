@@ -614,7 +614,7 @@
                     <div class="system-kpi-groups">
                         <!-- Inference Card -->
                         <div class="system-kpi-card">
-                            <div class="system-kpi-title">Inference (7d)</div>
+                            <div class="system-kpi-title">Inference (30d)</div>
                             <div class="system-kpi-content">
                                 <div class="system-kpi-icon inference">
                                     <i class="fas fa-rocket"></i>
@@ -729,7 +729,7 @@
                                 <div style="height: 180px; position: relative;">
                                     <canvas id="chartBqStorage"></canvas>
                                 </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin: 16px 0 8px 0;">Jobs & Bytes Billed (14d)</h5>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin: 16px 0 8px 0;">Jobs & Bytes Billed (30d)</h5>
                                 <div style="height: 180px; position: relative;">
                                     <canvas id="chartBqJobs"></canvas>
                                 </div>
@@ -747,7 +747,7 @@
                                 <div style="height: 180px; position: relative;">
                                     <canvas id="chartCloudRunServices"></canvas>
                                 </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin: 16px 0 8px 0;">Request Volume (7d)</h5>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin: 16px 0 8px 0;">Request Volume (30d)</h5>
                                 <div style="height: 180px; position: relative;">
                                     <canvas id="chartCloudRunRequests"></canvas>
                                 </div>
@@ -1044,7 +1044,7 @@
                         // Inference Group
                         setText('kpiActiveEndpoints', d.live_endpoints);
                         setClass('kpiActiveEndpoints', d.live_endpoints > 0 ? 'good' : 'inactive');
-                        setText('kpiRequests', formatNumber(d.requests_7d || 0));
+                        setText('kpiRequests', formatNumber(d.requests_30d || 0));
                         setText('kpiLatency', (d.avg_latency_ms || 0) + 'ms');
                         updateLatencyBar(d.avg_latency_ms || 0);
 

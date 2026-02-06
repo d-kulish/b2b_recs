@@ -523,8 +523,8 @@ def api_system_charts(request):
 def api_system_resource_charts(request):
     """
     API endpoint returning resource-oriented chart data from ResourceMetrics snapshots.
-    Returns chart datasets: bq_storage, bq_jobs, etl_health,
-    cloud_run_requests, db_size, gcs_storage, gpu_hours, gpu_types.
+    Returns chart datasets: combined_storage, bq_jobs, etl_health,
+    cloud_run_requests, gpu_hours, gpu_types.
     """
     try:
         cutoff_30d = timezone.now().date() - timedelta(days=30)
@@ -536,26 +536,19 @@ def api_system_resource_charts(request):
         # Latest snapshot for current-state charts
         latest = snapshots_30d[-1] if snapshots_30d else None
 
-        # 1. BQ Storage by Table (30d) - stacked bar
-        bq_storage = {'labels': [], 'tables': [], 'total_gb': []}
+        # 1. Combined Storage (30d) - stacked bar (BigQuery + SQL + GCS)
+        combined_storage = {'labels': [], 'bigquery_mb': [], 'sql_mb': [], 'buckets_mb': []}
         if snapshots_30d:
-            # Collect all unique table names across snapshots
-            all_table_names = []
-            for s in snapshots_30d:
-                for t in (s.bq_table_details or []):
-                    if t['name'] not in all_table_names:
-                        all_table_names.append(t['name'])
-
-            bq_storage['labels'] = [s.date.isoformat() for s in snapshots_30d]
-            bq_storage['total_gb'] = [round(s.bq_total_bytes / (1024**3), 2) for s in snapshots_30d]
-
-            for tname in all_table_names[:10]:  # Top 10 tables
-                series = []
-                for s in snapshots_30d:
-                    table_map = {t['name']: t for t in (s.bq_table_details or [])}
-                    bytes_val = table_map.get(tname, {}).get('bytes', 0)
-                    series.append(round(bytes_val / (1024**2), 1))  # MB
-                bq_storage['tables'].append({'name': tname, 'data': series})
+            combined_storage['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            combined_storage['bigquery_mb'] = [
+                round(s.bq_total_bytes / (1024**2), 1) for s in snapshots_30d
+            ]
+            combined_storage['sql_mb'] = [
+                round(s.db_size_bytes / (1024**2), 1) for s in snapshots_30d
+            ]
+            combined_storage['buckets_mb'] = [
+                round(s.gcs_total_bytes / (1024**2), 1) for s in snapshots_30d
+            ]
 
         # 2. BQ Jobs & Bytes Billed (14d) - dual axis
         bq_jobs = {'labels': [], 'completed': [], 'failed': [], 'bytes_billed_gb': []}
@@ -580,41 +573,7 @@ def api_system_resource_charts(request):
             cloud_run_requests['labels'] = [s.date.isoformat() for s in snapshots_30d]
             cloud_run_requests['requests'] = [s.cloud_run_total_requests for s in snapshots_30d]
 
-        # 5. DB Size Trend (30d) - line chart
-        db_size = {'labels': [], 'size_mb': [], 'top_tables': []}
-        if snapshots_30d:
-            db_size['labels'] = [s.date.isoformat() for s in snapshots_30d]
-            db_size['size_mb'] = [
-                round(s.db_size_bytes / (1024**2), 1) for s in snapshots_30d
-            ]
-            # Top tables from latest snapshot
-            if latest and latest.db_table_details:
-                db_size['top_tables'] = [
-                    {'name': t['name'], 'size_mb': round(t['size_bytes'] / (1024**2), 1)}
-                    for t in (latest.db_table_details or [])[:10]
-                ]
-
-        # 6. GCS Bucket Usage (30d) - stacked bar
-        gcs_storage = {'labels': [], 'buckets': [], 'total_gb': []}
-        if snapshots_30d:
-            all_bucket_names = []
-            for s in snapshots_30d:
-                for b in (s.gcs_bucket_details or []):
-                    if b['name'] not in all_bucket_names:
-                        all_bucket_names.append(b['name'])
-
-            gcs_storage['labels'] = [s.date.isoformat() for s in snapshots_30d]
-            gcs_storage['total_gb'] = [round(s.gcs_total_bytes / (1024**3), 2) for s in snapshots_30d]
-
-            for bname in all_bucket_names[:10]:
-                series = []
-                for s in snapshots_30d:
-                    bucket_map = {b['name']: b for b in (s.gcs_bucket_details or [])}
-                    bytes_val = bucket_map.get(bname, {}).get('total_bytes', 0)
-                    series.append(round(bytes_val / (1024**2), 1))  # MB
-                gcs_storage['buckets'].append({'name': bname, 'data': series})
-
-        # 7. GPU Training Hours (30d) - bar chart
+        # 5. GPU Training Hours (30d) - bar chart
         gpu_hours = {'labels': [], 'hours': [], 'completed': [], 'failed': []}
         if snapshots_30d:
             gpu_hours['labels'] = [s.date.isoformat() for s in snapshots_30d]
@@ -622,7 +581,7 @@ def api_system_resource_charts(request):
             gpu_hours['completed'] = [s.gpu_jobs_completed for s in snapshots_30d]
             gpu_hours['failed'] = [s.gpu_jobs_failed for s in snapshots_30d]
 
-        # 8. GPU Jobs by Type (latest snapshot) - horizontal bar
+        # 6. GPU Jobs by Type (latest snapshot) - horizontal bar
         gpu_types = {'types': [], 'total_hours': 0}
         if latest and latest.gpu_jobs_by_type:
             gpu_types['types'] = latest.gpu_jobs_by_type
@@ -633,12 +592,10 @@ def api_system_resource_charts(request):
         return JsonResponse({
             'success': True,
             'data': {
-                'bq_storage': bq_storage,
+                'combined_storage': combined_storage,
                 'bq_jobs': bq_jobs,
                 'etl_health': etl_health,
                 'cloud_run_requests': cloud_run_requests,
-                'db_size': db_size,
-                'gcs_storage': gcs_storage,
                 'gpu_hours': gpu_hours,
                 'gpu_types': gpu_types,
             }

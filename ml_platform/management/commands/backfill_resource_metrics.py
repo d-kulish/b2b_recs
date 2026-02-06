@@ -391,7 +391,7 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'  Cloud Monitoring request collection failed: {e}'))
-            return {}
+            return None
 
     def _generate_day_data(self, baseline, target_date, progress, gpu_by_day, requests_by_day=None, etl_by_day=None):
         """Generate a single day's data based on baseline + growth curve."""
@@ -459,10 +459,14 @@ class Command(BaseCommand):
         })
 
         # Cloud Run request data from Cloud Monitoring
-        request_data = (requests_by_day or {}).get(target_date, {
-            'cloud_run_total_requests': 0,
-            'cloud_run_request_details': [],
-        })
+        # When requests_by_day is None (collection failed), omit request fields
+        # so update_or_create won't overwrite existing data
+        request_data = {}
+        if requests_by_day is not None:
+            request_data = requests_by_day.get(target_date, {
+                'cloud_run_total_requests': 0,
+                'cloud_run_request_details': [],
+            })
 
         return {
             'bq_total_bytes': bq_total,

@@ -108,7 +108,7 @@ Three collapsible chapters displayed vertically:
 
 ## Chapter 1: System Details
 
-Displays user-centric metrics with 3 grouped KPI cards and 8 resource-oriented charts in a 4-column layout.
+Displays user-centric metrics with 3 grouped KPI cards and 6 resource-oriented charts in a 3-column layout.
 
 ### KPI Groups (3 Cards)
 
@@ -138,32 +138,25 @@ The KPIs are organized into 3 themed cards with icons, stats, and progress bars:
 | Data Volume | `kpiDataVolume` | Sum of table sizes in GB |
 | Progress Bar | `kpiVolumeBar`, `kpiVolumeStatus` | Storage used indicator (100GB max)
 
-### Resource Charts (4 columns x 2 rows)
+### Resource Charts (3 columns x 2 rows)
 
 Data is sourced from the `ResourceMetrics` model (daily snapshots collected by `collect_resource_metrics` management command).
 
-**Column 1: BigQuery** (Blue palette, `#4285f4`)
+**Column 1: Data** (Blue palette, `#4285f4`)
 
 | Chart | Type | Data Source | Period |
 |-------|------|-------------|--------|
-| Storage by Table | Stacked Bar | `bq_table_details` per-table bytes | 30 days |
+| BigQuery / SQL / Buckets | Stacked Bar (3 segments) | `bq_total_bytes`, `db_size_bytes`, `gcs_total_bytes` | 30 days |
 | Jobs & Bytes Billed | Bar + Line (dual-axis) | `bq_jobs_completed`, `bq_jobs_failed`, `bq_bytes_billed` | 30 days |
 
-**Column 2: Cloud Run & ETL** (Green palette, `#34a853`)
+**Column 2: Cloud Run** (Green palette, `#34a853`)
 
 | Chart | Type | Data Source | Period |
 |-------|------|-------------|--------|
 | ETL Jobs | Stacked Bar | `ETLRun` model (completed/failed by day) | 30 days |
 | Request Volume | Line (filled) | `cloud_run_total_requests` via Cloud Monitoring API | 30 days |
 
-**Column 3: Database & Storage** (Purple palette, `#9333ea`)
-
-| Chart | Type | Data Source | Period |
-|-------|------|-------------|--------|
-| DB Size Trend | Line (filled) | `db_size_bytes` | 30 days |
-| GCS Bucket Usage | Stacked Bar | `gcs_bucket_details` per-bucket bytes | 30 days |
-
-**Column 4: Compute & GPU** (Red palette, `#ea4335`)
+**Column 3: Compute & GPU** (Red palette, `#ea4335`)
 
 | Chart | Type | Data Source | Period |
 |-------|------|-------------|--------|
@@ -267,17 +260,18 @@ Returns system KPIs for the 3 grouped cards.
 
 ### `GET /api/system/resource-charts/`
 
-Returns 8 resource chart datasets from `ResourceMetrics` daily snapshots.
+Returns 6 resource chart datasets from `ResourceMetrics` daily snapshots.
 
 **Response:**
 ```json
 {
     "success": true,
     "data": {
-        "bq_storage": {
+        "combined_storage": {
             "labels": ["2026-01-07", ...],
-            "tables": [{"name": "orders", "data": [1024, 1030, ...]}, ...],
-            "total_gb": [1.5, 1.6, ...]
+            "bigquery_mb": [5234.5, 5240.1, ...],
+            "sql_mb": [10.5, 10.6, ...],
+            "buckets_mb": [150432.0, 150440.0, ...]
         },
         "bq_jobs": {
             "labels": ["2026-01-24", ...],
@@ -293,16 +287,6 @@ Returns 8 resource chart datasets from `ResourceMetrics` daily snapshots.
         "cloud_run_requests": {
             "labels": ["2026-01-31", ...],
             "requests": [142, 305, ...]
-        },
-        "db_size": {
-            "labels": ["2026-01-07", ...],
-            "size_mb": [45.2, 46.1, ...],
-            "top_tables": [{"name": "ml_platform_etlrun", "size_mb": 12.3}, ...]
-        },
-        "gcs_storage": {
-            "labels": ["2026-01-07", ...],
-            "buckets": [{"name": "training-artifacts", "data": [500, 520, ...]}, ...],
-            "total_gb": [1.2, 1.3, ...]
         },
         "gpu_hours": {
             "labels": ["2026-01-07", ...],
@@ -357,19 +341,17 @@ const SystemDashboard = (function() {
 ```
 
 **Chart Render Functions:**
-- `renderBqStorageChart(data)` - Stacked bar (tables as series, 30d)
+- `renderCombinedStorageChart(data)` - Stacked bar (BigQuery / Cloud SQL / GCS Buckets, 30d)
 - `renderBqJobsChart(data)` - Bar + line dual-axis (jobs + bytes billed, 30d)
 - `renderEtlHealthChart(data)` - Stacked bar (completed/failed ETL jobs, 30d)
 - `renderCloudRunRequestsChart(data)` - Line with fill (Cloud Monitoring data, 30d)
-- `renderDbSizeChart(data)` - Line with fill (DB size in MB, 30d)
-- `renderGcsStorageChart(data)` - Stacked bar (buckets as series, 30d)
 - `renderGpuHoursChart(data)` - Bar (GPU training hours, 30d)
 - `renderGpuJobsChart(data)` - Bar (completed/failed training jobs, 30d)
 
 **Key Features:**
 - Destroys charts before recreating (prevents memory leaks)
 - Graceful fallbacks for missing data ("No data available")
-- Color palettes per resource column (blue/green/purple/red)
+- Color palettes per resource column (blue/green/red)
 
 ---
 
@@ -443,6 +425,6 @@ The `cloud_run_total_requests` and `cloud_run_request_details` fields are popula
 - [ ] User profile dropdown menu
 - [ ] Quick actions in header
 - [x] ~~Recent activity feed~~ (Implemented, later replaced by resource charts)
-- [x] ~~Resource charts~~ (Implemented - 6 charts in 3-column layout)
+- [x] ~~Resource charts~~ (Implemented - 6 charts in 3-column layout: Data, Cloud Run, Compute & GPU)
 - [x] ~~Cloud Run request volume via Cloud Monitoring API~~ (Implemented - queries `run.googleapis.com/request_count` for `-serving` services)
 - [x] ~~Scheduled `collect_resource_metrics` via Cloud Scheduler~~ (Implemented - daily at 02:00 UTC via webhook)

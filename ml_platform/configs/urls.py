@@ -59,10 +59,10 @@ urlpatterns = [
     # Model Config API (Model Structure Domain)
     # ==========================================================================
 
-    # Model Config CRUD
-    path('api/model-configs/',
+    # Model Config CRUD (project-scoped)
+    path('api/models/<int:model_id>/model-configs/',
          api.list_model_configs, name='api_model_configs_list'),
-    path('api/model-configs/create/',
+    path('api/models/<int:model_id>/model-configs/create/',
          api.create_model_config, name='api_model_configs_create'),
     path('api/model-configs/<int:config_id>/',
          api.get_model_config, name='api_model_configs_get'),
@@ -70,7 +70,7 @@ urlpatterns = [
          api.update_model_config, name='api_model_configs_update'),
     path('api/model-configs/<int:config_id>/delete/',
          api.delete_model_config, name='api_model_configs_delete'),
-    path('api/model-configs/<int:config_id>/clone/',
+    path('api/models/<int:model_id>/model-configs/<int:config_id>/clone/',
          api.clone_model_config, name='api_model_configs_clone'),
 
     # Model Config presets and validation
@@ -80,7 +80,7 @@ urlpatterns = [
          api.get_model_config_preset, name='api_model_configs_preset'),
     path('api/model-configs/validate/',
          api.validate_model_config, name='api_model_configs_validate'),
-    path('api/model-configs/check-name/',
+    path('api/models/<int:model_id>/model-configs/check-name/',
          api.check_model_config_name, name='api_model_configs_check_name'),
 
     # Ranking model specific endpoints

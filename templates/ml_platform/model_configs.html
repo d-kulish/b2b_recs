@@ -18932,7 +18932,7 @@ function loadModelConfigs() {
     document.getElementById('modelConfigsGrid').classList.add('hidden');
     document.getElementById('mcFilterBar').classList.add('hidden');
 
-    fetch('/api/model-configs/?include_details=true')
+    fetch(`/api/models/${modelId}/model-configs/?include_details=true`)
         .then(r => r.json())
         .then(data => {
             document.getElementById('modelConfigsLoading').classList.add('hidden');
@@ -19808,7 +19808,7 @@ function checkMcNameAvailability() {
     spinnerEl.classList.remove('hidden');
 
     // Build URL with query params
-    let url = `/api/model-configs/check-name/?name=${encodeURIComponent(name)}`;
+    let url = `/api/models/${modelId}/model-configs/check-name/?name=${encodeURIComponent(name)}`;
     if (editingModelConfigId) {
         url += `&exclude_id=${editingModelConfigId}`;
     }
@@ -21145,7 +21145,7 @@ function createModelConfig() {
     const isEditing = editingModelConfigId !== null;
     const url = isEditing
         ? `/api/model-configs/${editingModelConfigId}/update/`
-        : '/api/model-configs/create/';
+        : `/api/models/${modelId}/model-configs/create/`;
     const method = isEditing ? 'PUT' : 'POST';
 
     fetch(url, {
@@ -21513,7 +21513,7 @@ function submitModelConfigClone() {
         return;
     }
 
-    fetch(`/api/model-configs/${cloneModelConfigId}/clone/`, {
+    fetch(`/api/models/${modelId}/model-configs/${cloneModelConfigId}/clone/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

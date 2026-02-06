@@ -1945,7 +1945,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Configure DeployWizard
+    const projectSlug = '{{ model.name|lower }}'.replace(/_/g, '-').replace(/ /g, '-').replace(/[^a-z0-9-]/g, '').replace(/--+/g, '-').replace(/^-|-$/g, '').substring(0, 20);
     DeployWizard.configure({
+        projectSlug: projectSlug,
         onSuccess: function(result) {
             // Refresh training cards to show updated deployment status
             TrainingCards.refresh();

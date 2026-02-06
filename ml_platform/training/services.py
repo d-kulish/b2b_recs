@@ -2074,10 +2074,17 @@ class TrainingService:
         if not training_run.gcs_artifacts_path:
             raise TrainingServiceError("No GCS artifacts path found for this training run")
 
+        # Build project slug for service name prefix
+        project_slug = self.ml_model.name.lower().replace('_', '-').replace(' ', '-')
+        project_slug = ''.join(c if c.isalnum() or c == '-' else '' for c in project_slug).strip('-')[:20]
+
         # Build service name (must be lowercase, alphanumeric, and hyphens only)
         if service_name:
             # Use provided service name (already sanitized by frontend)
             service_name = service_name.lower().replace('_', '-')
+            # Ensure it has the project prefix
+            if project_slug and not service_name.startswith(f"{project_slug}-"):
+                service_name = f"{project_slug}-{service_name}"
         else:
             # Generate default name from registered model or training run
             # Priority: vertex_model_name > registered_model.model_name > training_run.name > ml_model.name
@@ -2088,7 +2095,7 @@ class TrainingService:
                 training_run.name or
                 self.ml_model.name  # Fallback to ModelEndpoint
             )
-            service_name = f"{model_name}-serving".lower().replace('_', '-')
+            service_name = f"{project_slug}-{model_name}-serving".lower().replace('_', '-')
         # Ensure name is valid (max 63 chars, starts with letter, alphanumeric + hyphens only)
         service_name = ''.join(c if c.isalnum() or c == '-' else '-' for c in service_name)
         service_name = service_name.replace('--', '-').strip('-')[:63]

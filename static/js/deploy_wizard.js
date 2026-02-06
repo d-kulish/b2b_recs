@@ -30,6 +30,7 @@ const DeployWizard = (function() {
             deployCloudRun: '/api/training-runs/{id}/deploy-cloud-run/',
             cloudRunServices: '/api/cloud-run/services/'
         },
+        projectSlug: '',
         onSuccess: null,
         onError: null
     };
@@ -138,6 +139,9 @@ const DeployWizard = (function() {
     function configure(options) {
         if (options.endpoints) {
             config.endpoints = { ...config.endpoints, ...options.endpoints };
+        }
+        if (options.projectSlug !== undefined) {
+            config.projectSlug = options.projectSlug;
         }
         if (options.onSuccess) {
             config.onSuccess = options.onSuccess;
@@ -268,14 +272,16 @@ const DeployWizard = (function() {
      */
     function generateServiceName(modelName) {
         if (!modelName || modelName === '-') return '-';
+        // Build project slug prefix
+        const prefix = config.projectSlug ? config.projectSlug + '-' : '';
         // Convert to lowercase, replace underscores with hyphens, remove invalid chars
         let name = modelName.toLowerCase()
             .replace(/_/g, '-')
             .replace(/[^a-z0-9-]/g, '')
             .replace(/--+/g, '-')
             .replace(/^-|-$/g, '');
-        // Add -serving suffix
-        name = name + '-serving';
+        // Add project prefix and -serving suffix
+        name = prefix + name + '-serving';
         // Ensure starts with letter
         if (name && !name[0].match(/[a-z]/)) {
             name = 'm-' + name;

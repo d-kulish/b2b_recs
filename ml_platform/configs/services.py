@@ -6914,8 +6914,8 @@ class ConfigDashboardStatsService:
         from django.db.models import Count, Max
         from ml_platform.models import ModelConfig, QuickTest
 
-        # Get all model configs (global, not model-specific)
-        configs = ModelConfig.objects.all().annotate(
+        # Get model configs for this project
+        configs = ModelConfig.objects.filter(model_endpoint=self.model).annotate(
             total_exp_count=Count('quick_tests', distinct=True),
             last_experiment_at=Max('quick_tests__created_at')
         ).order_by('-updated_at')
@@ -6990,8 +6990,8 @@ class ConfigDashboardStatsService:
             dataset__model_endpoint=self.model
         ).select_related('dataset').order_by('dataset__name', 'name'))
 
-        # Get all model configs
-        model_configs = list(ModelConfig.objects.all().order_by('name'))
+        # Get model configs for this project
+        model_configs = list(ModelConfig.objects.filter(model_endpoint=self.model).order_by('name'))
 
         # Get experiment data for all cells
         experiments = QuickTest.objects.filter(

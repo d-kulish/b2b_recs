@@ -390,13 +390,16 @@ def _training_run_create(request, model_endpoint):
                 'error': f"FeatureConfig {data['feature_config_id']} not found"
             }, status=404)
 
-        # Validate model config (ModelConfig is global, not tied to model_endpoint)
+        # Validate model config (scoped to project)
         try:
-            model_config = ModelConfig.objects.get(id=data['model_config_id'])
+            model_config = ModelConfig.objects.get(
+                id=data['model_config_id'],
+                model_endpoint=model_endpoint
+            )
         except ModelConfig.DoesNotExist:
             return JsonResponse({
                 'success': False,
-                'error': f"ModelConfig {data['model_config_id']} not found"
+                'error': f"ModelConfig {data['model_config_id']} not found for this project"
             }, status=404)
 
         # Validate base experiment (optional)
@@ -2348,13 +2351,16 @@ def _training_schedule_create(request, model_endpoint):
                 'error': f"FeatureConfig {data['feature_config_id']} not found"
             }, status=404)
 
-        # Validate model config (ModelConfig is global, not tied to model_endpoint)
+        # Validate model config (scoped to project)
         try:
-            model_config = ModelConfig.objects.get(id=data['model_config_id'])
+            model_config = ModelConfig.objects.get(
+                id=data['model_config_id'],
+                model_endpoint=model_endpoint
+            )
         except ModelConfig.DoesNotExist:
             return JsonResponse({
                 'success': False,
-                'error': f"ModelConfig {data['model_config_id']} not found"
+                'error': f"ModelConfig {data['model_config_id']} not found for this project"
             }, status=404)
 
         # Validate base experiment (optional)

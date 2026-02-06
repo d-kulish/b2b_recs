@@ -149,13 +149,16 @@ class FeatureConfigVersionAdmin(admin.ModelAdmin):
 
 @admin.register(ModelConfig)
 class ModelConfigAdmin(admin.ModelAdmin):
-    list_display = ['name', 'model_type', 'get_buyer_tower_summary', 'get_product_tower_summary',
+    list_display = ['name', 'model_endpoint', 'model_type', 'get_buyer_tower_summary', 'get_product_tower_summary',
                     'output_embedding_dim', 'optimizer', 'epochs', 'created_at']
-    list_filter = ['model_type', 'optimizer', 'created_at']
+    list_filter = ['model_endpoint', 'model_type', 'optimizer', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['created_at', 'updated_at']
-    raw_id_fields = ['created_by']
+    raw_id_fields = ['created_by', 'model_endpoint']
     fieldsets = (
+        ('Project', {
+            'fields': ('model_endpoint',)
+        }),
         ('Basic Info', {
             'fields': ('name', 'description', 'model_type')
         }),

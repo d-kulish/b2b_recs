@@ -1156,6 +1156,7 @@ def serialize_model_config(mc, include_details=False):
     """
     data = {
         'id': mc.id,
+        'model_endpoint_id': mc.model_endpoint_id,
         'name': mc.name,
         'description': mc.description,
         'model_type': mc.model_type,
@@ -1210,9 +1211,9 @@ def serialize_model_config(mc, include_details=False):
 
 @login_required
 @require_http_methods(["GET"])
-def list_model_configs(request):
+def list_model_configs(request, model_id):
     """
-    List all model configs (global, not scoped to model endpoint).
+    List model configs scoped to a project (ModelEndpoint).
 
     Query params:
         model_type: Filter by model type ('retrieval', 'ranking', 'multitask')
@@ -1221,7 +1222,9 @@ def list_model_configs(request):
         JsonResponse with list of serialized model configs
     """
     try:
-        configs = ModelConfig.objects.all().select_related('created_by')
+        configs = ModelConfig.objects.filter(
+            model_endpoint_id=model_id
+        ).select_related('created_by')
 
         # Apply filters
         model_type = request.GET.get('model_type')
@@ -1250,9 +1253,9 @@ def list_model_configs(request):
 
 @login_required
 @require_http_methods(["POST"])
-def create_model_config(request):
+def create_model_config(request, model_id):
     """
-    Create a new model config.
+    Create a new model config scoped to a project.
 
     Request body:
         name: str (required)
@@ -1285,8 +1288,8 @@ def create_model_config(request):
                 'error': 'Name is required',
             }, status=400)
 
-        # Check name uniqueness
-        if ModelConfig.objects.filter(name=name).exists():
+        # Check name uniqueness within this project
+        if ModelConfig.objects.filter(model_endpoint_id=model_id, name=name).exists():
             return JsonResponse({
                 'success': False,
                 'error': f'A model config named "{name}" already exists',
@@ -1317,6 +1320,7 @@ def create_model_config(request):
 
         # Create model config
         mc = ModelConfig.objects.create(
+            model_endpoint_id=model_id,
             name=name,
             description=data.get('description', '').strip(),
             model_type=model_type,
@@ -1407,10 +1411,12 @@ def update_model_config(request, config_id):
         mc = get_object_or_404(ModelConfig, id=config_id)
         data = json.loads(request.body)
 
-        # Check name uniqueness if changing
+        # Check name uniqueness within project if changing
         new_name = data.get('name', '').strip()
         if new_name and new_name != mc.name:
-            if ModelConfig.objects.filter(name=new_name).exclude(id=mc.id).exists():
+            if ModelConfig.objects.filter(
+                model_endpoint=mc.model_endpoint, name=new_name
+            ).exclude(id=mc.id).exists():
                 return JsonResponse({
                     'success': False,
                     'error': f'A model config named "{new_name}" already exists',
@@ -1514,9 +1520,9 @@ def delete_model_config(request, config_id):
 
 @login_required
 @require_http_methods(["POST"])
-def clone_model_config(request, config_id):
+def clone_model_config(request, model_id, config_id):
     """
-    Clone a model config.
+    Clone a model config into the specified project.
 
     Request body:
         name: str (optional) - Name for the cloned config
@@ -1532,17 +1538,18 @@ def clone_model_config(request, config_id):
         if not new_name:
             new_name = f"{source.name} (Copy)"
 
-        # Check name uniqueness
-        if ModelConfig.objects.filter(name=new_name).exists():
+        # Check name uniqueness within target project
+        if ModelConfig.objects.filter(model_endpoint_id=model_id, name=new_name).exists():
             # Auto-suffix with number
             counter = 2
             base_name = new_name
-            while ModelConfig.objects.filter(name=new_name).exists():
+            while ModelConfig.objects.filter(model_endpoint_id=model_id, name=new_name).exists():
                 new_name = f"{base_name} {counter}"
                 counter += 1
 
         # Create clone
         clone = ModelConfig.objects.create(
+            model_endpoint_id=model_id,
             name=new_name,
             description=data.get('description', source.description),
             model_type=source.model_type,
@@ -1752,9 +1759,9 @@ def validate_model_config(request):
 
 @login_required
 @require_http_methods(["GET"])
-def check_model_config_name(request):
+def check_model_config_name(request, model_id):
     """
-    Check if a model config name is available.
+    Check if a model config name is available within a project.
 
     Query params:
         name: str (required) - The name to check
@@ -1772,8 +1779,8 @@ def check_model_config_name(request):
                 'error': 'Name is required',
             }, status=400)
 
-        # Check if name exists
-        existing = ModelConfig.objects.filter(name=name)
+        # Check if name exists within this project
+        existing = ModelConfig.objects.filter(model_endpoint_id=model_id, name=name)
 
         # Exclude current config if editing
         exclude_id = request.GET.get('exclude_id')

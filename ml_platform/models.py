@@ -2289,7 +2289,7 @@ class QuickTest(models.Model):
 class ModelConfig(models.Model):
     """
     Defines neural network architecture and training configuration.
-    Completely independent from Dataset/FeatureConfig - can be used with any feature set.
+    Scoped to a ModelEndpoint (project) - can be used with any feature set within that project.
 
     A ModelConfig specifies:
     - Model type (Retrieval, Ranking, Multitask)
@@ -2297,8 +2297,19 @@ class ModelConfig(models.Model):
     - Training hyperparameters (optimizer, learning rate, batch size, epochs)
     - Output embedding dimensions
 
-    ModelConfigs are global and reusable across any Dataset/FeatureConfig combination.
+    ModelConfigs are project-scoped and reusable across any Dataset/FeatureConfig within the same project.
     """
+
+    # =========================================================================
+    # Project Scope
+    # =========================================================================
+
+    model_endpoint = models.ForeignKey(
+        ModelEndpoint,
+        on_delete=models.CASCADE,
+        related_name='model_configs',
+        help_text="The project this model config belongs to"
+    )
 
     # =========================================================================
     # Model Types
@@ -2525,6 +2536,7 @@ class ModelConfig(models.Model):
         ordering = ['-updated_at']
         verbose_name = 'Model Configuration'
         verbose_name_plural = 'Model Configurations'
+        unique_together = ['model_endpoint', 'name']
 
     def __str__(self):
         return f"{self.name} ({self.get_model_type_display()})"

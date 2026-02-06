@@ -32,7 +32,7 @@ const TrainingWizard = (function() {
             quickTests: '/api/quick-tests/',
             datasets: '/api/modeling/datasets/{model_id}/',
             featureConfigs: '/api/modeling/{model_id}/feature-configs/',
-            modelConfigs: '/api/modeling/model-configs/',
+            modelConfigs: '/api/models/{model_id}/model-configs/',
             createTrainingRun: '/api/training-runs/'
         },
         modelId: null,

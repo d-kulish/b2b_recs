@@ -91,7 +91,12 @@ def start_quick_test(request, config_id):
             "error": f"Model Config with id {model_config_id} not found"
         }, status=404)
 
-    # Note: ModelConfig is dataset-independent (global) - no dataset validation needed
+    # Validate ModelConfig belongs to the same project as the FeatureConfig
+    if model_config.model_endpoint != feature_config.dataset.model_endpoint:
+        return JsonResponse({
+            "success": False,
+            "error": f"Model Config does not belong to the same project as the Feature Config"
+        }, status=400)
 
     # Use ModelConfig values as defaults, allow body to override
     epochs = body.get("epochs", model_config.epochs)

@@ -266,7 +266,7 @@ def start_quick_test(request, feature_config_id):
                 'error': 'Invalid JSON in request body'
             }, status=400)
 
-        # Get ModelConfig (global, not tied to model_endpoint)
+        # Get ModelConfig (scoped to this project)
         model_config_id = data.get('model_config_id')
         if not model_config_id:
             return JsonResponse({
@@ -281,6 +281,13 @@ def start_quick_test(request, feature_config_id):
                 'success': False,
                 'error': f'ModelConfig {model_config_id} not found'
             }, status=404)
+
+        # Validate ModelConfig belongs to the same project
+        if model_config.model_endpoint != model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': f'ModelConfig {model_config_id} does not belong to this project'
+            }, status=400)
 
         # Validate model type compatibility
         is_valid, validation_errors = validate_experiment_config(feature_config, model_config)
@@ -3274,9 +3281,10 @@ def experiment_suggestions(request):
             dataset__model_endpoint=model_endpoint
         ).values('id', 'name')
 
-        # ModelConfig is global (not tied to model_endpoint), get all of them
-        # or filter to those that have been used in experiments for this endpoint
-        model_configs = ModelConfig.objects.all().values('id', 'name')
+        # Get model configs scoped to this project
+        model_configs = ModelConfig.objects.filter(
+            model_endpoint=model_endpoint
+        ).values('id', 'name')
 
         # Get tested combinations
         tested_combinations = set(

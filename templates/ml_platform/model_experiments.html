@@ -3717,7 +3717,7 @@ async function loadInitialData() {
         // Load Feature Configs, Model Configs, and Experiments in parallel
         const [fcResponse, mcResponse, expResponse] = await Promise.all([
             fetch(`/api/models/${modelId}/feature-configs/`),
-            fetch('/api/model-configs/'),
+            fetch(`/api/models/${modelId}/model-configs/`),
             fetch('/api/quick-tests/?page=1&page_size=10')
         ]);
 

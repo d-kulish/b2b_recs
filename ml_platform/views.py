@@ -48,6 +48,17 @@ def system_dashboard(request):
     """
     models = ModelEndpoint.objects.all().order_by('-created_at')
 
+    # Per-project KPIs for project cards
+    for model in models:
+        registered = model.registered_models.all()
+        model.kpi_models_total = registered.count()
+        model.kpi_models_deployed = registered.filter(
+            deployed_endpoints__is_active=True
+        ).distinct().count()
+        endpoints = DeployedEndpoint.objects.filter(registered_model__ml_model=model)
+        model.kpi_endpoints_total = endpoints.count()
+        model.kpi_endpoints_active = endpoints.filter(is_active=True).count()
+
     # Get latest system metrics (if available)
     try:
         latest_metrics = SystemMetrics.objects.latest('date')

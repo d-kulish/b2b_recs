@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'css/buttons.css' %}">
+    <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
@@ -872,34 +873,84 @@
                         {% if models %}
                         <div class="models-grid">
                             {% for model in models %}
-                            <a href="{% url 'model_dashboard' model.id %}" class="model-card">
-                                <div class="model-info">
-                                    <div class="model-name">{{ model.name }}</div>
-                                    {% if model.description %}
-                                    <div class="model-description">{{ model.description|truncatewords:15 }}</div>
-                                    {% endif %}
-                                    <div class="model-meta">
-                                        <span class="status-badge
-                                            {% if model.status == 'active' %}status-active
-                                            {% elif model.status == 'draft' %}status-draft
-                                            {% elif model.status == 'inactive' %}status-inactive
-                                            {% else %}status-failed{% endif %}">
-                                            {{ model.get_status_display }}
-                                        </span>
-                                        <span class="model-meta-item">
-                                            <i class="far fa-calendar"></i>
-                                            {{ model.created_at|date:"M d, Y" }}
-                                        </span>
-                                        {% if model.last_trained_at %}
-                                        <span class="model-meta-item">
-                                            <i class="fas fa-brain"></i>
-                                            Last trained {{ model.last_trained_at|date:"M d, Y" }}
-                                        </span>
-                                        {% endif %}
+                            <div class="bg-white border border-black rounded-xl px-6 py-3 shadow-lg">
+                                <div class="flex items-center gap-6">
+                                    <!-- Model Name and Description -->
+                                    <div class="flex-shrink-0" style="width: 30%;">
+                                        <h2 class="text-5xl font-bold truncate
+                                            {% if model.is_endpoint_active %}text-green-900
+                                            {% elif model.status == 'failed' %}text-red-900
+                                            {% else %}text-blue-900{% endif %}">
+                                            {{ model.name }}
+                                        </h2>
+                                        <p class="text-sm text-gray-600 mt-1 truncate">
+                                            {% if model.description %}
+                                                {{ model.description|truncatewords:15 }}
+                                            {% else %}
+                                                <span class="italic text-gray-400">No description</span>
+                                            {% endif %}
+                                        </p>
+                                    </div>
+
+                                    <!-- Header KPI Section -->
+                                    <div class="flex items-center gap-3 flex-shrink-0 ml-6">
+                                        <!-- KPI: Serving Endpoints -->
+                                        <div class="header-kpi-card">
+                                            <div class="header-kpi-icon endpoints">
+                                                <i class="fas fa-rocket"></i>
+                                            </div>
+                                            <div class="header-kpi-content">
+                                                <div class="header-kpi-value {% if model.kpi_endpoints_active > 0 %}active{% elif model.kpi_endpoints_total > 0 %}inactive{% endif %}">{{ model.kpi_endpoints_active }}</div>
+                                                <div class="header-kpi-label">Endpoints Active</div>
+                                                <div class="header-kpi-subtitle">of {{ model.kpi_endpoints_total }} total</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- KPI: Total Models -->
+                                        <div class="header-kpi-card">
+                                            <div class="header-kpi-icon models">
+                                                <i class="fas fa-cube"></i>
+                                            </div>
+                                            <div class="header-kpi-content">
+                                                <div class="header-kpi-value">{{ model.kpi_models_total }}</div>
+                                                <div class="header-kpi-label">Total Models</div>
+                                                <div class="header-kpi-subtitle">{{ model.kpi_models_deployed }} deployed</div>
+                                            </div>
+                                        </div>
+
+                                        <!-- KPI: Requests (7D) - placeholder -->
+                                        <div class="header-kpi-card">
+                                            <div class="header-kpi-icon requests">
+                                                <i class="fas fa-chart-bar"></i>
+                                            </div>
+                                            <div class="header-kpi-content">
+                                                <div class="header-kpi-value">--</div>
+                                                <div class="header-kpi-label">Requests (7D)</div>
+                                                <div class="header-kpi-change neutral"></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- KPI: Latency (P95) - placeholder -->
+                                        <div class="header-kpi-card">
+                                            <div class="header-kpi-icon latency">
+                                                <i class="fas fa-clock"></i>
+                                            </div>
+                                            <div class="header-kpi-content">
+                                                <div class="header-kpi-value">--</div>
+                                                <div class="header-kpi-label">Latency (P95)</div>
+                                                <div class="header-kpi-change neutral"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Arrow link (pushed to far right) -->
+                                    <div class="ml-auto flex-shrink-0">
+                                        <a href="{% url 'model_dashboard' model.id %}" class="flex items-center justify-center w-11 h-11 rounded-full hover:bg-blue-50 transition" title="Open {{ model.name }}">
+                                            <i class="fas fa-arrow-right text-blue-500 text-xl"></i>
+                                        </a>
                                     </div>
                                 </div>
-                                <i class="fas fa-arrow-right view-arrow"></i>
-                            </a>
+                            </div>
                             {% endfor %}
                         </div>
                         {% else %}

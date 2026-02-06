@@ -217,24 +217,32 @@ Two `system-kpi-card` containers in a `4fr 3fr` grid layout, spanning the full c
 | Ranking | `best_ranking_rmse` | Best (lowest) `rmse` from ranking TrainingRuns | `0.48` or `--` |
 | Hybrid | `best_hybrid_recall` | Best `recall_at_100` from multitask TrainingRuns (×100) | `23.5%` or `--` |
 
-### Model Card Structure
+### Project Card Structure
 
-Each model displays:
-- Model name
-- Description (truncated to 15 words)
-- Status badge (active/draft/inactive/failed)
-- Created date
-- Last trained date (if applicable)
-- Arrow indicator on hover
+Each project card mirrors the model page header layout from `base_model.html` (without the logo and navigation bar). The card is a `bg-white border border-black rounded-xl px-6 py-3 shadow-lg` container with a single flex row:
 
-### Status Badge Colors
+**Left section (30% width):**
+- Project name (`text-5xl font-bold`, color-coded: green if endpoint active, red if failed, blue otherwise)
+- Description (truncated to 15 words, or italic "No description" placeholder)
 
-| Status | Background | Text Color |
-|--------|------------|------------|
-| Active | #d1fae5 | #065f46 |
-| Draft | #f3f4f6 | #4b5563 |
-| Inactive | #fef3c7 | #92400e |
-| Failed | #fee2e2 | #991b1b |
+**Center section (4 KPI cards):**
+
+Uses the shared `.header-kpi-card` classes from `model_dashboard.css` — identical styling to the model page header.
+
+| KPI | Icon Class | Icon | Data Source | Subtitle |
+|-----|-----------|------|-------------|----------|
+| Endpoints Active | `header-kpi-icon endpoints` | `fa-rocket` | `DeployedEndpoint` per project (real) | "of X total" |
+| Total Models | `header-kpi-icon models` | `fa-cube` | `RegisteredModel` per project (real) | "X deployed" |
+| Requests (7D) | `header-kpi-icon requests` | `fa-chart-bar` | Placeholder (`--`) | -- |
+| Latency (P95) | `header-kpi-icon latency` | `fa-clock` | Placeholder (`--`) | -- |
+
+**Right section:**
+- Arrow icon (`fa-arrow-right`, blue) — the only clickable element, links to `{% url 'model_dashboard' model.id %}`
+- Styled as a 44x44 circle with `hover:bg-blue-50` transition
+
+**Per-project KPI data** is computed server-side in the `system_dashboard` view by iterating the `ModelEndpoint` queryset and attaching:
+- `kpi_endpoints_active` / `kpi_endpoints_total` — from `DeployedEndpoint` objects (via `RegisteredModel`)
+- `kpi_models_total` / `kpi_models_deployed` — from `RegisteredModel` objects
 
 ### Empty State
 

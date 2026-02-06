@@ -18,7 +18,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Count, Avg, Max, Min
+from django.db.models import Count, Avg, Max, Min, Sum
 from django.db.models.functions import TruncDate
 from django.conf import settings
 from .models import (
@@ -422,8 +422,10 @@ def api_system_kpis(request):
                 'etl_runs_24h': etl_runs_24h,
                 'data_tables': data_tables,
                 'data_volume_gb': data_volume_gb,
-                # Placeholder fields for future implementation
-                'requests_30d': 0,
+                # Inference requests (30 days) from ResourceMetrics
+                'requests_30d': ResourceMetrics.objects.filter(
+                    date__gte=cutoff_30d.date()
+                ).aggregate(total=Sum('cloud_run_total_requests'))['total'] or 0,
                 'avg_latency_ms': 0,
             }
         })

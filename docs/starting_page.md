@@ -277,7 +277,7 @@ Returns system KPIs for the 3 grouped cards.
         "etl_runs_24h": 3,
         "data_tables": 12,
         "data_volume_gb": 4.56,
-        "requests_30d": 0,
+        "requests_30d": 42,
         "avg_latency_ms": 0
     }
 }
@@ -459,3 +459,4 @@ The `cloud_run_total_requests` and `cloud_run_request_details` fields are popula
 - [x] ~~Resource charts~~ (Implemented - 6 charts in 3-column layout: Data, Cloud Run, Compute & GPU)
 - [x] ~~Cloud Run request volume via Cloud Monitoring API~~ (Implemented - queries `run.googleapis.com/request_count` for `-serving` services)
 - [x] ~~Scheduled `collect_resource_metrics` via Cloud Scheduler~~ (Implemented - daily at 02:00 UTC via webhook)
+- [x] ~~Requests KPI wired to real data~~ (Implemented - `requests_30d` now sums `ResourceMetrics.cloud_run_total_requests` over 30 days via `api_system_kpis`)

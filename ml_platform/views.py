@@ -567,34 +567,12 @@ def api_system_resource_charts(request):
                 round(s.bq_bytes_billed / (1024**3), 2) for s in snapshots_30d
             ]
 
-        # 3. ETL Health (30d) - stacked bar (successful/failed per day)
+        # 3. ETL Health (30d) - stacked bar (from ResourceMetrics snapshots)
         etl_health = {'labels': [], 'completed': [], 'failed': []}
-        cutoff_30d_dt = timezone.now() - timedelta(days=30)
-        etl_by_day = ETLRun.objects.filter(
-            started_at__gte=cutoff_30d_dt
-        ).annotate(
-            date=TruncDate('started_at')
-        ).values('date', 'status').annotate(
-            count=Count('id')
-        ).order_by('date')
-
-        etl_dict = {}
-        for row in etl_by_day:
-            if row['date']:
-                date_str = row['date'].strftime('%Y-%m-%d')
-                if date_str not in etl_dict:
-                    etl_dict[date_str] = {'completed': 0, 'failed': 0}
-                if row['status'] == 'completed':
-                    etl_dict[date_str]['completed'] += row['count']
-                elif row['status'] in ['failed', 'partial']:
-                    etl_dict[date_str]['failed'] += row['count']
-
-        etl_labels = sorted(etl_dict.keys())
-        etl_health = {
-            'labels': etl_labels,
-            'completed': [etl_dict[d]['completed'] for d in etl_labels],
-            'failed': [etl_dict[d]['failed'] for d in etl_labels],
-        }
+        if snapshots_30d:
+            etl_health['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            etl_health['completed'] = [s.etl_jobs_completed for s in snapshots_30d]
+            etl_health['failed'] = [s.etl_jobs_failed for s in snapshots_30d]
 
         # 4. Cloud Run Request Volume (30d)
         cloud_run_requests = {'labels': [], 'requests': []}

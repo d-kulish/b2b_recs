@@ -961,6 +961,10 @@ class ResourceMetrics(models.Model):
     gcs_bucket_details = models.JSONField(default=list, help_text="[{name, total_bytes, object_count}]")
     gcs_total_bytes = models.BigIntegerField(default=0)
 
+    # ETL metrics (derived from ETLRun data)
+    etl_jobs_completed = models.IntegerField(default=0, help_text="ETL jobs completed on this day")
+    etl_jobs_failed = models.IntegerField(default=0, help_text="ETL jobs failed on this day")
+
     # GPU / Compute metrics (derived from TrainingRun data)
     gpu_training_hours = models.FloatField(default=0, help_text="Total GPU-hours for training jobs on this day")
     gpu_jobs_completed = models.IntegerField(default=0, help_text="Training jobs completed on this day")

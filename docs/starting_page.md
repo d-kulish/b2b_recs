@@ -190,6 +190,8 @@ Daily snapshot model storing GCP resource usage. Populated by `python manage.py 
 | `db_table_details` | JSONField | Top tables `[{name, size_bytes, row_count}]` |
 | `gcs_bucket_details` | JSONField | Bucket usage `[{name, total_bytes, object_count}]` |
 | `gcs_total_bytes` | BigIntegerField | Total GCS storage |
+| `etl_jobs_completed` | IntegerField | ETL jobs completed on this day |
+| `etl_jobs_failed` | IntegerField | ETL jobs failed on this day |
 
 ---
 
@@ -265,7 +267,7 @@ Returns system KPIs for the 3 grouped cards.
 
 ### `GET /api/system/resource-charts/`
 
-Returns 8 resource chart datasets from `ResourceMetrics` daily snapshots and `ETLRun` model.
+Returns 8 resource chart datasets from `ResourceMetrics` daily snapshots.
 
 **Response:**
 ```json

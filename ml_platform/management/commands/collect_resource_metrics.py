@@ -63,6 +63,8 @@ class Command(BaseCommand):
             'db_table_details': [],
             'gcs_bucket_details': [],
             'gcs_total_bytes': 0,
+            'etl_jobs_completed': 0,
+            'etl_jobs_failed': 0,
             'gpu_training_hours': 0,
             'gpu_jobs_completed': 0,
             'gpu_jobs_failed': 0,
@@ -81,6 +83,9 @@ class Command(BaseCommand):
 
         # Collect GCS metrics
         self._collect_gcs(data)
+
+        # Collect ETL metrics
+        self._collect_etl(data, target_date)
 
         # Collect Cloud Run request metrics from Cloud Monitoring
         self._collect_cloud_run_requests(data, target_date)
@@ -102,6 +107,8 @@ class Command(BaseCommand):
             self.stdout.write(f'  DB tables: {len(data["db_table_details"])}')
             self.stdout.write(f'  GCS buckets: {len(data["gcs_bucket_details"])}')
             self.stdout.write(f'  GCS total bytes: {data["gcs_total_bytes"]:,}')
+            self.stdout.write(f'  ETL jobs completed: {data["etl_jobs_completed"]}')
+            self.stdout.write(f'  ETL jobs failed: {data["etl_jobs_failed"]}')
             self.stdout.write(f'  GPU training hours: {data["gpu_training_hours"]:.1f}')
             self.stdout.write(f'  GPU jobs completed: {data["gpu_jobs_completed"]}')
             self.stdout.write(f'  GPU jobs failed: {data["gpu_jobs_failed"]}')
@@ -356,6 +363,35 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'  GCS collection failed: {e}'))
+
+    def _collect_etl(self, data, target_date):
+        """Collect ETL job metrics from ETLRun data."""
+        try:
+            from datetime import datetime, timedelta
+            from django.utils import timezone
+            from ml_platform.models import ETLRun
+
+            day_start = timezone.make_aware(datetime.combine(target_date, datetime.min.time()))
+            day_end = day_start + timedelta(days=1)
+
+            completed = ETLRun.objects.filter(
+                started_at__gte=day_start,
+                started_at__lt=day_end,
+                status='completed'
+            ).count()
+
+            failed = ETLRun.objects.filter(
+                started_at__gte=day_start,
+                started_at__lt=day_end,
+                status__in=['failed', 'partial']
+            ).count()
+
+            data['etl_jobs_completed'] = completed
+            data['etl_jobs_failed'] = failed
+            self.stdout.write(f'  ETL: {completed} completed, {failed} failed')
+
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'  ETL collection failed: {e}'))
 
     def _collect_gpu(self, data, target_date):
         """Collect GPU/Compute metrics from TrainingRun data."""

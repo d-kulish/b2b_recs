@@ -61,7 +61,11 @@ class Command(BaseCommand):
         self.stdout.write('Collecting GPU data from TrainingRun records...')
         gpu_by_day = self._collect_gpu_by_day(today, num_days)
 
-        # Step 2b: Collect real Cloud Run request data from Cloud Monitoring
+        # Step 2b: Collect real ETL data per day from ETLRun
+        self.stdout.write('Collecting ETL data from ETLRun records...')
+        etl_by_day = self._collect_etl_by_day(today, num_days)
+
+        # Step 2c: Collect real Cloud Run request data from Cloud Monitoring
         self.stdout.write('Collecting Cloud Run request data from Cloud Monitoring...')
         requests_by_day = self._collect_requests_by_day(today, num_days)
 
@@ -74,13 +78,14 @@ class Command(BaseCommand):
             progress = 1.0 - (days_ago / max(num_days, 1))  # 0.0 at oldest, 1.0 at today
 
             # Apply growth curves to baseline data
-            data = self._generate_day_data(baseline, target_date, progress, gpu_by_day, requests_by_day)
+            data = self._generate_day_data(baseline, target_date, progress, gpu_by_day, requests_by_day, etl_by_day)
 
             if dry_run:
                 self.stdout.write(
                     f'  {target_date}: BQ={data["bq_total_bytes"]:,}B '
                     f'DB={data["db_size_bytes"]:,}B '
                     f'GCS={data["gcs_total_bytes"]:,}B '
+                    f'ETL={data["etl_jobs_completed"]}c/{data["etl_jobs_failed"]}f '
                     f'GPU={data["gpu_training_hours"]:.1f}h '
                     f'({data["gpu_jobs_completed"]}c/{data["gpu_jobs_failed"]}f)'
                 )
@@ -272,6 +277,38 @@ class Command(BaseCommand):
 
         return gpu_by_day
 
+    def _collect_etl_by_day(self, today, num_days):
+        """Collect actual ETL job counts per day from ETLRun records."""
+        from ml_platform.models import ETLRun
+
+        etl_by_day = {}
+
+        for days_ago in range(num_days, -1, -1):
+            target_date = today - timedelta(days=days_ago)
+            day_start = timezone.make_aware(datetime.combine(target_date, datetime.min.time()))
+            day_end = day_start + timedelta(days=1)
+
+            completed = ETLRun.objects.filter(
+                started_at__gte=day_start,
+                started_at__lt=day_end,
+                status='completed'
+            ).count()
+
+            failed = ETLRun.objects.filter(
+                started_at__gte=day_start,
+                started_at__lt=day_end,
+                status__in=['failed', 'partial']
+            ).count()
+
+            etl_by_day[target_date] = {
+                'etl_jobs_completed': completed,
+                'etl_jobs_failed': failed,
+            }
+
+        days_with_data = sum(1 for d in etl_by_day.values() if d['etl_jobs_completed'] + d['etl_jobs_failed'] > 0)
+        self.stdout.write(f'  ETL: {days_with_data} days with ETL data')
+        return etl_by_day
+
     def _collect_requests_by_day(self, today, num_days):
         """Collect Cloud Run request counts per day from Cloud Monitoring API."""
         try:
@@ -356,7 +393,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f'  Cloud Monitoring request collection failed: {e}'))
             return {}
 
-    def _generate_day_data(self, baseline, target_date, progress, gpu_by_day, requests_by_day=None):
+    def _generate_day_data(self, baseline, target_date, progress, gpu_by_day, requests_by_day=None, etl_by_day=None):
         """Generate a single day's data based on baseline + growth curve."""
         # Growth factor: storage grows ~15% over the period
         # Older days had less data
@@ -415,6 +452,12 @@ class Command(BaseCommand):
             'gpu_jobs_by_type': [],
         })
 
+        # ETL data from actual ETLRun records
+        etl_data = (etl_by_day or {}).get(target_date, {
+            'etl_jobs_completed': 0,
+            'etl_jobs_failed': 0,
+        })
+
         # Cloud Run request data from Cloud Monitoring
         request_data = (requests_by_day or {}).get(target_date, {
             'cloud_run_total_requests': 0,
@@ -430,6 +473,7 @@ class Command(BaseCommand):
             'cloud_run_services': baseline['cloud_run_services'],
             'cloud_run_active_services': baseline['cloud_run_active_services'],
             **request_data,
+            **etl_data,
             'db_size_bytes': db_size,
             'db_table_details': db_table_details,
             'gcs_bucket_details': gcs_bucket_details,

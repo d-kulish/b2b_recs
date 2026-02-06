@@ -245,7 +245,7 @@ class Command(BaseCommand):
                     "interval": interval,
                     "aggregation": monitoring_v3.Aggregation(
                         alignment_period={"seconds": 86400},
-                        per_series_aligner=monitoring_v3.Aggregation.Aligner.ALIGN_SUM,
+                        per_series_aligner=monitoring_v3.Aggregation.Aligner.ALIGN_DELTA,
                         cross_series_reducer=monitoring_v3.Aggregation.Reducer.REDUCE_SUM,
                         group_by_fields=[
                             "resource.labels.service_name",

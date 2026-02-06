@@ -407,6 +407,10 @@ A Cloud Scheduler job triggers `POST /api/system/collect-metrics-webhook/` daily
 
 The `cloud_run_total_requests` and `cloud_run_request_details` fields are populated by querying the `run.googleapis.com/request_count` metric from the Cloud Monitoring API. Only services ending with `-serving` (ML endpoints) are included.
 
+**Metric aggregation:** Uses `ALIGN_DELTA` aligner for the cumulative `request_count` metric to compute net requests per alignment period. The `ALIGN_DELTA` aligner is required because `request_count` is a CUMULATIVE metric kind — `ALIGN_SUM` is incompatible and returns empty results.
+
+**IAM requirement:** The service account running the collection commands needs the `roles/monitoring.viewer` IAM role on the GCP project.
+
 **Dependency:** `google-cloud-monitoring>=2.21.0`
 
 ---

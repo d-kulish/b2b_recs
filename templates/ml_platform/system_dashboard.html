@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         body {
             background-color: #ffffff;
@@ -714,11 +715,12 @@
                 </div>
                 <div class="chapter-content">
                     <div class="chapter-content-inner">
+                        <div class="chapter-divider" style="margin-top: 0;"></div>
                         <!-- Resource Charts: 3 columns x 2 rows -->
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
 
                             <!-- Column 1: Data -->
-                            <div style="background: #f9fafb; border-radius: 12px; padding: 16px;">
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
                                     <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #4285f4, #669df6); display: flex; align-items: center; justify-content: center;">
                                         <i class="fas fa-database" style="color: white; font-size: 13px;"></i>
@@ -736,7 +738,7 @@
                             </div>
 
                             <!-- Column 2: Cloud Run -->
-                            <div style="background: #f9fafb; border-radius: 12px; padding: 16px;">
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
                                     <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #34a853, #5bb974); display: flex; align-items: center; justify-content: center;">
                                         <i class="fas fa-cloud" style="color: white; font-size: 13px;"></i>
@@ -754,7 +756,7 @@
                             </div>
 
                             <!-- Column 3: Compute & GPU -->
-                            <div style="background: #f9fafb; border-radius: 12px; padding: 16px;">
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
                                     <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #ea4335, #f28b82); display: flex; align-items: center; justify-content: center;">
                                         <i class="fas fa-microchip" style="color: white; font-size: 13px;"></i>
@@ -1148,30 +1150,36 @@
                 charts.combinedStorage = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: data.labels.map(formatDate),
+                        labels: data.labels,
                         datasets: [
                             {
+                                label: 'GCS Buckets',
+                                data: data.buckets_gb,
+                                backgroundColor: '#f59e0b',
+                            },
+                            {
                                 label: 'BigQuery',
-                                data: data.bigquery_mb,
+                                data: data.bigquery_gb,
                                 backgroundColor: '#4285f4',
                             },
                             {
                                 label: 'Cloud SQL',
-                                data: data.sql_mb,
+                                data: data.sql_gb,
                                 backgroundColor: '#9333ea',
-                            },
-                            {
-                                label: 'GCS Buckets',
-                                data: data.buckets_mb,
-                                backgroundColor: '#f59e0b',
                             }
                         ]
                     },
                     options: {
-                        ...getChartOptions('Size (MB)'),
+                        ...getChartOptions('Size (GB)'),
                         scales: {
-                            x: { stacked: true, grid: { display: false } },
-                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'MB' } }
+                            x: {
+                                type: 'time',
+                                time: { unit: 'week', displayFormats: { week: 'd MMM' } },
+                                stacked: true,
+                                grid: { display: false },
+                                ticks: { maxRotation: 0 }
+                            },
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'GB' } }
                         }
                     }
                 });
@@ -1402,6 +1410,7 @@
                 const d = new Date(dateStr);
                 return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             }
+
 
             function showNoData(ctx) {
                 const parent = ctx.parentElement;

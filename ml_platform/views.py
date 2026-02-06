@@ -537,17 +537,17 @@ def api_system_resource_charts(request):
         latest = snapshots_30d[-1] if snapshots_30d else None
 
         # 1. Combined Storage (30d) - stacked bar (BigQuery + SQL + GCS)
-        combined_storage = {'labels': [], 'bigquery_mb': [], 'sql_mb': [], 'buckets_mb': []}
+        combined_storage = {'labels': [], 'bigquery_gb': [], 'sql_gb': [], 'buckets_gb': []}
         if snapshots_30d:
             combined_storage['labels'] = [s.date.isoformat() for s in snapshots_30d]
-            combined_storage['bigquery_mb'] = [
-                round(s.bq_total_bytes / (1024**2), 1) for s in snapshots_30d
+            combined_storage['bigquery_gb'] = [
+                round(s.bq_total_bytes / (1024**3), 2) for s in snapshots_30d
             ]
-            combined_storage['sql_mb'] = [
-                round(s.db_size_bytes / (1024**2), 1) for s in snapshots_30d
+            combined_storage['sql_gb'] = [
+                round(s.db_size_bytes / (1024**3), 2) for s in snapshots_30d
             ]
-            combined_storage['buckets_mb'] = [
-                round(s.gcs_total_bytes / (1024**2), 1) for s in snapshots_30d
+            combined_storage['buckets_gb'] = [
+                round(s.gcs_total_bytes / (1024**3), 2) for s in snapshots_30d
             ]
 
         # 2. BQ Jobs & Bytes Billed (14d) - dual axis

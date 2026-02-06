@@ -269,9 +269,9 @@ Returns 6 resource chart datasets from `ResourceMetrics` daily snapshots.
     "data": {
         "combined_storage": {
             "labels": ["2026-01-07", ...],
-            "bigquery_mb": [5234.5, 5240.1, ...],
-            "sql_mb": [10.5, 10.6, ...],
-            "buckets_mb": [150432.0, 150440.0, ...]
+            "bigquery_gb": [5.11, 5.12, ...],
+            "sql_gb": [0.01, 0.01, ...],
+            "buckets_gb": [146.91, 146.92, ...]
         },
         "bq_jobs": {
             "labels": ["2026-01-24", ...],

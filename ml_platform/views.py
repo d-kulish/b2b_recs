@@ -86,9 +86,9 @@ def system_dashboard(request):
         'total_registered_models': total_registered_models,
         'total_trainings': total_trainings,
         'total_experiments': total_experiments,
-        'best_retrieval_recall': best_retrieval_recall,
+        'best_retrieval_recall': best_retrieval_recall * 100 if best_retrieval_recall is not None else None,
         'best_ranking_rmse': best_ranking_rmse,
-        'best_hybrid_recall': best_hybrid_recall,
+        'best_hybrid_recall': best_hybrid_recall * 100 if best_hybrid_recall is not None else None,
     }
 
     return render(request, 'ml_platform/system_dashboard.html', context)

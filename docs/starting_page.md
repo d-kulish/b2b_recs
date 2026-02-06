@@ -192,11 +192,15 @@ Daily snapshot model storing GCP resource usage. Populated by `python manage.py 
 
 Displays grouped KPI containers for assets and model accuracy, plus model cards linking to their dashboards.
 
-### KPI Containers (2-column grid)
+### Header Row
 
-Two `system-kpi-card` containers reusing the same CSS classes as Chapter 1's KPI groups, displayed in a flex row with a "+ Create New Model" button to the right.
+The chapter header contains the title on the left and a "+ New Project" button next to the collapse arrow on the right. The button uses the shared `btn btn-primary` classes from `static/css/buttons.css` (white background, black border, outlined style) and `event.stopPropagation()` to avoid triggering the chapter toggle.
 
-**Assets Card (Purple icon, `fa-folder-open`):**
+### KPI Containers (4:3 grid)
+
+Two `system-kpi-card` containers in a `4fr 3fr` grid layout, spanning the full chapter width. The `chapter-kpi-equal` CSS class ensures each card's stat tablets fill the available space (4-column grid for Assets, 3-column grid for Accuracy).
+
+**Assets Card (Blue icon, `fa-folder-open`):**
 
 | KPI | Context Variable | Data Source |
 |-----|-----------------|-------------|
@@ -209,11 +213,9 @@ Two `system-kpi-card` containers reusing the same CSS classes as Chapter 1's KPI
 
 | KPI | Context Variable | Data Source | Format |
 |-----|-----------------|-------------|--------|
-| Retrieval | `best_retrieval_recall` | Best `recall_at_100` from retrieval TrainingRuns | `81.2%` or `--` |
-| Ranking | `best_ranking_rmse` | Best (lowest) `rmse` from ranking TrainingRuns | `0.45` or `--` |
-| Hybrid | `best_hybrid_recall` | Best `recall_at_100` from multitask TrainingRuns | `81.2%` or `--` |
-
-The "+ Create New Model" button sits to the right of the KPI grid in the chapter header area (uses `event.stopPropagation()` to avoid triggering the chapter toggle).
+| Retrieval | `best_retrieval_recall` | Best `recall_at_100` from retrieval TrainingRuns (×100) | `31.9%` or `--` |
+| Ranking | `best_ranking_rmse` | Best (lowest) `rmse` from ranking TrainingRuns | `0.48` or `--` |
+| Hybrid | `best_hybrid_recall` | Best `recall_at_100` from multitask TrainingRuns (×100) | `23.5%` or `--` |
 
 ### Model Card Structure
 
@@ -390,9 +392,9 @@ The view provides these context variables:
 | `total_registered_models` | int | Count of all RegisteredModel objects |
 | `total_trainings` | int | Count of all TrainingRun objects |
 | `total_experiments` | int | Count of all QuickTest objects |
-| `best_retrieval_recall` | float/None | Best recall@100 from retrieval TrainingRuns |
+| `best_retrieval_recall` | float/None | Best recall@100 from retrieval TrainingRuns (×100 for percentage) |
 | `best_ranking_rmse` | float/None | Best (lowest) RMSE from ranking TrainingRuns |
-| `best_hybrid_recall` | float/None | Best recall@100 from multitask TrainingRuns |
+| `best_hybrid_recall` | float/None | Best recall@100 from multitask TrainingRuns (×100 for percentage) |
 
 ---
 

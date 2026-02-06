@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
     <script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'css/buttons.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
@@ -198,6 +199,17 @@
             padding: 10px 8px;
             background: #f9fafb;
             border-radius: 8px;
+        }
+
+        /* Chapter 2: KPI tablets fill their container width */
+        .chapter-kpi-equal .system-kpi-stats {
+            display: grid;
+        }
+        .chapter-kpi-equal .system-kpi-card:first-child .system-kpi-stats {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .chapter-kpi-equal .system-kpi-card:last-child .system-kpi-stats {
+            grid-template-columns: repeat(3, 1fr);
         }
 
         .system-kpi-value {
@@ -791,68 +803,67 @@
                                 <span class="chapter-subtitle">Manage ML models and endpoints</span>
                             </div>
                         </div>
-                        <div class="chapter-toggle">
-                            <i class="fas fa-chevron-right"></i>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <a href="{% url 'create_model_endpoint' %}" class="btn btn-primary" onclick="event.stopPropagation();" style="white-space: nowrap;">
+                                <i class="fas fa-plus"></i> New Project
+                            </a>
+                            <div class="chapter-toggle">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
                         </div>
                     </div>
                     <div class="chapter-divider"></div>
-                    <div style="display: flex; align-items: center; gap: 16px;">
-                        <div class="system-kpi-groups" style="grid-template-columns: repeat(2, 1fr); flex: 1;">
-                            <!-- Assets Card -->
-                            <div class="system-kpi-card">
-                                <div class="system-kpi-title">Assets</div>
-                                <div class="system-kpi-content">
-                                    <div class="system-kpi-icon data">
-                                        <i class="fas fa-folder-open"></i>
-                                    </div>
-                                    <div class="system-kpi-stats">
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{{ total_models }}</div>
-                                            <div class="system-kpi-label">Projects</div>
-                                        </div>
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{{ total_registered_models }}</div>
-                                            <div class="system-kpi-label">Models</div>
-                                        </div>
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{{ total_trainings }}</div>
-                                            <div class="system-kpi-label">Trainings</div>
-                                        </div>
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{{ total_experiments }}</div>
-                                            <div class="system-kpi-label">Experiments</div>
-                                        </div>
-                                    </div>
+                    <div class="system-kpi-groups chapter-kpi-equal" style="grid-template-columns: 4fr 3fr;">
+                        <!-- Assets Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Assets</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon training">
+                                    <i class="fas fa-folder-open"></i>
                                 </div>
-                            </div>
-                            <!-- Accuracy Card -->
-                            <div class="system-kpi-card">
-                                <div class="system-kpi-title">Accuracy</div>
-                                <div class="system-kpi-content">
-                                    <div class="system-kpi-icon inference">
-                                        <i class="fas fa-bullseye"></i>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{{ total_models }}</div>
+                                        <div class="system-kpi-label">Projects</div>
                                     </div>
-                                    <div class="system-kpi-stats">
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{% if best_retrieval_recall is not None %}{{ best_retrieval_recall|floatformat:1 }}%{% else %}--{% endif %}</div>
-                                            <div class="system-kpi-label">Retrieval</div>
-                                        </div>
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{% if best_ranking_rmse is not None %}{{ best_ranking_rmse|floatformat:2 }}{% else %}--{% endif %}</div>
-                                            <div class="system-kpi-label">Ranking</div>
-                                        </div>
-                                        <div class="system-kpi-stat">
-                                            <div class="system-kpi-value">{% if best_hybrid_recall is not None %}{{ best_hybrid_recall|floatformat:1 }}%{% else %}--{% endif %}</div>
-                                            <div class="system-kpi-label">Hybrid</div>
-                                        </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{{ total_registered_models }}</div>
+                                        <div class="system-kpi-label">Models</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{{ total_trainings }}</div>
+                                        <div class="system-kpi-label">Trainings</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{{ total_experiments }}</div>
+                                        <div class="system-kpi-label">Experiments</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <a href="{% url 'create_model_endpoint' %}" class="create-button" onclick="event.stopPropagation();" style="white-space: nowrap; flex-shrink: 0;">
-                            <i class="fas fa-plus"></i>
-                            Create New Model
-                        </a>
+                        <!-- Accuracy Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Accuracy</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon inference">
+                                    <i class="fas fa-bullseye"></i>
+                                </div>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{% if best_retrieval_recall is not None %}{{ best_retrieval_recall|floatformat:1 }}%{% else %}--{% endif %}</div>
+                                        <div class="system-kpi-label">Retrieval</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{% if best_ranking_rmse is not None %}{{ best_ranking_rmse|floatformat:2 }}{% else %}--{% endif %}</div>
+                                        <div class="system-kpi-label">Ranking</div>
+                                    </div>
+                                    <div class="system-kpi-stat">
+                                        <div class="system-kpi-value">{% if best_hybrid_recall is not None %}{{ best_hybrid_recall|floatformat:1 }}%{% else %}--{% endif %}</div>
+                                        <div class="system-kpi-label">Hybrid</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="chapter-content">

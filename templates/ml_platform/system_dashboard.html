@@ -1150,7 +1150,7 @@
                 charts.combinedStorage = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels: data.labels,
+                        labels: data.labels.map(formatDate),
                         datasets: [
                             {
                                 label: 'GCS Buckets',
@@ -1173,11 +1173,13 @@
                         ...getChartOptions('Size (GB)'),
                         scales: {
                             x: {
-                                type: 'time',
-                                time: { unit: 'week', displayFormats: { week: 'd MMM' } },
                                 stacked: true,
                                 grid: { display: false },
-                                ticks: { maxRotation: 0 }
+                                ticks: {
+                                    maxRotation: 0,
+                                    autoSkip: true,
+                                    maxTicksLimit: 5
+                                }
                             },
                             y: { stacked: true, beginAtZero: true, title: { display: true, text: 'GB' } }
                         }
@@ -1230,7 +1232,7 @@
                     options: {
                         ...getChartOptions(),
                         scales: {
-                            x: { stacked: true, grid: { display: false } },
+                            x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
                             y: { stacked: true, beginAtZero: true, position: 'left', title: { display: true, text: 'Jobs' } },
                             y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'GB Billed' } }
                         }
@@ -1248,6 +1250,12 @@
                     return;
                 }
 
+                const failedNeg = data.failed.map(v => -v);
+                const maxVal = (Math.max(
+                    Math.max(...data.completed),
+                    Math.max(...data.failed)
+                ) || 1) + 1;
+
                 charts.etlHealth = new Chart(ctx, {
                     type: 'bar',
                     data: {
@@ -1258,12 +1266,14 @@
                                 data: data.completed,
                                 backgroundColor: '#34a853',
                                 borderRadius: 2,
+                                stack: 'stack0',
                             },
                             {
                                 label: 'Failed',
-                                data: data.failed,
+                                data: failedNeg,
                                 backgroundColor: '#ea4335',
                                 borderRadius: 2,
+                                stack: 'stack0',
                             }
                         ]
                     },
@@ -1273,13 +1283,24 @@
                             x: {
                                 stacked: true,
                                 grid: { display: false },
-                                ticks: { font: { size: 10 }, maxRotation: 45 }
+                                ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 }
                             },
                             y: {
                                 stacked: true,
-                                beginAtZero: true,
-                                ticks: { stepSize: 1, font: { size: 10 } },
-                                grid: { color: '#f3f4f6' }
+                                min: -maxVal,
+                                max: maxVal,
+                                ticks: {
+                                    stepSize: maxVal <= 6 ? 1 : undefined,
+                                    callback: function(value) { return Math.abs(value); }
+                                },
+                                grid: {
+                                    color: function(context) {
+                                        return context.tick.value === 0 ? '#9ca3af' : '#f3f4f6';
+                                    },
+                                    lineWidth: function(context) {
+                                        return context.tick.value === 0 ? 2 : 1;
+                                    }
+                                }
                             }
                         }
                     }
@@ -1333,14 +1354,14 @@
                         datasets: [{
                             label: 'GPU Hours',
                             data: data.hours,
-                            backgroundColor: data.hours.map(h => h > 0 ? '#ea4335' : 'rgba(234, 67, 53, 0.15)'),
+                            backgroundColor: data.hours.map(h => h > 0 ? '#f97316' : 'rgba(249, 115, 22, 0.15)'),
                             borderRadius: 3,
                         }]
                     },
                     options: {
                         ...getChartOptions('Hours'),
                         scales: {
-                            x: { grid: { display: false } },
+                            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
                             y: { beginAtZero: true, title: { display: true, text: 'Hours' } }
                         }
                     }
@@ -1379,7 +1400,7 @@
                     options: {
                         ...getChartOptions(),
                         scales: {
-                            x: { stacked: true, grid: { display: false } },
+                            x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
                             y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Jobs' } }
                         }
                     }
@@ -1397,7 +1418,7 @@
                         }
                     },
                     scales: {
-                        x: { grid: { display: false } },
+                        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } },
                         y: {
                             beginAtZero: true,
                             title: yTitle ? { display: true, text: yTitle } : { display: false }

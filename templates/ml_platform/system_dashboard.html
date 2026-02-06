@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'css/buttons.css' %}">
     <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
@@ -805,9 +806,9 @@
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <a href="{% url 'create_model_endpoint' %}" class="btn btn-primary" onclick="event.stopPropagation();" style="white-space: nowrap;">
+                            <button class="btn btn-primary" onclick="event.stopPropagation(); openCreateProjectModal();" style="white-space: nowrap;">
                                 <i class="fas fa-plus"></i> New Project
-                            </a>
+                            </button>
                             <div class="chapter-toggle">
                                 <i class="fas fa-chevron-right"></i>
                             </div>
@@ -957,10 +958,10 @@
                         <div class="empty-state">
                             <i class="fas fa-cube empty-state-icon"></i>
                             <p class="empty-state-text">No models created yet</p>
-                            <a href="{% url 'create_model_endpoint' %}" class="create-button">
+                            <button class="create-button" onclick="openCreateProjectModal();">
                                 <i class="fas fa-plus"></i>
-                                Create Your First Model
-                            </a>
+                                Create Your First Project
+                            </button>
                         </div>
                         {% endif %}
                     </div>
@@ -1502,6 +1503,179 @@
 
             return { loadKPIs, loadCharts };
         })();
+    </script>
+
+    <!-- ============================================================================
+         CREATE PROJECT MODAL
+         ============================================================================ -->
+    <div id="createProjectModal" class="modal-overlay hidden" onclick="if(event.target === this) closeCreateProjectModal()">
+        <div class="modal-container" style="max-width: 600px;">
+            <div class="modal-header">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="fas fa-rocket" style="color: white; font-size: 18px;"></i>
+                </div>
+                <h3 class="modal-header-title">Create New Project</h3>
+            </div>
+            <div class="modal-body">
+                <p style="color: #6b7280; margin-bottom: 20px;">
+                    A project is your workspace for building a recommendation model — from data ingestion to a live serving endpoint.
+                </p>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                        Project Name <span style="color: #dc2626;">*</span>
+                    </label>
+                    <input type="text" id="createProjectName"
+                           style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                           onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#d1d5db'"
+                           placeholder="e.g., Product Recommendations - Retail">
+                    <p style="margin-top: 4px; font-size: 12px; color: #9ca3af;">A unique name for your project</p>
+                    <div id="createProjectNameError" style="color: #dc2626; font-size: 12px; margin-top: 4px; display: none;"></div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                        Description <span style="color: #dc2626;">*</span>
+                    </label>
+                    <textarea id="createProjectDescription" rows="3"
+                              style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; outline: none; resize: vertical; transition: border-color 0.2s;"
+                              onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#d1d5db'"
+                              placeholder="What products or content will be recommended, and to whom?"></textarea>
+                    <p style="margin-top: 4px; font-size: 12px; color: #9ca3af;">Helps your team understand the project's purpose</p>
+                    <div id="createProjectDescError" style="color: #dc2626; font-size: 12px; margin-top: 4px; display: none;"></div>
+                </div>
+
+                <div style="font-weight: 600; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Your project will include</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start;">
+                        <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #60a5fa); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-database" style="color: white; font-size: 14px;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 13px; color: #111827;">Data Ingestion</div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">SQL, NoSQL, Cloud Storage → BigQuery</div>
+                        </div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start;">
+                        <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-sliders-h" style="color: white; font-size: 14px;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 13px; color: #111827;">Configs</div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Datasets, features, model architecture</div>
+                        </div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start;">
+                        <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #22c55e, #4ade80); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-flask" style="color: white; font-size: 14px;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 13px; color: #111827;">Training</div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Experiments and GPU training on Vertex AI</div>
+                        </div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start;">
+                        <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b, #fbbf24); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fas fa-rocket" style="color: white; font-size: 14px;"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 13px; color: #111827;">Deployment</div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Serving endpoints with live inference</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer-wizard-neu">
+                <div class="footer-left"></div>
+                <div class="footer-right">
+                    <button id="createProjectSubmitBtn" class="btn-neu btn-neu-action btn-neu-save" onclick="submitCreateProject()">
+                        <span class="btn-neu-inner">Ok</span>
+                    </button>
+                    <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeCreateProjectModal()">
+                        <span class="btn-neu-inner">Cancel</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function openCreateProjectModal() {
+        document.getElementById('createProjectName').value = '';
+        document.getElementById('createProjectDescription').value = '';
+        document.getElementById('createProjectNameError').style.display = 'none';
+        document.getElementById('createProjectDescError').style.display = 'none';
+        document.getElementById('createProjectSubmitBtn').disabled = false;
+        document.getElementById('createProjectModal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('createProjectName').focus(), 100);
+    }
+
+    function closeCreateProjectModal() {
+        document.getElementById('createProjectModal').classList.add('hidden');
+    }
+
+    async function submitCreateProject() {
+        const name = document.getElementById('createProjectName').value.trim();
+        const description = document.getElementById('createProjectDescription').value.trim();
+        const nameErrEl = document.getElementById('createProjectNameError');
+        const descErrEl = document.getElementById('createProjectDescError');
+        const submitBtn = document.getElementById('createProjectSubmitBtn');
+
+        // Validate
+        nameErrEl.style.display = 'none';
+        descErrEl.style.display = 'none';
+
+        if (!name) {
+            nameErrEl.textContent = 'Project name is required.';
+            nameErrEl.style.display = 'block';
+            document.getElementById('createProjectName').focus();
+            return;
+        }
+
+        if (!description) {
+            descErrEl.textContent = 'Description is required.';
+            descErrEl.style.display = 'block';
+            document.getElementById('createProjectDescription').focus();
+            return;
+        }
+        submitBtn.disabled = true;
+
+        try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+                || '{{ csrf_token }}';
+
+            const response = await fetch('{% url "create_model_endpoint" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ name, description }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                window.location.reload();
+            } else {
+                nameErrEl.textContent = data.error || 'Failed to create project.';
+                nameErrEl.style.display = 'block';
+                submitBtn.disabled = false;
+            }
+        } catch (err) {
+            nameErrEl.textContent = 'Network error. Please try again.';
+            nameErrEl.style.display = 'block';
+            submitBtn.disabled = false;
+        }
+    }
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !document.getElementById('createProjectModal').classList.contains('hidden')) {
+            closeCreateProjectModal();
+        }
+    });
     </script>
 </body>
 </html>

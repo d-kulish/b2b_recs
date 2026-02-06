@@ -114,33 +114,52 @@ def system_dashboard(request):
 def create_model_endpoint(request):
     """
     Create a new Model/Endpoint.
+    Supports both AJAX (JSON) and traditional form submissions.
     """
     if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description', '')
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-        try:
-            model = ModelEndpoint.objects.create(
-                name=name,
-                description=description,
-                created_by=request.user,
-                status='draft',
-            )
+        if is_ajax:
+            import json
+            try:
+                body = json.loads(request.body)
+                name = body.get('name', '').strip()
+                description = body.get('description', '').strip()
+            except json.JSONDecodeError:
+                return JsonResponse({'success': False, 'error': 'Invalid request.'}, status=400)
 
-            # Create default configurations
-            ETLConfiguration.objects.create(
-                model_endpoint=model,
-            )
+            if not name:
+                return JsonResponse({'success': False, 'error': 'Project name is required.'}, status=400)
 
-            PipelineConfiguration.objects.create(
-                model_endpoint=model,
-            )
+            try:
+                model = ModelEndpoint.objects.create(
+                    name=name,
+                    description=description,
+                    created_by=request.user,
+                    status='draft',
+                )
+                ETLConfiguration.objects.create(model_endpoint=model)
+                PipelineConfiguration.objects.create(model_endpoint=model)
+                return JsonResponse({'success': True, 'id': model.id})
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        else:
+            name = request.POST.get('name')
+            description = request.POST.get('description', '')
 
-            return redirect('system_dashboard')
-
-        except Exception as e:
-            messages.error(request, f'Error creating model: {str(e)}')
-            return redirect('system_dashboard')
+            try:
+                model = ModelEndpoint.objects.create(
+                    name=name,
+                    description=description,
+                    created_by=request.user,
+                    status='draft',
+                )
+                ETLConfiguration.objects.create(model_endpoint=model)
+                PipelineConfiguration.objects.create(model_endpoint=model)
+                return redirect('system_dashboard')
+            except Exception as e:
+                messages.error(request, f'Error creating model: {str(e)}')
+                return redirect('system_dashboard')
 
     return render(request, 'ml_platform/create_model_endpoint.html')
 

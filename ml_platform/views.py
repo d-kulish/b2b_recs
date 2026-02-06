@@ -18,7 +18,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Count, Avg, Max
+from django.db.models import Count, Avg, Max, Min
 from django.db.models.functions import TruncDate
 from django.conf import settings
 from .models import (
@@ -34,7 +34,7 @@ from .models import (
     QuickTest,
     ResourceMetrics,
 )
-from .training.models import TrainingRun, DeployedEndpoint
+from .training.models import TrainingRun, DeployedEndpoint, RegisteredModel
 
 
 # ============================================================================
@@ -59,12 +59,36 @@ def system_dashboard(request):
     active_models = models.filter(status='active').count()
     recent_runs = PipelineRun.objects.filter(status='running').count()
 
+    # Assets KPIs
+    total_registered_models = RegisteredModel.objects.count()
+    total_trainings = TrainingRun.objects.count()
+    total_experiments = QuickTest.objects.count()
+
+    # Accuracy KPIs (from TrainingRun only — QuickTests excluded as they're sampled runs)
+    best_retrieval_recall = TrainingRun.objects.filter(
+        model_type='retrieval', recall_at_100__isnull=False
+    ).aggregate(Max('recall_at_100'))['recall_at_100__max']
+
+    best_ranking_rmse = TrainingRun.objects.filter(
+        model_type='ranking', rmse__isnull=False
+    ).aggregate(Min('rmse'))['rmse__min']
+
+    best_hybrid_recall = TrainingRun.objects.filter(
+        model_type='multitask', recall_at_100__isnull=False
+    ).aggregate(Max('recall_at_100'))['recall_at_100__max']
+
     context = {
         'models': models,
         'total_models': total_models,
         'active_models': active_models,
         'recent_runs': recent_runs,
         'latest_metrics': latest_metrics,
+        'total_registered_models': total_registered_models,
+        'total_trainings': total_trainings,
+        'total_experiments': total_experiments,
+        'best_retrieval_recall': best_retrieval_recall,
+        'best_ranking_rmse': best_ranking_rmse,
+        'best_hybrid_recall': best_hybrid_recall,
     }
 
     return render(request, 'ml_platform/system_dashboard.html', context)

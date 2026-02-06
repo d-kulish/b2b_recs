@@ -778,7 +778,7 @@
                 </div>
             </div>
 
-            <!-- Chapter 2: Your Models -->
+            <!-- Chapter 2: Your Projects -->
             <div class="chapter-container" data-chapter="models">
                 <div class="chapter-header" onclick="toggleChapter(this)">
                     <div class="chapter-header-top">
@@ -787,7 +787,7 @@
                                 <i class="fas fa-cube"></i>
                             </div>
                             <div class="chapter-title-text">
-                                <span class="chapter-title">Your Models</span>
+                                <span class="chapter-title">Your Projects</span>
                                 <span class="chapter-subtitle">Manage ML models and endpoints</span>
                             </div>
                         </div>
@@ -796,43 +796,63 @@
                         </div>
                     </div>
                     <div class="chapter-divider"></div>
-                    <div class="chapter-kpi-row">
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon purple">
-                                <i class="fas fa-cube"></i>
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="system-kpi-groups" style="grid-template-columns: repeat(2, 1fr); flex: 1;">
+                            <!-- Assets Card -->
+                            <div class="system-kpi-card">
+                                <div class="system-kpi-title">Assets</div>
+                                <div class="system-kpi-content">
+                                    <div class="system-kpi-icon data">
+                                        <i class="fas fa-folder-open"></i>
+                                    </div>
+                                    <div class="system-kpi-stats">
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{{ total_models }}</div>
+                                            <div class="system-kpi-label">Projects</div>
+                                        </div>
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{{ total_registered_models }}</div>
+                                            <div class="system-kpi-label">Models</div>
+                                        </div>
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{{ total_trainings }}</div>
+                                            <div class="system-kpi-label">Trainings</div>
+                                        </div>
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{{ total_experiments }}</div>
+                                            <div class="system-kpi-label">Experiments</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value">{{ total_models }}</span>
-                                <span class="chapter-kpi-label">Total Models</span>
+                            <!-- Accuracy Card -->
+                            <div class="system-kpi-card">
+                                <div class="system-kpi-title">Accuracy</div>
+                                <div class="system-kpi-content">
+                                    <div class="system-kpi-icon inference">
+                                        <i class="fas fa-bullseye"></i>
+                                    </div>
+                                    <div class="system-kpi-stats">
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{% if best_retrieval_recall is not None %}{{ best_retrieval_recall|floatformat:1 }}%{% else %}--{% endif %}</div>
+                                            <div class="system-kpi-label">Retrieval</div>
+                                        </div>
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{% if best_ranking_rmse is not None %}{{ best_ranking_rmse|floatformat:2 }}{% else %}--{% endif %}</div>
+                                            <div class="system-kpi-label">Ranking</div>
+                                        </div>
+                                        <div class="system-kpi-stat">
+                                            <div class="system-kpi-value">{% if best_hybrid_recall is not None %}{{ best_hybrid_recall|floatformat:1 }}%{% else %}--{% endif %}</div>
+                                            <div class="system-kpi-label">Hybrid</div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon green">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value active">{{ active_models }}</span>
-                                <span class="chapter-kpi-label">Active</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon orange">
-                                <i class="fas fa-rocket"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="deployedModelsKpi">--</span>
-                                <span class="chapter-kpi-label">Deployed</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon blue">
-                                <i class="fas fa-chart-line"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value">47.2K</span>
-                                <span class="chapter-kpi-label">Requests (7D)</span>
-                            </div>
-                        </div>
+                        <a href="{% url 'create_model_endpoint' %}" class="create-button" onclick="event.stopPropagation();" style="white-space: nowrap; flex-shrink: 0;">
+                            <i class="fas fa-plus"></i>
+                            Create New Model
+                        </a>
                     </div>
                 </div>
                 <div class="chapter-content">
@@ -870,11 +890,6 @@
                             </a>
                             {% endfor %}
                         </div>
-
-                        <a href="{% url 'create_model_endpoint' %}" class="create-button">
-                            <i class="fas fa-plus"></i>
-                            Create New Model
-                        </a>
                         {% else %}
                         <div class="empty-state">
                             <i class="fas fa-cube empty-state-icon"></i>
@@ -984,31 +999,6 @@
             const container = header.closest('.chapter-container');
             container.classList.toggle('open');
         }
-
-        // Load deployed models KPI from API
-        (async function() {
-            try {
-                const response = await fetch('/api/models/');
-                if (!response.ok) throw new Error('Failed to fetch models data');
-                const data = await response.json();
-
-                if (data.success && data.kpi) {
-                    const deployedEl = document.getElementById('deployedModelsKpi');
-                    if (deployedEl) {
-                        deployedEl.textContent = data.kpi.deployed || 0;
-                        if (data.kpi.deployed > 0) {
-                            deployedEl.classList.add('active');
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to fetch models KPI:', error);
-                const deployedEl = document.getElementById('deployedModelsKpi');
-                if (deployedEl) {
-                    deployedEl.textContent = '0';
-                }
-            }
-        })();
 
         // System Dashboard Module
         const SystemDashboard = (function() {

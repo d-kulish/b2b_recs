@@ -49,7 +49,7 @@ The starting page is intentionally **different** from model pages to provide cle
 Three collapsible chapters displayed vertically:
 
 1. **System Details** - Platform metrics, charts, and recent activity
-2. **Your Models** - Manage ML models and endpoints
+2. **Your Projects** - Manage ML models and endpoints
 3. **Billing** - Usage tracking and subscription details
 
 ---
@@ -101,7 +101,7 @@ Three collapsible chapters displayed vertically:
 | Chapter | Icon | Background Gradient |
 |---------|------|---------------------|
 | System Details | `fa-server` | Blue (#3b82f6 → #60a5fa) |
-| Your Models | `fa-cube` | Purple (#8b5cf6 → #a78bfa) |
+| Your Projects | `fa-cube` | Purple (#8b5cf6 → #a78bfa) |
 | Billing | `fa-credit-card` | Orange (#f59e0b → #fbbf24) |
 
 ---
@@ -188,9 +188,32 @@ Daily snapshot model storing GCP resource usage. Populated by `python manage.py 
 
 ---
 
-## Chapter 2: Your Models
+## Chapter 2: Your Projects
 
-Lists all models with cards linking to their dashboards.
+Displays grouped KPI containers for assets and model accuracy, plus model cards linking to their dashboards.
+
+### KPI Containers (2-column grid)
+
+Two `system-kpi-card` containers reusing the same CSS classes as Chapter 1's KPI groups, displayed in a flex row with a "+ Create New Model" button to the right.
+
+**Assets Card (Purple icon, `fa-folder-open`):**
+
+| KPI | Context Variable | Data Source |
+|-----|-----------------|-------------|
+| Projects | `total_models` | `ModelEndpoint.objects.count()` |
+| Models | `total_registered_models` | `RegisteredModel.objects.count()` |
+| Trainings | `total_trainings` | `TrainingRun.objects.count()` |
+| Experiments | `total_experiments` | `QuickTest.objects.count()` |
+
+**Accuracy Card (Green icon, `fa-bullseye`):**
+
+| KPI | Context Variable | Data Source | Format |
+|-----|-----------------|-------------|--------|
+| Retrieval | `best_retrieval_recall` | Best `recall_at_100` from retrieval TrainingRuns | `81.2%` or `--` |
+| Ranking | `best_ranking_rmse` | Best (lowest) `rmse` from ranking TrainingRuns | `0.45` or `--` |
+| Hybrid | `best_hybrid_recall` | Best `recall_at_100` from multitask TrainingRuns | `81.2%` or `--` |
+
+The "+ Create New Model" button sits to the right of the KPI grid in the chapter header area (uses `event.stopPropagation()` to avoid triggering the chapter toggle).
 
 ### Model Card Structure
 
@@ -364,6 +387,12 @@ The view provides these context variables:
 | `models` | QuerySet | All ModelEndpoint objects |
 | `total_models` | int | Count of all models |
 | `active_models` | int | Count of models with status='active' |
+| `total_registered_models` | int | Count of all RegisteredModel objects |
+| `total_trainings` | int | Count of all TrainingRun objects |
+| `total_experiments` | int | Count of all QuickTest objects |
+| `best_retrieval_recall` | float/None | Best recall@100 from retrieval TrainingRuns |
+| `best_ranking_rmse` | float/None | Best (lowest) RMSE from ranking TrainingRuns |
+| `best_hybrid_recall` | float/None | Best recall@100 from multitask TrainingRuns |
 
 ---
 

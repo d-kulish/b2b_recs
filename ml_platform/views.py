@@ -523,8 +523,8 @@ def api_system_charts(request):
 def api_system_resource_charts(request):
     """
     API endpoint returning resource-oriented chart data from ResourceMetrics snapshots.
-    Returns 6 chart datasets: bq_storage, bq_jobs, cloud_run_services,
-    cloud_run_requests, db_size, gcs_storage.
+    Returns chart datasets: bq_storage, bq_jobs, etl_health,
+    cloud_run_requests, db_size, gcs_storage, gpu_hours, gpu_types.
     """
     try:
         cutoff_30d = timezone.now().date() - timedelta(days=30)
@@ -567,12 +567,34 @@ def api_system_resource_charts(request):
                 round(s.bq_bytes_billed / (1024**3), 2) for s in snapshots_30d
             ]
 
-        # 3. Cloud Run Services Status (latest snapshot) - horizontal bar
-        cloud_run_services = {'services': [], 'total': 0, 'active': 0}
-        if latest and latest.cloud_run_services:
-            cloud_run_services['services'] = latest.cloud_run_services
-            cloud_run_services['total'] = len(latest.cloud_run_services)
-            cloud_run_services['active'] = latest.cloud_run_active_services
+        # 3. ETL Health (30d) - stacked bar (successful/failed per day)
+        etl_health = {'labels': [], 'completed': [], 'failed': []}
+        cutoff_30d_dt = timezone.now() - timedelta(days=30)
+        etl_by_day = ETLRun.objects.filter(
+            started_at__gte=cutoff_30d_dt
+        ).annotate(
+            date=TruncDate('started_at')
+        ).values('date', 'status').annotate(
+            count=Count('id')
+        ).order_by('date')
+
+        etl_dict = {}
+        for row in etl_by_day:
+            if row['date']:
+                date_str = row['date'].strftime('%Y-%m-%d')
+                if date_str not in etl_dict:
+                    etl_dict[date_str] = {'completed': 0, 'failed': 0}
+                if row['status'] == 'completed':
+                    etl_dict[date_str]['completed'] += row['count']
+                elif row['status'] in ['failed', 'partial']:
+                    etl_dict[date_str]['failed'] += row['count']
+
+        etl_labels = sorted(etl_dict.keys())
+        etl_health = {
+            'labels': etl_labels,
+            'completed': [etl_dict[d]['completed'] for d in etl_labels],
+            'failed': [etl_dict[d]['failed'] for d in etl_labels],
+        }
 
         # 4. Cloud Run Request Volume (30d)
         cloud_run_requests = {'labels': [], 'requests': []}
@@ -635,7 +657,7 @@ def api_system_resource_charts(request):
             'data': {
                 'bq_storage': bq_storage,
                 'bq_jobs': bq_jobs,
-                'cloud_run_services': cloud_run_services,
+                'etl_health': etl_health,
                 'cloud_run_requests': cloud_run_requests,
                 'db_size': db_size,
                 'gcs_storage': gcs_storage,

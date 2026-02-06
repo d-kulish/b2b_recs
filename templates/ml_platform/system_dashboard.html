@@ -743,9 +743,9 @@
                                     </div>
                                     <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cloud Run</h4>
                                 </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Services Status</h5>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">ETL Jobs (30d)</h5>
                                 <div style="height: 180px; position: relative;">
-                                    <canvas id="chartCloudRunServices"></canvas>
+                                    <canvas id="chartEtlHealth"></canvas>
                                 </div>
                                 <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin: 16px 0 8px 0;">Request Volume (30d)</h5>
                                 <div style="height: 180px; position: relative;">
@@ -1143,7 +1143,7 @@
                     if (result.success && result.data) {
                         renderBqStorageChart(result.data.bq_storage);
                         renderBqJobsChart(result.data.bq_jobs);
-                        renderCloudRunServicesChart(result.data.cloud_run_services);
+                        renderEtlHealthChart(result.data.etl_health);
                         renderCloudRunRequestsChart(result.data.cloud_run_requests);
                         renderDbSizeChart(result.data.db_size);
                         renderGcsStorageChart(result.data.gcs_storage);
@@ -1242,53 +1242,48 @@
                 });
             }
 
-            function renderCloudRunServicesChart(data) {
-                const ctx = document.getElementById('chartCloudRunServices');
+            function renderEtlHealthChart(data) {
+                const ctx = document.getElementById('chartEtlHealth');
                 if (!ctx) return;
-                if (charts.cloudRunServices) charts.cloudRunServices.destroy();
+                if (charts.etlHealth) charts.etlHealth.destroy();
 
-                if (!data.services || data.services.length === 0) {
+                if (!data.labels || data.labels.length === 0) {
                     showNoData(ctx);
                     return;
                 }
 
-                const labels = data.services.map(s => s.name);
-                const bgColors = data.services.map(s =>
-                    s.status === 'Ready' ? '#34a853' : (s.status === 'Not Ready' ? '#ea4335' : '#9aa0a6')
-                );
-                const values = data.services.map(() => 1);
-
-                charts.cloudRunServices = new Chart(ctx, {
+                charts.etlHealth = new Chart(ctx, {
                     type: 'bar',
                     data: {
-                        labels,
-                        datasets: [{
-                            label: 'Service',
-                            data: values,
-                            backgroundColor: bgColors,
-                            borderRadius: 4,
-                        }]
+                        labels: data.labels.map(formatDate),
+                        datasets: [
+                            {
+                                label: 'Completed',
+                                data: data.completed,
+                                backgroundColor: '#34a853',
+                                borderRadius: 2,
+                            },
+                            {
+                                label: 'Failed',
+                                data: data.failed,
+                                backgroundColor: '#ea4335',
+                                borderRadius: 2,
+                            }
+                        ]
                     },
                     options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(ctx) {
-                                        const svc = data.services[ctx.dataIndex];
-                                        return `${svc.status}${svc.is_ml_serving ? ' (ML Serving)' : ''}`;
-                                    }
-                                }
-                            }
-                        },
+                        ...getChartOptions(),
                         scales: {
-                            x: { display: false },
-                            y: {
+                            x: {
+                                stacked: true,
                                 grid: { display: false },
-                                ticks: { font: { size: 11 } }
+                                ticks: { font: { size: 10 }, maxRotation: 45 }
+                            },
+                            y: {
+                                stacked: true,
+                                beginAtZero: true,
+                                ticks: { stepSize: 1, font: { size: 10 } },
+                                grid: { color: '#f3f4f6' }
                             }
                         }
                     }

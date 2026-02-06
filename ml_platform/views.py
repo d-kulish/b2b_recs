@@ -15,6 +15,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Count, Avg, Max
@@ -31,6 +32,7 @@ from .models import (
     Deployment,
     SystemMetrics,
     QuickTest,
+    ResourceMetrics,
 )
 from .training.models import TrainingRun, DeployedEndpoint
 
@@ -517,6 +519,141 @@ def api_system_charts(request):
         }, status=500)
 
 
+@login_required
+def api_system_resource_charts(request):
+    """
+    API endpoint returning resource-oriented chart data from ResourceMetrics snapshots.
+    Returns 6 chart datasets: bq_storage, bq_jobs, cloud_run_services,
+    cloud_run_requests, db_size, gcs_storage.
+    """
+    try:
+        cutoff_30d = timezone.now().date() - timedelta(days=30)
+        cutoff_14d = timezone.now().date() - timedelta(days=14)
+        cutoff_7d = timezone.now().date() - timedelta(days=7)
+
+        snapshots_30d = list(
+            ResourceMetrics.objects.filter(date__gte=cutoff_30d).order_by('date')
+        )
+        snapshots_14d = [s for s in snapshots_30d if s.date >= cutoff_14d]
+        snapshots_7d = [s for s in snapshots_30d if s.date >= cutoff_7d]
+
+        # Latest snapshot for current-state charts
+        latest = snapshots_30d[-1] if snapshots_30d else None
+
+        # 1. BQ Storage by Table (30d) - stacked bar
+        bq_storage = {'labels': [], 'tables': [], 'total_gb': []}
+        if snapshots_30d:
+            # Collect all unique table names across snapshots
+            all_table_names = []
+            for s in snapshots_30d:
+                for t in (s.bq_table_details or []):
+                    if t['name'] not in all_table_names:
+                        all_table_names.append(t['name'])
+
+            bq_storage['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            bq_storage['total_gb'] = [round(s.bq_total_bytes / (1024**3), 2) for s in snapshots_30d]
+
+            for tname in all_table_names[:10]:  # Top 10 tables
+                series = []
+                for s in snapshots_30d:
+                    table_map = {t['name']: t for t in (s.bq_table_details or [])}
+                    bytes_val = table_map.get(tname, {}).get('bytes', 0)
+                    series.append(round(bytes_val / (1024**2), 1))  # MB
+                bq_storage['tables'].append({'name': tname, 'data': series})
+
+        # 2. BQ Jobs & Bytes Billed (14d) - dual axis
+        bq_jobs = {'labels': [], 'completed': [], 'failed': [], 'bytes_billed_gb': []}
+        if snapshots_14d:
+            bq_jobs['labels'] = [s.date.isoformat() for s in snapshots_14d]
+            bq_jobs['completed'] = [s.bq_jobs_completed for s in snapshots_14d]
+            bq_jobs['failed'] = [s.bq_jobs_failed for s in snapshots_14d]
+            bq_jobs['bytes_billed_gb'] = [
+                round(s.bq_bytes_billed / (1024**3), 2) for s in snapshots_14d
+            ]
+
+        # 3. Cloud Run Services Status (latest snapshot) - horizontal bar
+        cloud_run_services = {'services': [], 'total': 0, 'active': 0}
+        if latest and latest.cloud_run_services:
+            cloud_run_services['services'] = latest.cloud_run_services
+            cloud_run_services['total'] = len(latest.cloud_run_services)
+            cloud_run_services['active'] = latest.cloud_run_active_services
+
+        # 4. Cloud Run Request Volume (7d)
+        cloud_run_requests = {'labels': [], 'requests': []}
+        if snapshots_7d:
+            cloud_run_requests['labels'] = [s.date.isoformat() for s in snapshots_7d]
+            cloud_run_requests['requests'] = [s.cloud_run_total_requests for s in snapshots_7d]
+
+        # 5. DB Size Trend (30d) - line chart
+        db_size = {'labels': [], 'size_mb': [], 'top_tables': []}
+        if snapshots_30d:
+            db_size['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            db_size['size_mb'] = [
+                round(s.db_size_bytes / (1024**2), 1) for s in snapshots_30d
+            ]
+            # Top tables from latest snapshot
+            if latest and latest.db_table_details:
+                db_size['top_tables'] = [
+                    {'name': t['name'], 'size_mb': round(t['size_bytes'] / (1024**2), 1)}
+                    for t in (latest.db_table_details or [])[:10]
+                ]
+
+        # 6. GCS Bucket Usage (30d) - stacked bar
+        gcs_storage = {'labels': [], 'buckets': [], 'total_gb': []}
+        if snapshots_30d:
+            all_bucket_names = []
+            for s in snapshots_30d:
+                for b in (s.gcs_bucket_details or []):
+                    if b['name'] not in all_bucket_names:
+                        all_bucket_names.append(b['name'])
+
+            gcs_storage['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            gcs_storage['total_gb'] = [round(s.gcs_total_bytes / (1024**3), 2) for s in snapshots_30d]
+
+            for bname in all_bucket_names[:10]:
+                series = []
+                for s in snapshots_30d:
+                    bucket_map = {b['name']: b for b in (s.gcs_bucket_details or [])}
+                    bytes_val = bucket_map.get(bname, {}).get('total_bytes', 0)
+                    series.append(round(bytes_val / (1024**2), 1))  # MB
+                gcs_storage['buckets'].append({'name': bname, 'data': series})
+
+        # 7. GPU Training Hours (30d) - bar chart
+        gpu_hours = {'labels': [], 'hours': [], 'completed': [], 'failed': []}
+        if snapshots_30d:
+            gpu_hours['labels'] = [s.date.isoformat() for s in snapshots_30d]
+            gpu_hours['hours'] = [s.gpu_training_hours for s in snapshots_30d]
+            gpu_hours['completed'] = [s.gpu_jobs_completed for s in snapshots_30d]
+            gpu_hours['failed'] = [s.gpu_jobs_failed for s in snapshots_30d]
+
+        # 8. GPU Jobs by Type (latest snapshot) - horizontal bar
+        gpu_types = {'types': [], 'total_hours': 0}
+        if latest and latest.gpu_jobs_by_type:
+            gpu_types['types'] = latest.gpu_jobs_by_type
+            gpu_types['total_hours'] = sum(
+                t.get('hours', 0) for t in latest.gpu_jobs_by_type
+            )
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'bq_storage': bq_storage,
+                'bq_jobs': bq_jobs,
+                'cloud_run_services': cloud_run_services,
+                'cloud_run_requests': cloud_run_requests,
+                'db_size': db_size,
+                'gcs_storage': gcs_storage,
+                'gpu_hours': gpu_hours,
+                'gpu_types': gpu_types,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e),
+        }, status=500)
+
+
 def _time_ago(dt):
     """Convert datetime to human-readable time ago string."""
     if not dt:
@@ -632,5 +769,43 @@ def api_system_recent_activity(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
+            'message': str(e),
+        }, status=500)
+
+
+# ============================================================================
+# SCHEDULER WEBHOOKS
+# ============================================================================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def scheduler_collect_metrics_webhook(request):
+    """
+    Webhook for Cloud Scheduler to trigger daily resource metrics collection.
+    Accepts OIDC authenticated requests from Cloud Scheduler.
+    No login required as this uses OIDC token authentication.
+    """
+    import logging
+    from datetime import date
+    from django.core.management import call_command
+    from io import StringIO
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        output = StringIO()
+        call_command('collect_resource_metrics', stdout=output)
+        logger.info(f'Scheduled metrics collection completed for {date.today()}')
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Metrics collected for {date.today()}',
+            'output': output.getvalue(),
+        })
+
+    except Exception as e:
+        logger.error(f'Scheduled metrics collection failed: {e}')
+        return JsonResponse({
+            'status': 'error',
             'message': str(e),
         }, status=500)

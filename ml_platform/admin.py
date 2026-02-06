@@ -13,6 +13,7 @@ from .models import (
     Deployment,
     PredictionLog,
     SystemMetrics,
+    ResourceMetrics,
     FeatureConfig,
     FeatureConfigVersion,
     ModelConfig,
@@ -119,6 +120,13 @@ class SystemMetricsAdmin(admin.ModelAdmin):
     list_display = ['date', 'total_endpoints', 'active_endpoints', 'total_pipeline_runs', 'total_predictions']
     list_filter = ['date']
     readonly_fields = ['recorded_at']
+
+
+@admin.register(ResourceMetrics)
+class ResourceMetricsAdmin(admin.ModelAdmin):
+    list_display = ('date', 'bq_total_bytes', 'cloud_run_active_services', 'db_size_bytes', 'gcs_total_bytes', 'gpu_training_hours', 'gpu_jobs_completed')
+    list_filter = ('date',)
+    readonly_fields = ('created_at',)
 
 
 @admin.register(FeatureConfig)

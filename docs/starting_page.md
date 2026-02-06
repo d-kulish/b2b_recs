@@ -108,7 +108,7 @@ Three collapsible chapters displayed vertically:
 
 ## Chapter 1: System Details
 
-Displays user-centric metrics with 3 grouped KPI cards, 4 charts, and a recent activity table.
+Displays user-centric metrics with 3 grouped KPI cards and 6 resource-oriented charts in a 3-column layout.
 
 ### KPI Groups (3 Cards)
 
@@ -118,7 +118,7 @@ The KPIs are organized into 3 themed cards with icons, stats, and progress bars:
 | KPI | ID | Data Source |
 |-----|----|-------------|
 | Active Endpoints | `kpiActiveEndpoints` | `DeployedEndpoint.objects.filter(is_active=True).count()` |
-| Requests (7d) | `kpiRequests` | Placeholder (0) |
+| Requests (7d) | `kpiRequests` | Sum of `cloud_run_total_requests` over last 7 days |
 | Latency | `kpiLatency` | Placeholder (0ms) |
 | Progress Bar | `kpiLatencyBar`, `kpiLatencyStatus` | Latency status indicator |
 
@@ -138,28 +138,51 @@ The KPIs are organized into 3 themed cards with icons, stats, and progress bars:
 | Data Volume | `kpiDataVolume` | Sum of table sizes in GB |
 | Progress Bar | `kpiVolumeBar`, `kpiVolumeStatus` | Storage used indicator (100GB max)
 
-### Charts Grid (2x2)
+### Resource Charts (3 columns x 2 rows)
+
+Data is sourced from the `ResourceMetrics` model (daily snapshots collected by `collect_resource_metrics` management command).
+
+**Column 1: BigQuery** (Blue palette, `#4285f4`)
 
 | Chart | Type | Data Source | Period |
 |-------|------|-------------|--------|
-| Training Activity | Line | TrainingRun (started/completed/failed) | 30 days |
-| Model Performance | Line | TrainingRun (best/avg Recall@100) | 30 days |
-| Endpoint Requests | Area | Placeholder (future: request logging) | 7 days |
-| ETL Health | Stacked Bar | ETLRun (completed/failed) | 14 days |
+| Storage by Table | Stacked Bar | `bq_table_details` per-table bytes | 30 days |
+| Jobs & Bytes Billed | Bar + Line (dual-axis) | `bq_jobs_completed`, `bq_jobs_failed`, `bq_bytes_billed` | 14 days |
 
-### Recent Activity Table
+**Column 2: Cloud Run** (Green palette, `#34a853`)
 
-Displays last 5 activities merged from:
-- `TrainingRun` - Training started/completed/failed
-- `QuickTest` - Experiment completed/failed
-- `ETLRun` - ETL completed/failed
-- `DeployedEndpoint` - Deployment events
+| Chart | Type | Data Source | Period |
+|-------|------|-------------|--------|
+| Services Status | Horizontal Bar | `cloud_run_services` (latest snapshot) | Current |
+| Request Volume | Line (filled) | `cloud_run_total_requests` via Cloud Monitoring API | 7 days |
 
-**Columns:**
-- Type (with icon)
-- Status (badge)
-- Model name
-- Time ago
+**Column 3: Database & Storage** (Purple palette, `#9333ea`)
+
+| Chart | Type | Data Source | Period |
+|-------|------|-------------|--------|
+| DB Size Trend | Line (filled) | `db_size_bytes` | 30 days |
+| GCS Bucket Usage | Stacked Bar | `gcs_bucket_details` per-bucket bytes | 30 days |
+
+### ResourceMetrics Model
+
+Daily snapshot model storing GCP resource usage. Populated by `python manage.py collect_resource_metrics` or automatically via a Cloud Scheduler job (daily at 02:00 UTC).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `date` | DateField | Snapshot date (unique) |
+| `bq_total_bytes` | BigIntegerField | Total BigQuery storage |
+| `bq_table_details` | JSONField | Per-table breakdown `[{name, bytes, rows}]` |
+| `bq_jobs_completed` | IntegerField | Completed BQ jobs |
+| `bq_jobs_failed` | IntegerField | Failed BQ jobs |
+| `bq_bytes_billed` | BigIntegerField | Total bytes billed |
+| `cloud_run_services` | JSONField | Service list `[{name, status, is_ml_serving}]` |
+| `cloud_run_active_services` | IntegerField | Count of active services |
+| `cloud_run_total_requests` | IntegerField | Total ML serving requests on this day |
+| `cloud_run_request_details` | JSONField | Per-service breakdown `[{name, requests, errors}]` |
+| `db_size_bytes` | BigIntegerField | PostgreSQL database size |
+| `db_table_details` | JSONField | Top tables `[{name, size_bytes, row_count}]` |
+| `gcs_bucket_details` | JSONField | Bucket usage `[{name, total_bytes, object_count}]` |
+| `gcs_total_bytes` | BigIntegerField | Total GCS storage |
 
 ---
 
@@ -233,59 +256,56 @@ Returns system KPIs for the 3 grouped cards.
 }
 ```
 
-### `GET /api/system/charts/`
+### `GET /api/system/resource-charts/`
 
-Returns 4 chart datasets.
+Returns 6 resource chart datasets from `ResourceMetrics` daily snapshots.
 
 **Response:**
 ```json
 {
     "success": true,
     "data": {
-        "training_activity": {
-            "labels": ["2026-01-15", "2026-01-16", ...],
-            "started": [2, 1, ...],
-            "completed": [1, 2, ...],
-            "failed": [0, 0, ...]
+        "bq_storage": {
+            "labels": ["2026-01-07", ...],
+            "tables": [{"name": "orders", "data": [1024, 1030, ...]}, ...],
+            "total_gb": [1.5, 1.6, ...]
         },
-        "model_performance": {
-            "labels": ["2026-01-15", ...],
-            "best": [85.5, 86.2, ...],
-            "avg": [78.3, 79.1, ...]
+        "bq_jobs": {
+            "labels": ["2026-01-24", ...],
+            "completed": [5, 8, ...],
+            "failed": [0, 1, ...],
+            "bytes_billed_gb": [0.5, 0.8, ...]
         },
-        "endpoint_requests": {
-            "labels": ["2026-01-29", ...],
-            "requests": [0, 0, ...]
+        "cloud_run_services": {
+            "services": [{"name": "django-app", "status": "Ready", "is_ml_serving": false}, ...],
+            "total": 4,
+            "active": 3
         },
-        "etl_health": {
-            "labels": ["2026-01-22", ...],
-            "completed": [3, 2, ...],
-            "failed": [0, 1, ...]
+        "cloud_run_requests": {
+            "labels": ["2026-01-31", ...],
+            "requests": [142, 305, ...]
+        },
+        "db_size": {
+            "labels": ["2026-01-07", ...],
+            "size_mb": [45.2, 46.1, ...],
+            "top_tables": [{"name": "ml_platform_etlrun", "size_mb": 12.3}, ...]
+        },
+        "gcs_storage": {
+            "labels": ["2026-01-07", ...],
+            "buckets": [{"name": "training-artifacts", "data": [500, 520, ...]}, ...],
+            "total_gb": [1.2, 1.3, ...]
         }
     }
 }
 ```
 
+### `GET /api/system/charts/`
+
+Returns 4 ML-workflow chart datasets (legacy, still available).
+
 ### `GET /api/system/recent-activity/`
 
 Returns last 5 activities merged from multiple sources.
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": [
-        {
-            "type": "Training",
-            "status": "completed",
-            "model": "product-recs",
-            "time": "2026-02-05T10:30:00Z",
-            "time_ago": "2h ago"
-        },
-        ...
-    ]
-}
-```
 
 ---
 
@@ -312,17 +332,23 @@ const SystemDashboard = (function() {
     // Public methods
     return {
         loadKPIs,        // Fetch and populate KPI values
-        loadCharts,      // Fetch and render Chart.js charts
-        loadRecentActivity  // Fetch and render activity table
+        loadCharts,      // Fetch and render 6 resource charts
     };
 })();
 ```
 
+**Chart Render Functions:**
+- `renderBqStorageChart(data)` - Stacked bar (tables as series, 30d)
+- `renderBqJobsChart(data)` - Bar + line dual-axis (jobs + bytes billed, 14d)
+- `renderCloudRunServicesChart(data)` - Horizontal bar (services with status colors)
+- `renderCloudRunRequestsChart(data)` - Line with fill (Cloud Monitoring data, 7d)
+- `renderDbSizeChart(data)` - Line with fill (DB size in MB, 30d)
+- `renderGcsStorageChart(data)` - Stacked bar (buckets as series, 30d)
+
 **Key Features:**
 - Destroys charts before recreating (prevents memory leaks)
 - Graceful fallbacks for missing data ("No data available")
-- Status badge color mapping
-- Time ago formatting
+- Color palettes per resource column (blue/green/purple)
 
 ---
 
@@ -357,11 +383,41 @@ The view provides these context variables:
 
 ---
 
+## Metrics Collection
+
+### Management Commands
+
+| Command | Description |
+|---------|-------------|
+| `collect_resource_metrics` | Collects a single day's GCP resource metrics snapshot (BQ, Cloud Run, DB, GCS, GPU, request counts) |
+| `backfill_resource_metrics --days 30` | Backfills historical data with growth curves + real GPU and Cloud Monitoring request data |
+| `setup_metrics_scheduler --url https://<app>` | Creates a Cloud Scheduler job for automated daily collection |
+| `setup_metrics_scheduler --delete` | Deletes the Cloud Scheduler job |
+
+### Automated Daily Collection
+
+A Cloud Scheduler job triggers `POST /api/system/collect-metrics-webhook/` daily at 02:00 UTC. The webhook runs the same logic as `collect_resource_metrics` and returns a JSON response.
+
+- **Scheduler job name:** `collect-resource-metrics`
+- **Schedule:** `0 2 * * *` (daily at 02:00 UTC)
+- **Auth:** OIDC token (no Django login required)
+- **Setup:** `python manage.py setup_metrics_scheduler --url https://<cloud-run-url>`
+
+### Cloud Monitoring Integration
+
+The `cloud_run_total_requests` and `cloud_run_request_details` fields are populated by querying the `run.googleapis.com/request_count` metric from the Cloud Monitoring API. Only services ending with `-serving` (ML endpoints) are included.
+
+**Dependency:** `google-cloud-monitoring>=2.21.0`
+
+---
+
 ## Future Enhancements
 
 - [ ] Dynamic project ID from settings/database
 - [ ] Real billing data from subscription service
 - [ ] User profile dropdown menu
 - [ ] Quick actions in header
-- [x] ~~Recent activity feed~~ (Implemented)
-- [ ] Real endpoint request metrics (currently placeholder)
+- [x] ~~Recent activity feed~~ (Implemented, later replaced by resource charts)
+- [x] ~~Resource charts~~ (Implemented - 6 charts in 3-column layout)
+- [x] ~~Cloud Run request volume via Cloud Monitoring API~~ (Implemented - queries `run.googleapis.com/request_count` for `-serving` services)
+- [x] ~~Scheduled `collect_resource_metrics` via Cloud Scheduler~~ (Implemented - daily at 02:00 UTC via webhook)

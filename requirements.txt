@@ -47,6 +47,7 @@ google-cloud-run>=0.15.0
 google-cloud-aiplatform>=1.38.0
 google-cloud-build>=3.0.0
 google-cloud-logging>=3.10.0
+google-cloud-monitoring>=2.21.0
 
 # TFX runs in Cloud Build (Python 3.10), not locally
 # These packages are installed in Cloud Build, not in the Django venv:

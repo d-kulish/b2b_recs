@@ -50,5 +50,11 @@ urlpatterns = [
     # =========================================================================
     path('api/system/kpis/', views.api_system_kpis, name='api_system_kpis'),
     path('api/system/charts/', views.api_system_charts, name='api_system_charts'),
+    path('api/system/resource-charts/', views.api_system_resource_charts, name='api_system_resource_charts'),
     path('api/system/recent-activity/', views.api_system_recent_activity, name='api_system_recent_activity'),
+
+    # =========================================================================
+    # SCHEDULER WEBHOOKS
+    # =========================================================================
+    path('api/system/collect-metrics-webhook/', views.scheduler_collect_metrics_webhook, name='api_collect_metrics_webhook'),
 ]

@@ -936,6 +936,50 @@ class SystemMetrics(models.Model):
         return f"System Metrics: {self.date}"
 
 
+class ResourceMetrics(models.Model):
+    """Daily snapshot of GCP resource usage for dashboard charts."""
+    date = models.DateField(db_index=True)
+
+    # BigQuery metrics
+    bq_total_bytes = models.BigIntegerField(default=0, help_text="Total BQ storage in bytes")
+    bq_table_details = models.JSONField(default=list, help_text="Per-table breakdown [{name, bytes, rows}]")
+    bq_jobs_completed = models.IntegerField(default=0)
+    bq_jobs_failed = models.IntegerField(default=0)
+    bq_bytes_billed = models.BigIntegerField(default=0, help_text="Total bytes billed by BQ jobs")
+
+    # Cloud Run metrics
+    cloud_run_services = models.JSONField(default=list, help_text="[{name, status, is_ml_serving}]")
+    cloud_run_active_services = models.IntegerField(default=0)
+    cloud_run_total_requests = models.IntegerField(default=0, help_text="Total ML serving requests on this day")
+    cloud_run_request_details = models.JSONField(default=list, help_text="[{name, requests, errors}]")
+
+    # Database (Cloud SQL / PostgreSQL) metrics
+    db_size_bytes = models.BigIntegerField(default=0, help_text="PostgreSQL database size in bytes")
+    db_table_details = models.JSONField(default=list, help_text="[{name, size_bytes, row_count}]")
+
+    # GCS Storage metrics
+    gcs_bucket_details = models.JSONField(default=list, help_text="[{name, total_bytes, object_count}]")
+    gcs_total_bytes = models.BigIntegerField(default=0)
+
+    # GPU / Compute metrics (derived from TrainingRun data)
+    gpu_training_hours = models.FloatField(default=0, help_text="Total GPU-hours for training jobs on this day")
+    gpu_jobs_completed = models.IntegerField(default=0, help_text="Training jobs completed on this day")
+    gpu_jobs_failed = models.IntegerField(default=0, help_text="Training jobs failed on this day")
+    gpu_jobs_running = models.IntegerField(default=0, help_text="Training jobs running at snapshot time")
+    gpu_jobs_by_type = models.JSONField(default=list, help_text="[{gpu_type, count, hours}]")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = ['date']
+        verbose_name = 'Resource Metrics'
+        verbose_name_plural = 'Resource Metrics'
+
+    def __str__(self):
+        return f"Resource Metrics: {self.date}"
+
+
 # =============================================================================
 # DATASET DOMAIN MODELS
 # =============================================================================

@@ -722,6 +722,10 @@
     cursor: not-allowed;
 }
 
+.card-action-btn.rerun.wide {
+    width: 128px;
+}
+
 /* Deploy Action Button (orange/amber like fire icon) - solid when active, outline when disabled */
 .card-action-btn.deploy {
     width: 64px;

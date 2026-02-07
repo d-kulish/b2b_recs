@@ -371,6 +371,7 @@ def model_etl(request, model_id):
 
         run_data = {
             'id': run.id,
+            'data_source_id': run.data_source_id,
             'status': run.status,
             'error_type': run.error_type or '',  # Error classification for failed runs
             'job_name': run.data_source.name if run.data_source else 'Unknown',

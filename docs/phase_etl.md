@@ -1792,6 +1792,7 @@ filteredRunsData = allRunsData.filter(run => {
 [
     {
         "id": 567,
+        "data_source_id": 42,
         "job_name": "Daily Transactions",
         "source_type": "postgresql",
         "connection_name": "Prod PostgreSQL",
@@ -1867,7 +1868,7 @@ Clicking "View Details" opens a modal with comprehensive run information:
 
 ### ETL Run Cards
 
-The Recent Runs section displays ETL runs as **card-based tablets** providing at-a-glance status, metrics, and a 4-stage progress bar.
+The Recent Runs section displays ETL runs as **card-based tablets** providing at-a-glance status, metrics, a 4-stage progress bar, and action buttons (View + Rerun).
 
 #### Card Layout
 
@@ -1910,6 +1911,12 @@ Legend (terminal statuses — completed/failed/partial/cancelled):
 ████████ = Completed (purple gradient)
 ▓▓▓▓▓▓▓▓ = Failed (red)
 ░░░░░░░░ = Not reached (light gray)
+
+Each card's actions column contains two buttons:
+- **View** — Opens run details modal (`viewRunDetails(run.id)`)
+- **Rerun** — Re-triggers the same ETL source (`runSourceNow(run.data_source_id)`), teal, 128px wide (`.card-action-btn.rerun.wide`)
+  - **Enabled** (solid teal) for terminal states: `completed`, `failed`, `cancelled`, `partial`
+  - **Disabled** (outline, 50% opacity) for `running` and `pending` states
 
 Running/Pending jobs show an animated shimmer bar instead:
 ┌──────────────────────────────────────────────────────────────────┐
@@ -2717,6 +2724,7 @@ Three independent issues:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v18 | 2026-02-07 | ETL Run Cards: Added Rerun button to run cards with `data_source_id` in run JSON; reuses `runSourceNow()` and existing trigger endpoint; disabled for running/pending states |
 | v17 | 2026-02-07 | ETL Run Cards: Replaced frozen 4-segment bar with animated shimmer indicator for running/pending jobs; fixed polling to target cards instead of table rows; added missing API fields |
 | v16 | 2026-02-03 | ETL Jobs: Added filter bar (Status, Connection, Schedule) matching ETL Runs style |
 | v15 | 2026-02-03 | ETL Jobs: 6 per page, 2-column layout, fixed card height with `items-start` |

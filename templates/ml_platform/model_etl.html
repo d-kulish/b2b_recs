@@ -3391,6 +3391,12 @@ function renderRunCard(run) {
                 <!-- Column 4: Actions (20%) -->
                 <div class="run-card-col-actions">
                     <button class="card-action-btn view" onclick="event.stopPropagation(); viewRunDetails(${run.id})">View</button>
+                    <button class="card-action-btn rerun wide"
+                        onclick="event.stopPropagation(); runSourceNow(${run.data_source_id})"
+                        ${['completed', 'failed', 'cancelled', 'partial'].includes(run.status) ? '' : 'disabled'}
+                        title="${['completed', 'failed', 'cancelled', 'partial'].includes(run.status) ? 'Re-run this ETL job' : 'Rerun available after completion'}">
+                        Rerun
+                    </button>
                 </div>
             </div>
             ${stagesHtml}

@@ -5,8 +5,9 @@ from django.utils import timezone
 
 class ModelEndpoint(models.Model):
     """
-    Represents a complete ML project/pipeline instance.
-    Each ModelEndpoint is a separate recommendation system that can be trained and deployed.
+    Root project entity. Represents an isolated ML project workspace.
+    Called "Project" in the UI. All other entities (datasets, configs,
+    training runs, endpoints) are scoped to this.
     """
 
     STATUS_CHOICES = [

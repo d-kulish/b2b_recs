@@ -955,3 +955,94 @@ def api_setup_metrics_scheduler(request):
             'status': 'error',
             'message': str(e),
         }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_setup_cleanup_scheduler(request):
+    """
+    Create or update the Cloud Scheduler job for daily GCS artifact cleanup.
+    Must be called from within the deployed app (Cloud Run service account
+    has the required IAM roles).
+    """
+    import os
+    import json
+    import logging
+    from urllib.parse import urlparse
+    from google.cloud import scheduler_v1
+    from google.api_core import exceptions as google_exceptions
+
+    logger = logging.getLogger(__name__)
+
+    project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID', 'b2b-recs'))
+    region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+    from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+    manager = CloudSchedulerManager(project_id=project_id, region=region)
+
+    job_name = 'cleanup-gcs-artifacts'
+    full_job_name = f"{manager.parent}/jobs/{job_name}"
+    schedule = '0 3 * * *'
+
+    # Build webhook URL from request (same pattern as ETL wizard)
+    django_base_url = f"{request.scheme}://{request.get_host()}"
+    webhook_url = f"{django_base_url}/api/system/cleanup-artifacts-webhook/"
+
+    # Service account (same as ETL uses)
+    service_account = os.environ.get(
+        'ETL_SERVICE_ACCOUNT',
+        f'etl-runner@{project_id}.iam.gserviceaccount.com'
+    )
+
+    parsed = urlparse(webhook_url)
+    audience = f"{parsed.scheme}://{parsed.netloc}"
+
+    http_target = scheduler_v1.HttpTarget(
+        uri=webhook_url,
+        http_method=scheduler_v1.HttpMethod.POST,
+        headers={'Content-Type': 'application/json'},
+        body=json.dumps({'trigger': 'scheduled'}).encode('utf-8'),
+        oidc_token=scheduler_v1.OidcToken(
+            service_account_email=service_account,
+            audience=audience,
+        ),
+    )
+
+    job = scheduler_v1.Job(
+        name=full_job_name,
+        description='Daily GCS artifact cleanup for ML Platform (preserves registered models)',
+        schedule=schedule,
+        time_zone='UTC',
+        http_target=http_target,
+    )
+
+    try:
+        try:
+            created_job = manager.client.create_job(
+                request=scheduler_v1.CreateJobRequest(
+                    parent=manager.parent,
+                    job=job,
+                )
+            )
+            action = 'Created'
+        except google_exceptions.AlreadyExists:
+            created_job = manager.client.update_job(
+                request=scheduler_v1.UpdateJobRequest(job=job)
+            )
+            action = 'Updated'
+
+        logger.info(f'{action} cleanup scheduler: {created_job.name}')
+        return JsonResponse({
+            'status': 'success',
+            'action': action.lower(),
+            'job_name': created_job.name,
+            'schedule': schedule,
+            'webhook_url': webhook_url,
+        })
+
+    except Exception as e:
+        logger.error(f'Failed to create cleanup scheduler: {e}')
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)

@@ -450,16 +450,41 @@ The view provides these context variables:
 | `backfill_resource_metrics --days 30` | Backfills historical data with growth curves + real GPU and Cloud Monitoring request data |
 | `setup_metrics_scheduler --url https://<app>` | Creates a Cloud Scheduler job for automated daily collection |
 | `setup_metrics_scheduler --delete` | Deletes the Cloud Scheduler job |
+| `cleanup_gcs_artifacts` | Selectively deletes old training artifacts from GCS, preserving registered models |
+| `cleanup_gcs_artifacts --dry-run` | Preview what would be deleted without making changes |
+| `cleanup_gcs_artifacts --days 14` | Delete artifacts older than 14 days (default: 7) |
+| `cleanup_gcs_artifacts --include-registered` | Also delete artifacts for registered models (opt-in) |
+| `setup_cleanup_scheduler --url https://<app>` | Creates a Cloud Scheduler job for automated daily cleanup |
+| `setup_cleanup_scheduler --delete` | Deletes the cleanup scheduler job |
 
 ### Automated Daily Collection
 
-A Cloud Scheduler job triggers `POST /api/system/collect-metrics-webhook/` daily at 02:00 UTC. The webhook runs the same logic as `collect_resource_metrics` and returns a JSON response.
+Two Cloud Scheduler jobs run daily:
+
+**1. Metrics Collection** — `POST /api/system/collect-metrics-webhook/` at 02:00 UTC. Runs the same logic as `collect_resource_metrics`.
 
 - **Scheduler job name:** `collect-resource-metrics`
 - **Location:** `europe-central2` (same region as ETL scheduler jobs)
 - **Schedule:** `0 2 * * *` (daily at 02:00 UTC)
 - **Auth:** OIDC token via `etl-runner@b2b-recs.iam.gserviceaccount.com` (no Django login required)
 - **Setup:** `POST /api/system/setup-metrics-scheduler/` from deployed app (follows ETL scheduler pattern — uses `CloudSchedulerManager` from within Cloud Run where the service account has the required IAM roles)
+
+**2. GCS Artifact Cleanup** — `POST /api/system/cleanup-artifacts-webhook/` at 03:00 UTC. Deletes training artifacts older than 7 days while preserving registered models.
+
+- **Scheduler job name:** `cleanup-gcs-artifacts`
+- **Location:** `europe-central2`
+- **Schedule:** `0 3 * * *` (daily at 03:00 UTC, 1 hour after metrics collection)
+- **Auth:** OIDC token (same service account as metrics collection)
+- **Setup:** `python manage.py setup_cleanup_scheduler --url https://<app>`
+
+### GCS Bucket Lifecycle Policies
+
+| Bucket | Lifecycle | Purpose |
+|--------|-----------|---------|
+| `b2b-recs-quicktest-artifacts` | 7-day auto-delete | Experiment artifacts (short-lived) |
+| `b2b-recs-training-artifacts` | No lifecycle (managed by `cleanup_gcs_artifacts`) | Training artifacts — registered models preserved indefinitely |
+| `b2b-recs-pipeline-staging` | 7-day auto-delete | TFX intermediate artifacts (TFRecords, Transform, Statistics) |
+| `b2b-recs-dataflow` | 3-day auto-delete | ETL temp files |
 
 ### Error Tracking
 

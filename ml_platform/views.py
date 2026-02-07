@@ -832,6 +832,41 @@ def scheduler_collect_metrics_webhook(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def scheduler_cleanup_artifacts_webhook(request):
+    """
+    Webhook for Cloud Scheduler to trigger daily GCS artifact cleanup.
+    Accepts OIDC authenticated requests from Cloud Scheduler.
+    No login required as this uses OIDC token authentication.
+    """
+    import logging
+    from django.core.management import call_command
+    from io import StringIO
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        output = StringIO()
+        result = call_command('cleanup_gcs_artifacts', stdout=output)
+
+        logger.info(f'Scheduled artifact cleanup completed')
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Artifact cleanup completed',
+            'output': output.getvalue(),
+            'details': result if isinstance(result, dict) else {},
+        })
+
+    except Exception as e:
+        logger.error(f'Scheduled artifact cleanup failed: {e}')
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def api_setup_metrics_scheduler(request):
     """
     Create or update the Cloud Scheduler job for daily metrics collection.

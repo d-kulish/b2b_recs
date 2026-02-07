@@ -196,6 +196,21 @@ See [`implementation.md`](implementation.md) for full architecture details.
 | **Secrets** | Secret Manager | - | Credentials storage |
 | **ML Pipelines** | Vertex AI Pipelines | - | TFX pipeline execution |
 
+### **GCS Storage Management**
+
+Four GCS buckets with automated lifecycle policies:
+
+| Bucket | Lifecycle | Contents |
+|--------|-----------|----------|
+| `b2b-recs-quicktest-artifacts` | 7-day auto-delete | Experiment artifacts |
+| `b2b-recs-training-artifacts` | No lifecycle (selective cleanup) | Training run artifacts, registered models |
+| `b2b-recs-pipeline-staging` | 7-day auto-delete | TFX intermediate artifacts (TFRecords, Transform, Statistics) |
+| `b2b-recs-dataflow` | 3-day auto-delete | ETL Dataflow temp files |
+
+The training-artifacts bucket has no GCS lifecycle policy because registered models must be preserved indefinitely. Instead, a daily cleanup command (`cleanup_gcs_artifacts`) selectively deletes artifacts for old non-registered runs while preserving `pushed_model/` directories for models in the Vertex AI Model Registry.
+
+**Automated cleanup** runs daily at 03:00 UTC via Cloud Scheduler (1 hour after metrics collection).
+
 ### **Architecture**
 
 ```
@@ -658,7 +673,7 @@ WHERE source_type='gcs';
 - ✅ **QuickTest model** - Django model for tracking pipeline runs with status, progress, results
 - ✅ **Pipeline Service** - Submit pipelines, poll status, extract metrics from GCS
 - ✅ **UI Integration** - "Test" button, configuration dialog, progress modal, results display
-- ✅ **GCS Buckets** - Created with lifecycle policies (7/30/3 days)
+- ✅ **GCS Buckets** - Created with lifecycle policies (see GCS Storage Management)
 - ✅ **IAM Setup** - Service account roles for Vertex AI, Storage, Service Account User
 - ✅ API endpoints: `/api/feature-configs/{id}/quick-test/`, `/api/quick-tests/{id}/`
 - See [TFX Code Generation docs](docs/tfx_code_generation.md) for details

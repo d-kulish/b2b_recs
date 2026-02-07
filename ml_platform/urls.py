@@ -57,5 +57,6 @@ urlpatterns = [
     # SCHEDULER WEBHOOKS
     # =========================================================================
     path('api/system/collect-metrics-webhook/', views.scheduler_collect_metrics_webhook, name='api_collect_metrics_webhook'),
+    path('api/system/cleanup-artifacts-webhook/', views.scheduler_cleanup_artifacts_webhook, name='api_cleanup_artifacts_webhook'),
     path('api/system/setup-metrics-scheduler/', views.api_setup_metrics_scheduler, name='api_setup_metrics_scheduler'),
 ]

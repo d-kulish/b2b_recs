@@ -211,6 +211,39 @@ The training-artifacts bucket has no GCS lifecycle policy because registered mod
 
 **Automated cleanup** runs daily at 03:00 UTC via Cloud Scheduler (1 hour after metrics collection).
 
+**Setup for new projects:**
+
+```bash
+# 1. Create buckets (done by setup_vertex_ai.sh, or manually):
+gsutil mb -p $PROJECT_ID -l $REGION gs://$PROJECT_ID-quicktest-artifacts/
+gsutil mb -p $PROJECT_ID -l $REGION gs://$PROJECT_ID-training-artifacts/
+gsutil mb -p $PROJECT_ID -l $REGION gs://$PROJECT_ID-pipeline-staging/
+gsutil mb -p $PROJECT_ID -l $REGION gs://$PROJECT_ID-dataflow/
+
+# 2. Apply lifecycle policies:
+gsutil lifecycle set /dev/stdin gs://$PROJECT_ID-quicktest-artifacts/ <<< \
+  '{"rule":[{"action":{"type":"Delete"},"condition":{"age":7}}]}'
+
+gsutil lifecycle set /dev/stdin gs://$PROJECT_ID-training-artifacts/ <<< \
+  '{"rule":[]}'
+
+gsutil lifecycle set /dev/stdin gs://$PROJECT_ID-pipeline-staging/ <<< \
+  '{"rule":[{"action":{"type":"Delete"},"condition":{"age":7}}]}'
+
+gsutil lifecycle set /dev/stdin gs://$PROJECT_ID-dataflow/ <<< \
+  '{"rule":[{"action":{"type":"Delete"},"condition":{"age":3}}]}'
+
+# 3. Deploy the app, then create the cleanup scheduler from the deployed app:
+curl -X POST https://<your-cloud-run-url>/api/system/setup-cleanup-scheduler/ \
+  -H "Content-Type: application/json"
+
+# 4. Verify:
+gsutil lifecycle get gs://$PROJECT_ID-training-artifacts/
+gsutil lifecycle get gs://$PROJECT_ID-pipeline-staging/
+gsutil lifecycle get gs://$PROJECT_ID-dataflow/
+gcloud scheduler jobs list --location=$REGION
+```
+
 ### **Architecture**
 
 ```

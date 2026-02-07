@@ -250,6 +250,11 @@ urlpatterns = [
         name='model_lineage'
     ),
     path(
+        'api/models/<int:model_id>/metrics/',
+        api.model_metrics,
+        name='model_metrics'
+    ),
+    path(
         'api/training-schedules/calendar/',
         api.training_schedules_calendar,
         name='training_schedules_calendar'

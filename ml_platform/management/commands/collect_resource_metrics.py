@@ -19,7 +19,7 @@ from django.conf import settings
 from django.db import connection
 from django.utils import timezone
 
-from ml_platform.models import ResourceMetrics
+from ml_platform.models import ResourceMetrics, ProjectMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,7 @@ class Command(BaseCommand):
             ('gcs', lambda: self._collect_gcs(data)),
             ('etl', lambda: self._collect_etl(data, target_date)),
             ('cloud_run_requests', lambda: self._collect_cloud_run_requests(data, target_date)),
+            ('project_metrics', lambda: self._collect_project_metrics(data, target_date)),
             ('gpu', lambda: self._collect_gpu(data, target_date)),
         ]
 
@@ -106,6 +107,7 @@ class Command(BaseCommand):
             self.stdout.write(f'  Cloud Run active: {data["cloud_run_active_services"]}')
             self.stdout.write(f'  Cloud Run requests: {data["cloud_run_total_requests"]:,}')
             self.stdout.write(f'  Cloud Run serving endpoints: {len(data["cloud_run_request_details"])}')
+            self.stdout.write(f'  Project metrics rows: {data.get("project_metrics_count", 0)}')
             self.stdout.write(f'  DB size bytes: {data["db_size_bytes"]:,}')
             self.stdout.write(f'  DB tables: {len(data["db_table_details"])}')
             self.stdout.write(f'  GCS buckets: {len(data["gcs_bucket_details"])}')
@@ -282,6 +284,146 @@ class Command(BaseCommand):
             f'  Cloud Run requests: {total_requests:,} across '
             f'{len(request_details)} serving endpoints'
         )
+
+    def _collect_project_metrics(self, data, target_date):
+        """Collect per-project metrics from Cloud Run serving endpoints."""
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+        from ml_platform.training.models import DeployedEndpoint
+        from ml_platform.models import ModelEndpoint
+
+        # Build service_name -> ModelEndpoint mapping
+        deployed = DeployedEndpoint.objects.filter(
+            service_name__endswith='-serving'
+        ).select_related('registered_model__ml_model')
+
+        service_to_project = {}
+        for ep in deployed:
+            service_to_project[ep.service_name] = ep.registered_model.ml_model
+
+        if not service_to_project:
+            self.stdout.write('  Project metrics: no serving endpoints found')
+            data['project_metrics_count'] = 0
+            return
+
+        # Reuse request data from cloud_run_requests collector
+        request_details = data.get('cloud_run_request_details', [])
+        request_lookup = {d['name']: d for d in request_details}
+
+        # Query Cloud Monitoring for latency percentiles (2xx only)
+        latency_data = {}  # {service_name: {p50: val, p95: val, p99: val}}
+        try:
+            from google.cloud import monitoring_v3
+            from google.protobuf import timestamp_pb2
+            import os
+
+            project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID', 'b2b-recs'))
+            client = monitoring_v3.MetricServiceClient()
+            project_name = f"projects/{project_id}"
+
+            day_start = datetime.combine(target_date, datetime.min.time())
+            day_end = day_start + timedelta(days=1)
+
+            start_time = timestamp_pb2.Timestamp()
+            start_time.FromDatetime(day_start)
+            end_time = timestamp_pb2.Timestamp()
+            end_time.FromDatetime(day_end)
+
+            interval = monitoring_v3.TimeInterval(
+                start_time=start_time,
+                end_time=end_time,
+            )
+
+            percentile_map = {
+                monitoring_v3.Aggregation.Aligner.ALIGN_PERCENTILE_50: 'p50',
+                monitoring_v3.Aggregation.Aligner.ALIGN_PERCENTILE_95: 'p95',
+                monitoring_v3.Aggregation.Aligner.ALIGN_PERCENTILE_99: 'p99',
+            }
+
+            for aligner, key in percentile_map.items():
+                results = client.list_time_series(
+                    request={
+                        "name": project_name,
+                        "filter": (
+                            'metric.type = "run.googleapis.com/request_latencies" '
+                            'AND resource.type = "cloud_run_revision" '
+                            'AND resource.labels.service_name = monitoring.regex.full_match(".*-serving") '
+                            'AND metric.labels.response_code_class = "2xx"'
+                        ),
+                        "interval": interval,
+                        "aggregation": monitoring_v3.Aggregation(
+                            alignment_period={"seconds": 86400},
+                            per_series_aligner=aligner,
+                            cross_series_reducer=monitoring_v3.Aggregation.Reducer.REDUCE_NONE,
+                            group_by_fields=["resource.labels.service_name"],
+                        ),
+                        "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+                    }
+                )
+                for ts in results:
+                    svc = ts.resource.labels.get("service_name", "unknown")
+                    if svc not in latency_data:
+                        latency_data[svc] = {'p50': 0, 'p95': 0, 'p99': 0}
+                    for point in ts.points:
+                        latency_data[svc][key] = point.value.double_value
+
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'  Project metrics latency query failed: {e}'))
+
+        # Aggregate per project
+        project_data = defaultdict(lambda: {
+            'requests': 0, 'errors': 0,
+            'weighted_p50': 0, 'weighted_p95': 0, 'weighted_p99': 0,
+            'total_weight': 0,
+            'endpoint_details': []
+        })
+
+        for svc_name, project in service_to_project.items():
+            req_info = request_lookup.get(svc_name, {'requests': 0, 'errors': 0})
+            lat_info = latency_data.get(svc_name, {'p50': 0, 'p95': 0, 'p99': 0})
+            requests = req_info['requests']
+            errors = req_info['errors']
+
+            pd = project_data[project.id]
+            pd['project'] = project
+            pd['requests'] += requests
+            pd['errors'] += errors
+
+            if requests > 0:
+                pd['weighted_p50'] += lat_info['p50'] * requests
+                pd['weighted_p95'] += lat_info['p95'] * requests
+                pd['weighted_p99'] += lat_info['p99'] * requests
+                pd['total_weight'] += requests
+
+            pd['endpoint_details'].append({
+                'name': svc_name,
+                'requests': requests,
+                'errors': errors,
+                'latency_p50_ms': round(lat_info['p50'], 1),
+                'latency_p95_ms': round(lat_info['p95'], 1),
+                'latency_p99_ms': round(lat_info['p99'], 1),
+            })
+
+        # Persist per project
+        count = 0
+        for project_id_val, pd in project_data.items():
+            w = pd['total_weight']
+            ProjectMetrics.objects.update_or_create(
+                date=target_date,
+                model_endpoint=pd['project'],
+                defaults={
+                    'total_requests': pd['requests'],
+                    'error_count': pd['errors'],
+                    'latency_p50_ms': round(pd['weighted_p50'] / w, 1) if w > 0 else 0,
+                    'latency_p95_ms': round(pd['weighted_p95'] / w, 1) if w > 0 else 0,
+                    'latency_p99_ms': round(pd['weighted_p99'] / w, 1) if w > 0 else 0,
+                    'endpoint_details': pd['endpoint_details'],
+                }
+            )
+            count += 1
+
+        data['project_metrics_count'] = count
+        self.stdout.write(f'  Project metrics: {count} projects updated')
 
     def _collect_database(self, data):
         """Collect PostgreSQL database size metrics."""

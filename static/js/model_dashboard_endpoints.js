@@ -34,7 +34,10 @@ const ModelDashboardEndpoints = (function() {
         tablesContainerId: '#endpointsTablesSection',
         chartHeight: 220,
         // API endpoint for real KPI data (same as EndpointsTable uses)
-        endpointsApiUrl: '/api/deployed-endpoints/'
+        endpointsApiUrl: '/api/deployed-endpoints/',
+        // Per-project metrics API (set via init with modelId)
+        metricsApiUrl: null,
+        modelId: null
     };
 
     let state = {
@@ -198,6 +201,28 @@ const ModelDashboardEndpoints = (function() {
             return state.demoData;
         } catch (error) {
             console.error('Demo data load failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Fetch real per-project metrics data from the API.
+     * Returns parsed response or null on failure.
+     */
+    async function fetchMetricsData() {
+        if (!config.metricsApiUrl) return null;
+
+        try {
+            const response = await fetch(config.metricsApiUrl);
+            if (!response.ok) throw new Error('Failed to fetch metrics data');
+            const data = await response.json();
+
+            if (data.success && data.has_data) {
+                return data;
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch metrics data:', error);
             return null;
         }
     }
@@ -965,6 +990,10 @@ const ModelDashboardEndpoints = (function() {
         if (options.chartsContainerId) config.chartsContainerId = options.chartsContainerId;
         if (options.tablesContainerId) config.tablesContainerId = options.tablesContainerId;
         if (options.chartHeight) config.chartHeight = options.chartHeight;
+        if (options.modelId) {
+            config.modelId = options.modelId;
+            config.metricsApiUrl = `/api/models/${options.modelId}/metrics/`;
+        }
 
         state.initialized = true;
         return ModelDashboardEndpoints;
@@ -975,22 +1004,41 @@ const ModelDashboardEndpoints = (function() {
             init();
         }
 
-        // Always fetch real KPI data from the API
-        const realKpi = await fetchEndpointsKpi();
-
-        // Load demo data for charts and tables (no real APIs exist yet)
-        let demoData = null;
-        if (DEMO_MODE_CHARTS) {
-            demoData = await loadDemoData();
+        // Fetch real KPI data and metrics data in parallel
+        const fetchPromises = [fetchEndpointsKpi()];
+        if (config.metricsApiUrl) {
+            fetchPromises.push(fetchMetricsData());
+        } else {
+            fetchPromises.push(Promise.resolve(null));
         }
 
-        // Build merged data object with real KPIs + demo charts/tables
-        if (realKpi || demoData) {
+        // Load demo data for charts/tables that don't have real APIs yet
+        if (DEMO_MODE_CHARTS) {
+            fetchPromises.push(loadDemoData());
+        } else {
+            fetchPromises.push(Promise.resolve(null));
+        }
+
+        const [realKpi, metricsData, demoData] = await Promise.all(fetchPromises);
+
+        // Build merged data object with real KPIs + real metrics + demo for remaining
+        if (realKpi || metricsData || demoData) {
+            const hasMetrics = metricsData && metricsData.has_data;
+
             const mergedData = {
                 // Use real KPI data, fallback to demo if API fails
                 endpoints_summary: realKpi || (demoData ? demoData.endpoints_summary : { total: 0, active: 0, inactive: 0 }),
-                // Use demo data for performance KPIs (no real API)
-                kpi_summary: demoData ? demoData.kpi_summary : {
+                // Use real metrics KPI when available, fallback to demo
+                kpi_summary: hasMetrics ? {
+                    total_requests: metricsData.kpi_summary.total_requests,
+                    total_requests_change_pct: metricsData.kpi_summary.total_requests_change_pct,
+                    avg_latency_p95_ms: metricsData.kpi_summary.avg_latency_p95_ms,
+                    avg_latency_change_ms: metricsData.kpi_summary.avg_latency_change_ms,
+                    error_rate_pct: metricsData.kpi_summary.error_rate_pct,
+                    error_rate_trend: metricsData.kpi_summary.error_rate_trend,
+                    peak_instances: demoData ? demoData.kpi_summary.peak_instances : 0,
+                    avg_instances: demoData ? demoData.kpi_summary.avg_instances : 0
+                } : (demoData ? demoData.kpi_summary : {
                     total_requests: 0,
                     total_requests_change_pct: 0,
                     avg_latency_p95_ms: 0,
@@ -999,13 +1047,14 @@ const ModelDashboardEndpoints = (function() {
                     error_rate_trend: '-',
                     peak_instances: 0,
                     avg_instances: 0
-                },
-                // Charts and tables use demo data
+                }),
+                // Use real metrics for request_volume, latency_distribution, error_rate charts
                 endpoints: demoData ? demoData.endpoints : [],
-                request_volume: demoData ? demoData.request_volume : null,
-                latency_distribution: demoData ? demoData.latency_distribution : null,
+                request_volume: hasMetrics ? metricsData.request_volume : (demoData ? demoData.request_volume : null),
+                latency_distribution: hasMetrics ? metricsData.latency_distribution : (demoData ? demoData.latency_distribution : null),
+                error_rate: hasMetrics ? metricsData.error_rate : (demoData ? demoData.error_rate : null),
+                // These 3 charts stay on demo data (no real APIs yet)
                 container_instances: demoData ? demoData.container_instances : null,
-                error_rate: demoData ? demoData.error_rate : null,
                 cold_start_latency: demoData ? demoData.cold_start_latency : null,
                 resource_utilization: demoData ? demoData.resource_utilization : null,
                 endpoint_performance: demoData ? demoData.endpoint_performance : [],
@@ -1014,8 +1063,8 @@ const ModelDashboardEndpoints = (function() {
 
             renderKPIsWithData(mergedData);
 
-            // Only render charts and tables if we have demo data
-            if (demoData) {
+            // Render charts and tables if we have any data
+            if (hasMetrics || demoData) {
                 renderChartsWithData(mergedData);
                 renderTablesWithData(mergedData);
             } else {
@@ -1025,7 +1074,7 @@ const ModelDashboardEndpoints = (function() {
             return;
         }
 
-        // Fallback to skeleton UI if both fail
+        // Fallback to skeleton UI if all fail
         renderSkeletonKPIs();
         renderSkeletonCharts();
         renderSkeletonTables();

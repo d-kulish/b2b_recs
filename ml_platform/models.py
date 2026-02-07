@@ -987,6 +987,42 @@ class ResourceMetrics(models.Model):
         return f"Resource Metrics: {self.date}"
 
 
+class ProjectMetrics(models.Model):
+    """Daily per-project metrics aggregated from Cloud Run serving endpoints."""
+    date = models.DateField(db_index=True)
+    model_endpoint = models.ForeignKey(
+        ModelEndpoint, on_delete=models.CASCADE,
+        related_name='project_metrics',
+        help_text="The project this metrics row belongs to"
+    )
+
+    # Request metrics
+    total_requests = models.IntegerField(default=0, help_text="Total serving requests on this day")
+    error_count = models.IntegerField(default=0, help_text="Total non-2xx responses")
+
+    # Latency metrics (2xx only, request-volume-weighted across endpoints)
+    latency_p50_ms = models.FloatField(default=0, help_text="P50 latency in ms")
+    latency_p95_ms = models.FloatField(default=0, help_text="P95 latency in ms")
+    latency_p99_ms = models.FloatField(default=0, help_text="P99 latency in ms")
+
+    # Per-endpoint breakdown
+    endpoint_details = models.JSONField(
+        default=list,
+        help_text="[{name, requests, errors, latency_p50_ms, latency_p95_ms, latency_p99_ms}]"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = ['date', 'model_endpoint']
+        verbose_name = 'Project Metrics'
+        verbose_name_plural = 'Project Metrics'
+
+    def __str__(self):
+        return f"Project Metrics: {self.model_endpoint.name} - {self.date}"
+
+
 # =============================================================================
 # DATASET DOMAIN MODELS
 # =============================================================================

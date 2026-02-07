@@ -4669,6 +4669,166 @@ def model_lineage(request, model_id):
         }, status=500)
 
 
+@require_http_methods(["GET"])
+def model_metrics(request, model_id):
+    """
+    Get per-project daily metrics (requests, latency, error rate).
+
+    GET /api/models/<id>/metrics/
+
+    Returns KPI summary (7-day) and 30-day chart data.
+    """
+    from datetime import timedelta
+    from ml_platform.models import ModelEndpoint, ProjectMetrics
+
+    try:
+        try:
+            model_endpoint = ModelEndpoint.objects.get(id=model_id)
+        except ModelEndpoint.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'Model endpoint {model_id} not found'
+            }, status=404)
+
+        today = timezone.now().date()
+        last_30d = today - timedelta(days=30)
+        last_7d = today - timedelta(days=7)
+        last_14d = today - timedelta(days=14)
+
+        rows_30d = list(
+            ProjectMetrics.objects.filter(
+                model_endpoint=model_endpoint,
+                date__gt=last_30d,
+            ).order_by('date')
+        )
+
+        if not rows_30d:
+            return JsonResponse({
+                'success': True,
+                'has_data': False,
+                'kpi_summary': {
+                    'total_requests': 0,
+                    'total_requests_change_pct': 0,
+                    'avg_latency_p95_ms': 0,
+                    'avg_latency_change_ms': 0,
+                    'error_rate_pct': 0,
+                    'error_rate_trend': '--',
+                },
+                'request_volume': {'labels': [], 'endpoints': []},
+                'latency_distribution': {'labels': [], 'p50': [], 'p95': [], 'p99': []},
+                'error_rate': {'labels': [], 'values': []},
+            })
+
+        # Split into current 7d and previous 7d
+        rows_7d = [r for r in rows_30d if r.date > last_7d]
+        rows_prev_7d = [r for r in rows_30d if last_14d < r.date <= last_7d]
+
+        # KPI: total requests
+        total_req_7d = sum(r.total_requests for r in rows_7d)
+        total_req_prev = sum(r.total_requests for r in rows_prev_7d)
+        req_change_pct = 0
+        if total_req_prev > 0:
+            req_change_pct = round((total_req_7d - total_req_prev) / total_req_prev * 100, 1)
+
+        # KPI: weighted P95 latency
+        weighted_p95_7d = sum(r.latency_p95_ms * r.total_requests for r in rows_7d)
+        weight_7d = sum(r.total_requests for r in rows_7d)
+        avg_p95_7d = round(weighted_p95_7d / weight_7d, 0) if weight_7d > 0 else 0
+
+        weighted_p95_prev = sum(r.latency_p95_ms * r.total_requests for r in rows_prev_7d)
+        weight_prev = sum(r.total_requests for r in rows_prev_7d)
+        avg_p95_prev = round(weighted_p95_prev / weight_prev, 0) if weight_prev > 0 else 0
+
+        latency_change_ms = round(avg_p95_7d - avg_p95_prev)
+
+        # KPI: error rate
+        total_errors_7d = sum(r.error_count for r in rows_7d)
+        error_rate_pct = round(total_errors_7d / total_req_7d * 100, 2) if total_req_7d > 0 else 0
+
+        # Error rate trend: compare recent 3d vs earlier 4d within 7d window
+        if len(rows_7d) >= 4:
+            recent_3d = rows_7d[-3:]
+            earlier_4d = rows_7d[:-3]
+            recent_req = sum(r.total_requests for r in recent_3d)
+            recent_err = sum(r.error_count for r in recent_3d)
+            earlier_req = sum(r.total_requests for r in earlier_4d)
+            earlier_err = sum(r.error_count for r in earlier_4d)
+            recent_rate = (recent_err / recent_req * 100) if recent_req > 0 else 0
+            earlier_rate = (earlier_err / earlier_req * 100) if earlier_req > 0 else 0
+            diff = recent_rate - earlier_rate
+            if abs(diff) < 0.01:
+                error_trend = 'stable'
+            elif diff > 0:
+                error_trend = 'up'
+            else:
+                error_trend = 'down'
+        else:
+            error_trend = 'stable'
+
+        # Chart data: 30 days
+        labels = [r.date.strftime('%b %d') for r in rows_30d]
+
+        # Request volume per endpoint
+        all_endpoints = set()
+        for r in rows_30d:
+            for ep in r.endpoint_details:
+                all_endpoints.add(ep['name'])
+        all_endpoints = sorted(all_endpoints)
+
+        request_volume_endpoints = []
+        for ep_name in all_endpoints:
+            values = []
+            for r in rows_30d:
+                ep_match = next((e for e in r.endpoint_details if e['name'] == ep_name), None)
+                values.append(ep_match['requests'] if ep_match else 0)
+            request_volume_endpoints.append({'name': ep_name, 'values': values})
+
+        # Latency distribution
+        latency_p50 = [round(r.latency_p50_ms, 1) for r in rows_30d]
+        latency_p95 = [round(r.latency_p95_ms, 1) for r in rows_30d]
+        latency_p99 = [round(r.latency_p99_ms, 1) for r in rows_30d]
+
+        # Error rate per day
+        error_rate_values = [
+            round(r.error_count / r.total_requests * 100, 2) if r.total_requests > 0 else 0
+            for r in rows_30d
+        ]
+
+        return JsonResponse({
+            'success': True,
+            'has_data': True,
+            'kpi_summary': {
+                'total_requests': total_req_7d,
+                'total_requests_change_pct': req_change_pct,
+                'avg_latency_p95_ms': int(avg_p95_7d),
+                'avg_latency_change_ms': latency_change_ms,
+                'error_rate_pct': error_rate_pct,
+                'error_rate_trend': error_trend,
+            },
+            'request_volume': {
+                'labels': labels,
+                'endpoints': request_volume_endpoints,
+            },
+            'latency_distribution': {
+                'labels': labels,
+                'p50': latency_p50,
+                'p95': latency_p95,
+                'p99': latency_p99,
+            },
+            'error_rate': {
+                'labels': labels,
+                'values': error_rate_values,
+            },
+        })
+
+    except Exception as e:
+        logger.exception(f"Error getting model metrics: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
 @csrf_exempt
 @require_http_methods(["GET"])
 def training_schedules_calendar(request):

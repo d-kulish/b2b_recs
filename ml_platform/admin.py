@@ -14,6 +14,7 @@ from .models import (
     PredictionLog,
     SystemMetrics,
     ResourceMetrics,
+    ProjectMetrics,
     FeatureConfig,
     FeatureConfigVersion,
     ModelConfig,
@@ -126,6 +127,13 @@ class SystemMetricsAdmin(admin.ModelAdmin):
 class ResourceMetricsAdmin(admin.ModelAdmin):
     list_display = ('date', 'bq_total_bytes', 'cloud_run_active_services', 'db_size_bytes', 'gcs_total_bytes', 'gpu_training_hours', 'gpu_jobs_completed')
     list_filter = ('date',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(ProjectMetrics)
+class ProjectMetricsAdmin(admin.ModelAdmin):
+    list_display = ('date', 'model_endpoint', 'total_requests', 'error_count', 'latency_p95_ms')
+    list_filter = ('date', 'model_endpoint')
     readonly_fields = ('created_at',)
 
 

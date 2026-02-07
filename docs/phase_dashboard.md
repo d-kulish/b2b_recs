@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2026-02-04 (Added ETL chapter with KPIs, scheduled jobs table, and bubble chart)
+**Last Updated**: 2026-02-07 (Added real per-project metrics: ProjectMetrics model, daily collection, API, and UI wiring)
 
 ---
 
@@ -21,6 +21,13 @@ The Model Dashboard (`/model/{id}/dashboard/`) is accessible via the horizontal 
 ## Chapter 1: Endpoints
 
 The Endpoints chapter displays observability data for all serving endpoints associated with the model. It includes KPIs, time-series charts, and performance tables.
+
+**Data Sources:**
+- **Serving Endpoints KPI**: Real data from `GET /api/deployed-endpoints/`
+- **Performance KPIs** (Requests, Latency, Error Rate): Real data from `GET /api/models/<id>/metrics/`
+- **Charts** (Request Volume, Latency Distribution, Error Rate): Real data from metrics API when available, demo fallback
+- **Charts** (Container Instances, Cold Start Latency, Resource Utilization): Demo data (APIs not yet implemented)
+- **Tables**: Demo data (APIs not yet implemented)
 
 ### Visual Layout
 
@@ -80,14 +87,14 @@ Four individual KPI cards displayed inline after the Serving Endpoints group:
 
 Charts are displayed in a 3-column grid (2 rows x 3 columns):
 
-| Chart | Type | Data Source | Features |
-|-------|------|-------------|----------|
-| Request Volume Over Time | Stacked Area | `request_volume` | Per-endpoint breakdown, 7-day period |
-| Latency Distribution | Multi-line | `latency_distribution` | P50/P95/P99 lines with different styles |
-| Container Instances | Stacked Area | `container_instances` | Per-endpoint scaling visualization |
-| Error Rate Over Time | Line + Fill | `error_rate` | Threshold line, spike highlighting |
-| Cold Start Latency | Horizontal Bar | `cold_start_latency` | P50/P95 bars per endpoint |
-| Resource Utilization | Dual Y-axis | `resource_utilization` | CPU (filled) and Memory (line) |
+| Chart | Type | Data Source | Source | Features |
+|-------|------|-------------|--------|----------|
+| Request Volume Over Time | Stacked Area | `request_volume` | **Real** (metrics API) | Per-endpoint breakdown, 30-day period |
+| Latency Distribution | Multi-line | `latency_distribution` | **Real** (metrics API) | P50/P95/P99 lines with different styles |
+| Container Instances | Stacked Area | `container_instances` | Demo | Per-endpoint scaling visualization |
+| Error Rate Over Time | Line + Fill | `error_rate` | **Real** (metrics API) | Threshold line, spike highlighting |
+| Cold Start Latency | Horizontal Bar | `cold_start_latency` | Demo | P50/P95 bars per endpoint |
+| Resource Utilization | Dual Y-axis | `resource_utilization` | Demo | CPU (filled) and Memory (line) |
 
 **Chart Library**: Chart.js (loaded from CDN)
 
@@ -382,6 +389,17 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details. 
 | `static/css/model_dashboard.css` | Styles with `.model-dashboard-` prefix |
 | `static/data/demo/model_dashboard_endpoints.json` | Demo data for Endpoints (sales demonstrations) |
 
+### Backend Files
+
+| File | Purpose |
+|------|---------|
+| `ml_platform/models.py` | `ProjectMetrics` model for daily per-project metrics |
+| `ml_platform/admin.py` | `ProjectMetricsAdmin` registration |
+| `ml_platform/management/commands/collect_resource_metrics.py` | `_collect_project_metrics` daily collector |
+| `ml_platform/training/api.py` | `model_metrics` API view |
+| `ml_platform/training/urls.py` | `/api/models/<id>/metrics/` URL pattern |
+| `ml_platform/migrations/0058_projectmetrics.py` | Migration for ProjectMetrics table |
+
 ### Dependencies
 
 | File | Purpose |
@@ -468,12 +486,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    ModelDashboardEndpoints.init();
+    ModelDashboardEndpoints.init({ modelId: {{ model.id }} });
     ModelDashboardEndpoints.load();
     ModelDashboardModels.init();
     ModelDashboardModels.load();
     ModelDashboardExperiments.init();
     ModelDashboardExperiments.load();
+    ModelDashboardConfigs.init();
+    ModelDashboardConfigs.load();
+    ModelDashboardEtl.init();
+    ModelDashboardEtl.load();
 });
 </script>
 {% endblock %}
@@ -499,13 +521,14 @@ ModelDashboardEndpoints.refresh()      // Clear cache and reload
     kpiContainerId: '#endpointsKpiRow',
     chartsContainerId: '#endpointsChartsGrid',
     tablesContainerId: '#endpointsTablesSection',
-    chartHeight: 220
+    chartHeight: 220,
+    modelId: null       // Set via init() to enable real metrics
 }
 ```
 
-### Demo Mode
+### Data Mode
 
-The module operates in demo mode by default (`DEMO_MODE = true`), loading data from:
+When `modelId` is provided via `init({ modelId: N })`, the module fetches real per-project metrics from `/api/models/{N}/metrics/`. Three charts (Request Volume, Latency Distribution, Error Rate) and performance KPIs use real data when available. The remaining three charts (Container Instances, Cold Start Latency, Resource Utilization) and tables fall back to demo data from:
 ```
 /static/data/demo/model_dashboard_endpoints.json
 ```
@@ -1031,6 +1054,98 @@ All styles use `.model-dashboard-etl-*` prefix:
 
 ---
 
+## Per-Project Metrics Infrastructure
+
+### ProjectMetrics Model
+
+**File**: `ml_platform/models.py`
+
+Stores daily per-project metrics aggregated from Cloud Run serving endpoints. One row per project per day.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `date` | DateField | Day this row represents (indexed) |
+| `model_endpoint` | FK → ModelEndpoint | Project this row belongs to |
+| `total_requests` | IntegerField | Total serving requests on this day |
+| `error_count` | IntegerField | Total non-2xx responses |
+| `latency_p50_ms` | FloatField | P50 latency in ms (2xx only, request-volume-weighted) |
+| `latency_p95_ms` | FloatField | P95 latency in ms (2xx only, request-volume-weighted) |
+| `latency_p99_ms` | FloatField | P99 latency in ms (2xx only, request-volume-weighted) |
+| `endpoint_details` | JSONField | Per-endpoint breakdown: `[{name, requests, errors, latency_p50_ms, latency_p95_ms, latency_p99_ms}]` |
+
+**Unique constraint**: `(date, model_endpoint)`
+
+### Daily Collection
+
+**File**: `ml_platform/management/commands/collect_resource_metrics.py`
+
+The `project_metrics` collector runs after `cloud_run_requests` in the daily `collect_resource_metrics` command.
+
+**Logic**:
+1. Maps Cloud Run `-serving` services to `ModelEndpoint` via `DeployedEndpoint.registered_model.ml_model`
+2. Reuses request/error counts from the `cloud_run_request_details` data (already populated by prior collector)
+3. Queries Cloud Monitoring for latency percentiles (`ALIGN_PERCENTILE_50/95/99`) on `run.googleapis.com/request_latencies`, filtered to `response_code_class = "2xx"`
+4. Aggregates per project using request-volume-weighted latency averaging
+5. Persists via `update_or_create` per project per day
+
+### Metrics API
+
+**Endpoint**: `GET /api/models/<model_id>/metrics/`
+**File**: `ml_platform/training/api.py`
+
+Returns KPI summary (7-day window) and 30-day chart data for a specific project.
+
+**Response**:
+```json
+{
+    "success": true,
+    "has_data": true,
+    "kpi_summary": {
+        "total_requests": 47250,
+        "total_requests_change_pct": 12.3,
+        "avg_latency_p95_ms": 142,
+        "avg_latency_change_ms": -8,
+        "error_rate_pct": 0.04,
+        "error_rate_trend": "stable"
+    },
+    "request_volume": {
+        "labels": ["Feb 01", "Feb 02", "..."],
+        "endpoints": [{"name": "svc-name", "values": [100, 200, "..."]}]
+    },
+    "latency_distribution": {
+        "labels": ["Feb 01", "Feb 02", "..."],
+        "p50": [62, 58, "..."],
+        "p95": [105, 98, "..."],
+        "p99": [185, 172, "..."]
+    },
+    "error_rate": {
+        "labels": ["Feb 01", "Feb 02", "..."],
+        "values": [0.04, 0.02, "..."]
+    }
+}
+```
+
+**KPI calculations**:
+- `total_requests`: sum of last 7 days
+- `total_requests_change_pct`: 7d sum vs previous 7d sum
+- `avg_latency_p95_ms`: request-volume-weighted P95 over last 7 days
+- `avg_latency_change_ms`: difference vs previous 7d weighted P95
+- `error_rate_pct`: `error_count / total_requests * 100` over last 7 days
+- `error_rate_trend`: compare recent 3d vs earlier 4d within 7d window (`stable`/`up`/`down`)
+
+### Header KPI Integration
+
+**File**: `templates/base_model.html`
+
+The header IIFE fetches three APIs in parallel:
+- `GET /api/deployed-endpoints/` → Endpoints KPI (total/active/inactive)
+- `GET /api/models/` → Models KPI (total/deployed)
+- `GET /api/models/<id>/metrics/` → Metrics KPI (requests, latency)
+
+Requests (7D) and Latency (P95) KPIs show real data when available, or "0" / "--" when no `ProjectMetrics` data exists yet.
+
+---
+
 ## Future Chapters (Planned)
 
 The Dashboard page may expand to include additional chapters:
@@ -1045,6 +1160,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-07 | 1.7 | Added real per-project metrics: ProjectMetrics model, daily collection, metrics API, header and dashboard UI wiring |
 | 2026-02-04 | 1.6 | Added ETL chapter with KPIs, scheduled jobs table, and bubble chart |
 | 2026-02-04 | 1.5 | Added Configs chapter with KPI cards for dataset, feature, and model configurations |
 | 2026-02-03 | 1.4 | Fixed ExpViewModal experiment mode tabs, added pipeline_dag.js and d3.js dependencies |

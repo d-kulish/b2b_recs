@@ -198,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Initialize and load all chapters
-    ModelDashboardEndpoints.init();
+    ModelDashboardEndpoints.init({ modelId: {{ model.id }} });
     ModelDashboardEndpoints.load();
     ModelDashboardModels.init();
     ModelDashboardModels.load();

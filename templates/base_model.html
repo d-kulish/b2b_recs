@@ -154,7 +154,7 @@
  * Data Sources:
  * - Endpoints KPI: Real data from /api/deployed-endpoints/
  * - Models KPI: Real data from /api/models/
- * - Requests, Latency: Demo data (APIs not yet implemented)
+ * - Requests, Latency: Real data from /api/models/<id>/metrics/
  */
 (function() {
     'use strict';
@@ -162,22 +162,19 @@
     // API endpoints for real KPI data
     const ENDPOINTS_API_URL = '/api/deployed-endpoints/';
     const MODELS_API_URL = '/api/models/';
+    const METRICS_API_URL = '/api/models/{{ model.id }}/metrics/';
 
-    // Demo data for KPIs without real APIs yet
-    const DEMO_DATA = {
+    // Fallback data for KPIs when APIs have no data
+    const FALLBACK_DATA = {
         endpoints: {
             total: 0,
             active: 0,
             inactive: 0
         },
         models: {
-            total: 7,
+            total: 0,
             deployed: 0
-        },
-        total_requests: 47250,
-        total_requests_change_pct: 12.3,
-        latency_p95_ms: 142,
-        latency_change_ms: -8
+        }
     };
 
     function formatNumber(num) {
@@ -236,14 +233,35 @@
         }
     }
 
+    /**
+     * Fetch real metrics KPI data from the API.
+     * Returns kpi_summary object or null on failure.
+     */
+    async function fetchMetricsKpi() {
+        try {
+            const response = await fetch(METRICS_API_URL);
+            if (!response.ok) throw new Error('Failed to fetch metrics data');
+            const data = await response.json();
+
+            if (data.success && data.has_data && data.kpi_summary) {
+                return data.kpi_summary;
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch metrics KPI:', error);
+            return null;
+        }
+    }
+
     async function loadHeaderKpis() {
         // Fetch real KPI data from APIs in parallel
-        const [realEndpoints, realModels] = await Promise.all([
+        const [realEndpoints, realModels, metricsKpi] = await Promise.all([
             fetchEndpointsKpi(),
-            fetchModelsKpi()
+            fetchModelsKpi(),
+            fetchMetricsKpi()
         ]);
-        const endpoints = realEndpoints || DEMO_DATA.endpoints;
-        const models = realModels || DEMO_DATA.models;
+        const endpoints = realEndpoints || FALLBACK_DATA.endpoints;
+        const models = realModels || FALLBACK_DATA.models;
 
         // Endpoints KPI (real data)
         const endpointsValueEl = document.getElementById('headerKpiEndpointsValue');
@@ -278,35 +296,47 @@
             modelsSubtitleEl.textContent = models.deployed + ' deployed';
         }
 
-        // Requests KPI (demo data - no API yet)
+        // Requests KPI (real data from metrics API)
         const requestsValueEl = document.getElementById('headerKpiRequestsValue');
         const requestsChangeEl = document.getElementById('headerKpiRequestsChange');
 
         if (requestsValueEl) {
-            requestsValueEl.textContent = formatNumber(DEMO_DATA.total_requests);
+            requestsValueEl.textContent = metricsKpi ? formatNumber(metricsKpi.total_requests) : '0';
         }
 
-        if (requestsChangeEl && DEMO_DATA.total_requests_change_pct !== undefined) {
-            const pct = DEMO_DATA.total_requests_change_pct;
-            const sign = pct >= 0 ? '+' : '';
-            requestsChangeEl.textContent = sign + pct.toFixed(1) + '%';
-            requestsChangeEl.className = 'header-kpi-change ' + (pct >= 0 ? 'positive' : 'negative');
+        if (requestsChangeEl) {
+            if (metricsKpi && metricsKpi.total_requests > 0) {
+                const pct = metricsKpi.total_requests_change_pct;
+                const sign = pct >= 0 ? '+' : '';
+                requestsChangeEl.textContent = sign + pct.toFixed(1) + '%';
+                requestsChangeEl.className = 'header-kpi-change ' + (pct >= 0 ? 'positive' : 'negative');
+            } else {
+                requestsChangeEl.textContent = '--';
+                requestsChangeEl.className = 'header-kpi-change neutral';
+            }
         }
 
-        // Latency KPI (demo data - no API yet)
+        // Latency KPI (real data from metrics API)
         const latencyValueEl = document.getElementById('headerKpiLatencyValue');
         const latencyChangeEl = document.getElementById('headerKpiLatencyChange');
 
         if (latencyValueEl) {
-            latencyValueEl.textContent = DEMO_DATA.latency_p95_ms + 'ms';
+            latencyValueEl.textContent = metricsKpi && metricsKpi.avg_latency_p95_ms > 0
+                ? metricsKpi.avg_latency_p95_ms + 'ms'
+                : '--';
         }
 
-        if (latencyChangeEl && DEMO_DATA.latency_change_ms !== undefined) {
-            const change = DEMO_DATA.latency_change_ms;
-            const sign = change >= 0 ? '+' : '';
-            latencyChangeEl.textContent = sign + change + 'ms';
-            // For latency, negative is good (faster)
-            latencyChangeEl.className = 'header-kpi-change ' + (change <= 0 ? 'positive' : 'negative');
+        if (latencyChangeEl) {
+            if (metricsKpi && metricsKpi.avg_latency_p95_ms > 0) {
+                const change = metricsKpi.avg_latency_change_ms;
+                const sign = change >= 0 ? '+' : '';
+                latencyChangeEl.textContent = sign + change + 'ms';
+                // For latency, negative is good (faster)
+                latencyChangeEl.className = 'header-kpi-change ' + (change <= 0 ? 'positive' : 'negative');
+            } else {
+                latencyChangeEl.textContent = '--';
+                latencyChangeEl.className = 'header-kpi-change neutral';
+            }
         }
     }
 

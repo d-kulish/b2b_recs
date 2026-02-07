@@ -228,14 +228,60 @@ if processed_files is not None:
 estimated_rows = self.extractor.estimate_row_count(**estimate_kwargs)
 ```
 
+### Bug 3: numpy `int64` not JSON serializable
+
+After bugs 1 & 2 were fixed, the ETL job (execution `etl-runner-z7srb`) successfully extracted and loaded **567 rows** to BigQuery, but crashed during finalization when sending run results back to the Django API:
+
+```
+ETL error occurred [load]: TypeError: Object of type int64 is not JSON serializable
+```
+
+`df.memory_usage(deep=True).sum()` returns numpy `int64`, which accumulates into `self.total_bytes_processed`. When this value is passed to `requests.patch(url, json=payload)` in `config.py:150`, `json.dumps()` fails on the numpy type.
+
+**Fix** (`main.py` — 4 `counting_generator` / extraction sites + final payload):
+
+Cast `.sum()` to native `int` at all accumulation sites:
+
+```python
+self.total_bytes_processed += int(df.memory_usage(deep=True).sum())
+```
+
+Defensive cast in the final status payload:
+
+```python
+'rows_extracted': int(self.total_rows_extracted),
+'rows_loaded': int(self.total_rows_loaded),
+'bytes_processed': int(self.total_bytes_processed),
+```
+
+### Bug 4: ETL deploy script using wrong Dockerfile
+
+The initial redeployment (execution `etl-runner-6rwgx`) failed with `Application failed to start`. Cloud Build log showed it built with `CMD exec gunicorn ... config.wsgi:application` — the root Django `Dockerfile` instead of `etl_runner/Dockerfile`.
+
+`etl_runner/deploy_to_cloud_run.sh` ran `gcloud builds submit` without a source directory argument, so it used CWD (the project root) as build context.
+
+**Fix** (`etl_runner/deploy_to_cloud_run.sh`):
+
+Resolve the script's own directory and pass it as the build source:
+
+```bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+gcloud builds submit --tag gcr.io/$PROJECT_ID/etl-runner --project=$PROJECT_ID "$SCRIPT_DIR"
+```
+
 ---
 
-## Verification
+## Verification (Completed 2026-02-07)
 
-After table creation, the ETL job `memo2_firestore_memos_v2` should:
-1. Pass the VALIDATE phase (`verify_table_exists()` returns True)
-2. Detect stale watermark (empty table + old `last_sync_value`)
-3. Fall back to `historical_start_date` or `2000-01-01`
-4. Extract ~600 documents from Firestore collection `memos`
-5. Load them into `b2b-recs.raw_data.bq_memos`
-6. No more `unexpected keyword argument 'processed_files'` warnings for non-file sources
+After all fixes were deployed and the ETL job re-executed:
+
+| Check | Result |
+|-------|--------|
+| BQ table `bq_memos` row count | **567 rows** |
+| BQ `created_at` range | `2025-04-09 17:21:55` — `2025-12-02 15:11:20` |
+| Django `last_sync_value` | `2025-12-02T15:11:20.083199` (matches max `created_at`) |
+| `processed_files` TypeError | No longer appears |
+| Deploy script | Builds correct Dockerfile regardless of CWD |
+| JSON serialization | No int64 errors during finalization |
+
+Data was loaded by execution `etl-runner-z7srb` (first attempt). The int64 crash occurred *after* BQ load succeeded but *before* Django status update. Subsequent runs correctly report 0 new rows (no Firestore documents newer than the watermark).

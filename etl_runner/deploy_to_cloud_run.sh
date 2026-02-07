@@ -8,17 +8,19 @@ set -e
 PROJECT_ID="b2b-recs"
 REGION="europe-central2"
 SERVICE_ACCOUNT="etl-runner@$PROJECT_ID.iam.gserviceaccount.com"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=========================================="
 echo "Deploying ETL Runner to Cloud Run"
 echo "=========================================="
 echo "Project: $PROJECT_ID"
 echo "Region: $REGION"
+echo "Source: $SCRIPT_DIR"
 echo ""
 
-# Step 1: Build and push image
+# Step 1: Build and push image (from the etl_runner directory, not project root)
 echo "Step 1: Building Docker image..."
-gcloud builds submit --tag gcr.io/$PROJECT_ID/etl-runner --project=$PROJECT_ID
+gcloud builds submit --tag gcr.io/$PROJECT_ID/etl-runner --project=$PROJECT_ID "$SCRIPT_DIR"
 
 echo ""
 echo "Step 2: Deploying to Cloud Run Jobs..."

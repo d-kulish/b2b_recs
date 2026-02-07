@@ -2976,6 +2976,36 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
         import traceback
         traceback.print_exc()
         return {{}}
+
+
+def _load_original_product_ids(tf_transform_output, product_id_col, product_id_bq_type):
+    """
+    Load original product IDs from TFT vocabulary file.
+
+    Vocabulary maps: vocab_index -> original_value
+
+    Args:
+        tf_transform_output: TFT output containing vocabulary files
+        product_id_col: Name of the product ID column
+        product_id_bq_type: BigQuery type of the product ID (STRING, INTEGER, INT64)
+
+    Returns:
+        List of original product IDs in vocabulary order
+    """
+    vocab_name = f'{{product_id_col}}_vocab'
+    try:
+        vocab_bytes = tf_transform_output.vocabulary_by_name(vocab_name)
+
+        if product_id_bq_type in ['INTEGER', 'INT64']:
+            original_ids = [int(b.decode()) for b in vocab_bytes]
+        else:
+            original_ids = [b.decode() for b in vocab_bytes]
+
+        logging.info(f"Loaded {{len(original_ids)}} original product IDs from {{vocab_name}}")
+        return original_ids
+    except Exception as e:
+        logging.error(f"Failed to load vocabulary {{vocab_name}}: {{e}}")
+        raise
 '''
 
     def _generate_scann_serve_fn(self) -> str:
@@ -5866,6 +5896,36 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
         import traceback
         traceback.print_exc()
         return {{}}
+
+
+def _load_original_product_ids(tf_transform_output, product_id_col, product_id_bq_type):
+    """
+    Load original product IDs from TFT vocabulary file.
+
+    Vocabulary maps: vocab_index -> original_value
+
+    Args:
+        tf_transform_output: TFT output containing vocabulary files
+        product_id_col: Name of the product ID column
+        product_id_bq_type: BigQuery type of the product ID (STRING, INTEGER, INT64)
+
+    Returns:
+        List of original product IDs in vocabulary order
+    """
+    vocab_name = f'{{product_id_col}}_vocab'
+    try:
+        vocab_bytes = tf_transform_output.vocabulary_by_name(vocab_name)
+
+        if product_id_bq_type in ['INTEGER', 'INT64']:
+            original_ids = [int(b.decode()) for b in vocab_bytes]
+        else:
+            original_ids = [b.decode() for b in vocab_bytes]
+
+        logging.info(f"Loaded {{len(original_ids)}} original product IDs from {{vocab_name}}")
+        return original_ids
+    except Exception as e:
+        logging.error(f"Failed to load vocabulary {{vocab_name}}: {{e}}")
+        raise
 '''
 
     def _generate_metrics_callback_multitask(self) -> str:

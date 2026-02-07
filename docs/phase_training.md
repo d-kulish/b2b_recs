@@ -3905,6 +3905,40 @@ Output: ["367073001001", "383033001001", ...]  ← Correct!
 
 ---
 
+### Fix: `_load_original_product_ids` Missing from Brute-Force and Multitask Code Paths (2026-02-07)
+
+**Problem:** Training run 54 (brute-force retrieval) completed 100 epochs successfully but crashed during model export with:
+```
+NameError: name '_load_original_product_ids' is not defined
+File "/tmp/.../trainer_module.py", line 1387, in run_fn
+    original_product_ids = _load_original_product_ids(
+```
+
+Training run 53 (ScaNN retrieval, same FeatureConfig) succeeded without issues.
+
+**Root Cause:** The vocabulary-index-to-product-ID fix (2026-02-02) added a call to `_load_original_product_ids()` in the generated `run_fn()` for all retrieval algorithms and multitask models. However, the **function definition** was only emitted by `_generate_scann_serve_fn()`. The other two code generation paths did not include it:
+
+| Code generation method | Includes `_load_original_product_ids` def? |
+|---|---|
+| `_generate_scann_serve_fn()` | Yes |
+| `_generate_brute_force_serve_fn()` | **No** (bug) |
+| `_generate_serve_fn_multitask()` | **No** (bug) |
+
+**Affected Code Paths:**
+- Retrieval + brute_force — broken (confirmed by training run 54)
+- Multitask (all) — broken (multitask does not use ScaNN)
+- Retrieval + ScaNN — working (function definition present)
+
+**Fix (2 changes in `ml_platform/configs/services.py`):**
+
+1. **`_generate_brute_force_serve_fn()`** — Added `_load_original_product_ids()` function definition after `_evaluate_recall_on_test_set` in the generated code.
+
+2. **`_generate_serve_fn_multitask()`** — Added the same function definition after `_evaluate_recall_on_test_set` in the generated code.
+
+**Resolution:** Redeploy the Django app, then rerun training run 54 to regenerate `trainer_module.py` with the fix.
+
+---
+
 ### Fix: Ranking/Multitask Models Require Serialized tf.Example Instead of JSON (2026-02-02)
 
 **Problem:** Deployed ranking and multitask model endpoints returned HTTP 400 errors when called with TF Serving's standard JSON API format. The error message was:

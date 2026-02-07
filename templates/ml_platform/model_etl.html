@@ -2238,6 +2238,62 @@
     50% { background-position: 100% 50%; }
 }
 
+/* Running/Pending animated indicator */
+.run-stages-running {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+.run-stages-running-bar {
+    flex: 1;
+    height: 22px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #e5e7eb;
+    position: relative;
+}
+
+.run-stages-running-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        #818cf8 0%,
+        #6366f1 20%,
+        #4f46e5 40%,
+        #6366f1 60%,
+        #818cf8 80%,
+        #6366f1 100%
+    );
+    background-size: 200% 100%;
+    animation: run-shimmer 1.8s linear infinite;
+    border-radius: 6px;
+}
+
+@keyframes run-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.run-stages-running-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6366f1;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    min-width: 100px;
+}
+
 /* ==================== End ETL Run Cards ==================== */
 
 /* Connection Modal Button States */
@@ -3344,8 +3400,29 @@ function renderRunCard(run) {
 }
 
 function renderRunStagesBar(run) {
+    // For running/pending jobs: show animated indicator with current phase
+    if (run.status === 'running' || run.status === 'pending') {
+        let phaseLabel = 'Initializing...';
+        if (run.loading_started_at && !run.loading_completed_at) {
+            phaseLabel = 'Loading...';
+        } else if (run.extraction_started_at && !run.extraction_completed_at) {
+            phaseLabel = 'Extracting...';
+        } else if (run.init_completed_at && !run.validation_completed_at) {
+            phaseLabel = 'Validating...';
+        } else if (run.init_completed_at && run.validation_completed_at) {
+            phaseLabel = 'Extracting...';
+        }
+
+        return `
+            <div class="run-stages-running">
+                <div class="run-stages-running-bar"></div>
+                <div class="run-stages-running-label">${phaseLabel}</div>
+            </div>
+        `;
+    }
+
+    // For terminal statuses (completed, failed, partial, cancelled): show 4-segment diagnostic bar
     // 4-stage pipeline: INIT → VALIDATE → EXTRACT → LOAD
-    // Determine stage statuses based on timestamps and error_type
     let initStatus = 'pending';
     let validateStatus = 'pending';
     let extractStatus = 'pending';
@@ -3371,26 +3448,10 @@ function renderRunStagesBar(run) {
         loadStatus = run.loading_completed_at ? 'completed' : 'running';
     }
 
-    // For running jobs, mark stages as 'running' appropriately
-    if (run.status === 'running') {
-        // Find the current running stage
-        if (loadStatus !== 'completed' && loadStatus !== 'running' && extractStatus === 'completed') {
-            loadStatus = 'running';
-        } else if (extractStatus !== 'completed' && extractStatus !== 'running' && validateStatus === 'completed') {
-            extractStatus = 'running';
-        } else if (validateStatus !== 'completed' && validateStatus !== 'running' && initStatus === 'completed') {
-            validateStatus = 'running';
-        } else if (initStatus !== 'completed') {
-            initStatus = 'running';
-        }
-    }
-
     // Handle failed runs - use error_type to mark the correct stage as failed
     if (run.status === 'failed') {
         const errorType = run.error_type || '';
 
-        // Mark stages after the failed one as "not-reached"
-        // Mark the failed stage based on error_type
         if (errorType === 'init') {
             initStatus = 'failed';
             validateStatus = 'not-reached';
@@ -3429,6 +3490,14 @@ function renderRunStagesBar(run) {
                 loadStatus = 'not-reached';
             }
         }
+    }
+
+    // For completed runs, ensure all stages show completed
+    if (run.status === 'completed') {
+        initStatus = 'completed';
+        validateStatus = 'completed';
+        extractStatus = 'completed';
+        loadStatus = 'completed';
     }
 
     return `
@@ -9268,15 +9337,14 @@ const POLLING_INTERVAL_MS = 5000; // Poll every 5 seconds
  * Start polling for running jobs status updates
  */
 function startRunningJobsPolling() {
-    // Find all rows with running status
-    const runningRows = document.querySelectorAll('tr[data-run-status="running"]');
+    const runningRuns = allRunsData.filter(r => r.status === 'running' || r.status === 'pending');
 
-    if (runningRows.length === 0) {
+    if (runningRuns.length === 0) {
         console.log('No running jobs to poll');
         return;
     }
 
-    console.log(`Starting polling for ${runningRows.length} running job(s)`);
+    console.log(`Starting polling for ${runningRuns.length} running job(s)`);
 
     // Poll immediately, then set interval
     pollRunningJobs();
@@ -9299,17 +9367,14 @@ function stopRunningJobsPolling() {
  * Poll status for all running jobs
  */
 function pollRunningJobs() {
-    const runningRows = document.querySelectorAll('tr[data-run-status="running"]');
+    const runningRuns = allRunsData.filter(r => r.status === 'running' || r.status === 'pending');
 
-    if (runningRows.length === 0) {
+    if (runningRuns.length === 0) {
         stopRunningJobsPolling();
         return;
     }
 
-    runningRows.forEach(row => {
-        const runId = row.dataset.runId;
-        pollSingleRunStatus(runId);
-    });
+    runningRuns.forEach(run => pollSingleRunStatus(run.id));
 }
 
 /**
@@ -9319,7 +9384,7 @@ function pollSingleRunStatus(runId) {
     fetch(`/api/etl/runs/${runId}/status/`)
         .then(response => response.json())
         .then(data => {
-            updateRunRow(runId, data);
+            updateRunCard(runId, data);
         })
         .catch(error => {
             console.error(`Error polling run ${runId}:`, error);
@@ -9377,6 +9442,80 @@ function updateRunRow(runId, data) {
     if (rowsCell) {
         const rows = data.total_rows_extracted || 0;
         rowsCell.textContent = rows.toLocaleString();
+    }
+}
+
+/**
+ * Update a run card with new data from polling API
+ */
+function updateRunCard(runId, data) {
+    // Update the allRunsData entry
+    const runIndex = allRunsData.findIndex(r => r.id === runId);
+    if (runIndex === -1) return;
+
+    const run = allRunsData[runIndex];
+    const oldStatus = run.status;
+
+    // Merge new data into the run object
+    run.status = data.status;
+    run.duration_seconds = data.duration_seconds;
+    run.rows_extracted = data.total_rows_extracted;
+    run.rows_loaded = data.rows_loaded;
+    run.bytes_processed = data.bytes_processed;
+    run.init_completed_at = data.init_completed_at;
+    run.validation_completed_at = data.validation_completed_at;
+    run.extraction_started_at = data.extraction_started_at;
+    run.extraction_completed_at = data.extraction_completed_at;
+    run.loading_started_at = data.loading_started_at;
+    run.loading_completed_at = data.loading_completed_at;
+    run.error_type = data.error_type;
+    run.error_message = data.error_message;
+
+    // Find the card in the DOM
+    const card = document.querySelector(`[data-run-id="${runId}"]`);
+    if (!card) return;
+
+    // Update status icon
+    const statusIcons = {
+        'running': 'fa-spinner fa-spin',
+        'completed': 'fa-check',
+        'failed': 'fa-times',
+        'cancelled': 'fa-ban',
+        'pending': 'fa-clock',
+        'partial': 'fa-exclamation'
+    };
+    const statusEl = card.querySelector('.run-card-status');
+    if (statusEl) {
+        const icon = statusIcons[data.status] || 'fa-clock';
+        statusEl.className = `run-card-status ${data.status}`;
+        statusEl.innerHTML = `<i class="fas ${icon}"></i>`;
+    }
+
+    // Update duration
+    const timesEl = card.querySelector('.run-card-times');
+    if (timesEl) {
+        const duration = data.duration_seconds ? formatDuration(data.duration_seconds) : '-';
+        const durationSpan = timesEl.querySelectorAll('span')[1];
+        if (durationSpan) durationSpan.textContent = duration;
+    }
+
+    // Update metrics
+    const metricValues = card.querySelectorAll('.run-card-metric-value');
+    if (metricValues.length >= 3) {
+        metricValues[0].textContent = data.total_rows_extracted ? data.total_rows_extracted.toLocaleString() : '0';
+        metricValues[1].textContent = data.rows_loaded ? data.rows_loaded.toLocaleString() : '0';
+        metricValues[2].textContent = data.bytes_processed ? formatBytes(data.bytes_processed) : '0 B';
+    }
+
+    // Re-render the stages bar (handles transition from animated to diagnostic)
+    const stagesContainer = card.querySelector('.run-card-stages') || card.querySelector('.run-stages-running');
+    if (stagesContainer) {
+        const newStagesHtml = renderRunStagesBar(run);
+        stagesContainer.outerHTML = newStagesHtml;
+    }
+
+    if (oldStatus !== data.status) {
+        console.log(`Run #${runId} status changed: ${oldStatus} → ${data.status}`);
     }
 }
 

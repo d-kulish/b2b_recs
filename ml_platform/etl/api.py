@@ -1108,6 +1108,9 @@ def run_status(request, run_id):
             'extraction_completed_at': etl_run.extraction_completed_at.isoformat() if etl_run.extraction_completed_at else None,
             'loading_started_at': etl_run.loading_started_at.isoformat() if etl_run.loading_started_at else None,
             'loading_completed_at': etl_run.loading_completed_at.isoformat() if etl_run.loading_completed_at else None,
+            'init_completed_at': etl_run.init_completed_at.isoformat() if etl_run.init_completed_at else None,
+            'validation_completed_at': etl_run.validation_completed_at.isoformat() if etl_run.validation_completed_at else None,
+            'error_type': etl_run.error_type or '',
             'duration_seconds': etl_run.get_duration_seconds(),
             # Detailed results if available
             'results_detail': etl_run.results_detail,

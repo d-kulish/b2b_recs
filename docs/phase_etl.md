@@ -1906,11 +1906,17 @@ The Recent Runs section displays ETL runs as **card-based tablets** providing at
 │ └─────────────────────────────────────┘  └─────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────────┘
 
-Legend:
+Legend (terminal statuses — completed/failed/partial/cancelled):
 ████████ = Completed (purple gradient)
 ▓▓▓▓▓▓▓▓ = Failed (red)
 ░░░░░░░░ = Not reached (light gray)
-▒▒▒▒▒▒▒▒ = Running (animated pulse)
+
+Running/Pending jobs show an animated shimmer bar instead:
+┌──────────────────────────────────────────────────────────────────┐
+│ ┌═══════════════════════════════════════════════════┐            │
+│ │▓▓▓▓▓░░░░░▓▓▓▓▓░░░░░▓▓▓▓▓░░░░░▓▓▓▓▓░░░░░ (shimmer)│ EXTRACTING│
+│ └═══════════════════════════════════════════════════┘            │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 #### 4-Stage Pipeline Architecture
@@ -2004,103 +2010,71 @@ class ETLRun(models.Model):
 
 #### Progress Bar Rendering Logic
 
-The progress bar uses timestamps and `error_type` to determine stage colors:
+`renderRunStagesBar(run)` branches based on run status:
+
+**Running/Pending jobs** — Animated indeterminate indicator with current phase text:
 
 ```javascript
-// templates/ml_platform/model_etl.html - renderRunStagesBar()
-
-function renderRunStagesBar(run) {
-    // Initialize all stages as pending
-    let initStatus = 'pending';
-    let validateStatus = 'pending';
-    let extractStatus = 'pending';
-    let loadStatus = 'pending';
-
-    // Determine status from timestamps
-    if (run.init_completed_at) initStatus = 'completed';
-    if (run.validation_completed_at) validateStatus = 'completed';
-    if (run.extraction_started_at) {
-        extractStatus = run.extraction_completed_at ? 'completed' : 'running';
-    }
-    if (run.loading_started_at) {
-        loadStatus = run.loading_completed_at ? 'completed' : 'running';
-    }
-
-    // Handle failed runs using error_type
-    if (run.status === 'failed') {
-        const errorType = run.error_type || '';
-
-        if (errorType === 'init') {
-            initStatus = 'failed';
-            validateStatus = 'not-reached';
-            extractStatus = 'not-reached';
-            loadStatus = 'not-reached';
-        } else if (errorType === 'validation') {
-            validateStatus = 'failed';
-            extractStatus = 'not-reached';
-            loadStatus = 'not-reached';
-        } else if (errorType === 'extraction') {
-            extractStatus = 'failed';
-            loadStatus = 'not-reached';
-        } else if (errorType === 'load') {
-            loadStatus = 'failed';
-        }
-        // else: fallback to timestamp-based detection
-    }
+// For running/pending: animated shimmer bar with phase label
+if (run.status === 'running' || run.status === 'pending') {
+    let phaseLabel = 'Initializing...';
+    if (run.loading_started_at && !run.loading_completed_at) phaseLabel = 'Loading...';
+    else if (run.extraction_started_at && !run.extraction_completed_at) phaseLabel = 'Extracting...';
+    else if (run.init_completed_at && !run.validation_completed_at) phaseLabel = 'Validating...';
+    else if (run.init_completed_at && run.validation_completed_at) phaseLabel = 'Extracting...';
 
     return `
+        <div class="run-stages-running">
+            <div class="run-stages-running-bar"></div>
+            <div class="run-stages-running-label">${phaseLabel}</div>
+        </div>
+    `;
+}
+```
+
+**Terminal statuses (completed, failed, partial, cancelled)** — 4-segment diagnostic bar (unchanged):
+
+```javascript
+// For terminal statuses: 4-segment bar with error_type classification
+let initStatus = 'pending';
+// ... timestamp-based detection + error_type classification (same as before)
+
+return `
+    <div class="run-card-stages">
         <div class="run-stages-bar">
             <div class="run-stage-segment ${initStatus}">Init</div>
             <div class="run-stage-segment ${validateStatus}">Validate</div>
             <div class="run-stage-segment ${extractStatus}">Extract</div>
             <div class="run-stage-segment ${loadStatus}">Load</div>
         </div>
-    `;
-}
+    </div>
+`;
 ```
+
+When a running job completes (detected via polling), the animated indicator automatically transitions to the 4-segment diagnostic bar.
 
 #### CSS Styling
 
 ```css
-/* Progress Bar (4 stages: INIT → VALIDATE → EXTRACT → LOAD) */
-.run-stages-bar {
-    display: flex;
-    height: 24px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #e5e7eb;
-}
+/* Progress Bar (4 stages: INIT → VALIDATE → EXTRACT → LOAD) — terminal statuses only */
+.run-stages-bar { display: flex; height: 24px; border-radius: 6px; overflow: hidden; background: #e5e7eb; }
+.run-stage-segment { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; color: white; text-transform: uppercase; }
+.run-stage-segment.completed { background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); }
+.run-stage-segment.failed { background: #ef4444; }
+.run-stage-segment.pending { background: #d1d5db; color: #6b7280; }
+.run-stage-segment.not-reached { background: #e5e7eb; color: #9ca3af; }
 
-.run-stage-segment {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    font-weight: 500;
-    color: white;
-    text-transform: uppercase;
-}
-
-.run-stage-segment.completed {
-    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
-}
-.run-stage-segment.running {
-    background: linear-gradient(90deg, #6366f1 0%, #818cf8 50%, #6366f1 100%);
+/* Running/Pending animated indicator */
+.run-stages-running { display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f3f4f6; }
+.run-stages-running-bar { flex: 1; height: 22px; border-radius: 6px; overflow: hidden; background: #e5e7eb; position: relative; }
+.run-stages-running-bar::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, #818cf8, #6366f1, #4f46e5, #6366f1, #818cf8, #6366f1);
     background-size: 200% 100%;
-    animation: run-stage-pulse 1.5s ease-in-out infinite;
+    animation: run-shimmer 1.8s linear infinite;
 }
-.run-stage-segment.failed {
-    background: #ef4444;
-}
-.run-stage-segment.pending {
-    background: #d1d5db;
-    color: #6b7280;
-}
-.run-stage-segment.not-reached {
-    background: #e5e7eb;
-    color: #9ca3af;
-}
+@keyframes run-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.run-stages-running-label { font-size: 11px; font-weight: 600; color: #6366f1; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; min-width: 100px; }
 ```
 
 #### ETL Runner Phase Reporting
@@ -2665,6 +2639,35 @@ if is_file_source and files_to_process:
   2. Replaced post-Dataflow row count logic with snapshot-delta calculation for transactional loads
   3. Added bytes tracking from `files_to_process` file size metadata
 
+### Issue #8: Frozen Progress Bar and Broken Polling for ETL Run Cards (Fixed 2026-02-07)
+
+**Symptoms:**
+- Running/pending ETL jobs displayed a 4-segment progress bar (Init → Validate → Extract → Load) that rendered once on page load and never updated
+- The bar always showed a frozen state because ETL jobs run as Cloud Run Jobs that complete in seconds with no intermediate progress API
+- Polling never fired because `startRunningJobsPolling()` queried for `tr[data-run-status="running"]` table rows, but the UI uses card-based layout (no `<tr>` elements)
+- Even if polling had fired, the API response was missing `init_completed_at`, `validation_completed_at`, and `error_type` fields needed by `renderRunStagesBar()`
+
+**Root Cause:**
+
+Three independent issues:
+1. **Wrong UI paradigm for running jobs:** The 4-segment bar was modeled after Vertex AI Pipeline progress, but Cloud Run Jobs have no intermediate progress API — the bar rendered once and stayed frozen
+2. **Polling targeted wrong DOM elements:** `document.querySelectorAll('tr[data-run-status="running"]')` found nothing because run cards use `<div class="run-card">`, not `<tr>` elements
+3. **Incomplete polling API:** `run_status()` endpoint in `api.py` was missing phase timestamp fields that the page-load data from `views.py` included
+
+**Fix Applied:**
+
+1. **New animated indicator for running/pending jobs:** `renderRunStagesBar()` now branches on status — running/pending jobs show a CSS shimmer bar with current phase text ("Initializing...", "Validating...", "Extracting...", "Loading...") instead of the 4-segment bar. Terminal statuses (completed, failed, partial, cancelled) keep the existing 4-segment diagnostic bar unchanged.
+
+2. **Fixed polling to use data array:** `startRunningJobsPolling()` and `pollRunningJobs()` now filter `allRunsData` instead of querying DOM for table rows.
+
+3. **New `updateRunCard()` function:** Replaces `updateRunRow()` for card-based updates — merges API data into `allRunsData`, updates status icon, duration, metrics, and re-renders the stages bar. When status transitions to terminal, the animated indicator naturally becomes the 4-segment diagnostic bar.
+
+4. **Added missing API fields:** `run_status()` now returns `init_completed_at`, `validation_completed_at`, and `error_type`, aligning with the page-load data from `views.py`.
+
+**Files Modified:**
+- `ml_platform/etl/api.py` — Added 3 missing fields to `run_status()` response
+- `templates/ml_platform/model_etl.html` — New CSS for animated indicator, branching `renderRunStagesBar()`, fixed polling functions, new `updateRunCard()`
+
 ---
 
 ## Files Reference
@@ -2714,6 +2717,7 @@ if is_file_source and files_to_process:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v17 | 2026-02-07 | ETL Run Cards: Replaced frozen 4-segment bar with animated shimmer indicator for running/pending jobs; fixed polling to target cards instead of table rows; added missing API fields |
 | v16 | 2026-02-03 | ETL Jobs: Added filter bar (Status, Connection, Schedule) matching ETL Runs style |
 | v15 | 2026-02-03 | ETL Jobs: 6 per page, 2-column layout, fixed card height with `items-start` |
 | v14 | 2026-02-03 | Restyled filter bar (matches ETL Runs), added Status filter (Working/Failed/Not Tested) |

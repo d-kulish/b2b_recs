@@ -540,15 +540,28 @@
 <!-- ETL Run Details Modal -->
 <div id="runDetailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl border border-gray-300 h-[600px] overflow-hidden flex flex-col">
-        <!-- Header -->
-        <div id="runDetailsHeader" class="px-5 py-4 border-b border-gray-200 flex items-center flex-shrink-0">
-            <div class="flex items-center gap-3">
-                <div id="runDetailsStatusIcon" class="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">
-                    <i class="fas fa-spinner fa-spin text-gray-500"></i>
+        <!-- Header - 3 Column Layout (matching training page style) -->
+        <div class="modal-header exp-view-header flex-shrink-0" id="runDetailsHeader">
+            <!-- Column 1: Run Number (20%, centered) -->
+            <div class="exp-view-header-number">
+                <h3 class="exp-view-title" id="runDetailsTitle">ETL Run #—</h3>
+            </div>
+            <!-- Column 2: Job Info, Times (60%, left-aligned) -->
+            <div class="exp-view-header-info">
+                <div class="exp-view-exp-name" id="runDetailsJobNameHeader"></div>
+                <div class="exp-view-description" id="runDetailsConnectionHeader"></div>
+                <div class="exp-view-times">
+                    <div>Start: <span id="runDetailsStartTimeHeader">-</span></div>
+                    <div>End: <span id="runDetailsEndTimeHeader">-</span></div>
                 </div>
-                <div>
-                    <h3 id="runDetailsTitle" class="text-lg font-bold text-gray-900">ETL Run #—</h3>
-                    <p id="runDetailsSubtitle" class="text-sm text-gray-500">Loading...</p>
+                <div class="exp-view-header-type-row">
+                    <span class="exp-view-header-type-badge" id="runDetailsLoadTypeBadge"></span>
+                </div>
+            </div>
+            <!-- Column 3: Status Panel (20%, centered) -->
+            <div class="exp-view-status-panel">
+                <div class="exp-view-status-icon" id="runDetailsStatusIcon">
+                    <i class="fas fa-spinner fa-spin"></i>
                 </div>
             </div>
         </div>
@@ -4446,9 +4459,15 @@ function viewRunDetails(runId) {
     loadingDiv.classList.remove('hidden');
     contentDiv.classList.add('hidden');
     document.getElementById('runDetailsTitle').textContent = `ETL Run #${runId}`;
-    document.getElementById('runDetailsSubtitle').textContent = 'Loading...';
-    document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin text-gray-500"></i>';
-    document.getElementById('runDetailsStatusIcon').className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-100';
+    document.getElementById('runDetailsJobNameHeader').textContent = '';
+    document.getElementById('runDetailsConnectionHeader').textContent = 'Loading...';
+    document.getElementById('runDetailsStartTimeHeader').textContent = '-';
+    document.getElementById('runDetailsEndTimeHeader').textContent = '-';
+    document.getElementById('runDetailsLoadTypeBadge').textContent = '';
+    document.getElementById('runDetailsLoadTypeBadge').className = 'exp-view-header-type-badge';
+    document.getElementById('runDetailsHeader').className = 'modal-header exp-view-header flex-shrink-0';
+    document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    document.getElementById('runDetailsStatusIcon').className = 'exp-view-status-icon';
 
     // Reset logs section to initial empty state
     const logsContainer = document.getElementById('runDetailsLogsContainer');
@@ -4490,32 +4509,38 @@ function populateRunDetailsModal(data) {
 
     // Update header
     document.getElementById('runDetailsTitle').textContent = `ETL Run #${data.run_id}`;
+    document.getElementById('runDetailsJobNameHeader').textContent = data.job_name || '';
+    document.getElementById('runDetailsConnectionHeader').textContent = data.connection_name ? `Connection: ${data.connection_name}` : '';
+    document.getElementById('runDetailsStartTimeHeader').textContent = formatDateTime(data.started_at);
+    document.getElementById('runDetailsEndTimeHeader').textContent = formatDateTime(data.completed_at);
 
-    // Set status icon and subtitle
-    const statusIcon = document.getElementById('runDetailsStatusIcon');
-    let statusText = data.status.charAt(0).toUpperCase() + data.status.slice(1);
-
-    if (data.status === 'completed') {
-        statusIcon.innerHTML = '<i class="fas fa-check text-white"></i>';
-        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-green-500';
-    } else if (data.status === 'failed') {
-        statusIcon.innerHTML = '<i class="fas fa-times text-white"></i>';
-        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-red-500';
-    } else if (data.status === 'running') {
-        statusIcon.innerHTML = '<i class="fas fa-spinner fa-spin text-white"></i>';
-        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-blue-500';
-    } else if (data.status === 'cancelled') {
-        statusIcon.innerHTML = '<i class="fas fa-ban text-white"></i>';
-        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-500';
-    } else if (data.status === 'partial') {
-        statusIcon.innerHTML = '<i class="fas fa-exclamation text-white"></i>';
-        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-yellow-500';
+    // Load type badge
+    const loadTypeBadge = document.getElementById('runDetailsLoadTypeBadge');
+    if (data.load_type === 'transactional') {
+        loadTypeBadge.innerHTML = '<i class="fas fa-exchange-alt"></i> TRANSACTIONAL';
+        loadTypeBadge.className = 'exp-view-header-type-badge retrieval';
+    } else if (data.load_type === 'catalog') {
+        loadTypeBadge.innerHTML = '<i class="fas fa-database"></i> CATALOG';
+        loadTypeBadge.className = 'exp-view-header-type-badge ranking';
     } else {
-        statusIcon.innerHTML = '<i class="fas fa-circle text-white"></i>';
-        statusIcon.className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-400';
+        loadTypeBadge.textContent = '';
+        loadTypeBadge.className = 'exp-view-header-type-badge';
     }
 
-    document.getElementById('runDetailsSubtitle').textContent = statusText;
+    // Set status icon and header gradient
+    const header = document.getElementById('runDetailsHeader');
+    const statusIcon = document.getElementById('runDetailsStatusIcon');
+    const statusMap = {
+        completed:  { icon: 'fa-check',        cls: 'completed' },
+        failed:     { icon: 'fa-times',         cls: 'failed' },
+        running:    { icon: 'fa-spinner fa-spin', cls: 'running' },
+        cancelled:  { icon: 'fa-ban',           cls: 'cancelled' },
+        partial:    { icon: 'fa-exclamation',   cls: 'running' },
+    };
+    const s = statusMap[data.status] || { icon: 'fa-circle', cls: 'pending' };
+    header.className = `modal-header exp-view-header flex-shrink-0 ${s.cls}`;
+    statusIcon.innerHTML = `<i class="fas ${s.icon}"></i>`;
+    statusIcon.className = `exp-view-status-icon ${s.cls}`;
 
     // Job Information
     document.getElementById('runDetailsJobName').textContent = data.job_name || '—';

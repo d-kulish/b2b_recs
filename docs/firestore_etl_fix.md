@@ -171,9 +171,71 @@ result = bq.create_table_from_schema(
 
 ---
 
+## Post-Recovery: Stale Watermark + `processed_files` Bug Fix
+
+**Date:** 2026-02-07
+
+After recreating the empty `bq_memos` table (Feb 6), the ETL job ran successfully but loaded **0 rows**. Two bugs were identified and fixed in `etl_runner/main.py`.
+
+### Bug 1: Stale Watermark
+
+`DataSource.last_sync_value` was not reset when the table was recreated empty. The ETL queried Firestore with `created_at > 2025-12-02T15:11:20.083199`, skipping all ~600 existing documents. With 0 rows extracted, the watermark never advances — a permanent 0-row loop.
+
+**Fix** (`main.py` — `run_transactional_load()`, after timestamp resolution):
+
+After resolving `since_datetime` from `last_sync_value`, check if the destination BQ table has 0 rows via `self.loader.get_table_info()`. If the table is empty and `last_sync_value` was used:
+- Log a warning about the stale watermark
+- Fall back to `historical_start_date`
+- If `historical_start_date` is also not set, use `"2000-01-01T00:00:00"` as a safe catch-all
+- Wrapped in `try/except` so a failure to check row count doesn't break the ETL
+
+```python
+if last_sync_value and since_datetime == last_sync_value:
+    try:
+        table_info = self.loader.get_table_info()
+        if table_info.get('num_rows', -1) == 0:
+            fallback = historical_start_date or "2000-01-01T00:00:00"
+            logger.warning(
+                f"Destination table is empty but last_sync_value is "
+                f"'{last_sync_value}' — stale watermark detected. "
+                f"Falling back to '{fallback}'"
+            )
+            since_datetime = fallback
+    except Exception as e:
+        logger.warning(f"Could not check destination table row count: {e}")
+```
+
+### Bug 2: `processed_files` TypeError
+
+`estimate_row_count()` passed `processed_files=None` to all extractors, but only `FileExtractor` accepts that parameter. All other extractors (Firestore, PostgreSQL, MySQL, BigQuery) raised a `TypeError`, caught as a warning:
+```
+WARNING Failed to estimate row count: ... unexpected keyword argument 'processed_files'
+```
+
+**Fix** (`main.py` — `estimate_row_count()`):
+
+Build kwargs dict and only include `processed_files` when it's not `None`:
+
+```python
+estimate_kwargs = {
+    'table_name': table_name,
+    'schema_name': schema_name,
+    'timestamp_column': timestamp_column,
+    'since_datetime': since_datetime,
+}
+if processed_files is not None:
+    estimate_kwargs['processed_files'] = processed_files
+estimated_rows = self.extractor.estimate_row_count(**estimate_kwargs)
+```
+
+---
+
 ## Verification
 
 After table creation, the ETL job `memo2_firestore_memos_v2` should:
 1. Pass the VALIDATE phase (`verify_table_exists()` returns True)
-2. Extract ~600 documents from Firestore collection `memos`
-3. Load them into `b2b-recs.raw_data.bq_memos`
+2. Detect stale watermark (empty table + old `last_sync_value`)
+3. Fall back to `historical_start_date` or `2000-01-01`
+4. Extract ~600 documents from Firestore collection `memos`
+5. Load them into `b2b-recs.raw_data.bq_memos`
+6. No more `unexpected keyword argument 'processed_files'` warnings for non-file sources

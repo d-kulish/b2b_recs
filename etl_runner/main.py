@@ -344,13 +344,15 @@ class ETLRunner:
                 logger.info(f"Found {len(processed_files)} previously processed files")
 
             # Call extractor's estimate_row_count method
-            estimated_rows = self.extractor.estimate_row_count(
-                table_name=table_name,
-                schema_name=schema_name,
-                timestamp_column=timestamp_column,
-                since_datetime=since_datetime,
-                processed_files=processed_files  # Pass for file sources
-            )
+            estimate_kwargs = {
+                'table_name': table_name,
+                'schema_name': schema_name,
+                'timestamp_column': timestamp_column,
+                'since_datetime': since_datetime,
+            }
+            if processed_files is not None:
+                estimate_kwargs['processed_files'] = processed_files
+            estimated_rows = self.extractor.estimate_row_count(**estimate_kwargs)
 
             logger.info(f"Estimated row count: {estimated_rows:,}")
             return estimated_rows
@@ -619,14 +621,32 @@ class ETLRunner:
 
         try:
             # Determine starting timestamp
-            since_datetime = self.job_config.get('last_sync_value') or \
-                           self.job_config.get('historical_start_date')
+            last_sync_value = self.job_config.get('last_sync_value')
+            historical_start_date = self.job_config.get('historical_start_date')
+            since_datetime = last_sync_value or historical_start_date
 
             if not since_datetime:
                 raise ConfigurationError(
                     "Either last_sync_value or historical_start_date must be provided "
                     "for transactional loads"
                 )
+
+            # Detect stale watermark: if destination table is empty but we have
+            # a last_sync_value, the watermark is stale (e.g. table was recreated).
+            # Fall back to historical_start_date or a safe default to re-extract.
+            if last_sync_value and since_datetime == last_sync_value:
+                try:
+                    table_info = self.loader.get_table_info()
+                    if table_info.get('num_rows', -1) == 0:
+                        fallback = historical_start_date or "2000-01-01T00:00:00"
+                        logger.warning(
+                            f"Destination table is empty but last_sync_value is "
+                            f"'{last_sync_value}' — stale watermark detected. "
+                            f"Falling back to '{fallback}'"
+                        )
+                        since_datetime = fallback
+                except Exception as e:
+                    logger.warning(f"Could not check destination table row count: {e}")
 
             logger.info(f"Extracting data since: {since_datetime}")
 

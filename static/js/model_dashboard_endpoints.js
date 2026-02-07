@@ -1048,12 +1048,11 @@ const ModelDashboardEndpoints = (function() {
                     peak_instances: 0,
                     avg_instances: 0
                 }),
-                // Use real metrics for request_volume, latency_distribution, error_rate charts
+                // All 6 charts use demo data (real data is too sparse to visualize well)
                 endpoints: demoData ? demoData.endpoints : [],
-                request_volume: hasMetrics ? metricsData.request_volume : (demoData ? demoData.request_volume : null),
-                latency_distribution: hasMetrics ? metricsData.latency_distribution : (demoData ? demoData.latency_distribution : null),
-                error_rate: hasMetrics ? metricsData.error_rate : (demoData ? demoData.error_rate : null),
-                // These 3 charts stay on demo data (no real APIs yet)
+                request_volume: demoData ? demoData.request_volume : null,
+                latency_distribution: demoData ? demoData.latency_distribution : null,
+                error_rate: demoData ? demoData.error_rate : null,
                 container_instances: demoData ? demoData.container_instances : null,
                 cold_start_latency: demoData ? demoData.cold_start_latency : null,
                 resource_utilization: demoData ? demoData.resource_utilization : null,
@@ -1063,8 +1062,8 @@ const ModelDashboardEndpoints = (function() {
 
             renderKPIsWithData(mergedData);
 
-            // Render charts and tables if we have any data
-            if (hasMetrics || demoData) {
+            // Render charts and tables from demo data
+            if (demoData) {
                 renderChartsWithData(mergedData);
                 renderTablesWithData(mergedData);
             } else {

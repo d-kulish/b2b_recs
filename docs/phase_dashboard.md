@@ -25,8 +25,7 @@ The Endpoints chapter displays observability data for all serving endpoints asso
 **Data Sources:**
 - **Serving Endpoints KPI**: Real data from `GET /api/deployed-endpoints/`
 - **Performance KPIs** (Requests, Latency, Error Rate): Real data from `GET /api/models/<id>/metrics/`
-- **Charts** (Request Volume, Latency Distribution, Error Rate): Real data from metrics API when available, demo fallback
-- **Charts** (Container Instances, Cold Start Latency, Resource Utilization): Demo data (APIs not yet implemented)
+- **All 6 Charts**: Demo data from JSON (real chart data available in API but not wired due to sparse traffic)
 - **Tables**: Demo data (APIs not yet implemented)
 
 ### Visual Layout
@@ -87,14 +86,16 @@ Four individual KPI cards displayed inline after the Serving Endpoints group:
 
 Charts are displayed in a 3-column grid (2 rows x 3 columns):
 
-| Chart | Type | Data Source | Source | Features |
-|-------|------|-------------|--------|----------|
-| Request Volume Over Time | Stacked Area | `request_volume` | **Real** (metrics API) | Per-endpoint breakdown, 30-day period |
-| Latency Distribution | Multi-line | `latency_distribution` | **Real** (metrics API) | P50/P95/P99 lines with different styles |
-| Container Instances | Stacked Area | `container_instances` | Demo | Per-endpoint scaling visualization |
-| Error Rate Over Time | Line + Fill | `error_rate` | **Real** (metrics API) | Threshold line, spike highlighting |
-| Cold Start Latency | Horizontal Bar | `cold_start_latency` | Demo | P50/P95 bars per endpoint |
-| Resource Utilization | Dual Y-axis | `resource_utilization` | Demo | CPU (filled) and Memory (line) |
+| Chart | Type | Data Source | Features |
+|-------|------|-------------|----------|
+| Request Volume Over Time | Stacked Area | `request_volume` (demo) | Per-endpoint breakdown, 7-day period |
+| Latency Distribution | Multi-line | `latency_distribution` (demo) | P50/P95/P99 lines with different styles |
+| Container Instances | Stacked Area | `container_instances` (demo) | Per-endpoint scaling visualization |
+| Error Rate Over Time | Line + Fill | `error_rate` (demo) | Threshold line, spike highlighting |
+| Cold Start Latency | Horizontal Bar | `cold_start_latency` (demo) | P50/P95 bars per endpoint |
+| Resource Utilization | Dual Y-axis | `resource_utilization` (demo) | CPU (filled) and Memory (line) |
+
+> **Note**: All 6 charts currently use demo data for visual richness. The metrics API (`/api/models/<id>/metrics/`) provides real chart data (`request_volume`, `latency_distribution`, `error_rate`) that can replace demo data once traffic volume is sufficient. The switch is in `model_dashboard_endpoints.js` `load()` function.
 
 **Chart Library**: Chart.js (loaded from CDN)
 
@@ -528,7 +529,7 @@ ModelDashboardEndpoints.refresh()      // Clear cache and reload
 
 ### Data Mode
 
-When `modelId` is provided via `init({ modelId: N })`, the module fetches real per-project metrics from `/api/models/{N}/metrics/`. Three charts (Request Volume, Latency Distribution, Error Rate) and performance KPIs use real data when available. The remaining three charts (Container Instances, Cold Start Latency, Resource Utilization) and tables fall back to demo data from:
+When `modelId` is provided via `init({ modelId: N })`, the module fetches real per-project metrics from `/api/models/{N}/metrics/`. Performance KPIs (Requests, Latency, Error Rate) use real data when available. All 6 charts currently use demo data for visual richness (can be switched to real data in `load()` once traffic volume is sufficient). Demo data is loaded from:
 ```
 /static/data/demo/model_dashboard_endpoints.json
 ```

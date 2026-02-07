@@ -2603,6 +2603,70 @@ print(f'selected_columns: {t.selected_columns}')
 
 ---
 
+### Issue #7: Dataflow Transactional Loads Reporting Total Table Row Count (Fixed 2026-02-07)
+
+**Symptoms:**
+- ETL jobs using Dataflow with **transactional** (append) load type showed incorrect ROWS and LOADED values
+- UI displayed the **total BigQuery table row count** (e.g., 55,869,500) instead of rows loaded in that run
+- SIZE showed "0 B" for Dataflow runs
+- Only affected Dataflow-processed runs; standard (pandas) processing reported correctly
+
+**Root Cause:**
+
+When a Dataflow job completed, `_wait_for_dataflow_completion()` called `_get_bigquery_row_count()` which ran `SELECT COUNT(*) FROM destination_table` — returning the **entire table's row count**, not just the rows appended by this run:
+
+```python
+# OLD (broken) - _get_bigquery_row_count() returns total table rows
+def _get_bigquery_row_count(self) -> int:
+    query = f"SELECT COUNT(*) as cnt FROM `{table_ref}`"  # 55M+ for existing tables
+    ...
+```
+
+For catalog (replace) loads this was correct (table is replaced, so total = loaded). But for transactional (append) loads, the pre-existing rows were included in the count.
+
+The `estimated_rows` fallback (from Issue #1 fix) didn't trigger because `final_rows_loaded` was non-zero (55M+, not 0).
+
+Additionally, `total_bytes_processed` stayed at 0 because byte tracking happens in-process via DataFrame memory usage, but Dataflow workers process data independently.
+
+**Fix Applied:**
+
+Snapshot-delta approach — capture BigQuery row count before and after Dataflow execution, report the difference:
+
+```python
+# 1. Snapshot BEFORE Dataflow launch
+pre_load_row_count = self._get_bigquery_row_count()
+
+# 2. Dataflow runs...
+
+# 3. After completion, _wait_for_dataflow_completion() returns post_load_row_count
+
+# 4. For transactional loads, compute delta
+if load_type == 'transactional' and post_load_row_count > 0:
+    actual_rows_loaded = post_load_row_count - pre_load_row_count
+    final_rows_loaded = actual_rows_loaded  # e.g., 55M - 50M = 5M
+else:
+    final_rows_loaded = post_load_row_count  # Catalog: total is correct
+```
+
+Also fixed SIZE: 0 B by summing file sizes from `files_to_process` metadata:
+```python
+if is_file_source and files_to_process:
+    self.total_bytes_processed = sum(f.get('file_size_bytes', 0) for f in files_to_process)
+```
+
+**Edge Cases Handled:**
+- Non-positive delta (e.g., concurrent table modifications): falls back to `estimated_rows`
+- Pre-load count query failure (returns 0): delta equals post-count, same as previous behavior — no regression
+- Catalog loads: unaffected, uses post-count directly as before
+
+**Files Modified:**
+- `etl_runner/main.py` - Three changes in `run_with_dataflow()`:
+  1. Added pre-load row count snapshot before Dataflow pipeline launch
+  2. Replaced post-Dataflow row count logic with snapshot-delta calculation for transactional loads
+  3. Added bytes tracking from `files_to_process` file size metadata
+
+---
+
 ## Files Reference
 
 ### Backend Files

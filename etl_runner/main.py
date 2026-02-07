@@ -1019,6 +1019,11 @@ class ETLRunner:
             logger.info(f"✓ Created {len(work_units)} work units for parallel processing")
             logger.info("=" * 80)
 
+            # Snapshot pre-load row count for accurate delta calculation
+            # For transactional loads, we compute: rows_loaded = post_count - pre_count
+            pre_load_row_count = self._get_bigquery_row_count()
+            logger.info(f"Pre-load BigQuery row count: {pre_load_row_count:,}")
+
             # Determine which pipeline to use based on source type and work unit type
             source_type = self.job_config['source_type']
 
@@ -1056,13 +1061,13 @@ class ETLRunner:
             logger.info("=" * 80)
 
             # Poll for Dataflow job completion and track metrics
-            final_rows_loaded = 0
+            post_load_row_count = 0
             dataflow_job_id = None
             dataflow_api_failed = False
 
             try:
                 job_name = result['job_name']
-                final_rows_loaded, dataflow_job_id = self._wait_for_dataflow_completion(
+                post_load_row_count, dataflow_job_id = self._wait_for_dataflow_completion(
                     job_name=job_name,
                     region=gcp_config['region'],
                     project_id=gcp_config['project_id']
@@ -1070,6 +1075,27 @@ class ETLRunner:
             except Exception as e:
                 logger.warning(f"Failed to wait for Dataflow completion: {e}")
                 dataflow_api_failed = True
+
+            # Calculate actual rows loaded using snapshot-delta approach
+            # For transactional (append) loads: delta = post_count - pre_count
+            # For catalog (replace) loads: post_count is the actual loaded count
+            load_type = self.job_config.get('load_type', 'transactional')
+            if load_type == 'transactional' and post_load_row_count > 0:
+                actual_rows_loaded = post_load_row_count - pre_load_row_count
+                if actual_rows_loaded > 0:
+                    logger.info(
+                        f"Transactional delta: {post_load_row_count:,} (post) - "
+                        f"{pre_load_row_count:,} (pre) = {actual_rows_loaded:,} rows loaded"
+                    )
+                    final_rows_loaded = actual_rows_loaded
+                else:
+                    logger.warning(
+                        f"Non-positive delta ({actual_rows_loaded:,}), "
+                        f"falling back to estimated rows"
+                    )
+                    final_rows_loaded = 0  # Will trigger fallback below
+            else:
+                final_rows_loaded = post_load_row_count
 
             # Use estimated rows as fallback if Dataflow API failed or returned 0
             effective_rows = final_rows_loaded
@@ -1097,6 +1123,10 @@ class ETLRunner:
                         logger.info(f"Recorded: {file_metadata['file_path']}")
                     except Exception as e:
                         logger.warning(f"Failed to record processed file {file_metadata['file_path']}: {e}")
+
+            # Track bytes processed from file sizes (Beam workers don't report back)
+            if is_file_source and files_to_process:
+                self.total_bytes_processed = sum(f.get('file_size_bytes', 0) for f in files_to_process)
 
             # Update row counts using effective_rows (with fallback)
             self.total_rows_extracted = effective_rows

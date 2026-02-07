@@ -578,7 +578,7 @@ class ETLRunner:
                 for df in gen:
                     self.total_rows_extracted += len(df)
                     # Track bytes processed (memory usage of DataFrame)
-                    self.total_bytes_processed += df.memory_usage(deep=True).sum()
+                    self.total_bytes_processed += int(df.memory_usage(deep=True).sum())
                     yield df
 
             # Mark extraction complete, loading starting
@@ -668,7 +668,7 @@ class ETLRunner:
                 for df in gen:
                     self.total_rows_extracted += len(df)
                     # Track bytes processed (memory usage of DataFrame)
-                    self.total_bytes_processed += df.memory_usage(deep=True).sum()
+                    self.total_bytes_processed += int(df.memory_usage(deep=True).sum())
                     # Track max timestamp for updating last_sync_value
                     if timestamp_col and timestamp_col in df.columns:
                         batch_max = df[timestamp_col].max()
@@ -747,7 +747,7 @@ class ETLRunner:
                     df = self.extractor.extract_file(file_path)
                     self.total_rows_extracted += len(df)
                     # Track bytes processed (memory usage + file size)
-                    self.total_bytes_processed += df.memory_usage(deep=True).sum()
+                    self.total_bytes_processed += int(df.memory_usage(deep=True).sum())
                     self.total_bytes_processed += file_metadata.get('file_size_bytes', 0)
                     all_dataframes.append(df)
                     files_processed.append(file_metadata)
@@ -869,7 +869,7 @@ class ETLRunner:
             for df, file_metadata in file_generator:
                 self.total_rows_extracted += len(df)
                 # Track bytes processed
-                self.total_bytes_processed += df.memory_usage(deep=True).sum()
+                self.total_bytes_processed += int(df.memory_usage(deep=True).sum())
                 self.total_bytes_processed += file_metadata.get('file_size_bytes', 0)
 
                 logger.info(
@@ -1421,9 +1421,9 @@ class ETLRunner:
                     'etl_run_id': self.etl_run_id,
                     'status': 'completed',
                     'data_source_id': self.data_source_id,
-                    'rows_extracted': self.total_rows_extracted,
-                    'rows_loaded': self.total_rows_loaded,
-                    'bytes_processed': self.total_bytes_processed,
+                    'rows_extracted': int(self.total_rows_extracted),
+                    'rows_loaded': int(self.total_rows_loaded),
+                    'bytes_processed': int(self.total_bytes_processed),
                     'duration_seconds': duration_seconds,
                     'loading_completed_at': True,  # Mark final phase complete
                 }

@@ -3050,9 +3050,9 @@ class ScaNNServingModel(tf.keras.Model):
         Returns top-K product recommendations with original product IDs and scores.
         """
         # Build raw features dict from inputs (buyer features only)
-        raw_features = {{{{
+        raw_features = {{
 {raw_features_str}
-        }}}}
+        }}
 
         # Apply TFT preprocessing
         transformed_features = self.tft_layer(raw_features)
@@ -3064,10 +3064,10 @@ class ScaNNServingModel(tf.keras.Model):
         # Map vocabulary indices to original product IDs
         recommended_products = tf.gather(self.original_product_ids, top_vocab_indices)
 
-        return {{{{
+        return {{
             'product_ids': recommended_products,
             'scores': top_scores
-        }}}}
+        }}
 
 
 class BruteForceServingModel(tf.keras.Model):

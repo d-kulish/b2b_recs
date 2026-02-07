@@ -9,6 +9,7 @@
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 {% endblock %}
 
 {% block model_content %}
@@ -632,29 +633,51 @@
                 </div>
 
                 <!-- Logs Section -->
-                <div id="runDetailsLogsSection">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="text-xs font-semibold text-gray-500 uppercase">Logs</h4>
-                        <button id="runDetailsLoadLogsBtn" onclick="loadRunLogs()" class="text-xs px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 transition-colors">
-                            <i class="fas fa-sync-alt mr-1"></i>
-                            Load Logs
-                        </button>
+                <div id="runDetailsLogsSection" class="logs-tab-content">
+                    <!-- Logs Header Section -->
+                    <div class="logs-header-section">
+                        <div class="logs-header-left">
+                            <div class="logs-header-icon">
+                                <i class="fas fa-stream"></i>
+                            </div>
+                            <div class="logs-header-info">
+                                <h4>ETL Run Logs</h4>
+                                <span class="logs-service-name">Cloud Run Job</span>
+                            </div>
+                        </div>
+                        <div class="logs-header-actions">
+                            <button class="logs-load-btn" id="runDetailsLoadLogsBtn" onclick="loadRunLogs()">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Load Logs</span>
+                            </button>
+                        </div>
                     </div>
-                    <div id="runDetailsLogsContainer" class="bg-gray-900 rounded-lg p-3 max-h-48 overflow-y-auto">
-                        <div id="runDetailsLogsEmpty" class="text-center py-4 text-gray-500">
-                            <i class="fas fa-file-alt text-2xl mb-2 text-gray-600"></i>
-                            <p class="text-sm">Click "Load Logs" to fetch recent log entries</p>
+
+                    <!-- Info Banner -->
+                    <div class="logs-info-banner">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Displays the last 100 log entries from Cloud Run Job. Includes ETL execution phases, errors, and timing.</span>
+                    </div>
+
+                    <!-- Logs Container -->
+                    <div class="logs-content-wrapper">
+                        <div class="exp-view-logs-container" id="runDetailsLogsContainer">
+                            <div class="logs-empty-state">
+                                <div class="logs-empty-icon">
+                                    <i class="fas fa-terminal"></i>
+                                </div>
+                                <p class="logs-empty-title">No logs loaded</p>
+                                <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
+                            </div>
                         </div>
-                        <div id="runDetailsLogsLoading" class="hidden text-center py-4">
-                            <i class="fas fa-spinner fa-spin text-xl text-indigo-400"></i>
-                            <p class="text-sm text-gray-400 mt-2">Fetching logs...</p>
-                        </div>
-                        <div id="runDetailsLogsContent" class="hidden font-mono text-xs space-y-1">
-                            <!-- Logs will be populated here -->
-                        </div>
-                        <div id="runDetailsLogsError" class="hidden text-center py-4 text-yellow-500">
-                            <i class="fas fa-exclamation-triangle text-xl mb-2"></i>
-                            <p id="runDetailsLogsErrorMsg" class="text-sm"></p>
+                    </div>
+
+                    <!-- Logs Footer with Legend -->
+                    <div class="logs-footer">
+                        <div class="logs-legend">
+                            <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
+                            <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
+                            <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
                         </div>
                     </div>
                 </div>
@@ -4427,12 +4450,19 @@ function viewRunDetails(runId) {
     document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin text-gray-500"></i>';
     document.getElementById('runDetailsStatusIcon').className = 'w-10 h-10 rounded-full flex items-center justify-center bg-gray-100';
 
-    // Reset logs section
-    document.getElementById('runDetailsLogsEmpty').classList.remove('hidden');
-    document.getElementById('runDetailsLogsLoading').classList.add('hidden');
-    document.getElementById('runDetailsLogsContent').classList.add('hidden');
-    document.getElementById('runDetailsLogsError').classList.add('hidden');
-    document.getElementById('runDetailsLogsContent').innerHTML = '';
+    // Reset logs section to initial empty state
+    const logsContainer = document.getElementById('runDetailsLogsContainer');
+    if (logsContainer) {
+        logsContainer.innerHTML = `
+            <div class="logs-empty-state">
+                <div class="logs-empty-icon">
+                    <i class="fas fa-terminal"></i>
+                </div>
+                <p class="logs-empty-title">No logs loaded</p>
+                <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
+            </div>
+        `;
+    }
 
     // Show modal
     modal.classList.remove('hidden');
@@ -4543,75 +4573,84 @@ function loadRunLogs() {
         return;
     }
 
-    const emptyDiv = document.getElementById('runDetailsLogsEmpty');
-    const loadingDiv = document.getElementById('runDetailsLogsLoading');
-    const contentDiv = document.getElementById('runDetailsLogsContent');
-    const errorDiv = document.getElementById('runDetailsLogsError');
-    const loadBtn = document.getElementById('runDetailsLoadLogsBtn');
+    const container = document.getElementById('runDetailsLogsContainer');
+    const btn = document.getElementById('runDetailsLoadLogsBtn');
+    if (!container || !btn) return;
 
     // Show loading state
-    emptyDiv.classList.add('hidden');
-    contentDiv.classList.add('hidden');
-    errorDiv.classList.add('hidden');
-    loadingDiv.classList.remove('hidden');
-    loadBtn.disabled = true;
+    container.innerHTML = `
+        <div class="logs-loading-state">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <span>Fetching logs from Cloud Run...</span>
+        </div>
+    `;
+    btn.disabled = true;
+    btn.querySelector('i').classList.add('fa-spin');
 
     // Fetch logs from API
     fetch(`/api/etl/runs/${currentRunDetailsId}/logs/`)
         .then(response => response.json())
         .then(data => {
-            loadingDiv.classList.add('hidden');
-            loadBtn.disabled = false;
-
             if (data.available && data.logs && data.logs.length > 0) {
-                // Render logs
-                contentDiv.innerHTML = data.logs.map(log => {
-                    const severityClass = getSeverityClass(log.severity);
-                    return `<div class="flex gap-2 py-0.5 border-b border-gray-800 last:border-0">
-                        <span class="text-gray-500 flex-shrink-0">${escapeHtml(log.timestamp)}</span>
-                        <span class="${severityClass} flex-shrink-0 w-16">${escapeHtml(log.severity)}</span>
-                        <span class="text-gray-300 break-all">${escapeHtml(log.message)}</span>
-                    </div>`;
-                }).join('');
-                contentDiv.classList.remove('hidden');
+                const logCount = data.logs.length;
 
-                // Show note if using timestamp range fallback
+                // Show source indicator if using timestamp range fallback
+                let sourceNote = '';
                 if (data.note) {
-                    const noteHtml = `<div class="text-yellow-500 text-xs mb-2 pb-2 border-b border-gray-700">
-                        <i class="fas fa-info-circle mr-1"></i>${escapeHtml(data.note)}
-                    </div>`;
-                    contentDiv.innerHTML = noteHtml + contentDiv.innerHTML;
+                    sourceNote = `<div class="logs-info-banner component-logs-note"><i class="fas fa-info-circle"></i> <span>${escapeHtml(data.note)}</span></div>`;
                 }
+
+                // Render log entries
+                container.innerHTML = `
+                    ${sourceNote}
+                    <div class="logs-count-header">
+                        <span class="logs-count-badge">${logCount}</span>
+                        <span>log entries</span>
+                    </div>
+                    <div class="logs-entries-list">
+                        ${data.logs.map(log => {
+                            const severityClass = log.severity === 'DEFAULT' ? 'INFO' : (log.severity || 'INFO').toUpperCase();
+                            return `
+                                <div class="log-entry ${severityClass.toLowerCase()}">
+                                    <span class="log-severity-indicator ${severityClass}"></span>
+                                    <span class="log-timestamp">${log.timestamp}</span>
+                                    <span class="log-message">${escapeHtml(log.message)}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
             } else {
-                // Show error/empty message
-                document.getElementById('runDetailsLogsErrorMsg').textContent = data.message || 'No logs available';
-                errorDiv.classList.remove('hidden');
+                // Show empty/unavailable message
+                const message = data.message || 'No logs available';
+                container.innerHTML = `
+                    <div class="logs-empty-state">
+                        <div class="logs-empty-icon">
+                            <i class="fas fa-inbox"></i>
+                        </div>
+                        <p class="logs-empty-title">No logs available</p>
+                        <p class="logs-empty-subtitle">${escapeHtml(message)}</p>
+                    </div>
+                `;
             }
         })
         .catch(error => {
-            loadingDiv.classList.add('hidden');
-            loadBtn.disabled = false;
-            document.getElementById('runDetailsLogsErrorMsg').textContent = `Failed to fetch logs: ${error}`;
-            errorDiv.classList.remove('hidden');
+            console.error('Error loading ETL run logs:', error);
+            container.innerHTML = `
+                <div class="logs-error-state">
+                    <div class="logs-error-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <p class="logs-error-title">Failed to load logs</p>
+                    <p class="logs-error-subtitle">Please try again or check your connection</p>
+                </div>
+            `;
+        })
+        .finally(() => {
+            btn.disabled = false;
+            const btnIcon = btn.querySelector('i');
+            if (btnIcon) btnIcon.classList.remove('fa-spin');
         });
-}
-
-function getSeverityClass(severity) {
-    switch (severity) {
-        case 'ERROR':
-        case 'CRITICAL':
-        case 'ALERT':
-        case 'EMERGENCY':
-            return 'text-red-400';
-        case 'WARNING':
-            return 'text-yellow-400';
-        case 'INFO':
-            return 'text-blue-400';
-        case 'DEBUG':
-            return 'text-gray-500';
-        default:
-            return 'text-gray-400';
-    }
 }
 
 // Helper functions for formatting

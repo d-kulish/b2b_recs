@@ -2227,8 +2227,7 @@
     transition: background-color 0.3s ease;
 }
 
-.run-stage-segment.completed { background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%); }
-.run-stage-segment.running { background: linear-gradient(90deg, #6366f1 0%, #818cf8 50%, #6366f1 100%); background-size: 200% 100%; animation: run-stage-pulse 1.5s ease-in-out infinite; }
+.run-stage-segment.running { background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #3b82f6 100%); background-size: 200% 100%; animation: run-stage-pulse 1.5s ease-in-out infinite; }
 .run-stage-segment.failed { background: #ef4444; }
 .run-stage-segment.pending { background: #d1d5db; color: #6b7280; }
 .run-stage-segment.not-reached { background: #e5e7eb; color: #9ca3af; }
@@ -2267,12 +2266,12 @@
     bottom: 0;
     background: linear-gradient(
         90deg,
-        #818cf8 0%,
-        #6366f1 20%,
-        #4f46e5 40%,
-        #6366f1 60%,
-        #818cf8 80%,
-        #6366f1 100%
+        #86efac 0%,
+        #4ade80 20%,
+        #22c55e 40%,
+        #4ade80 60%,
+        #86efac 80%,
+        #22c55e 100%
     );
     background-size: 200% 100%;
     animation: run-shimmer 1.8s linear infinite;
@@ -2287,7 +2286,7 @@
 .run-stages-running-label {
     font-size: 11px;
     font-weight: 600;
-    color: #6366f1;
+    color: #059669;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     white-space: nowrap;
@@ -3503,10 +3502,10 @@ function renderRunStagesBar(run) {
     return `
         <div class="run-card-stages">
             <div class="run-stages-bar">
-                <div class="run-stage-segment ${initStatus}">Init</div>
-                <div class="run-stage-segment ${validateStatus}">Validate</div>
-                <div class="run-stage-segment ${extractStatus}">Extract</div>
-                <div class="run-stage-segment ${loadStatus}">Load</div>
+                <div class="run-stage-segment ${initStatus}" ${initStatus === 'completed' ? 'style="background: #059669"' : ''}>Init</div>
+                <div class="run-stage-segment ${validateStatus}" ${validateStatus === 'completed' ? 'style="background: #22c55e"' : ''}>Validate</div>
+                <div class="run-stage-segment ${extractStatus}" ${extractStatus === 'completed' ? 'style="background: #4ade80"' : ''}>Extract</div>
+                <div class="run-stage-segment ${loadStatus}" ${loadStatus === 'completed' ? 'style="background: #86efac"' : ''}>Load</div>
             </div>
         </div>
     `;

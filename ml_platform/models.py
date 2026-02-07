@@ -973,6 +973,8 @@ class ResourceMetrics(models.Model):
     gpu_jobs_running = models.IntegerField(default=0, help_text="Training jobs running at snapshot time")
     gpu_jobs_by_type = models.JSONField(default=list, help_text="[{gpu_type, count, hours}]")
 
+    # Collection metadata
+    collection_errors = models.JSONField(default=list, blank=True, help_text="Errors from sub-collectors [{collector, error}]")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

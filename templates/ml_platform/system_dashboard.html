@@ -150,6 +150,8 @@
             border-radius: 12px;
             padding: 20px;
             transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
         }
 
         .system-kpi-card:hover {
@@ -201,6 +203,8 @@
             padding: 10px 8px;
             background: #f9fafb;
             border-radius: 8px;
+            min-width: 0;
+            overflow: hidden;
         }
 
         /* Chapter 2: KPI tablets fill their container width */
@@ -219,6 +223,7 @@
             font-weight: 700;
             color: #111827;
             line-height: 1.2;
+            white-space: nowrap;
         }
 
         .system-kpi-value.good { color: #10b981; }
@@ -232,7 +237,7 @@
         }
 
         .system-kpi-bar-row {
-            margin-top: 12px;
+            margin-top: auto;
             padding-top: 12px;
             border-top: 1px solid #f3f4f6;
         }
@@ -1096,7 +1101,7 @@
                         // Data Group
                         setText('kpiEtlRuns', d.etl_runs_24h);
                         setText('kpiDataTables', d.data_tables);
-                        setText('kpiDataVolume', d.data_volume_gb + ' GB');
+                        setText('kpiDataVolume', formatVolume(d.data_volume_gb));
                         updateVolumeBar(d.data_volume_gb);
                     }
                 } catch (error) {
@@ -1120,6 +1125,13 @@
                     el.classList.remove('good', 'warning', 'inactive');
                     el.classList.add(className);
                 }
+            }
+
+            function formatVolume(gb) {
+                if (gb >= 1000) return (gb / 1000).toFixed(1) + ' TB';
+                if (gb >= 100) return Math.round(gb) + ' GB';
+                if (gb >= 10) return gb.toFixed(1) + ' GB';
+                return gb.toFixed(2) + ' GB';
             }
 
             function formatNumber(num) {

@@ -335,6 +335,21 @@ Returns 6 resource chart datasets from `ResourceMetrics` daily snapshots.
 }
 ```
 
+### `POST /api/system/setup-metrics-scheduler/`
+
+Creates or updates the Cloud Scheduler job for daily metrics collection. Must be called from within the deployed Cloud Run app (the service account has the required IAM roles). Protected by Cloud Run IAM (requires valid identity token). Follows the same pattern as ETL scheduler creation.
+
+**Response:**
+```json
+{
+    "status": "success",
+    "action": "created",
+    "job_name": "projects/b2b-recs/locations/europe-central2/jobs/collect-resource-metrics",
+    "schedule": "0 2 * * *",
+    "webhook_url": "https://django-app-555035914949.europe-central2.run.app/api/system/collect-metrics-webhook/"
+}
+```
+
 ### `GET /api/system/charts/`
 
 Returns 4 ML-workflow chart datasets (legacy, still available).
@@ -441,9 +456,20 @@ The view provides these context variables:
 A Cloud Scheduler job triggers `POST /api/system/collect-metrics-webhook/` daily at 02:00 UTC. The webhook runs the same logic as `collect_resource_metrics` and returns a JSON response.
 
 - **Scheduler job name:** `collect-resource-metrics`
+- **Location:** `europe-central2` (same region as ETL scheduler jobs)
 - **Schedule:** `0 2 * * *` (daily at 02:00 UTC)
-- **Auth:** OIDC token (no Django login required)
-- **Setup:** `python manage.py setup_metrics_scheduler --url https://<cloud-run-url>`
+- **Auth:** OIDC token via `etl-runner@b2b-recs.iam.gserviceaccount.com` (no Django login required)
+- **Setup:** `POST /api/system/setup-metrics-scheduler/` from deployed app (follows ETL scheduler pattern — uses `CloudSchedulerManager` from within Cloud Run where the service account has the required IAM roles)
+
+### Error Tracking
+
+Each sub-collector (BigQuery, Cloud Run, Database, GCS, ETL, Cloud Run Requests, GPU) runs independently. If any collector fails, the error is recorded in the `collection_errors` JSONField on the `ResourceMetrics` record. The webhook response includes:
+
+- `"status": "success"` — all 7 collectors succeeded
+- `"status": "partial"` — some collectors failed (errors in `collection_errors` array)
+- `"status": "error"` — entire collection failed
+
+**Date handling:** All date calculations use `timezone.now().date()` (Django UTC-aware) instead of `date.today()` (timezone-naive) to prevent date mismatches when Cloud Run containers run at UTC boundaries.
 
 ### Cloud Monitoring Integration
 

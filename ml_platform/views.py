@@ -795,7 +795,6 @@ def scheduler_collect_metrics_webhook(request):
     No login required as this uses OIDC token authentication.
     """
     import logging
-    from datetime import date
     from django.core.management import call_command
     from io import StringIO
 
@@ -804,16 +803,119 @@ def scheduler_collect_metrics_webhook(request):
     try:
         output = StringIO()
         call_command('collect_resource_metrics', stdout=output)
-        logger.info(f'Scheduled metrics collection completed for {date.today()}')
+        today = timezone.now().date()
+
+        # Check if collection had partial errors
+        from ml_platform.models import ResourceMetrics
+        record = ResourceMetrics.objects.filter(date=today).first()
+        errors = record.collection_errors if record and record.collection_errors else []
+
+        if errors:
+            logger.warning(f'Metrics collection for {today} had {len(errors)} error(s): {errors}')
+        else:
+            logger.info(f'Scheduled metrics collection completed for {today}')
 
         return JsonResponse({
-            'status': 'success',
-            'message': f'Metrics collected for {date.today()}',
+            'status': 'success' if not errors else 'partial',
+            'message': f'Metrics collected for {today}',
             'output': output.getvalue(),
+            'collection_errors': errors,
         })
 
     except Exception as e:
         logger.error(f'Scheduled metrics collection failed: {e}')
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_setup_metrics_scheduler(request):
+    """
+    Create or update the Cloud Scheduler job for daily metrics collection.
+    Follows the same pattern as ETL scheduler creation — must be called from
+    within the deployed app (Cloud Run service account has the required IAM roles).
+    Protected by Cloud Run IAM (requires valid identity token).
+    """
+    import os
+    import json
+    import logging
+    from urllib.parse import urlparse
+    from google.cloud import scheduler_v1
+    from google.api_core import exceptions as google_exceptions
+
+    logger = logging.getLogger(__name__)
+
+    project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID', 'b2b-recs'))
+    region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+    from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+    manager = CloudSchedulerManager(project_id=project_id, region=region)
+
+    job_name = 'collect-resource-metrics'
+    full_job_name = f"{manager.parent}/jobs/{job_name}"
+    schedule = '0 2 * * *'
+
+    # Build webhook URL from request (same pattern as ETL wizard)
+    django_base_url = f"{request.scheme}://{request.get_host()}"
+    webhook_url = f"{django_base_url}/api/system/collect-metrics-webhook/"
+
+    # Service account (same as ETL uses)
+    service_account = os.environ.get(
+        'ETL_SERVICE_ACCOUNT',
+        f'etl-runner@{project_id}.iam.gserviceaccount.com'
+    )
+
+    parsed = urlparse(webhook_url)
+    audience = f"{parsed.scheme}://{parsed.netloc}"
+
+    http_target = scheduler_v1.HttpTarget(
+        uri=webhook_url,
+        http_method=scheduler_v1.HttpMethod.POST,
+        headers={'Content-Type': 'application/json'},
+        body=json.dumps({'trigger': 'scheduled'}).encode('utf-8'),
+        oidc_token=scheduler_v1.OidcToken(
+            service_account_email=service_account,
+            audience=audience,
+        ),
+    )
+
+    job = scheduler_v1.Job(
+        name=full_job_name,
+        description='Daily resource metrics collection for ML Platform dashboard',
+        schedule=schedule,
+        time_zone='UTC',
+        http_target=http_target,
+    )
+
+    try:
+        try:
+            created_job = manager.client.create_job(
+                request=scheduler_v1.CreateJobRequest(
+                    parent=manager.parent,
+                    job=job,
+                )
+            )
+            action = 'Created'
+        except google_exceptions.AlreadyExists:
+            created_job = manager.client.update_job(
+                request=scheduler_v1.UpdateJobRequest(job=job)
+            )
+            action = 'Updated'
+
+        logger.info(f'{action} metrics scheduler: {created_job.name}')
+        return JsonResponse({
+            'status': 'success',
+            'action': action.lower(),
+            'job_name': created_job.name,
+            'schedule': schedule,
+            'webhook_url': webhook_url,
+        })
+
+    except Exception as e:
+        logger.error(f'Failed to create metrics scheduler: {e}')
         return JsonResponse({
             'status': 'error',
             'message': str(e),

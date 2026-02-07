@@ -42,7 +42,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID', 'b2b-recs'))
-        region = getattr(settings, 'GCP_SCHEDULER_REGION', os.getenv('GCP_SCHEDULER_REGION', 'us-central1'))
+        region = getattr(settings, 'GCP_SCHEDULER_REGION', os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2'))
 
         from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
         manager = CloudSchedulerManager(project_id=project_id, region=region)

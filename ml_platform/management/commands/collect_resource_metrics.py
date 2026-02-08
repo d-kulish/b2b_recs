@@ -74,6 +74,8 @@ class Command(BaseCommand):
             'collection_errors': [],
         }
 
+        project_metrics_count = 0
+
         collectors = [
             ('bigquery', lambda: self._collect_bigquery(data)),
             ('cloud_run', lambda: self._collect_cloud_run(data)),
@@ -87,7 +89,9 @@ class Command(BaseCommand):
 
         for name, collector in collectors:
             try:
-                collector()
+                result = collector()
+                if name == 'project_metrics' and result is not None:
+                    project_metrics_count = result
             except Exception as e:
                 data['collection_errors'].append({'collector': name, 'error': str(e)})
                 self.stdout.write(self.style.WARNING(f'  {name} collection failed: {e}'))
@@ -107,7 +111,7 @@ class Command(BaseCommand):
             self.stdout.write(f'  Cloud Run active: {data["cloud_run_active_services"]}')
             self.stdout.write(f'  Cloud Run requests: {data["cloud_run_total_requests"]:,}')
             self.stdout.write(f'  Cloud Run serving endpoints: {len(data["cloud_run_request_details"])}')
-            self.stdout.write(f'  Project metrics rows: {data.get("project_metrics_count", 0)}')
+            self.stdout.write(f'  Project metrics rows: {project_metrics_count}')
             self.stdout.write(f'  DB size bytes: {data["db_size_bytes"]:,}')
             self.stdout.write(f'  DB tables: {len(data["db_table_details"])}')
             self.stdout.write(f'  GCS buckets: {len(data["gcs_bucket_details"])}')
@@ -303,8 +307,7 @@ class Command(BaseCommand):
 
         if not service_to_project:
             self.stdout.write('  Project metrics: no serving endpoints found')
-            data['project_metrics_count'] = 0
-            return
+            return 0
 
         # Reuse request data from cloud_run_requests collector
         request_details = data.get('cloud_run_request_details', [])
@@ -422,8 +425,8 @@ class Command(BaseCommand):
             )
             count += 1
 
-        data['project_metrics_count'] = count
         self.stdout.write(f'  Project metrics: {count} projects updated')
+        return count
 
     def _collect_database(self, data):
         """Collect PostgreSQL database size metrics."""

@@ -160,12 +160,8 @@ class Command(BaseCommand):
                 f'{len(errors)} error(s) during cleanup'
             ))
 
-        return {
-            'deleted': deleted_count,
-            'preserved': preserved_count,
-            'bytes_freed': total_bytes_freed,
-            'errors': errors,
-        }
+        # Don't return a dict — Django's BaseCommand.execute() calls
+        # stdout.write(output) on truthy return values, which fails on dicts.
 
     def _get_storage_client(self):
         """Get GCS client with error handling."""

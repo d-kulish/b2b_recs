@@ -868,7 +868,7 @@ def scheduler_collect_metrics_webhook(request):
         })
 
     except Exception as e:
-        logger.error(f'Scheduled metrics collection failed: {e}')
+        logger.error(f'Scheduled metrics collection failed: {e}', exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': str(e),
@@ -903,7 +903,7 @@ def scheduler_cleanup_artifacts_webhook(request):
         })
 
     except Exception as e:
-        logger.error(f'Scheduled artifact cleanup failed: {e}')
+        logger.error(f'Scheduled artifact cleanup failed: {e}', exc_info=True)
         return JsonResponse({
             'status': 'error',
             'message': str(e),

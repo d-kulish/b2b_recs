@@ -3836,7 +3836,7 @@ function renderExperiments() {
 
 function renderMetricsRow(exp) {
     const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : '--';
-    const formatRMSE = v => v != null ? v.toFixed(4) : '--';
+    const formatRMSE = v => v != null ? v.toFixed(2) : '--';
 
     // Check model type
     const configType = exp.feature_config_type;
@@ -5590,7 +5590,7 @@ function exp_renderResultsCell(exp) {
 
     // Loss
     if (r.loss !== null && r.loss !== undefined) {
-        rows.push(exp_createCompareRow('Loss', typeof r.loss === 'number' ? r.loss.toFixed(4) : r.loss));
+        rows.push(exp_createCompareRow('Loss', typeof r.loss === 'number' ? r.loss.toFixed(2) : r.loss));
     }
 
     // Duration
@@ -6003,31 +6003,32 @@ function renderModelTypeKPIs(stats) {
      * Render KPI sections for each model type (Retrieval, Ranking, Hybrid).
      * All sections are always visible - shows 0 for count and "-" for metrics when empty.
      */
-    const formatMetric = (v, decimals = 3) => v !== null && v !== undefined ? v.toFixed(decimals) : '-';
+    const formatRecall = (v) => v !== null && v !== undefined ? (v * 100).toFixed(1) + '%' : '-';
+    const formatAccuracy = (v) => v !== null && v !== undefined ? v.toFixed(2) : '-';
 
     // Retrieval Section - always visible
     const retrieval = stats.retrieval || {};
     document.getElementById('dashboardRetrievalCount').textContent = retrieval.count || 0;
-    document.getElementById('dashboardRetrievalR5').textContent = formatMetric(retrieval.best_r5);
-    document.getElementById('dashboardRetrievalR10').textContent = formatMetric(retrieval.best_r10);
-    document.getElementById('dashboardRetrievalR50').textContent = formatMetric(retrieval.best_r50);
-    document.getElementById('dashboardRetrievalR100').textContent = formatMetric(retrieval.best_r100);
+    document.getElementById('dashboardRetrievalR5').textContent = formatRecall(retrieval.best_r5);
+    document.getElementById('dashboardRetrievalR10').textContent = formatRecall(retrieval.best_r10);
+    document.getElementById('dashboardRetrievalR50').textContent = formatRecall(retrieval.best_r50);
+    document.getElementById('dashboardRetrievalR100').textContent = formatRecall(retrieval.best_r100);
 
     // Ranking Section - always visible
     const ranking = stats.ranking || {};
     document.getElementById('dashboardRankingCount').textContent = ranking.count || 0;
-    document.getElementById('dashboardRankingRMSE').textContent = formatMetric(ranking.best_rmse, 4);
-    document.getElementById('dashboardRankingTestRMSE').textContent = formatMetric(ranking.best_test_rmse, 4);
-    document.getElementById('dashboardRankingMAE').textContent = formatMetric(ranking.best_mae, 4);
-    document.getElementById('dashboardRankingTestMAE').textContent = formatMetric(ranking.best_test_mae, 4);
+    document.getElementById('dashboardRankingRMSE').textContent = formatAccuracy(ranking.best_rmse);
+    document.getElementById('dashboardRankingTestRMSE').textContent = formatAccuracy(ranking.best_test_rmse);
+    document.getElementById('dashboardRankingMAE').textContent = formatAccuracy(ranking.best_mae);
+    document.getElementById('dashboardRankingTestMAE').textContent = formatAccuracy(ranking.best_test_mae);
 
     // Hybrid Section - always visible
     const hybrid = stats.hybrid || {};
     document.getElementById('dashboardHybridCount').textContent = hybrid.count || 0;
-    document.getElementById('dashboardHybridR50').textContent = formatMetric(hybrid.best_r50);
-    document.getElementById('dashboardHybridR100').textContent = formatMetric(hybrid.best_r100);
-    document.getElementById('dashboardHybridRMSE').textContent = formatMetric(hybrid.best_rmse, 4);
-    document.getElementById('dashboardHybridTestRMSE').textContent = formatMetric(hybrid.best_test_rmse, 4);
+    document.getElementById('dashboardHybridR50').textContent = formatRecall(hybrid.best_r50);
+    document.getElementById('dashboardHybridR100').textContent = formatRecall(hybrid.best_r100);
+    document.getElementById('dashboardHybridRMSE').textContent = formatAccuracy(hybrid.best_rmse);
+    document.getElementById('dashboardHybridTestRMSE').textContent = formatAccuracy(hybrid.best_test_rmse);
 }
 
 async function refreshDashboard() {
@@ -6260,7 +6261,7 @@ function renderEpochHeatmapD3(container, data, modelType) {
                 .attr('rx', 2);
 
             if (val !== null) {
-                // Format: show decimals for ranking (small MSE values), integers for retrieval
+                // Format: 2 decimals for ranking (small MSE values), integers for retrieval (validation loss)
                 const displayVal = modelType === 'ranking' ? val.toFixed(2) : val;
                 cell.append('text')
                     .attr('x', xScale(epoch) + xScale.bandwidth() / 2)
@@ -6429,7 +6430,7 @@ function renderFinalMetricsHeatmapD3(container, data, modelType) {
                 const isLowerBetter = modelType === 'ranking' || (modelType === 'hybrid' && lowerIsBetterMetrics.includes(metric));
                 let displayVal;
                 if (isLowerBetter) {
-                    displayVal = val.toFixed(4);
+                    displayVal = val.toFixed(2);
                 } else {
                     displayVal = val + '%';
                 }
@@ -6727,6 +6728,15 @@ async function loadMetricsTrend(modelType = null) {
                 },
                 tooltip: {
                     callbacks: {
+                        label: (context) => {
+                            const label = context.dataset.label || '';
+                            const val = context.parsed.y;
+                            if (val == null) return label;
+                            const isRecall = activeModelType === 'retrieval' ||
+                                (activeModelType === 'hybrid' && context.dataset.yAxisID !== 'y1');
+                            const formatted = isRecall ? (val * 100).toFixed(1) + '%' : val.toFixed(2);
+                            return `${label}: ${formatted}`;
+                        },
                         afterLabel: (context) => {
                             const idx = context.dataIndex;
                             return `Experiments: ${data.trend[idx].experiment_count}`;
@@ -6745,7 +6755,12 @@ async function loadMetricsTrend(modelType = null) {
                     position: 'left',
                     beginAtZero: false,
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { font: { size: 10 } },
+                    ticks: {
+                        font: { size: 10 },
+                        callback: (value) => activeModelType === 'ranking'
+                            ? value.toFixed(2)
+                            : (value * 100).toFixed(0) + '%'
+                    },
                     title: activeModelType === 'hybrid' ? {
                         display: true,
                         text: 'Recall',
@@ -6763,7 +6778,10 @@ async function loadMetricsTrend(modelType = null) {
                 position: 'right',
                 beginAtZero: false,
                 grid: { drawOnChartArea: false },
-                ticks: { font: { size: 10 } },
+                ticks: {
+                    font: { size: 10 },
+                    callback: (value) => value.toFixed(2)
+                },
                 title: {
                     display: true,
                     text: 'RMSE',
@@ -6900,10 +6918,10 @@ async function loadTopConfigurations(modelType = null) {
                         <td style="text-align: center;">${cfg.batch_size}</td>
                         <td style="text-align: center;">${cfg.epochs}</td>
                         <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                            ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(4) : '-'}
+                            ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.test_mae !== null ? cfg.test_mae.toFixed(4) : '-'}
+                            ${cfg.test_mae !== null ? cfg.test_mae.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;
@@ -6925,16 +6943,16 @@ async function loadTopConfigurations(modelType = null) {
                         <td>${cfg.model_config || '-'}</td>
                         <td style="text-align: center;">${cfg.learning_rate}</td>
                         <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                            ${cfg.recall_at_100 != null ? cfg.recall_at_100.toFixed(3) : '-'}
+                            ${cfg.recall_at_100 != null ? (cfg.recall_at_100 * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.recall_at_50 != null ? cfg.recall_at_50.toFixed(3) : '-'}
+                            ${cfg.recall_at_50 != null ? (cfg.recall_at_50 * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(4) : '-'}
+                            ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.test_mae != null ? cfg.test_mae.toFixed(4) : '-'}
+                            ${cfg.test_mae != null ? cfg.test_mae.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;
@@ -6958,7 +6976,7 @@ async function loadTopConfigurations(modelType = null) {
                         <td style="text-align: center;">${cfg.batch_size}</td>
                         <td style="text-align: center;">${cfg.epochs}</td>
                         <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                            ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
+                            ${cfg.recall_at_100 !== null ? (cfg.recall_at_100 * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: center;">
                             ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}
@@ -7032,7 +7050,7 @@ async function loadHyperparameterAnalysis(modelType = null) {
         // For hybrid, we use R@100 as the primary metric (same as retrieval)
         const metricLabel = activeModelType === 'ranking' ? 'Test RMSE' : 'R@100';
         const thresholdLabel = activeModelType === 'ranking'
-            ? (analysis.good_threshold ? analysis.good_threshold.toFixed(4) : '-')
+            ? (analysis.good_threshold ? analysis.good_threshold.toFixed(2) : '-')
             : (analysis.good_threshold ? (analysis.good_threshold * 100).toFixed(1) + '%' : '-');
 
         // Build meta info section
@@ -7462,13 +7480,13 @@ async function loadDatasetComparison(modelType = null) {
                         <td><strong>${ds.name}</strong></td>
                         <td style="text-align: center;">${ds.experiment_count}</td>
                         <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
-                            ${ds.best_rmse !== null ? ds.best_rmse.toFixed(4) : '-'}
+                            ${ds.best_rmse !== null ? ds.best_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.avg_rmse !== null ? ds.avg_rmse.toFixed(4) : '-'}
+                            ${ds.avg_rmse !== null ? ds.avg_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
+                            ${ds.avg_loss !== null ? ds.avg_loss.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;
@@ -7484,16 +7502,16 @@ async function loadDatasetComparison(modelType = null) {
                         <td><strong>${ds.name}</strong></td>
                         <td style="text-align: center;">${ds.experiment_count}</td>
                         <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
-                            ${ds.best_recall !== null ? ds.best_recall.toFixed(4) : '-'}
+                            ${ds.best_recall !== null ? (ds.best_recall * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.avg_recall !== null ? ds.avg_recall.toFixed(4) : '-'}
+                            ${ds.avg_recall !== null ? (ds.avg_recall * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.best_rmse !== null ? ds.best_rmse.toFixed(4) : '-'}
+                            ${ds.best_rmse !== null ? ds.best_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.avg_rmse !== null ? ds.avg_rmse.toFixed(4) : '-'}
+                            ${ds.avg_rmse !== null ? ds.avg_rmse.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;
@@ -7509,13 +7527,13 @@ async function loadDatasetComparison(modelType = null) {
                         <td><strong>${ds.name}</strong></td>
                         <td style="text-align: center;">${ds.experiment_count}</td>
                         <td style="text-align: right;" class="${isBest ? 'metric-best' : ''}">
-                            ${ds.best_recall !== null ? ds.best_recall.toFixed(4) : '-'}
+                            ${ds.best_recall !== null ? (ds.best_recall * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.avg_recall !== null ? ds.avg_recall.toFixed(4) : '-'}
+                            ${ds.avg_recall !== null ? (ds.avg_recall * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: right;">
-                            ${ds.avg_loss !== null ? ds.avg_loss.toFixed(4) : '-'}
+                            ${ds.avg_loss !== null ? ds.avg_loss.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;

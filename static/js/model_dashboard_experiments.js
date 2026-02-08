@@ -183,24 +183,24 @@ const ModelDashboardExperiments = (function() {
 
             // Update Retrieval KPIs
             updateKpiValue('experiments_retrieval_count', data.stats?.retrieval?.count || 0);
-            updateKpiValue('experiments_retrieval_metric0', formatMetric(data.stats?.retrieval?.best_r5, 3));
-            updateKpiValue('experiments_retrieval_metric1', formatMetric(data.stats?.retrieval?.best_r10, 3));
-            updateKpiValue('experiments_retrieval_metric2', formatMetric(data.stats?.retrieval?.best_r50, 3));
-            updateKpiValue('experiments_retrieval_metric3', formatMetric(data.stats?.retrieval?.best_r100, 3));
+            updateKpiValue('experiments_retrieval_metric0', formatRecall(data.stats?.retrieval?.best_r5));
+            updateKpiValue('experiments_retrieval_metric1', formatRecall(data.stats?.retrieval?.best_r10));
+            updateKpiValue('experiments_retrieval_metric2', formatRecall(data.stats?.retrieval?.best_r50));
+            updateKpiValue('experiments_retrieval_metric3', formatRecall(data.stats?.retrieval?.best_r100));
 
             // Update Ranking KPIs
             updateKpiValue('experiments_ranking_count', data.stats?.ranking?.count || 0);
-            updateKpiValue('experiments_ranking_metric0', formatMetric(data.stats?.ranking?.best_rmse, 4));
-            updateKpiValue('experiments_ranking_metric1', formatMetric(data.stats?.ranking?.best_test_rmse, 4));
-            updateKpiValue('experiments_ranking_metric2', formatMetric(data.stats?.ranking?.best_mae, 4));
-            updateKpiValue('experiments_ranking_metric3', formatMetric(data.stats?.ranking?.best_test_mae, 4));
+            updateKpiValue('experiments_ranking_metric0', formatAccuracy(data.stats?.ranking?.best_rmse));
+            updateKpiValue('experiments_ranking_metric1', formatAccuracy(data.stats?.ranking?.best_test_rmse));
+            updateKpiValue('experiments_ranking_metric2', formatAccuracy(data.stats?.ranking?.best_mae));
+            updateKpiValue('experiments_ranking_metric3', formatAccuracy(data.stats?.ranking?.best_test_mae));
 
             // Update Hybrid KPIs
             updateKpiValue('experiments_hybrid_count', data.stats?.hybrid?.count || 0);
-            updateKpiValue('experiments_hybrid_metric0', formatMetric(data.stats?.hybrid?.best_rmse, 4));
-            updateKpiValue('experiments_hybrid_metric1', formatMetric(data.stats?.hybrid?.best_test_rmse, 4));
-            updateKpiValue('experiments_hybrid_metric2', formatMetric(data.stats?.hybrid?.best_r50, 3));
-            updateKpiValue('experiments_hybrid_metric3', formatMetric(data.stats?.hybrid?.best_r100, 3));
+            updateKpiValue('experiments_hybrid_metric0', formatAccuracy(data.stats?.hybrid?.best_rmse));
+            updateKpiValue('experiments_hybrid_metric1', formatAccuracy(data.stats?.hybrid?.best_test_rmse));
+            updateKpiValue('experiments_hybrid_metric2', formatRecall(data.stats?.hybrid?.best_r50));
+            updateKpiValue('experiments_hybrid_metric3', formatRecall(data.stats?.hybrid?.best_r100));
 
         } catch (error) {
             console.error('Error loading KPIs:', error);
@@ -214,9 +214,14 @@ const ModelDashboardExperiments = (function() {
         }
     }
 
-    function formatMetric(value, decimals) {
+    function formatRecall(value) {
         if (value === null || value === undefined) return '-';
-        return Number(value).toFixed(decimals);
+        return (Number(value) * 100).toFixed(1) + '%';
+    }
+
+    function formatAccuracy(value) {
+        if (value === null || value === undefined) return '-';
+        return Number(value).toFixed(2);
     }
 
     // =============================================================================
@@ -459,6 +464,15 @@ const ModelDashboardExperiments = (function() {
                 },
                 tooltip: {
                     callbacks: {
+                        label: (context) => {
+                            const label = context.dataset.label || '';
+                            const val = context.parsed.y;
+                            if (val == null) return label;
+                            const isRecall = modelType === 'retrieval' ||
+                                (modelType === 'hybrid' && context.dataset.yAxisID !== 'y1');
+                            const formatted = isRecall ? (val * 100).toFixed(1) + '%' : val.toFixed(2);
+                            return `${label}: ${formatted}`;
+                        },
                         afterLabel: (context) => {
                             const idx = context.dataIndex;
                             return `Experiments: ${trend[idx].experiment_count}`;
@@ -477,7 +491,12 @@ const ModelDashboardExperiments = (function() {
                     position: 'left',
                     beginAtZero: false,
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { font: { size: 10 } },
+                    ticks: {
+                        font: { size: 10 },
+                        callback: (value) => modelType === 'ranking'
+                            ? value.toFixed(2)
+                            : (value * 100).toFixed(0) + '%'
+                    },
                     title: modelType === 'hybrid' ? {
                         display: true,
                         text: 'Recall',
@@ -495,7 +514,10 @@ const ModelDashboardExperiments = (function() {
                 position: 'right',
                 beginAtZero: false,
                 grid: { drawOnChartArea: false },
-                ticks: { font: { size: 10 } },
+                ticks: {
+                    font: { size: 10 },
+                    callback: (value) => value.toFixed(2)
+                },
                 title: {
                     display: true,
                     text: 'RMSE',
@@ -636,10 +658,10 @@ const ModelDashboardExperiments = (function() {
                     <td style="text-align: center;">${cfg.batch_size}</td>
                     <td style="text-align: center;">${cfg.epochs}</td>
                     <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                        ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(4) : '-'}
+                        ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(2) : '-'}
                     </td>
                     <td style="text-align: center;">
-                        ${cfg.test_mae !== null ? cfg.test_mae.toFixed(4) : '-'}
+                        ${cfg.test_mae !== null ? cfg.test_mae.toFixed(2) : '-'}
                     </td>
                 </tr>
             `;
@@ -654,16 +676,16 @@ const ModelDashboardExperiments = (function() {
                     <td>${cfg.model_config || '-'}</td>
                     <td style="text-align: center;">${cfg.learning_rate}</td>
                     <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                        ${cfg.recall_at_100 != null ? cfg.recall_at_100.toFixed(3) : '-'}
+                        ${cfg.recall_at_100 != null ? (cfg.recall_at_100 * 100).toFixed(1) + '%' : '-'}
                     </td>
                     <td style="text-align: center;">
-                        ${cfg.recall_at_50 != null ? cfg.recall_at_50.toFixed(3) : '-'}
+                        ${cfg.recall_at_50 != null ? (cfg.recall_at_50 * 100).toFixed(1) + '%' : '-'}
                     </td>
                     <td style="text-align: center;">
-                        ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(4) : '-'}
+                        ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(2) : '-'}
                     </td>
                     <td style="text-align: center;">
-                        ${cfg.test_mae != null ? cfg.test_mae.toFixed(4) : '-'}
+                        ${cfg.test_mae != null ? cfg.test_mae.toFixed(2) : '-'}
                     </td>
                 </tr>
             `;
@@ -681,7 +703,7 @@ const ModelDashboardExperiments = (function() {
                     <td style="text-align: center;">${cfg.batch_size}</td>
                     <td style="text-align: center;">${cfg.epochs}</td>
                     <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                        ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
+                        ${cfg.recall_at_100 !== null ? (cfg.recall_at_100 * 100).toFixed(1) + '%' : '-'}
                     </td>
                     <td style="text-align: center;">
                         ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}

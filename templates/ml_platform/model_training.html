@@ -2022,31 +2022,32 @@ async function loadBestExperiments() {
 }
 
 function renderBestExpKPIs(stats) {
-    const formatMetric = (v, decimals = 3) => v !== null && v !== undefined ? v.toFixed(decimals) : '-';
+    const formatRecall = (v) => v !== null && v !== undefined ? (v * 100).toFixed(1) + '%' : '-';
+    const formatAccuracy = (v) => v !== null && v !== undefined ? v.toFixed(2) : '-';
 
     // Retrieval Section
     const retrieval = stats.retrieval || {};
     document.getElementById('bestExpRetrievalCount').textContent = retrieval.count || 0;
-    document.getElementById('bestExpRetrievalR5').textContent = formatMetric(retrieval.best_r5);
-    document.getElementById('bestExpRetrievalR10').textContent = formatMetric(retrieval.best_r10);
-    document.getElementById('bestExpRetrievalR50').textContent = formatMetric(retrieval.best_r50);
-    document.getElementById('bestExpRetrievalR100').textContent = formatMetric(retrieval.best_r100);
+    document.getElementById('bestExpRetrievalR5').textContent = formatRecall(retrieval.best_r5);
+    document.getElementById('bestExpRetrievalR10').textContent = formatRecall(retrieval.best_r10);
+    document.getElementById('bestExpRetrievalR50').textContent = formatRecall(retrieval.best_r50);
+    document.getElementById('bestExpRetrievalR100').textContent = formatRecall(retrieval.best_r100);
 
     // Ranking Section
     const ranking = stats.ranking || {};
     document.getElementById('bestExpRankingCount').textContent = ranking.count || 0;
-    document.getElementById('bestExpRankingRMSE').textContent = formatMetric(ranking.best_rmse, 4);
-    document.getElementById('bestExpRankingTestRMSE').textContent = formatMetric(ranking.best_test_rmse, 4);
-    document.getElementById('bestExpRankingMAE').textContent = formatMetric(ranking.best_mae, 4);
-    document.getElementById('bestExpRankingTestMAE').textContent = formatMetric(ranking.best_test_mae, 4);
+    document.getElementById('bestExpRankingRMSE').textContent = formatAccuracy(ranking.best_rmse);
+    document.getElementById('bestExpRankingTestRMSE').textContent = formatAccuracy(ranking.best_test_rmse);
+    document.getElementById('bestExpRankingMAE').textContent = formatAccuracy(ranking.best_mae);
+    document.getElementById('bestExpRankingTestMAE').textContent = formatAccuracy(ranking.best_test_mae);
 
     // Hybrid Section
     const hybrid = stats.hybrid || {};
     document.getElementById('bestExpHybridCount').textContent = hybrid.count || 0;
-    document.getElementById('bestExpHybridR50').textContent = formatMetric(hybrid.best_r50);
-    document.getElementById('bestExpHybridR100').textContent = formatMetric(hybrid.best_r100);
-    document.getElementById('bestExpHybridRMSE').textContent = formatMetric(hybrid.best_rmse, 4);
-    document.getElementById('bestExpHybridTestRMSE').textContent = formatMetric(hybrid.best_test_rmse, 4);
+    document.getElementById('bestExpHybridR50').textContent = formatRecall(hybrid.best_r50);
+    document.getElementById('bestExpHybridR100').textContent = formatRecall(hybrid.best_r100);
+    document.getElementById('bestExpHybridRMSE').textContent = formatAccuracy(hybrid.best_rmse);
+    document.getElementById('bestExpHybridTestRMSE').textContent = formatAccuracy(hybrid.best_test_rmse);
 }
 
 // =============================================================================
@@ -2190,10 +2191,10 @@ async function loadBestExpConfigurations(modelType = null) {
                         <td style="text-align: center;">${cfg.batch_size}</td>
                         <td style="text-align: center;">${cfg.epochs}</td>
                         <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                            ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(4) : '-'}
+                            ${cfg.test_rmse !== null ? cfg.test_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.test_mae !== null ? cfg.test_mae.toFixed(4) : '-'}
+                            ${cfg.test_mae !== null ? cfg.test_mae.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;
@@ -2214,16 +2215,16 @@ async function loadBestExpConfigurations(modelType = null) {
                         <td>${cfg.model_config || '-'}</td>
                         <td style="text-align: center;">${cfg.learning_rate}</td>
                         <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                            ${cfg.recall_at_100 != null ? cfg.recall_at_100.toFixed(3) : '-'}
+                            ${cfg.recall_at_100 != null ? (cfg.recall_at_100 * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.recall_at_50 != null ? cfg.recall_at_50.toFixed(3) : '-'}
+                            ${cfg.recall_at_50 != null ? (cfg.recall_at_50 * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(4) : '-'}
+                            ${cfg.test_rmse != null ? cfg.test_rmse.toFixed(2) : '-'}
                         </td>
                         <td style="text-align: center;">
-                            ${cfg.test_mae != null ? cfg.test_mae.toFixed(4) : '-'}
+                            ${cfg.test_mae != null ? cfg.test_mae.toFixed(2) : '-'}
                         </td>
                     </tr>
                 `;
@@ -2246,7 +2247,7 @@ async function loadBestExpConfigurations(modelType = null) {
                         <td style="text-align: center;">${cfg.batch_size}</td>
                         <td style="text-align: center;">${cfg.epochs}</td>
                         <td style="text-align: center;" class="${isBest ? 'metric-best' : ''}">
-                            ${cfg.recall_at_100 !== null ? cfg.recall_at_100.toFixed(3) : '-'}
+                            ${cfg.recall_at_100 !== null ? (cfg.recall_at_100 * 100).toFixed(1) + '%' : '-'}
                         </td>
                         <td style="text-align: center;">
                             ${cfg.loss !== null ? cfg.loss.toFixed(1) : '-'}

@@ -3911,6 +3911,7 @@ def models_list(request):
         base_filter = {
             'ml_model': model_endpoint,
             'vertex_model_resource_name__isnull': False,
+            'registered_model__isnull': False,
         }
 
         # Build filter queryset (applied before deduplication)

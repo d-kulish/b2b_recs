@@ -55,7 +55,9 @@ def system_dashboard(request):
     last_14d = now.date() - timedelta(days=14)
 
     for model in models:
-        registered = model.registered_models.all()
+        registered = model.registered_models.exclude(
+            vertex_model_resource_name=''
+        ).exclude(vertex_model_resource_name__isnull=True)
         model.kpi_models_total = registered.count()
         model.kpi_models_deployed = registered.filter(
             deployed_endpoints__is_active=True
@@ -107,7 +109,9 @@ def system_dashboard(request):
     recent_runs = PipelineRun.objects.filter(status='running').count()
 
     # Assets KPIs
-    total_registered_models = RegisteredModel.objects.count()
+    total_registered_models = RegisteredModel.objects.exclude(
+        vertex_model_resource_name=''
+    ).exclude(vertex_model_resource_name__isnull=True).count()
     total_trainings = TrainingRun.objects.count()
     total_experiments = QuickTest.objects.count()
 
@@ -1087,6 +1091,131 @@ def api_setup_cleanup_scheduler(request):
 
     except Exception as e:
         logger.error(f'Failed to create cleanup scheduler: {e}')
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def scheduler_cleanup_orphan_models_webhook(request):
+    """
+    Webhook for Cloud Scheduler to trigger daily orphaned RegisteredModel cleanup.
+    Accepts OIDC authenticated requests from Cloud Scheduler.
+    No login required as this uses OIDC token authentication.
+    """
+    import logging
+    from django.core.management import call_command
+    from io import StringIO
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        output = StringIO()
+        call_command('cleanup_orphan_models', stdout=output)
+
+        logger.info(f'Scheduled orphan model cleanup completed')
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Orphan model cleanup completed',
+            'output': output.getvalue(),
+        })
+
+    except Exception as e:
+        logger.error(f'Scheduled orphan model cleanup failed: {e}', exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_setup_orphan_cleanup_scheduler(request):
+    """
+    Create or update the Cloud Scheduler job for daily orphaned RegisteredModel cleanup.
+    Must be called from within the deployed app (Cloud Run service account
+    has the required IAM roles).
+    """
+    import os
+    import json
+    import logging
+    from urllib.parse import urlparse
+    from google.cloud import scheduler_v1
+    from google.api_core import exceptions as google_exceptions
+
+    logger = logging.getLogger(__name__)
+
+    project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID', 'b2b-recs'))
+    region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+
+    from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+    manager = CloudSchedulerManager(project_id=project_id, region=region)
+
+    job_name = 'cleanup-orphan-models'
+    full_job_name = f"{manager.parent}/jobs/{job_name}"
+    schedule = '0 4 * * *'
+
+    # Build webhook URL from request (same pattern as ETL wizard)
+    django_base_url = f"{request.scheme}://{request.get_host()}"
+    webhook_url = f"{django_base_url}/api/system/cleanup-orphan-models-webhook/"
+
+    # Service account (same as ETL uses)
+    service_account = os.environ.get(
+        'ETL_SERVICE_ACCOUNT',
+        f'etl-runner@{project_id}.iam.gserviceaccount.com'
+    )
+
+    parsed = urlparse(webhook_url)
+    audience = f"{parsed.scheme}://{parsed.netloc}"
+
+    http_target = scheduler_v1.HttpTarget(
+        uri=webhook_url,
+        http_method=scheduler_v1.HttpMethod.POST,
+        headers={'Content-Type': 'application/json'},
+        body=json.dumps({'trigger': 'scheduled'}).encode('utf-8'),
+        oidc_token=scheduler_v1.OidcToken(
+            service_account_email=service_account,
+            audience=audience,
+        ),
+    )
+
+    job = scheduler_v1.Job(
+        name=full_job_name,
+        description='Daily orphaned RegisteredModel cleanup for ML Platform',
+        schedule=schedule,
+        time_zone='UTC',
+        http_target=http_target,
+    )
+
+    try:
+        try:
+            created_job = manager.client.create_job(
+                request=scheduler_v1.CreateJobRequest(
+                    parent=manager.parent,
+                    job=job,
+                )
+            )
+            action = 'Created'
+        except google_exceptions.AlreadyExists:
+            created_job = manager.client.update_job(
+                request=scheduler_v1.UpdateJobRequest(job=job)
+            )
+            action = 'Updated'
+
+        logger.info(f'{action} orphan cleanup scheduler: {created_job.name}')
+        return JsonResponse({
+            'status': 'success',
+            'action': action.lower(),
+            'job_name': created_job.name,
+            'schedule': schedule,
+            'webhook_url': webhook_url,
+        })
+
+    except Exception as e:
+        logger.error(f'Failed to create orphan cleanup scheduler: {e}')
         return JsonResponse({
             'status': 'error',
             'message': str(e),

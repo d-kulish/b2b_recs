@@ -60,4 +60,6 @@ urlpatterns = [
     path('api/system/cleanup-artifacts-webhook/', views.scheduler_cleanup_artifacts_webhook, name='api_cleanup_artifacts_webhook'),
     path('api/system/setup-metrics-scheduler/', views.api_setup_metrics_scheduler, name='api_setup_metrics_scheduler'),
     path('api/system/setup-cleanup-scheduler/', views.api_setup_cleanup_scheduler, name='api_setup_cleanup_scheduler'),
+    path('api/system/cleanup-orphan-models-webhook/', views.scheduler_cleanup_orphan_models_webhook, name='api_cleanup_orphan_models_webhook'),
+    path('api/system/setup-orphan-cleanup-scheduler/', views.api_setup_orphan_cleanup_scheduler, name='api_setup_orphan_cleanup_scheduler'),
 ]

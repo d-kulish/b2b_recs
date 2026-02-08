@@ -314,3 +314,89 @@ The `models_list` API now calls `batch_verify_models_in_vertex_ai()` and include
 - [ ] Model Registry list → "Not in Registry" badge for missing models
 - [ ] `model_delete` full cleanup → GCS artifacts gone, inactive endpoints marked, version cache synced
 - [ ] `model_delete` blocks active deployments → "Cannot delete a deployed model" error
+
+---
+
+## Fixes Applied (2026-02-08) — Bug 1: Early Model Naming
+
+### Problem
+
+`RegisteredModel` records were created eagerly at training run creation time (`services.py:236-243`), before the TFX pipeline starts. If the pipeline fails, the record persists as an orphan with empty `vertex_model_resource_name`, inflating the "Models" KPI on the dashboard.
+
+Three code paths created RegisteredModel early:
+1. Manual training runs (`create_training_run()`)
+2. Schedule creation (`api.py:2471-2502`)
+3. Schedule-from-run creation (`api.py:3255-3307`)
+
+### Fix 6: Deferred Registration for Manual Training Runs
+
+**File:** `ml_platform/training/services.py`
+
+Moved `RegisteredModel` creation from `create_training_run()` to `_register_to_model_registry()` — the method called after a successful Vertex AI model upload. Manual training runs now start with `registered_model=None` and only get a `RegisteredModel` record after the pipeline succeeds and the model is actually registered.
+
+Scheduled runs are unchanged — they pass `registered_model` from the schedule, which represents an intentional, named model lineage.
+
+**Why this is safe for parallel runs:** The parent model lookup in `_register_to_model_registry()` (lines 1095-1103) queries the `TrainingRun` table directly (not `RegisteredModel`), so versioning works regardless. The `get_or_create()` with `unique_together` constraint handles name collision atomically.
+
+### Fix 7: Dashboard KPI Queries Exclude Orphans
+
+**File:** `ml_platform/views.py`
+
+| Location | Before | After |
+|----------|--------|-------|
+| Global Assets KPI (line 110) | `RegisteredModel.objects.count()` | `.exclude(vertex_model_resource_name='').exclude(vertex_model_resource_name__isnull=True).count()` |
+| Per-project KPI (lines 58-59) | `model.registered_models.all()` | `model.registered_models.exclude(vertex_model_resource_name='').exclude(vertex_model_resource_name__isnull=True)` |
+
+The deployed models count (`kpi_models_deployed`) uses the same `registered` queryset, so the filter propagates automatically.
+
+### Fix 8: Periodic Orphan Cleanup (Scheduled Job)
+
+Added a scheduled job to clean up any remaining orphans — from schedules deleted before a successful run, or historical data.
+
+**New management command:** `cleanup_orphan_models`
+
+```
+python manage.py cleanup_orphan_models --dry-run   # Preview
+python manage.py cleanup_orphan_models              # Delete orphans older than 7 days
+python manage.py cleanup_orphan_models --days 14    # Custom age threshold
+```
+
+Cleanup logic:
+1. Finds `RegisteredModel` records where `vertex_model_resource_name` is empty/null and `created_at` is older than N days (default: 7)
+2. Skips records with linked `TrainingRun` in non-terminal state (pending, scheduled, submitting, running, deploying)
+3. Deletes orphans and logs details for audit trail
+
+**Scheduler setup:** Cloud Scheduler job `cleanup-orphan-models` runs daily at 04:00 UTC (after the 03:00 GCS cleanup).
+
+| Component | File |
+|-----------|------|
+| Management command | `ml_platform/management/commands/cleanup_orphan_models.py` |
+| Scheduler setup command | `ml_platform/management/commands/setup_orphan_cleanup_scheduler.py` |
+| Webhook endpoint | `ml_platform/views.py` → `scheduler_cleanup_orphan_models_webhook()` |
+| Scheduler setup API | `ml_platform/views.py` → `api_setup_orphan_cleanup_scheduler()` |
+| URL paths | `ml_platform/urls.py` (2 new paths) |
+
+### Expected Outcome
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Dashboard "Models" KPI | Counts all RegisteredModel records (including orphans from failed pipelines) | Only counts models actually registered in Vertex AI |
+| Manual training run failure | Leaves orphan RegisteredModel record permanently | No RegisteredModel created — nothing to clean up |
+| Schedule with no successful runs | Orphan RegisteredModel accumulates | Cleaned up after 7 days by scheduled job |
+| Historical orphans | Persist indefinitely | Cleaned up by first scheduled job run |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/training/services.py` | Removed early RegisteredModel creation in `create_training_run()`, added deferred creation in `_register_to_model_registry()` |
+| `ml_platform/views.py` | KPI queries exclude orphans, added webhook + scheduler setup endpoints |
+| `ml_platform/urls.py` | 2 new URL paths for orphan cleanup |
+| `ml_platform/management/commands/cleanup_orphan_models.py` | **NEW** — management command |
+| `ml_platform/management/commands/setup_orphan_cleanup_scheduler.py` | **NEW** — scheduler management command |
+
+### Verification
+
+- `python manage.py check` — no issues
+- No migrations needed (`TrainingRun.registered_model` FK is already `null=True`)
+- Existing test failures are pre-existing (`Dataset()` got unexpected keyword arg `bq_dataset` — unrelated)

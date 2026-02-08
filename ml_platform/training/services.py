@@ -232,15 +232,9 @@ class TrainingService:
                 elif config_model_type == 'ranking':
                     model_type = TrainingRun.MODEL_TYPE_RANKING
 
-            # Get or create RegisteredModel for this training run
-            if not registered_model:
-                reg_model_service = RegisteredModelService(self.ml_model)
-                registered_model = reg_model_service.get_or_create_for_training(
-                    model_name=name,
-                    model_type=model_type,
-                    description=description,
-                    created_by=created_by,
-                )
+            # RegisteredModel is created post-pipeline in _register_to_model_registry().
+            # For scheduled runs, registered_model is passed in from the schedule.
+            # For manual runs, it stays None until the model is actually registered.
 
             # Create training run
             training_run = TrainingRun.objects.create(
@@ -265,7 +259,7 @@ class TrainingService:
             logger.info(
                 f"Created training run {training_run.display_name} "
                 f"(id={training_run.id}) for model {self.ml_model.name}, "
-                f"registered_model={registered_model.model_name}"
+                f"registered_model={registered_model.model_name if registered_model else 'deferred'}"
             )
 
             return training_run
@@ -1131,6 +1125,18 @@ class TrainingService:
                 f"{training_run.display_name}: Registered to Model Registry as {model.display_name} "
                 f"(version: {model.version_id})"
             )
+
+            # Create or get RegisteredModel if not yet linked (manual runs)
+            if not training_run.registered_model:
+                reg_model_service = RegisteredModelService(self.ml_model)
+                registered_model = reg_model_service.get_or_create_for_training(
+                    model_name=model_name,
+                    model_type=training_run.model_type,
+                    description=training_run.description,
+                    created_by=training_run.created_by,
+                )
+                training_run.registered_model = registered_model
+                training_run.save(update_fields=['registered_model', 'updated_at'])
 
             # Update RegisteredModel with new version info
             if training_run.registered_model:

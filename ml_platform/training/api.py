@@ -3919,6 +3919,15 @@ def models_list(request):
             vertex_model_resource_name=''
         )
 
+        # Batch verify which models still exist in Vertex AI
+        service = TrainingService(model_endpoint)
+        try:
+            existing_vertex_models = service.batch_verify_models_in_vertex_ai()
+            registry_check_available = True
+        except Exception:
+            existing_vertex_models = set()
+            registry_check_available = False
+
         # Apply filters that can be done at database level
         model_type = request.GET.get('model_type')
         if model_type and model_type != 'all':
@@ -4067,7 +4076,11 @@ def models_list(request):
                         deployed_model_names=deployed_model_names,
                         deployed_training_run_ids=deployed_training_run_ids
                     ),
-                    'version_count': version_counts.get(m.vertex_model_name, 1)
+                    'version_count': version_counts.get(m.vertex_model_name, 1),
+                    'registry_verified': (
+                        m.vertex_model_resource_name in existing_vertex_models
+                        if registry_check_available else None
+                    ),
                 }
                 for m in models
             ],
@@ -4079,7 +4092,8 @@ def models_list(request):
                 'has_next': page < total_pages,
                 'has_prev': page > 1
             },
-            'kpi': kpi
+            'kpi': kpi,
+            'registry_check_available': registry_check_available,
         })
 
     except Exception as e:
@@ -4458,16 +4472,18 @@ def model_delete(request, model_id):
                 'error': f'Registered model {model_id} not found'
             }, status=404)
 
-        # Check if model is deployed - cannot delete deployed models
-        service = TrainingService(model_endpoint)
-        endpoint_info = service.get_deployed_model_resource_names()
-        deployed_models = endpoint_info['deployed_models']
-
-        if training_run.vertex_model_resource_name in deployed_models:
+        # Check if model is deployed to Cloud Run - cannot delete deployed models
+        from .models import DeployedEndpoint
+        if DeployedEndpoint.objects.filter(
+            deployed_training_run=training_run,
+            is_active=True
+        ).exists():
             return JsonResponse({
                 'success': False,
                 'error': 'Cannot delete a deployed model. Undeploy it first.'
             }, status=400)
+
+        service = TrainingService(model_endpoint)
 
         # Store model name for response
         model_name = training_run.vertex_model_name
@@ -4481,6 +4497,21 @@ def model_delete(request, model_id):
                 'error': str(e)
             }, status=500)
 
+        # Delete GCS artifacts
+        if training_run.gcs_artifacts_path:
+            try:
+                service._delete_gcs_artifacts(training_run.gcs_artifacts_path, f"model {model_name}")
+            except Exception as e:
+                logger.warning(f"Failed to delete GCS artifacts for {model_name}: {e}")
+
+        # Mark inactive DeployedEndpoints as model_deleted
+        updated = DeployedEndpoint.objects.filter(
+            deployed_training_run=training_run,
+            is_active=False
+        ).update(model_deleted=True)
+        if updated:
+            logger.info(f"Marked {updated} inactive endpoint(s) as model_deleted for {model_name}")
+
         # Clear registration data from training run
         # Note: CharField fields use empty string, not None (they have blank=True but not null=True)
         training_run.vertex_model_resource_name = ''
@@ -4493,6 +4524,15 @@ def model_delete(request, model_id):
             'vertex_model_version',
             'registered_at'
         ])
+
+        # Sync RegisteredModel version cache
+        if training_run.registered_model:
+            try:
+                from .registered_model_service import RegisteredModelService
+                rm_service = RegisteredModelService(model_endpoint)
+                rm_service.sync_version_cache(training_run.registered_model)
+            except Exception as e:
+                logger.warning(f"Failed to sync version cache: {e}")
 
         return JsonResponse({
             'success': True,
@@ -4998,6 +5038,7 @@ def _serialize_deployed_endpoint(endpoint, include_details=False):
         'service_url': endpoint.service_url,
         'deployed_version': endpoint.deployed_version,
         'is_active': endpoint.is_active,
+        'model_deleted': endpoint.model_deleted,
 
         # Registered model info
         'registered_model_id': endpoint.registered_model_id,
@@ -5453,6 +5494,12 @@ def endpoint_deploy(request, endpoint_id):
             return JsonResponse({
                 'success': False,
                 'error': 'No training run linked to this endpoint'
+            }, status=400)
+
+        if endpoint.model_deleted:
+            return JsonResponse({
+                'success': False,
+                'error': 'Cannot deploy: the underlying model has been deleted. Deploy a new model version instead.'
             }, status=400)
 
         # Re-deploy the endpoint

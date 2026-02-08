@@ -201,3 +201,116 @@ Before deploying, the service should verify the model exists in the Vertex AI Mo
 - Return a clear error: "Model not found in Vertex AI Model Registry. It may have been deleted."
 - Do NOT silently re-upload from GCS
 - Clean up the stale DB fields (`vertex_model_resource_name`, etc.) on the TrainingRun and RegisteredModel
+
+---
+
+## Bug 4: `model_delete` checks wrong deployment layer
+
+**Location:** `ml_platform/training/api.py:4461-4470` (before fix)
+
+```python
+# BROKEN — queries Vertex AI Endpoints (unused deployment path)
+service = TrainingService(model_endpoint)
+endpoint_info = service.get_deployed_model_resource_names()
+deployed_models = endpoint_info['deployed_models']
+
+if training_run.vertex_model_resource_name in deployed_models:
+    return JsonResponse({'error': 'Cannot delete a deployed model.'}, status=400)
+```
+
+`get_deployed_model_resource_names()` queries Vertex AI Endpoints — the deployment path that is not used. All actual deployments go through Cloud Run via `DeployedEndpoint` records. This means a user could delete a model that has an active Cloud Run deployment, causing the deployment to fail on next restart.
+
+---
+
+## Fixes Applied (2026-02-08)
+
+### Fix 1: Deployment Integrity Verification
+
+**Files:** `ml_platform/training/services.py`, `ml_platform/training/api.py`
+
+Added three verification helpers to `TrainingService`:
+
+| Method | Purpose |
+|--------|---------|
+| `verify_model_in_vertex_ai(resource_name)` | Checks model exists by fetching `display_name` via API |
+| `verify_gcs_artifacts_exist(gcs_path)` | Lightweight check for `pushed_model/` blobs (max_results=1) |
+| `batch_verify_models_in_vertex_ai()` | Lists all models in one API call, returns set of resource names |
+
+`deploy_to_cloud_run()` now verifies both Vertex AI model existence and GCS artifacts before proceeding. Since this is the shared low-level deploy method, both the first-deploy path (`training_run_deploy_cloud_run`) and the redeploy path (`redeploy_endpoint()`) benefit.
+
+### Fix 2: `model_delete` Complete Cleanup
+
+**File:** `ml_platform/training/api.py`, function `model_delete`
+
+| Before | After |
+|--------|-------|
+| Checked Vertex AI Endpoints (dead code path) | Checks `DeployedEndpoint.objects.filter(is_active=True)` |
+| No GCS cleanup | Calls `_delete_gcs_artifacts()` to remove training artifacts |
+| No endpoint marking | Sets `model_deleted=True` on inactive `DeployedEndpoint` records |
+| No version cache sync | Calls `RegisteredModelService.sync_version_cache()` |
+
+### Fix 3: `model_deleted` Field on DeployedEndpoint
+
+**File:** `ml_platform/training/models.py`
+
+Added `model_deleted = BooleanField(default=False)` to `DeployedEndpoint`. This is orthogonal to `is_active`:
+
+| `is_active` | `model_deleted` | Meaning |
+|-------------|-----------------|---------|
+| True | False | Normal active deployment |
+| False | False | Stopped but restorable |
+| False | True | Stopped, model deleted — cannot restore |
+
+Both `redeploy_endpoint()` (services.py) and `endpoint_deploy` (api.py) now fast-fail with a clear error when `model_deleted=True`.
+
+Migration: `0012_add_model_deleted_to_deployed_endpoint.py`
+
+### Fix 4: Proactive Registry Verification on Model List
+
+**File:** `ml_platform/training/api.py`, function `models_list`
+
+The `models_list` API now calls `batch_verify_models_in_vertex_ai()` and includes:
+- `registry_verified` per model (`true`/`false`/`null` if check unavailable)
+- `registry_check_available` flag in response
+
+### Fix 5: Frontend Safeguards
+
+**Endpoints Table** (`static/js/endpoints_table.js`, `static/css/endpoints_table.css`):
+- "Model Deleted" amber badge when `model_deleted=true`
+- Deploy button disabled with tooltip when model deleted
+- `confirmDeploy()` returns early with error toast
+
+**Models Registry** (`static/js/models_registry.js`, `static/css/models_registry.css`):
+- "Not in Registry" red warning badge when `registry_verified === false`
+- Deploy button disabled when model missing from Vertex AI
+
+---
+
+## Verification Performed
+
+### Automated
+- `python manage.py makemigrations --check` — no pending migrations (migration matches model)
+- `python manage.py migrate training` — migration applied successfully
+- `python manage.py check` — system check identified no issues
+- Python import verification — all new methods accessible on `TrainingService`, `api.py` imports cleanly
+
+### Files Modified
+
+| File | Change Type |
+|------|-------------|
+| `ml_platform/training/models.py` | Added `model_deleted` field |
+| `ml_platform/training/migrations/0012_...py` | New migration |
+| `ml_platform/training/services.py` | 3 verification helpers + deploy checks + redeploy guard |
+| `ml_platform/training/api.py` | Fixed `model_delete`, added registry verification to `models_list`, endpoint serializer, `endpoint_deploy` guard |
+| `static/js/endpoints_table.js` | Model Deleted badge + disabled Deploy |
+| `static/js/models_registry.js` | Not in Registry badge + disabled Deploy |
+| `static/css/endpoints_table.css` | `.model-deleted` badge style |
+| `static/css/models_registry.css` | `.registry-missing` badge style |
+
+### Manual Testing Checklist
+
+- [ ] Deploy with deleted Vertex AI model → expect clear error message
+- [ ] Reactivate endpoint after model deleted → "Model Deleted" badge, Deploy disabled
+- [ ] Model Registry list → "Not in Registry" badge for missing models
+- [ ] `model_delete` full cleanup → GCS artifacts gone, inactive endpoints marked, version cache synced
+- [ ] `model_delete` blocks active deployments → "Cannot delete a deployed model" error

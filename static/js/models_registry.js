@@ -511,6 +511,9 @@ const ModelsRegistry = (function() {
                         <i class="fas ${statusConfig.icon}"></i>
                         ${statusConfig.label}
                     </span>
+                    ${model.registry_verified === false
+                        ? '<span class="models-status-badge registry-missing" title="Model not found in Vertex AI Registry"><i class="fas fa-exclamation-triangle"></i> Not in Registry</span>'
+                        : ''}
                 </td>
                 <td>
                     ${model.has_schedule ? `
@@ -549,12 +552,14 @@ const ModelsRegistry = (function() {
     function renderActionButtons(model) {
         const isDeployed = model.model_status === 'deployed';
         const hasSchedule = model.has_schedule;
+        const registryMissing = model.registry_verified === false;
 
         return `
             <div class="ml-card-col-actions">
                 <div class="ml-card-actions-grid">
                     <!-- Row 1: Deploy | View -->
                     <button class="card-action-btn deploy"
+                            ${registryMissing && !isDeployed ? 'disabled title="Model not found in Vertex AI Registry"' : ''}
                             onclick="${isDeployed ? `ModelsRegistry.undeploy(${model.id})` : `ModelsRegistry.deploy(${model.id})`}">
                         ${isDeployed ? 'Undeploy' : 'Deploy'}
                     </button>

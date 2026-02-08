@@ -963,6 +963,11 @@ class DeployedEndpoint(models.Model):
         help_text="Whether endpoint exists and is active"
     )
 
+    model_deleted = models.BooleanField(
+        default=False,
+        help_text="Whether the underlying model has been deleted from Vertex AI"
+    )
+
     deployment_config = models.JSONField(
         default=dict,
         help_text="Last deployment configuration (instances, memory, cpu, etc.)"

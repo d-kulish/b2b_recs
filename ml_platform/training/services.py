@@ -1762,6 +1762,65 @@ class TrainingService:
             logger.exception(f"Error deleting model from registry: {e}")
             raise TrainingServiceError(f"Failed to delete model from registry: {e}")
 
+    def verify_model_in_vertex_ai(self, resource_name: str) -> bool:
+        """
+        Check whether a model exists in Vertex AI Model Registry.
+
+        Args:
+            resource_name: Full Vertex AI model resource name
+
+        Returns:
+            True if model exists, False otherwise
+        """
+        try:
+            from google.cloud import aiplatform
+            self._init_aiplatform()
+            model = aiplatform.Model(model_name=resource_name)
+            _ = model.display_name  # Force API fetch
+            return True
+        except Exception:
+            return False
+
+    def verify_gcs_artifacts_exist(self, gcs_path: str) -> bool:
+        """
+        Check whether GCS artifacts exist at the given path.
+
+        Args:
+            gcs_path: GCS path (gs://bucket/prefix)
+
+        Returns:
+            True if artifacts found, False otherwise
+        """
+        try:
+            if not gcs_path or not gcs_path.startswith('gs://'):
+                return False
+
+            path = gcs_path[5:]  # Remove 'gs://'
+            bucket_name = path.split('/')[0]
+            prefix = '/'.join(path.split('/')[1:])
+
+            bucket = self.storage_client.bucket(bucket_name)
+            blobs = list(bucket.list_blobs(prefix=f"{prefix}/pushed_model/", max_results=1))
+            return len(blobs) > 0
+        except Exception:
+            return False
+
+    def batch_verify_models_in_vertex_ai(self) -> set:
+        """
+        List all models in Vertex AI Model Registry and return their resource names.
+
+        Returns:
+            Set of resource names for all models in the registry.
+            Returns empty set on failure.
+        """
+        try:
+            from google.cloud import aiplatform
+            self._init_aiplatform()
+            models = aiplatform.Model.list()
+            return {m.resource_name for m in models}
+        except Exception:
+            return set()
+
     def force_push_model(self, training_run: TrainingRun) -> TrainingRun:
         """
         Force-push a not-blessed model to Vertex AI Model Registry.
@@ -2074,6 +2133,18 @@ class TrainingService:
         if not training_run.gcs_artifacts_path:
             raise TrainingServiceError("No GCS artifacts path found for this training run")
 
+        # Verify model exists in Vertex AI
+        if not self.verify_model_in_vertex_ai(training_run.vertex_model_resource_name):
+            raise TrainingServiceError(
+                "Model not found in Vertex AI Model Registry. It may have been deleted. Cannot deploy."
+            )
+
+        # Verify GCS artifacts exist
+        if not self.verify_gcs_artifacts_exist(training_run.gcs_artifacts_path):
+            raise TrainingServiceError(
+                "Model artifacts not found in GCS. The training artifacts may have been deleted. Cannot deploy."
+            )
+
         # Build project slug for service name prefix
         project_slug = self.ml_model.name.lower().replace('_', '-').replace(' ', '-')
         project_slug = ''.join(c if c.isalnum() or c == '-' else '' for c in project_slug).strip('-')[:20]
@@ -2312,6 +2383,11 @@ class TrainingService:
 
         if endpoint.is_active:
             raise TrainingServiceError("Endpoint is already active")
+
+        if endpoint.model_deleted:
+            raise TrainingServiceError(
+                "Cannot re-deploy: the underlying model has been deleted. Deploy a new model version instead."
+            )
 
         if not endpoint.deployed_training_run:
             raise TrainingServiceError("No training run linked to this endpoint")

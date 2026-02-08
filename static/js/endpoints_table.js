@@ -64,7 +64,8 @@ const EndpointsTable = (function() {
     // Status badge configurations
     const STATUS_CONFIG = {
         active: { icon: 'fa-check-circle', label: 'Active', class: 'active' },
-        inactive: { icon: 'fa-times-circle', label: 'Inactive', class: 'inactive' }
+        inactive: { icon: 'fa-times-circle', label: 'Inactive', class: 'inactive' },
+        model_deleted: { icon: 'fa-exclamation-triangle', label: 'Model Deleted', class: 'model-deleted' }
     };
 
     // Model type configurations
@@ -733,7 +734,9 @@ const EndpointsTable = (function() {
     }
 
     function renderTableRow(endpoint, idx) {
-        const statusConfig = endpoint.is_active ? STATUS_CONFIG.active : STATUS_CONFIG.inactive;
+        const statusConfig = endpoint.model_deleted
+            ? STATUS_CONFIG.model_deleted
+            : (endpoint.is_active ? STATUS_CONFIG.active : STATUS_CONFIG.inactive);
         const typeConfig = TYPE_CONFIG[endpoint.model_type] || TYPE_CONFIG.retrieval;
         const rowNum = (state.pagination.page - 1) * state.pagination.pageSize + idx + 1;
 
@@ -788,6 +791,7 @@ const EndpointsTable = (function() {
 
     function renderActionButtons(endpoint) {
         const isActive = endpoint.is_active;
+        const isModelDeleted = endpoint.model_deleted;
 
         // 2x2 Grid Layout matching Models Registry on Training page:
         // Row 1: [Deploy/Undeploy] [View]
@@ -797,6 +801,7 @@ const EndpointsTable = (function() {
                 <div class="ml-card-actions-grid">
                     <!-- Row 1: Deploy/Undeploy | View -->
                     <button class="card-action-btn deploy"
+                            ${isModelDeleted && !isActive ? 'disabled title="Model has been deleted"' : ''}
                             onclick="${isActive
                                 ? `EndpointsTable.confirmUndeploy(${endpoint.id})`
                                 : `EndpointsTable.confirmDeploy(${endpoint.id})`}">
@@ -1124,6 +1129,11 @@ const EndpointsTable = (function() {
     function confirmDeploy(endpointId) {
         const endpoint = state.endpoints.find(e => e.id === endpointId);
         if (!endpoint) return;
+
+        if (endpoint.model_deleted) {
+            showToast('Cannot deploy: the underlying model has been deleted.', 'error');
+            return;
+        }
 
         if (endpoint.is_active) {
             showToast('Endpoint is already active', 'error');

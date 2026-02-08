@@ -377,6 +377,11 @@
     color: #6b7280;
 }
 
+.models-status-badge.registry-missing {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
 .models-status-badge i {
     font-size: 9px;
 }

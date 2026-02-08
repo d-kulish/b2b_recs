@@ -375,6 +375,11 @@
     color: #dc2626;
 }
 
+.endpoints-status-badge.model-deleted {
+    background: #fef3c7;
+    color: #92400e;
+}
+
 .endpoints-status-badge i {
     font-size: 9px;
 }

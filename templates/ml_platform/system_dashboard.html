@@ -924,27 +924,27 @@
                                             </div>
                                         </div>
 
-                                        <!-- KPI: Requests (7D) - placeholder -->
+                                        <!-- KPI: Requests (7D) -->
                                         <div class="header-kpi-card">
                                             <div class="header-kpi-icon requests">
                                                 <i class="fas fa-chart-bar"></i>
                                             </div>
                                             <div class="header-kpi-content">
-                                                <div class="header-kpi-value">--</div>
+                                                <div class="header-kpi-value">{% if model.kpi_requests_7d %}{{ model.kpi_requests_7d }}{% else %}--{% endif %}</div>
                                                 <div class="header-kpi-label">Requests (7D)</div>
-                                                <div class="header-kpi-change neutral"></div>
+                                                <div class="header-kpi-change {% if model.kpi_requests_change_pct != None %}{% if model.kpi_requests_change_pct >= 0 %}positive{% else %}negative{% endif %}{% else %}neutral{% endif %}">{% if model.kpi_requests_change_pct != None %}{% if model.kpi_requests_change_pct >= 0 %}+{% endif %}{{ model.kpi_requests_change_pct }}%{% endif %}</div>
                                             </div>
                                         </div>
 
-                                        <!-- KPI: Latency (P95) - placeholder -->
+                                        <!-- KPI: Latency (P95) -->
                                         <div class="header-kpi-card">
                                             <div class="header-kpi-icon latency">
                                                 <i class="fas fa-clock"></i>
                                             </div>
                                             <div class="header-kpi-content">
-                                                <div class="header-kpi-value">--</div>
+                                                <div class="header-kpi-value">{% if model.kpi_latency_p95 != None %}{{ model.kpi_latency_p95 }}ms{% else %}--{% endif %}</div>
                                                 <div class="header-kpi-label">Latency (P95)</div>
-                                                <div class="header-kpi-change neutral"></div>
+                                                <div class="header-kpi-change {% if model.kpi_latency_change_ms != None %}{% if model.kpi_latency_change_ms <= 0 %}positive{% else %}negative{% endif %}{% else %}neutral{% endif %}">{% if model.kpi_latency_change_ms != None %}{% if model.kpi_latency_change_ms >= 0 %}+{% endif %}{{ model.kpi_latency_change_ms }}ms{% endif %}</div>
                                             </div>
                                         </div>
                                     </div>

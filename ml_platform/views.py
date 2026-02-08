@@ -33,6 +33,7 @@ from .models import (
     SystemMetrics,
     QuickTest,
     ResourceMetrics,
+    ProjectMetrics,
 )
 from .training.models import TrainingRun, DeployedEndpoint, RegisteredModel
 
@@ -49,6 +50,10 @@ def system_dashboard(request):
     models = ModelEndpoint.objects.all().order_by('-created_at')
 
     # Per-project KPIs for project cards
+    now = timezone.now()
+    last_7d = now.date() - timedelta(days=7)
+    last_14d = now.date() - timedelta(days=14)
+
     for model in models:
         registered = model.registered_models.all()
         model.kpi_models_total = registered.count()
@@ -58,6 +63,37 @@ def system_dashboard(request):
         endpoints = DeployedEndpoint.objects.filter(registered_model__ml_model=model)
         model.kpi_endpoints_total = endpoints.count()
         model.kpi_endpoints_active = endpoints.filter(is_active=True).count()
+
+        # Requests & Latency from ProjectMetrics (7-day window)
+        rows_7d = list(ProjectMetrics.objects.filter(
+            model_endpoint=model, date__gt=last_7d,
+        ))
+        rows_prev_7d = list(ProjectMetrics.objects.filter(
+            model_endpoint=model, date__gt=last_14d, date__lte=last_7d,
+        ))
+
+        total_req_7d = sum(r.total_requests for r in rows_7d)
+        total_req_prev = sum(r.total_requests for r in rows_prev_7d)
+
+        model.kpi_requests_7d = total_req_7d
+        if total_req_prev > 0:
+            model.kpi_requests_change_pct = round(
+                (total_req_7d - total_req_prev) / total_req_prev * 100, 1
+            )
+        else:
+            model.kpi_requests_change_pct = None
+
+        weighted_p95 = sum(r.latency_p95_ms * r.total_requests for r in rows_7d)
+        weight = sum(r.total_requests for r in rows_7d)
+        model.kpi_latency_p95 = round(weighted_p95 / weight) if weight > 0 else None
+
+        weighted_p95_prev = sum(r.latency_p95_ms * r.total_requests for r in rows_prev_7d)
+        weight_prev = sum(r.total_requests for r in rows_prev_7d)
+        avg_p95_prev = round(weighted_p95_prev / weight_prev) if weight_prev > 0 else None
+        if model.kpi_latency_p95 is not None and avg_p95_prev is not None:
+            model.kpi_latency_change_ms = model.kpi_latency_p95 - avg_p95_prev
+        else:
+            model.kpi_latency_change_ms = None
 
     # Get latest system metrics (if available)
     try:
@@ -394,6 +430,14 @@ def api_pipeline_run_status(request, run_id):
 # SYSTEM-LEVEL API ENDPOINTS
 # ============================================================================
 
+def _system_avg_latency_p95(since_date):
+    """Volume-weighted avg P95 latency across all projects from ProjectMetrics."""
+    rows = ProjectMetrics.objects.filter(date__gte=since_date)
+    weighted = sum(r.latency_p95_ms * r.total_requests for r in rows)
+    total_reqs = sum(r.total_requests for r in rows)
+    return round(weighted / total_reqs) if total_reqs > 0 else 0
+
+
 @login_required
 def api_system_kpis(request):
     """
@@ -456,7 +500,8 @@ def api_system_kpis(request):
                 'requests_30d': ResourceMetrics.objects.filter(
                     date__gte=cutoff_30d.date()
                 ).aggregate(total=Sum('cloud_run_total_requests'))['total'] or 0,
-                'avg_latency_ms': 0,
+                # System-wide volume-weighted avg P95 latency from ProjectMetrics
+                'avg_latency_ms': _system_avg_latency_p95(cutoff_30d.date()),
             }
         })
     except Exception as e:

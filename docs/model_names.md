@@ -400,3 +400,25 @@ Cleanup logic:
 - `python manage.py check` — no issues
 - No migrations needed (`TrainingRun.registered_model` FK is already `null=True`)
 - Existing test failures are pre-existing (`Dataset()` got unexpected keyword arg `bq_dataset` — unrelated)
+
+### Deployed (2026-02-08)
+
+Cloud Scheduler job created and tested:
+
+```
+$ curl -s -X POST .../api/system/setup-orphan-cleanup-scheduler/
+{"status": "success", "action": "created", "job_name": "projects/b2b-recs/locations/europe-central2/jobs/cleanup-orphan-models", "schedule": "0 4 * * *"}
+
+$ curl -s -X POST .../api/system/cleanup-orphan-models-webhook/
+{"status": "success", "message": "Orphan model cleanup completed", "output": "...Found 0 orphaned RegisteredModel(s) older than 7 days.\n\nDeleted 0 orphaned RegisteredModel(s), skipped 0 with active training runs\n"}
+```
+
+All three system cleanup/metrics jobs now active:
+
+| Job | Schedule (UTC) | Purpose |
+|-----|----------------|---------|
+| `collect-resource-metrics` | 02:00 | Collect CPU/memory/request metrics from Cloud Run |
+| `cleanup-gcs-artifacts` | 03:00 | Delete old GCS training artifacts |
+| `cleanup-orphan-models` | 04:00 | Delete orphan RegisteredModel records (never registered to Vertex AI) |
+
+First run found 0 orphans — expected since the 3 historical orphans were manually cleaned during the data audit.

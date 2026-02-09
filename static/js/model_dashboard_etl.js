@@ -16,7 +16,7 @@ const ModelDashboardEtl = (function() {
         containerId: '#etlChapter',
         loadingId: '#etlChapterLoading',
         emptyId: '#etlChapterEmpty',
-        contentId: '#etlChapterContent',
+        contentIds: ['#etlChapterKpiRow', '#etlChapterRow2'],
         kpiRowId: '#etlChapterKpiRow',
         row2Id: '#etlChapterRow2',
         scheduledSectionId: '#etlScheduledSection',
@@ -63,7 +63,7 @@ const ModelDashboardEtl = (function() {
     function showLoading() {
         document.querySelector(config.loadingId).classList.remove('hidden');
         document.querySelector(config.emptyId).classList.add('hidden');
-        document.querySelector(config.contentId).classList.add('hidden');
+        config.contentIds.forEach(id => document.querySelector(id).classList.add('hidden'));
     }
 
     /**
@@ -72,7 +72,7 @@ const ModelDashboardEtl = (function() {
     function showEmpty() {
         document.querySelector(config.loadingId).classList.add('hidden');
         document.querySelector(config.emptyId).classList.remove('hidden');
-        document.querySelector(config.contentId).classList.add('hidden');
+        config.contentIds.forEach(id => document.querySelector(id).classList.add('hidden'));
     }
 
     /**
@@ -81,7 +81,7 @@ const ModelDashboardEtl = (function() {
     function showContent() {
         document.querySelector(config.loadingId).classList.add('hidden');
         document.querySelector(config.emptyId).classList.add('hidden');
-        document.querySelector(config.contentId).classList.remove('hidden');
+        config.contentIds.forEach(id => document.querySelector(id).classList.remove('hidden'));
     }
 
     /**

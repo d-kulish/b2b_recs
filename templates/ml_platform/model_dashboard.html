@@ -118,76 +118,76 @@
 </div>
 
 <!-- CHAPTER: CONFIGS -->
-<div id="configsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    <!-- Header -->
-    <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #6366f1, #818cf8);">
-            <i class="fas fa-cogs text-white text-2xl"></i>
+<div id="configsChapter" class="chapter-container" data-chapter="configs">
+    <div class="chapter-header">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon configs">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Configs</span>
+                    <span class="chapter-subtitle">Track configuration inventory and usage</span>
+                </div>
+            </div>
         </div>
-        <div>
-            <h2 class="text-2xl font-bold text-gray-900">Configs</h2>
-            <p class="chapter-subtitle">Track configuration inventory and usage</p>
+        <div class="chapter-divider"></div>
+        <!-- Loading State -->
+        <div id="configsChapterLoading" class="model-dashboard-configs-loading">
+            <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+            <span class="text-gray-500">Loading configs...</span>
         </div>
+        <!-- Empty State -->
+        <div id="configsChapterEmpty" class="model-dashboard-configs-empty hidden">
+            <i class="fas fa-cubes"></i>
+            <p class="model-dashboard-configs-empty-title">No configurations yet</p>
+            <p class="model-dashboard-configs-empty-text">Configuration data will appear here once datasets, features, and models are created.</p>
+        </div>
+        <!-- KPI Row (3 Cards: Datasets, Features, Models) -->
+        <div id="configsChapterKpiRow" class="model-dashboard-configs-kpi-row hidden"></div>
     </div>
-
-    <!-- Loading State -->
-    <div id="configsChapterLoading" class="model-dashboard-configs-loading">
-        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
-        <span class="text-gray-500">Loading configs...</span>
-    </div>
-
-    <!-- Empty State -->
-    <div id="configsChapterEmpty" class="model-dashboard-configs-empty hidden">
-        <i class="fas fa-cubes"></i>
-        <p class="model-dashboard-configs-empty-title">No configurations yet</p>
-        <p class="model-dashboard-configs-empty-text">Configuration data will appear here once datasets, features, and models are created.</p>
-    </div>
-
-    <!-- KPI Row (3 Cards: Datasets, Features, Models) -->
-    <div id="configsChapterKpiRow" class="model-dashboard-configs-kpi-row hidden"></div>
 </div>
 
 <!-- CHAPTER: ETL -->
-<div id="etlChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm"
-                 style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
-                <i class="fas fa-exchange-alt text-white text-2xl"></i>
+<div id="etlChapter" class="chapter-container" data-chapter="etl">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon etl">
+                    <i class="fas fa-exchange-alt"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">ETL</span>
+                    <span class="chapter-subtitle">Monitor data pipeline jobs and runs (last 30 days)</span>
+                </div>
             </div>
-            <div>
-                <h2 class="text-2xl font-bold text-gray-900">ETL</h2>
-                <p class="chapter-subtitle">Monitor data pipeline jobs and runs</p>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
             </div>
         </div>
-        <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-            <i class="fas fa-calendar mr-1"></i>Last 30 days
-        </span>
+        <div class="chapter-divider"></div>
+        <!-- Loading State -->
+        <div id="etlChapterLoading" class="model-dashboard-etl-loading">
+            <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+            <span class="text-gray-500">Loading ETL data...</span>
+        </div>
+        <!-- Empty State -->
+        <div id="etlChapterEmpty" class="model-dashboard-etl-empty hidden">
+            <i class="fas fa-exchange-alt"></i>
+            <p class="model-dashboard-etl-empty-title">No ETL jobs configured</p>
+            <p class="model-dashboard-etl-empty-text">Configure ETL jobs on the ETL page to see data here.</p>
+        </div>
+        <!-- KPI Row — always visible -->
+        <div id="etlChapterKpiRow" class="etl-kpi-row hidden"></div>
     </div>
-
-    <!-- Loading State -->
-    <div id="etlChapterLoading" class="model-dashboard-etl-loading">
-        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
-        <span class="text-gray-500">Loading ETL data...</span>
-    </div>
-
-    <!-- Empty State -->
-    <div id="etlChapterEmpty" class="model-dashboard-etl-empty hidden">
-        <i class="fas fa-exchange-alt"></i>
-        <p class="model-dashboard-etl-empty-title">No ETL jobs configured</p>
-        <p class="model-dashboard-etl-empty-text">Configure ETL jobs on the ETL page to see data here.</p>
-    </div>
-
-    <!-- Content -->
-    <div id="etlChapterContent" class="hidden">
-        <!-- KPI Row - uses etl-kpi-row from cards.css -->
-        <div id="etlChapterKpiRow" class="etl-kpi-row"></div>
-
-        <!-- Row 2: Scheduled Jobs (35%) + Bubble Chart (65%) - uses etl-dashboard-row-2 from cards.css -->
-        <div id="etlChapterRow2" class="etl-dashboard-row-2">
-            <div id="etlScheduledSection" class="etl-scheduled-section"></div>
-            <div id="etlChartSection" class="etl-chart-section"></div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Row 2: Scheduled Jobs (35%) + Bubble Chart (65%) -->
+            <div id="etlChapterRow2" class="etl-dashboard-row-2">
+                <div id="etlScheduledSection" class="etl-scheduled-section"></div>
+                <div id="etlChartSection" class="etl-chart-section"></div>
+            </div>
         </div>
     </div>
 </div>

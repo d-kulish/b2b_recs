@@ -68,6 +68,14 @@
     background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
 }
 
+.chapter-icon.configs {
+    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+}
+
+.chapter-icon.etl {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+}
+
 .chapter-title-text {
     display: flex;
     flex-direction: column;

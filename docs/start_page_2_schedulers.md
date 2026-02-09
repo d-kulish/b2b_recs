@@ -170,3 +170,66 @@ Both jobs triggered manually via `gcloud scheduler jobs run` after redeployment:
 |-----|-----------|--------|
 | `collect-resource-metrics` | 2026-02-08 ~15:05 UTC | **Success** (confirmed via scheduler dashboard) |
 | `cleanup-gcs-artifacts` | 2026-02-08 ~15:10 UTC | **Success** (`status: {}`, no error code) |
+
+---
+
+## Bug 3: Stale GPU Counts — Scheduler Timing (2026-02-09)
+
+**Symptom:** The "Training Jobs (30d)" chart on the starting page under-reported failed
+training jobs for Feb 6, Feb 8, and Feb 9.
+
+### Data Comparison (ResourceMetrics vs TrainingRun ground truth)
+
+| Date | Chart completed | Chart failed | Real completed | Real failed | Status |
+|------|:-:|:-:|:-:|:-:|--------|
+| Feb 6 | 0 | **1** | 0 | **2** | WRONG — missing 1 failed |
+| Feb 8 | 1 | **0** | 1 | **3** | WRONG — missing 3 failed |
+| Feb 9 | 0 | **0** | 0 | **1** | WRONG — missing 1 failed |
+
+### Root Cause
+
+The webhook (`views.py:854`) called `collect_resource_metrics` without a `--date` argument,
+so the command defaulted to `target_date = timezone.now().date()` (today). The scheduler
+runs at **02:00 UTC** — at that hour the day has barely started, so training runs completing
+later in the day are permanently missed.
+
+The data is **never retroactively updated** because the next day's scheduler run uses the
+next day's date. This affected every collection point:
+
+| Collection | Ran at (UTC) | target_date | Missed runs |
+|------------|-------------|-------------|-------------|
+| Backfill | Feb 6 10:46 | Feb 6 | TR-51 (failed 15:24) |
+| Manual re-run | Feb 8 15:05 | Feb 8 | TR-56 (17:09), TR-57 (19:26), TR-58 (21:27) |
+| First scheduled | Feb 9 02:00 | Feb 9 | TR-59 (failed 09:58) |
+
+### Fix Applied
+
+**File:** `ml_platform/views.py` — `scheduler_collect_metrics_webhook()`
+
+The webhook now passes `--date` with **yesterday's date** to the command. At 02:00 UTC,
+the previous day is fully complete so all training runs have their final `completed_at`
+timestamps:
+
+```python
+yesterday = (timezone.now() - timedelta(days=1)).date()
+call_command('collect_resource_metrics', '--date', yesterday.isoformat(), stdout=output)
+```
+
+The management command default (`timezone.now().date()`) is unchanged for manual usage.
+
+### Data Repair
+
+Re-collected the 3 stale dates manually via `collect_resource_metrics --date`:
+
+```
+$ python manage.py collect_resource_metrics --date 2026-02-06
+  GPU: 0.2h, 0 completed, 2 failed, 0 running     # was: 0c/1f
+
+$ python manage.py collect_resource_metrics --date 2026-02-08
+  GPU: 3.0h, 1 completed, 3 failed, 0 running      # was: 1c/0f
+
+$ python manage.py collect_resource_metrics --date 2026-02-09
+  GPU: 0.6h, 0 completed, 1 failed, 0 running      # was: 0c/0f
+```
+
+All 13 active days in the 30-day window now match ground truth.

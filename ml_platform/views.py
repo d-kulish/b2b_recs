@@ -851,22 +851,24 @@ def scheduler_collect_metrics_webhook(request):
 
     try:
         output = StringIO()
-        call_command('collect_resource_metrics', stdout=output)
-        today = timezone.now().date()
+        # Collect for yesterday — at 02:00 UTC the previous day is fully complete,
+        # so all training runs / ETL jobs have their final completed_at timestamps.
+        yesterday = (timezone.now() - timedelta(days=1)).date()
+        call_command('collect_resource_metrics', '--date', yesterday.isoformat(), stdout=output)
 
         # Check if collection had partial errors
         from ml_platform.models import ResourceMetrics
-        record = ResourceMetrics.objects.filter(date=today).first()
+        record = ResourceMetrics.objects.filter(date=yesterday).first()
         errors = record.collection_errors if record and record.collection_errors else []
 
         if errors:
-            logger.warning(f'Metrics collection for {today} had {len(errors)} error(s): {errors}')
+            logger.warning(f'Metrics collection for {yesterday} had {len(errors)} error(s): {errors}')
         else:
-            logger.info(f'Scheduled metrics collection completed for {today}')
+            logger.info(f'Scheduled metrics collection completed for {yesterday}')
 
         return JsonResponse({
             'status': 'success' if not errors else 'partial',
-            'message': f'Metrics collected for {today}',
+            'message': f'Metrics collected for {yesterday}',
             'output': output.getvalue(),
             'collection_errors': errors,
         })

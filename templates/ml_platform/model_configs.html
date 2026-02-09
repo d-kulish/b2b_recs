@@ -6,6 +6,7 @@
 
 {% block extra_css %}
 {{ block.super }}
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=17">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <style>
@@ -18,7 +19,7 @@
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 16px;
-        margin-bottom: 24px;
+        margin-bottom: 0;
     }
 
     /* Individual KPI Card */
@@ -1567,46 +1568,21 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         padding: 24px;
     }
-    .chapter-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
-    }
-    .chapter-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
+    /* Chapter icon variants (base styles from model_dashboard.css) */
+    .chapter-icon.configs-dashboard {
+        background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
     }
     .chapter-icon.features {
         background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
-        color: white;
     }
     .chapter-icon.model-structure {
         background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
-        color: white;
     }
     .chapter-icon.quick-test {
         background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
-        color: white;
     }
     .chapter-icon.experiments {
         background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
-        color: white;
-    }
-    .chapter-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: #111827;
-    }
-    .chapter-subtitle {
-        font-size: 13px;
-        color: #6b7280;
-        margin-top: 2px;
     }
     .chapter-empty-state {
         display: flex;
@@ -4101,61 +4077,70 @@
     <!-- =========================================================================== -->
     <!-- CHAPTER 0: CONFIGS DASHBOARD -->
     <!-- =========================================================================== -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%); color: white;">
-                    <i class="fas fa-chart-bar"></i>
-                </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">Configs Dashboard</h2>
-                    <p class="chapter-subtitle">Track configuration inventory and usage</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Loading State -->
-        <div id="cfgDashboardLoading" class="configs-dashboard-loading">
-            <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
-            <span class="text-gray-500">Loading dashboard...</span>
-        </div>
-
-        <!-- Empty State -->
-        <div id="cfgDashboardEmpty" class="configs-dashboard-empty hidden">
-            <i class="fas fa-cubes"></i>
-            <p class="configs-dashboard-empty-title">No configurations yet</p>
-            <p class="configs-dashboard-empty-text">Configuration data will appear here once datasets, features, and models are created.</p>
-        </div>
-
-        <!-- Dashboard Content -->
-        <div id="cfgDashboardContent" class="hidden">
-            <!-- KPI Row: 3 Cards (Datasets, Features, Models) -->
-            <div id="cfgKpiRow" class="configs-dashboard-kpi-row">
-                <!-- Dynamically populated by JavaScript -->
-            </div>
-
-            <!-- Coverage Matrix Section (Collapsible) -->
-            <div class="filter-subchapter" id="cfgCoverageSection">
-                <div class="subchapter-header-tablet" onclick="cfg_toggleSection('coverage')">
-                    <span class="subchapter-title">COVERAGE MATRIX (experiment counts)</span>
-                    <i id="cfgCoverageChevron" class="fas fa-chevron-right subchapter-chevron"></i>
-                </div>
-                <div id="cfgCoverageContent" class="subchapter-content-outside hidden">
-                    <div id="cfgCoverageMatrix" style="overflow-x: auto;">
-                        <!-- Dynamically populated by JavaScript -->
+    <div class="chapter-container" data-chapter="configs-dashboard">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon configs-dashboard">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">Configs Dashboard</span>
+                        <span class="chapter-subtitle">Track configuration inventory and usage</span>
                     </div>
                 </div>
+                <div class="chapter-toggle">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </div>
+            <div class="chapter-divider"></div>
+
+            <!-- Loading State -->
+            <div id="cfgDashboardLoading" class="configs-dashboard-loading">
+                <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+                <span class="text-gray-500">Loading dashboard...</span>
             </div>
 
-            <!-- Configuration Flow Section (Collapsible) -->
-            <div class="filter-subchapter" id="cfgRelationshipsSection">
-                <div class="subchapter-header-tablet" onclick="cfg_toggleSection('flow')">
-                    <span class="subchapter-title">CONFIGURATION FLOW</span>
-                    <i id="cfgFlowChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+            <!-- Empty State -->
+            <div id="cfgDashboardEmpty" class="configs-dashboard-empty hidden">
+                <i class="fas fa-cubes"></i>
+                <p class="configs-dashboard-empty-title">No configurations yet</p>
+                <p class="configs-dashboard-empty-text">Configuration data will appear here once datasets, features, and models are created.</p>
+            </div>
+
+            <!-- KPI Row: 3 Cards (Datasets, Features, Models) — always visible -->
+            <div id="cfgDashboardContent" class="hidden">
+                <div id="cfgKpiRow" class="configs-dashboard-kpi-row">
+                    <!-- Dynamically populated by JavaScript -->
                 </div>
-                <div id="cfgFlowContent" class="subchapter-content-outside hidden">
-                    <div id="cfgRelationshipsDiagram" class="configs-dashboard-relationships">
-                        <!-- Dynamically populated by JavaScript -->
+            </div>
+        </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <div class="chapter-divider" style="margin-top: 0;"></div>
+                <!-- Coverage Matrix Section (Collapsible) -->
+                <div class="filter-subchapter" id="cfgCoverageSection">
+                    <div class="subchapter-header-tablet" onclick="cfg_toggleSection('coverage'); event.stopPropagation();">
+                        <span class="subchapter-title">COVERAGE MATRIX (experiment counts)</span>
+                        <i id="cfgCoverageChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="cfgCoverageContent" class="subchapter-content-outside hidden">
+                        <div id="cfgCoverageMatrix" style="overflow-x: auto;">
+                            <!-- Dynamically populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Flow Section (Collapsible) -->
+                <div class="filter-subchapter" id="cfgRelationshipsSection">
+                    <div class="subchapter-header-tablet" onclick="cfg_toggleSection('flow'); event.stopPropagation();">
+                        <span class="subchapter-title">CONFIGURATION FLOW</span>
+                        <i id="cfgFlowChevron" class="fas fa-chevron-right subchapter-chevron"></i>
+                    </div>
+                    <div id="cfgFlowContent" class="subchapter-content-outside hidden">
+                        <div id="cfgRelationshipsDiagram" class="configs-dashboard-relationships">
+                            <!-- Dynamically populated by JavaScript -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -7686,6 +7671,13 @@
 
 <!-- D3.js for charts (used in dataset filter modals) -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+function toggleChapter(header) {
+    const container = header.closest('.chapter-container');
+    container.classList.toggle('open');
+}
+</script>
 
 <script>
 const modelId = {{ model.id }};

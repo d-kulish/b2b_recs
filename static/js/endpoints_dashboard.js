@@ -19,7 +19,9 @@ const EndpointsDashboard = (function() {
     // CONFIGURATION & STATE
     // =============================================================================
 
-    const DEMO_MODE = true;
+    // Demo mode only affects charts and tables (no APIs exist yet)
+    // KPIs always use real data from the metrics API
+    const DEMO_MODE_CHARTS = true;
     const DEMO_DATA_URL = '/static/data/demo/endpoints_dashboard_demo.json';
 
     const config = {
@@ -28,7 +30,10 @@ const EndpointsDashboard = (function() {
         chartsContainerId: '#dashboardChartsGrid',
         tablesContainerId: '#dashboardTablesSection',
         prometheusContainerId: '#dashboardPrometheusSection',
-        chartHeight: 220
+        chartHeight: 220,
+        // Per-project metrics API (set via init with modelId)
+        metricsApiUrl: null,
+        modelId: null
     };
 
     let state = {
@@ -164,6 +169,27 @@ const EndpointsDashboard = (function() {
             return state.demoData;
         } catch (error) {
             console.error('Demo data load failed:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Fetch real per-project metrics data from the API.
+     */
+    async function fetchMetricsData() {
+        if (!config.metricsApiUrl) return null;
+
+        try {
+            const response = await fetch(config.metricsApiUrl);
+            if (!response.ok) throw new Error('Failed to fetch metrics data');
+            const data = await response.json();
+
+            if (data.success && data.has_data) {
+                return data;
+            }
+            return null;
+        } catch (error) {
+            console.error('Failed to fetch metrics data:', error);
             return null;
         }
     }
@@ -982,6 +1008,10 @@ const EndpointsDashboard = (function() {
         if (options.tablesContainerId) config.tablesContainerId = options.tablesContainerId;
         if (options.prometheusContainerId) config.prometheusContainerId = options.prometheusContainerId;
         if (options.chartHeight) config.chartHeight = options.chartHeight;
+        if (options.modelId) {
+            config.modelId = options.modelId;
+            config.metricsApiUrl = `/api/models/${options.modelId}/metrics/`;
+        }
 
         state.initialized = true;
         return EndpointsDashboard;
@@ -992,15 +1022,54 @@ const EndpointsDashboard = (function() {
             init();
         }
 
-        if (DEMO_MODE) {
-            const data = await loadDemoData();
-            if (data) {
-                renderKPIsWithData(data);
-                renderChartsWithData(data);
-                renderTablesWithData(data);
-                renderPrometheusSection();
-                return;
+        // Fetch real metrics and demo data in parallel
+        const fetchPromises = [];
+        if (config.metricsApiUrl) {
+            fetchPromises.push(fetchMetricsData());
+        } else {
+            fetchPromises.push(Promise.resolve(null));
+        }
+
+        if (DEMO_MODE_CHARTS) {
+            fetchPromises.push(loadDemoData());
+        } else {
+            fetchPromises.push(Promise.resolve(null));
+        }
+
+        const [metricsData, demoData] = await Promise.all(fetchPromises);
+
+        if (metricsData || demoData) {
+            const hasMetrics = metricsData && metricsData.has_data;
+
+            // Build KPI summary: real metrics when available, demo fallback
+            const kpiSummary = hasMetrics ? {
+                total_requests: metricsData.kpi_summary.total_requests,
+                total_requests_change_pct: metricsData.kpi_summary.total_requests_change_pct,
+                avg_latency_p95_ms: metricsData.kpi_summary.avg_latency_p95_ms,
+                avg_latency_change_ms: metricsData.kpi_summary.avg_latency_change_ms,
+                error_rate_pct: metricsData.kpi_summary.error_rate_pct,
+                error_rate_trend: metricsData.kpi_summary.error_rate_trend,
+                peak_instances: demoData ? demoData.kpi_summary.peak_instances : 0,
+                avg_instances: demoData ? demoData.kpi_summary.avg_instances : 0
+            } : (demoData ? demoData.kpi_summary : null);
+
+            if (kpiSummary) {
+                renderKPIsWithData({ kpi_summary: kpiSummary });
+            } else {
+                renderKPIs();
             }
+
+            // Charts and tables from demo data
+            if (demoData) {
+                renderChartsWithData(demoData);
+                renderTablesWithData(demoData);
+            } else {
+                renderChartsGrid();
+                renderTables();
+            }
+
+            renderPrometheusSection();
+            return;
         }
 
         // Fallback to skeleton UI

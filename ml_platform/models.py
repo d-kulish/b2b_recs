@@ -2876,3 +2876,109 @@ class ModelConfig(models.Model):
                 'use_case': 'Noisy ratings',
             },
         }
+
+
+# =============================================================================
+# BILLING DOMAIN MODELS
+# =============================================================================
+
+class BillingConfig(models.Model):
+    """
+    Singleton configuration for the billing model.
+    Stores pricing parameters and GCP Billing Export connection details.
+    """
+    license_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=1900.00,
+        help_text="Monthly license fee in USD"
+    )
+    license_discount_pct = models.IntegerField(
+        default=100,
+        help_text="Discount on license fee (0-100, currently 100%)"
+    )
+    default_margin_pct = models.IntegerField(
+        default=100,
+        help_text="Margin applied to most GCP services (100%)"
+    )
+    gpu_margin_pct = models.IntegerField(
+        default=50,
+        help_text="Margin applied to Vertex AI / GPU costs (50%)"
+    )
+    billing_export_project = models.CharField(
+        max_length=255, default='b2b-recs',
+        help_text="GCP project hosting the billing export dataset"
+    )
+    billing_export_dataset = models.CharField(
+        max_length=255, default='billing_export',
+        help_text="BigQuery dataset name for billing export"
+    )
+    client_project_id = models.CharField(
+        max_length=255, default='b2b-recs',
+        help_text="This client's GCP project ID (for filtering billing export)"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Billing Config'
+        verbose_name_plural = 'Billing Config'
+
+    def __str__(self):
+        return f"BillingConfig (license=${self.license_fee}, margin={self.default_margin_pct}%)"
+
+    def save(self, *args, **kwargs):
+        """Enforce singleton — only one BillingConfig can exist."""
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        """Return the singleton instance, creating with defaults if needed."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def get_margin_pct(self, service_name):
+        """Return the margin percentage for a given GCP service."""
+        if 'Vertex AI' in service_name:
+            return self.gpu_margin_pct
+        return self.default_margin_pct
+
+
+class BillingSnapshot(models.Model):
+    """
+    Daily materialized cost records per GCP service.
+    Populated by collect_billing_snapshots management command.
+    Costs and margins are frozen at snapshot time for immutable history.
+    """
+    date = models.DateField(db_index=True, help_text="Cost date (from billing export usage_start_time)")
+    service_name = models.CharField(
+        max_length=255,
+        help_text="GCP service (e.g., 'BigQuery', 'Vertex AI', 'Cloud Run')"
+    )
+    gcp_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Actual GCP charge for this service on this date (USD)"
+    )
+    margin_pct = models.IntegerField(
+        default=100,
+        help_text="Margin percentage applied (frozen at snapshot time)"
+    )
+    platform_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="gcp_cost * margin_pct / 100"
+    )
+    total_cost = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="gcp_cost + platform_fee"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = ['date', 'service_name']
+        verbose_name = 'Billing Snapshot'
+        verbose_name_plural = 'Billing Snapshots'
+
+    def __str__(self):
+        return f"{self.service_name} {self.date}: ${self.total_cost}"

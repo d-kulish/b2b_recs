@@ -18,6 +18,8 @@ from .models import (
     FeatureConfig,
     FeatureConfigVersion,
     ModelConfig,
+    BillingConfig,
+    BillingSnapshot,
 )
 from ml_platform.training.models import TrainingRun
 
@@ -341,3 +343,35 @@ class TrainingRunAdmin(admin.ModelAdmin):
                 return f"R@100: {obj.recall_at_100:.3f}"
             return '-'
     get_primary_metric.short_description = 'Primary Metric'
+
+
+@admin.register(BillingConfig)
+class BillingConfigAdmin(admin.ModelAdmin):
+    list_display = ('license_fee', 'license_discount_pct', 'default_margin_pct', 'gpu_margin_pct', 'client_project_id')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Pricing', {
+            'fields': ('license_fee', 'license_discount_pct', 'default_margin_pct', 'gpu_margin_pct')
+        }),
+        ('GCP Billing Export', {
+            'fields': ('billing_export_project', 'billing_export_dataset', 'client_project_id')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        """Only allow one BillingConfig (singleton)."""
+        return not BillingConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(BillingSnapshot)
+class BillingSnapshotAdmin(admin.ModelAdmin):
+    list_display = ('date', 'service_name', 'gcp_cost', 'margin_pct', 'platform_fee', 'total_cost')
+    list_filter = ('date', 'service_name')
+    readonly_fields = ('created_at',)
+    ordering = ('-date', 'service_name')

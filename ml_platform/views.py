@@ -918,6 +918,43 @@ def scheduler_cleanup_artifacts_webhook(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def scheduler_collect_billing_webhook(request):
+    """
+    Webhook for Cloud Scheduler to trigger daily billing snapshot collection.
+    Accepts OIDC authenticated requests from Cloud Scheduler.
+    No login required as this uses OIDC token authentication.
+    """
+    import logging
+    from django.core.management import call_command
+    from io import StringIO
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        output = StringIO()
+        # Collect for yesterday — billing export has ~24h delay,
+        # so at 04:00 UTC the previous day's data is available.
+        yesterday = (timezone.now() - timedelta(days=1)).date()
+        call_command('collect_billing_snapshots', '--date', yesterday.isoformat(), stdout=output)
+
+        logger.info(f'Scheduled billing snapshot collection completed for {yesterday}')
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Billing snapshots collected for {yesterday}',
+            'output': output.getvalue(),
+        })
+
+    except Exception as e:
+        logger.error(f'Scheduled billing snapshot collection failed: {e}', exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def api_setup_metrics_scheduler(request):
     """
     Create or update the Cloud Scheduler job for daily metrics collection.

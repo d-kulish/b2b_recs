@@ -47,7 +47,7 @@ const EndpointsTable = (function() {
         endpoints: [],
         modelNames: [],
         kpi: { total: 0, active: 0, inactive: 0, last_updated: null },
-        pagination: { page: 1, pageSize: 10, totalCount: 0, totalPages: 1 },
+        pagination: { page: 1, pageSize: 5, totalCount: 0, totalPages: 1 },
         filters: {
             modelType: 'all',
             status: 'active',  // Default to showing active endpoints
@@ -959,23 +959,61 @@ const EndpointsTable = (function() {
         return cookieValue;
     }
 
+    function renderPageButton(pageNum, currentPage) {
+        if (pageNum === currentPage) {
+            return `<button class="endpoints-page-btn active">${pageNum}</button>`;
+        }
+        return `<button class="endpoints-page-btn" onclick="EndpointsTable.goToPage(${pageNum})">${pageNum}</button>`;
+    }
+
+    function renderPageButtons(currentPage, totalPages) {
+        const buttons = [];
+        if (totalPages <= 7) {
+            for (let i = 1; i <= totalPages; i++) {
+                buttons.push(renderPageButton(i, currentPage));
+            }
+        } else {
+            buttons.push(renderPageButton(1, currentPage));
+            if (currentPage > 3) {
+                buttons.push('<span class="endpoints-page-ellipsis">...</span>');
+            }
+            const start = Math.max(2, currentPage - 1);
+            const end = Math.min(totalPages - 1, currentPage + 1);
+            for (let i = start; i <= end; i++) {
+                buttons.push(renderPageButton(i, currentPage));
+            }
+            if (currentPage < totalPages - 2) {
+                buttons.push('<span class="endpoints-page-ellipsis">...</span>');
+            }
+            buttons.push(renderPageButton(totalPages, currentPage));
+        }
+        return buttons.join('');
+    }
+
     function renderPagination() {
         if (state.pagination.totalPages <= 1) return '';
 
+        const { page, totalPages, totalCount, pageSize, hasPrev, hasNext } = state.pagination;
+        const start = (page - 1) * pageSize + 1;
+        const end = Math.min(page * pageSize, totalCount);
+        const showingText = totalCount === 0
+            ? 'Showing 0 endpoints'
+            : `Showing ${start}-${end} of ${totalCount} endpoints`;
+
         return `
             <div class="endpoints-pagination">
-                <button class="endpoints-pagination-btn" onclick="EndpointsTable.prevPage()" ${!state.pagination.hasPrev ? 'disabled' : ''}>
-                    <i class="fas fa-chevron-left"></i>
-                    Previous
-                </button>
-                <span class="endpoints-pagination-info">
-                    Page ${state.pagination.page} of ${state.pagination.totalPages}
-                    (${state.pagination.totalCount} endpoints)
-                </span>
-                <button class="endpoints-pagination-btn" onclick="EndpointsTable.nextPage()" ${!state.pagination.hasNext ? 'disabled' : ''}>
-                    Next
-                    <i class="fas fa-chevron-right"></i>
-                </button>
+                <div class="endpoints-pagination-info">${showingText}</div>
+                <div class="endpoints-pagination-controls">
+                    <button class="endpoints-pagination-btn" onclick="EndpointsTable.prevPage()" ${!hasPrev ? 'disabled' : ''}>
+                        Previous
+                    </button>
+                    <div class="endpoints-pagination-pages">
+                        ${renderPageButtons(page, totalPages)}
+                    </div>
+                    <button class="endpoints-pagination-btn" onclick="EndpointsTable.nextPage()" ${!hasNext ? 'disabled' : ''}>
+                        Next
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -1223,6 +1261,13 @@ const EndpointsTable = (function() {
         }
     }
 
+    function goToPage(page) {
+        if (page >= 1 && page <= state.pagination.totalPages && page !== state.pagination.page) {
+            state.pagination.page = page;
+            fetchEndpoints();
+        }
+    }
+
     function refresh() {
         fetchEndpoints();
     }
@@ -1442,7 +1487,8 @@ const EndpointsTable = (function() {
         toggleAdvancedOptions,
         saveEndpointConfig,
         nextPage,
-        prevPage
+        prevPage,
+        goToPage
     };
 
 })();

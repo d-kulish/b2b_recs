@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/integrate_modal.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=16">
 <link rel="stylesheet" href="{% static 'css/endpoints_dashboard.css' %}?v=1">
 {% endblock %}
 
@@ -59,34 +60,37 @@
 <!-- End Chapter: Serving Endpoints -->
 
 <!-- CHAPTER: ENDPOINTS DASHBOARD -->
-<div id="endpointsDashboardChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-3">
-            <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
-                <i class="fas fa-chart-line text-white text-lg"></i>
+<div id="endpointsDashboardChapter" class="chapter-container mt-6" data-chapter="endpoints-dashboard">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon endpoints">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Endpoints Dashboard</span>
+                    <span class="chapter-subtitle">Monitor performance and traffic metrics</span>
+                </div>
             </div>
-            <div>
-                <h2 class="text-lg font-bold text-gray-900">Endpoints Dashboard</h2>
-                <p class="chapter-subtitle">Monitor performance and traffic metrics</p>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
             </div>
         </div>
-        <button id="dashboardRefreshBtn" class="dashboard-refresh-btn" disabled>
-            <i class="fas fa-sync-alt"></i> Refresh
-        </button>
+        <div class="chapter-divider"></div>
+        <!-- KPI Row — always visible -->
+        <div id="dashboardKpiSummary" class="dashboard-kpi-row"></div>
     </div>
-
-    <!-- KPI Row -->
-    <div id="dashboardKpiSummary" class="dashboard-kpi-row"></div>
-
-    <!-- Charts Grid -->
-    <div id="dashboardChartsGrid" class="dashboard-charts-grid"></div>
-
-    <!-- Tables Section -->
-    <div id="dashboardTablesSection" class="dashboard-tables-section"></div>
-
-    <!-- Prometheus Section -->
-    <div id="dashboardPrometheusSection" class="dashboard-prometheus-section"></div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Charts Grid -->
+            <div id="dashboardChartsGrid" class="dashboard-charts-grid"></div>
+            <!-- Tables Section -->
+            <div id="dashboardTablesSection" class="dashboard-tables-section"></div>
+            <!-- Prometheus Section -->
+            <div id="dashboardPrometheusSection" class="dashboard-prometheus-section"></div>
+        </div>
+    </div>
 </div>
 <!-- End Chapter: Endpoints Dashboard -->
 
@@ -275,6 +279,11 @@ const TrainingCards = (function() {
 <script src="{% static 'js/endpoints_table.js' %}?v=6"></script>
 <script src="{% static 'js/endpoints_dashboard.js' %}?v=1"></script>
 <script>
+function toggleChapter(header) {
+    const container = header.closest('.chapter-container');
+    container.classList.toggle('open');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Configure DeployWizard to refresh endpoints table and modal on success
     if (typeof DeployWizard !== 'undefined') {

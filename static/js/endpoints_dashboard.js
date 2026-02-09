@@ -999,7 +999,6 @@ const EndpointsDashboard = (function() {
                 renderChartsWithData(data);
                 renderTablesWithData(data);
                 renderPrometheusSection();
-                enableRefreshButton();
                 return;
             }
         }
@@ -1009,35 +1008,6 @@ const EndpointsDashboard = (function() {
         renderChartsGrid();
         renderTables();
         renderPrometheusSection();
-    }
-
-    function enableRefreshButton() {
-        const btn = document.getElementById('dashboardRefreshBtn');
-        if (btn) {
-            btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.cursor = 'pointer';
-
-            // Remove old listeners by cloning
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-
-            newBtn.addEventListener('click', async () => {
-                newBtn.disabled = true;
-                newBtn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i> Refreshing...';
-
-                // Simulate refresh delay
-                await new Promise(r => setTimeout(r, 800));
-
-                // Clear cached data to force reload
-                state.demoData = null;
-                destroyCharts();
-                await load();
-
-                newBtn.disabled = false;
-                newBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
-            });
-        }
     }
 
     function refresh() {

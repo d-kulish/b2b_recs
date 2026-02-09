@@ -40,40 +40,6 @@
 }
 
 /* =========================================================================
-   Refresh Button (Disabled State)
-   ========================================================================= */
-.dashboard-refresh-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: white;
-    font-size: 13px;
-    font-weight: 500;
-    color: #6b7280;
-    cursor: not-allowed;
-    transition: all 0.15s ease;
-    opacity: 0.6;
-}
-
-.dashboard-refresh-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.dashboard-refresh-btn:not(:disabled):hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-    color: #374151;
-}
-
-.dashboard-refresh-btn i {
-    font-size: 12px;
-}
-
-/* =========================================================================
    KPI Summary Row (4 cards)
    ========================================================================= */
 .dashboard-kpi-row {

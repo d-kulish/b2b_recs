@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 {{ block.super }}
-<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=15">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=16">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
@@ -14,26 +14,35 @@
 
 {% block model_content %}
 <!-- CHAPTER: ENDPOINTS -->
-<div id="endpointsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
-    <!-- Header -->
-    <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
-            <i class="fas fa-chart-line text-white text-2xl"></i>
+<div id="endpointsChapter" class="chapter-container" data-chapter="endpoints">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon endpoints">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Endpoints</span>
+                    <span class="chapter-subtitle">Monitor serving performance and traffic</span>
+                </div>
+            </div>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
         </div>
-        <div>
-            <h2 class="text-2xl font-bold text-gray-900">Endpoints</h2>
-            <p class="chapter-subtitle">Monitor serving performance and traffic</p>
+        <div class="chapter-divider"></div>
+        <!-- KPI Row (Summary Card + 4 Performance Cards) — always visible -->
+        <div id="endpointsKpiRow" class="model-dashboard-kpi-row"></div>
+    </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Charts Grid -->
+            <div id="endpointsChartsGrid" class="model-dashboard-charts-grid"></div>
+            <!-- Tables Section -->
+            <div id="endpointsTablesSection" class="model-dashboard-tables-section"></div>
         </div>
     </div>
-
-    <!-- KPI Row (Summary Card + 4 Performance Cards) -->
-    <div id="endpointsKpiRow" class="model-dashboard-kpi-row"></div>
-
-    <!-- Charts Grid -->
-    <div id="endpointsChartsGrid" class="model-dashboard-charts-grid"></div>
-
-    <!-- Tables Section -->
-    <div id="endpointsTablesSection" class="model-dashboard-tables-section"></div>
 </div>
 
 <!-- CHAPTER: MODELS -->
@@ -183,6 +192,11 @@
 <script src="{% static 'js/model_dashboard_configs.js' %}?v=1"></script>
 <script src="{% static 'js/model_dashboard_etl.js' %}?v=5"></script>
 <script>
+function toggleChapter(header) {
+    const container = header.closest('.chapter-container');
+    container.classList.toggle('open');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal for model/experiment viewing
     ExpViewModal.configure({

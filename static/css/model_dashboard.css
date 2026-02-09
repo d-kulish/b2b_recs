@@ -7,12 +7,120 @@
  */
 
 /* =========================================================================
-   Chapter Headers
+   Chapter Container (collapsible chapter pattern)
    ========================================================================= */
+.chapter-container {
+    background: white;
+    border: 2px solid #1f2937;
+    border-radius: 16px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.chapter-header {
+    display: flex;
+    flex-direction: column;
+    padding: 24px 28px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.chapter-header:hover {
+    background-color: #f9fafb;
+}
+
+.chapter-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.chapter-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.chapter-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chapter-icon i {
+    font-size: 20px;
+    color: white;
+}
+
+.chapter-icon.endpoints {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.chapter-title-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.chapter-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+}
+
 .chapter-subtitle {
     font-size: 13px;
     color: #6b7280;
     margin-top: 2px;
+}
+
+.chapter-toggle {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chapter-toggle i {
+    font-size: 18px;
+    color: #9ca3af;
+    transition: transform 0.3s ease;
+}
+
+.chapter-container.open .chapter-toggle i {
+    transform: rotate(90deg);
+}
+
+.chapter-divider {
+    height: 1px;
+    margin: 16px 0;
+    background: linear-gradient(to right, transparent 0%, #e5e7eb 10%, #e5e7eb 90%, transparent 100%);
+}
+
+.chapter-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.chapter-container.open .chapter-content {
+    max-height: 3000px;
+    transition: max-height 0.5s ease-in;
+}
+
+.chapter-content-inner {
+    padding: 0 28px 24px 28px;
+}
+
+/* Remove KPI row bottom margin when inside chapter header */
+.chapter-header .model-dashboard-kpi-row,
+.chapter-header .dashboard-kpi-row {
+    margin-bottom: 0;
 }
 
 /* =========================================================================

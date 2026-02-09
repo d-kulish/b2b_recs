@@ -46,38 +46,45 @@
 </div>
 
 <!-- CHAPTER: MODELS -->
-<div id="modelsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    <!-- Header -->
-    <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #8b5cf6, #a78bfa);">
-            <i class="fas fa-cube text-white text-2xl"></i>
+<div id="modelsChapter" class="chapter-container" data-chapter="models">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon models">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Models</span>
+                    <span class="chapter-subtitle">Track registered models and deployments</span>
+                </div>
+            </div>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
         </div>
-        <div>
-            <h2 class="text-2xl font-bold text-gray-900">Models</h2>
-            <p class="chapter-subtitle">Track registered models and deployments</p>
+        <div class="chapter-divider"></div>
+        <!-- KPI Row (5 Cards) — always visible -->
+        <div id="modelsChapterKpiRow" class="model-dashboard-models-kpi-row"></div>
+    </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Training Activity Calendar -->
+            <div class="model-dashboard-models-calendar-wrapper">
+                <h4 class="model-dashboard-models-calendar-title">
+                    <i class="fas fa-calendar-alt"></i>
+                    Training Activity
+                </h4>
+                <div id="modelsChapterCalendar"></div>
+            </div>
+            <!-- Filter Bar -->
+            <div id="modelsChapterFilterBar" class="model-dashboard-models-filter-bar"></div>
+            <!-- Models Table -->
+            <div id="modelsChapterTable"></div>
+            <!-- Empty State -->
+            <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
         </div>
     </div>
-
-    <!-- KPI Row (5 Cards) -->
-    <div id="modelsChapterKpiRow" class="model-dashboard-models-kpi-row"></div>
-
-    <!-- Training Activity Calendar -->
-    <div class="model-dashboard-models-calendar-wrapper">
-        <h4 class="model-dashboard-models-calendar-title">
-            <i class="fas fa-calendar-alt"></i>
-            Training Activity
-        </h4>
-        <div id="modelsChapterCalendar"></div>
-    </div>
-
-    <!-- Filter Bar -->
-    <div id="modelsChapterFilterBar" class="model-dashboard-models-filter-bar"></div>
-
-    <!-- Models Table -->
-    <div id="modelsChapterTable"></div>
-
-    <!-- Empty State -->
-    <div id="modelsChapterEmptyState" class="model-dashboard-models-empty-state" style="display: none;"></div>
 </div>
 
 <!-- CHAPTER: EXPERIMENTS -->

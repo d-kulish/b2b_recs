@@ -60,6 +60,10 @@
     background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
 }
 
+.chapter-icon.models {
+    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+}
+
 .chapter-title-text {
     display: flex;
     flex-direction: column;
@@ -119,7 +123,8 @@
 
 /* Remove KPI row bottom margin when inside chapter header */
 .chapter-header .model-dashboard-kpi-row,
-.chapter-header .dashboard-kpi-row {
+.chapter-header .dashboard-kpi-row,
+.chapter-header .model-dashboard-models-kpi-row {
     margin-bottom: 0;
 }
 

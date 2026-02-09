@@ -88,23 +88,33 @@
 </div>
 
 <!-- CHAPTER: EXPERIMENTS -->
-<div id="experimentsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    <!-- Header -->
-    <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl flex items-center justify-center shadow-sm" style="background: linear-gradient(135deg, #10b981, #34d399);">
-            <i class="fas fa-flask text-white text-2xl"></i>
+<div id="experimentsChapter" class="chapter-container" data-chapter="experiments">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon experiments">
+                    <i class="fas fa-flask"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Experiments</span>
+                    <span class="chapter-subtitle">Analyze experiment results and metrics</span>
+                </div>
+            </div>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
         </div>
-        <div>
-            <h2 class="text-2xl font-bold text-gray-900">Experiments</h2>
-            <p class="chapter-subtitle">Analyze experiment results and metrics</p>
+        <div class="chapter-divider"></div>
+        <!-- KPI Sections (40%) + Metrics Trend (60%) — always visible -->
+        <div id="experimentsKpiTrendRow" class="model-dashboard-experiments-kpi-trend-row" onclick="event.stopPropagation()"></div>
+    </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Top Configurations Table -->
+            <div id="experimentsTopConfigsSection" class="model-dashboard-experiments-section"></div>
         </div>
     </div>
-
-    <!-- KPI Sections (40%) + Metrics Trend (60%) -->
-    <div id="experimentsKpiTrendRow" class="model-dashboard-experiments-kpi-trend-row"></div>
-
-    <!-- Top Configurations Table -->
-    <div id="experimentsTopConfigsSection" class="model-dashboard-experiments-section"></div>
 </div>
 
 <!-- CHAPTER: CONFIGS -->

@@ -64,6 +64,10 @@
     background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
 }
 
+.chapter-icon.experiments {
+    background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+}
+
 .chapter-title-text {
     display: flex;
     flex-direction: column;
@@ -690,9 +694,9 @@
 }
 
 .model-dashboard-models-kpi-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -700,7 +704,7 @@
 }
 
 .model-dashboard-models-kpi-icon i {
-    font-size: 18px;
+    font-size: 14px;
     color: white;
 }
 

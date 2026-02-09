@@ -4,7 +4,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2026-02-07 (Added real per-project metrics: ProjectMetrics model, daily collection, API, and UI wiring)
+**Last Updated**: 2026-02-09 (Unified chapter-container style across Endpoints, Models, and Experiments chapters)
 
 ---
 
@@ -15,6 +15,66 @@ The Model Dashboard (`/model/{id}/dashboard/`) is accessible via the horizontal 
 **URL Pattern**: `/model/<model_id>/dashboard/`
 **Template**: `templates/ml_platform/model_dashboard.html`
 **Base Template**: `base_model.html`
+
+### Standard Chapter Style: `.chapter-container`
+
+All dashboard chapters follow a unified collapsible chapter pattern defined in `model_dashboard.css` (lines 9-129). The pattern provides a consistent header with icon, title, subtitle, gradient divider, always-visible KPI area, and a collapsible content section.
+
+**HTML Structure:**
+```html
+<div id="{chapter}Chapter" class="chapter-container" data-chapter="{chapter}">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon {chapter}">
+                    <i class="fas fa-{icon}"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">{Title}</span>
+                    <span class="chapter-subtitle">{Subtitle}</span>
+                </div>
+            </div>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+        <div class="chapter-divider"></div>
+        <!-- KPI row — always visible -->
+        <div id="{chapter}KpiRow" class="..."></div>
+    </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Collapsible content (charts, tables, etc.) -->
+        </div>
+    </div>
+</div>
+```
+
+**Key CSS Classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `.chapter-container` | Outer wrapper (white bg, 1px black border, 12px radius) |
+| `.chapter-header` | Clickable header area (always visible) |
+| `.chapter-header-top` | Flexbox row: icon + title + chevron |
+| `.chapter-icon.{variant}` | 48×48 icon with gradient background |
+| `.chapter-toggle` | Chevron icon, rotates 90° when `.open` |
+| `.chapter-divider` | Gradient separator line |
+| `.chapter-content` | Collapsible area (max-height animation) |
+| `.chapter-content-inner` | Padding wrapper for collapsible content |
+
+**Icon Gradients:**
+
+| Variant | Gradient |
+|---------|----------|
+| `.endpoints` | `#3b82f6 → #60a5fa` (blue) |
+| `.models` | `#8b5cf6 → #a78bfa` (purple) |
+| `.experiments` | `#10b981 → #34d399` (green) |
+
+**Toggle Mechanism:** Global `toggleChapter(header)` function (line 212) toggles `.open` class on `.chapter-container`. CSS handles the animation via `max-height` transition.
+
+**Note:** For chapters with interactive elements inside the header (e.g., Experiments model-type cards), add `onclick="event.stopPropagation()"` on the interactive container to prevent clicks from triggering the collapse toggle.
 
 ---
 
@@ -263,20 +323,21 @@ ExpViewModal.configure({
 
 ## Chapter 3: Experiments
 
-The Experiments chapter displays experiment analytics from the Experiments page, including model type KPIs, metrics trend chart, and top configurations table.
+The Experiments chapter displays experiment analytics from the Experiments page, including model type KPIs, metrics trend chart, and top configurations table. Uses the standard `.chapter-container` pattern with the KPI+trend row always visible and the Top Configurations table as the collapsible content.
 
 ### Visual Layout
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│ [Flask Icon] Experiments                                                         │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
+│ [Flask Icon] Experiments                                                      > │
+│ Analyze experiment results and metrics                                          │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
+│  [Always visible: KPI + Trend]                                                  │
 │  ┌──────────────────────────┐  ┌───────────────────────────────────────────────┐│
 │  │ [🔍] RETRIEVAL  (selected)│  │ METRICS TREND                                ││
 │  │ Experiments: 23           │  │ Best Recall metrics over time                ││
 │  │ R@5: 0.055 | R@10: 0.088 │  │ ┌─────────────────────────────────────────┐  ││
-│  │ R@50: 0.213 | R@100: 0.317│  │ │   📈 Multi-line area chart              │  ││
+│  │ R@50: 0.213 | R@100: 0.317│  │ │   Multi-line area chart                 │  ││
 │  ├──────────────────────────┤  │ │   (R@100, R@50, R@10, R@5)              │  ││
 │  │ [📊] RANKING              │  │ │                                         │  ││
 │  │ Experiments: 3            │  │ └─────────────────────────────────────────┘  ││
@@ -287,7 +348,8 @@ The Experiments chapter displays experiment analytics from the Experiments page,
 │  │ Experiments: 4            │                                                   │
 │  │ (40% width)               │                  (60% width)                      │
 │  └──────────────────────────┘                                                   │
-│                                                                                 │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
+│  [Collapsible: Top Configurations]                                              │
 │  TOP CONFIGURATIONS                                                             │
 │  Best performing retrieval experiments (by R@100)                               │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐│
@@ -436,26 +498,28 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details. 
 {% endblock %}
 
 {% block model_content %}
+<!-- All chapters use the standard .chapter-container pattern -->
+
 <!-- CHAPTER: ENDPOINTS -->
-<div id="endpointsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
-    ...
+<div id="endpointsChapter" class="chapter-container" data-chapter="endpoints">
+    <div class="chapter-header" onclick="toggleChapter(this)">...</div>
+    <div class="chapter-content">...</div>
 </div>
 
 <!-- CHAPTER: MODELS -->
-<div id="modelsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    ...
+<div id="modelsChapter" class="chapter-container" data-chapter="models">
+    <div class="chapter-header" onclick="toggleChapter(this)">...</div>
+    <div class="chapter-content">...</div>
 </div>
 
 <!-- CHAPTER: EXPERIMENTS -->
-<div id="experimentsChapter" class="bg-white rounded-xl border border-black shadow-lg p-6 mt-6">
-    <div class="flex items-center gap-4 mb-6">
-        <div class="w-14 h-14 rounded-xl ..." style="background: linear-gradient(135deg, #10b981, #34d399);">
-            <i class="fas fa-flask text-white text-2xl"></i>
-        </div>
-        <h2 class="text-2xl font-bold text-gray-900">Experiments</h2>
+<div id="experimentsChapter" class="chapter-container" data-chapter="experiments">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <!-- KPI+Trend row with onclick="event.stopPropagation()" -->
     </div>
-    <div id="experimentsKpiTrendRow" class="model-dashboard-experiments-kpi-trend-row"></div>
-    <div id="experimentsTopConfigsSection" class="model-dashboard-experiments-section"></div>
+    <div class="chapter-content">
+        <!-- Top Configurations table (collapsible) -->
+    </div>
 </div>
 
 <!-- ExpViewModal (must be inside model_content block) -->
@@ -1161,6 +1225,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-09 | 1.8 | Applied collapsible chapter-container style to Experiments chapter; documented standard chapter pattern; aligned Models KPI icon sizes to Endpoints standard |
 | 2026-02-07 | 1.7 | Added real per-project metrics: ProjectMetrics model, daily collection, metrics API, header and dashboard UI wiring |
 | 2026-02-04 | 1.6 | Added ETL chapter with KPIs, scheduled jobs table, and bubble chart |
 | 2026-02-04 | 1.5 | Added Configs chapter with KPI cards for dataset, feature, and model configurations |

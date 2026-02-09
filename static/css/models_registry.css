@@ -32,9 +32,9 @@
 }
 
 .models-kpi-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -42,7 +42,7 @@
 }
 
 .models-kpi-icon i {
-    font-size: 18px;
+    font-size: 14px;
     color: white;
 }
 
@@ -131,8 +131,8 @@
 
 .models-filter-select:focus {
     outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 .models-search-input {
@@ -147,8 +147,8 @@
 
 .models-search-input:focus {
     outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
 }
 
 .models-search-input::placeholder {
@@ -561,8 +561,43 @@
 }
 
 /* =========================================================================
+   Calendar Section
+   ========================================================================= */
+.models-calendar-wrapper {
+    margin-bottom: 20px;
+}
+
+.models-calendar-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.models-calendar-title i {
+    color: #10b981;
+}
+
+/* =========================================================================
+   Chapter Header KPI Override
+   ========================================================================= */
+/* Remove KPI row bottom margin when inside chapter header */
+.chapter-header .models-kpi-row {
+    margin-bottom: 0;
+}
+
+/* =========================================================================
    Responsive
    ========================================================================= */
+@media (max-width: 1200px) {
+    .models-kpi-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
 @media (max-width: 1024px) {
     .models-kpi-row {
         grid-template-columns: repeat(3, 1fr);

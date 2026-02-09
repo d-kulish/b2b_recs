@@ -12,7 +12,8 @@
 <link rel="stylesheet" href="{% static 'css/training_wizard.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=6">
 <link rel="stylesheet" href="{% static 'css/training_cards.css' %}?v=3">
-<link rel="stylesheet" href="{% static 'css/models_registry.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=17">
+<link rel="stylesheet" href="{% static 'css/models_registry.css' %}?v=3">
 <link rel="stylesheet" href="{% static 'css/schedule_calendar.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/schedule_modal.css' %}?v=1">
 <link rel="stylesheet" href="{% static 'css/deploy_wizard.css' %}?v=1">
@@ -1061,159 +1062,238 @@
 {% endblock %}
 
 {% block model_content %}
-<!-- CHAPTER 1: BEST EXPERIMENTS -->
-<div class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
-    <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-            <i class="fas fa-trophy text-white text-lg"></i>
+<!-- CHAPTER 1: MODELS REGISTRY -->
+<div id="modelsRegistryChapter" class="chapter-container" data-chapter="models-registry">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon models">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Models Registry</span>
+                    <span class="chapter-subtitle">View and deploy registered models</span>
+                </div>
+            </div>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
         </div>
-        <div>
-            <h2 class="text-lg font-bold text-gray-900">Best Experiments</h2>
-            <p class="text-sm text-gray-500">Top performing experiment configurations</p>
+        <div class="chapter-divider"></div>
+        <!-- KPI Summary Row — always visible -->
+        <div id="modelsKpiSummary" class="models-kpi-row">
+            <!-- Populated by JavaScript -->
+            <div class="models-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span class="models-loading-text">Loading...</span>
+            </div>
         </div>
     </div>
-
-    <!-- Loading State -->
-    <div id="bestExpLoading" class="flex items-center justify-center py-12">
-        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
-        <span class="text-gray-500">Loading experiments...</span>
-    </div>
-
-    <!-- Empty State -->
-    <div id="bestExpEmpty" class="hidden">
-        <div class="best-exp-empty-section">
-            <i class="fas fa-flask"></i>
-            <p>No completed experiments yet.<br>Run some experiments to see results here.</p>
-        </div>
-    </div>
-
-    <!-- Content -->
-    <div id="bestExpContent" class="hidden">
-        <!-- KPI Rows: 3 Full-Width Rows Stacked Vertically -->
-        <div class="best-exp-kpi-rows">
-            <!-- Row 1: Retrieval -->
-            <div id="bestExpRetrievalRow" class="best-exp-model-row retrieval selected" onclick="selectBestExpModelType('retrieval')">
-                <div class="best-exp-row-header">
-                    <div class="best-exp-model-icon retrieval">
-                        <i class="fas fa-search"></i>
-                    </div>
-                    <span class="best-exp-model-title">Retrieval</span>
-                </div>
-                <div class="best-exp-kpi-boxes">
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">Experiments</div>
-                        <div class="best-exp-kpi-value" id="bestExpRetrievalCount">0</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">R@5</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR5">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">R@10</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR10">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">R@50</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR50">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">R@100</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR100">-</div>
-                    </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Training Activity Calendar -->
+            <div class="models-calendar-wrapper">
+                <h4 class="models-calendar-title">
+                    <i class="fas fa-calendar-alt"></i>
+                    Training Activity
+                </h4>
+                <div id="modelsScheduleGrid">
+                    <!-- Populated by JavaScript -->
                 </div>
             </div>
-
-            <!-- Row 2: Ranking -->
-            <div id="bestExpRankingRow" class="best-exp-model-row ranking" onclick="selectBestExpModelType('ranking')">
-                <div class="best-exp-row-header">
-                    <div class="best-exp-model-icon ranking">
-                        <i class="fas fa-sort-amount-down"></i>
-                    </div>
-                    <span class="best-exp-model-title">Ranking</span>
-                </div>
-                <div class="best-exp-kpi-boxes">
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">Experiments</div>
-                        <div class="best-exp-kpi-value" id="bestExpRankingCount">0</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">RMSE</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRankingRMSE">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">Test RMSE</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRankingTestRMSE">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">MAE</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRankingMAE">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">Test MAE</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpRankingTestMAE">-</div>
-                    </div>
-                </div>
+            <!-- Filter Bar -->
+            <div id="modelsFilterBar" class="models-filter-bar">
+                <!-- Populated by JavaScript -->
             </div>
-
-            <!-- Row 3: Hybrid -->
-            <div id="bestExpHybridRow" class="best-exp-model-row hybrid" onclick="selectBestExpModelType('hybrid')">
-                <div class="best-exp-row-header">
-                    <div class="best-exp-model-icon hybrid">
-                        <i class="fas fa-layer-group"></i>
-                    </div>
-                    <span class="best-exp-model-title">Hybrid</span>
+            <!-- Models Table -->
+            <div id="modelsTable">
+                <!-- Populated by JavaScript -->
+            </div>
+            <!-- Empty State (hidden by default) -->
+            <div id="modelsEmptyState" class="models-empty-state" style="display: none;">
+                <div class="empty-icon"><i class="fas fa-cube"></i></div>
+                <h3>No Registered Models</h3>
+                <p>Complete training runs with the Pusher component to register models in Vertex AI Model Registry.</p>
+            </div>
+            <!-- Schedules Section -->
+            <div id="trainingSchedulesSection" class="training-schedules-section hidden">
+                <div class="schedules-section-header">
+                    <h3 class="schedules-section-title">
+                        <i class="fas fa-clock"></i> Schedules
+                    </h3>
                 </div>
-                <div class="best-exp-kpi-boxes">
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">Experiments</div>
-                        <div class="best-exp-kpi-value" id="bestExpHybridCount">0</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">R@50</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpHybridR50">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">R@100</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpHybridR100">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">RMSE</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpHybridRMSE">-</div>
-                    </div>
-                    <div class="best-exp-kpi-box">
-                        <div class="best-exp-kpi-label">Test RMSE</div>
-                        <div class="best-exp-kpi-value highlight" id="bestExpHybridTestRMSE">-</div>
-                    </div>
+                <div id="schedulesList" class="schedules-list">
+                    <!-- Schedule cards will be populated here by TrainingSchedules -->
                 </div>
             </div>
         </div>
+    </div>
+</div>
+<!-- End Chapter 1: Models Registry -->
 
-        <!-- Top Configurations Table -->
-        <div class="best-exp-section">
-            <div class="best-exp-section-header">
-                <span class="best-exp-section-title" id="bestExpTableTitle">Top Configurations</span>
-                <span class="text-xs text-gray-400" id="bestExpTableSubtitle">Best performing experiment configurations</span>
+<!-- CHAPTER 2: BEST EXPERIMENTS -->
+<div class="chapter-container" data-chapter="best-experiments">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon experiments">
+                    <i class="fas fa-trophy"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Best Experiments</span>
+                    <span class="chapter-subtitle">Top performing experiment configurations</span>
+                </div>
             </div>
-            <div id="bestExpTableContainer" class="best-exp-table-container">
-                <table class="best-exp-table">
-                    <thead id="bestExpTableHead">
-                        <tr>
-                            <th style="width: 40px;">#</th>
-                            <th style="text-align: center;">Experiment</th>
-                            <th>Dataset</th>
-                            <th>Feature</th>
-                            <th>Model</th>
-                            <th style="text-align: center;">LR</th>
-                            <th style="text-align: center;">Batch</th>
-                            <th style="text-align: center;">Epochs</th>
-                            <th style="text-align: center;">R@100</th>
-                            <th style="text-align: center;">Loss</th>
-                        </tr>
-                    </thead>
-                    <tbody id="bestExpTableBody">
-                        <!-- Populated by JavaScript -->
-                    </tbody>
-                </table>
+            <div class="chapter-toggle">
+                <i class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+    </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
+            <!-- Loading State -->
+            <div id="bestExpLoading" class="flex items-center justify-center py-12">
+                <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+                <span class="text-gray-500">Loading experiments...</span>
+            </div>
+            <!-- Empty State -->
+            <div id="bestExpEmpty" class="hidden">
+                <div class="best-exp-empty-section">
+                    <i class="fas fa-flask"></i>
+                    <p>No completed experiments yet.<br>Run some experiments to see results here.</p>
+                </div>
+            </div>
+            <!-- Content -->
+            <div id="bestExpContent" class="hidden">
+                <!-- KPI Rows: 3 Full-Width Rows Stacked Vertically -->
+                <div class="best-exp-kpi-rows">
+                    <!-- Row 1: Retrieval -->
+                    <div id="bestExpRetrievalRow" class="best-exp-model-row retrieval selected" onclick="selectBestExpModelType('retrieval')">
+                        <div class="best-exp-row-header">
+                            <div class="best-exp-model-icon retrieval">
+                                <i class="fas fa-search"></i>
+                            </div>
+                            <span class="best-exp-model-title">Retrieval</span>
+                        </div>
+                        <div class="best-exp-kpi-boxes">
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">Experiments</div>
+                                <div class="best-exp-kpi-value" id="bestExpRetrievalCount">0</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">R@5</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR5">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">R@10</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR10">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">R@50</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR50">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">R@100</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRetrievalR100">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Ranking -->
+                    <div id="bestExpRankingRow" class="best-exp-model-row ranking" onclick="selectBestExpModelType('ranking')">
+                        <div class="best-exp-row-header">
+                            <div class="best-exp-model-icon ranking">
+                                <i class="fas fa-sort-amount-down"></i>
+                            </div>
+                            <span class="best-exp-model-title">Ranking</span>
+                        </div>
+                        <div class="best-exp-kpi-boxes">
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">Experiments</div>
+                                <div class="best-exp-kpi-value" id="bestExpRankingCount">0</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">RMSE</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRankingRMSE">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">Test RMSE</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRankingTestRMSE">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">MAE</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRankingMAE">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">Test MAE</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpRankingTestMAE">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Hybrid -->
+                    <div id="bestExpHybridRow" class="best-exp-model-row hybrid" onclick="selectBestExpModelType('hybrid')">
+                        <div class="best-exp-row-header">
+                            <div class="best-exp-model-icon hybrid">
+                                <i class="fas fa-layer-group"></i>
+                            </div>
+                            <span class="best-exp-model-title">Hybrid</span>
+                        </div>
+                        <div class="best-exp-kpi-boxes">
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">Experiments</div>
+                                <div class="best-exp-kpi-value" id="bestExpHybridCount">0</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">R@50</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpHybridR50">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">R@100</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpHybridR100">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">RMSE</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpHybridRMSE">-</div>
+                            </div>
+                            <div class="best-exp-kpi-box">
+                                <div class="best-exp-kpi-label">Test RMSE</div>
+                                <div class="best-exp-kpi-value highlight" id="bestExpHybridTestRMSE">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Configurations Table -->
+                <div class="best-exp-section">
+                    <div class="best-exp-section-header">
+                        <span class="best-exp-section-title" id="bestExpTableTitle">Top Configurations</span>
+                        <span class="text-xs text-gray-400" id="bestExpTableSubtitle">Best performing experiment configurations</span>
+                    </div>
+                    <div id="bestExpTableContainer" class="best-exp-table-container">
+                        <table class="best-exp-table">
+                            <thead id="bestExpTableHead">
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th style="text-align: center;">Experiment</th>
+                                    <th>Dataset</th>
+                                    <th>Feature</th>
+                                    <th>Model</th>
+                                    <th style="text-align: center;">LR</th>
+                                    <th style="text-align: center;">Batch</th>
+                                    <th style="text-align: center;">Epochs</th>
+                                    <th style="text-align: center;">R@100</th>
+                                    <th style="text-align: center;">Loss</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bestExpTableBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1710,9 +1790,9 @@
     </div>
 </div>
 <!-- End Training Wizard Modal -->
-<!-- End Chapter 1: Best Experiments -->
+<!-- End Chapter 2: Best Experiments -->
 
-<!-- CHAPTER 2: TRAINING -->
+<!-- CHAPTER 3: TRAINING -->
 <div class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
     <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-3">
@@ -1765,73 +1845,7 @@
         </button>
     </div>
 </div>
-<!-- End Chapter 2: Training -->
-
-<!-- CHAPTER 3: MODELS REGISTRY -->
-<div id="modelsRegistryChapter" class="bg-white rounded-xl border border-black shadow-lg p-6">
-    <!-- Header with Icon -->
-    <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-3">
-            <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
-                <i class="fas fa-cube text-white text-lg"></i>
-            </div>
-            <div>
-                <h2 class="text-lg font-bold text-gray-900">Models Registry</h2>
-                <p class="chapter-subtitle">View and deploy registered models</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- KPI Summary Row -->
-    <div id="modelsKpiSummary" class="models-kpi-row">
-        <!-- Populated by JavaScript -->
-        <div class="models-loading">
-            <i class="fas fa-spinner fa-spin"></i>
-            <span class="models-loading-text">Loading...</span>
-        </div>
-    </div>
-
-    <!-- Schedule Calendar Grid -->
-    <div class="exp-view-section-group" style="margin-bottom: 20px;">
-        <h4 class="exp-view-group-title" style="margin-bottom: 12px; justify-content: flex-start;">
-            <i class="fas fa-calendar-alt" style="margin-right: 8px; color: #10b981;"></i>
-            Training Activity
-        </h4>
-        <div id="modelsScheduleGrid">
-            <!-- Populated by JavaScript -->
-        </div>
-    </div>
-
-    <!-- Filter Bar -->
-    <div id="modelsFilterBar" class="models-filter-bar">
-        <!-- Populated by JavaScript -->
-    </div>
-
-    <!-- Models Table -->
-    <div id="modelsTable">
-        <!-- Populated by JavaScript -->
-    </div>
-
-    <!-- Empty State (hidden by default) -->
-    <div id="modelsEmptyState" class="models-empty-state" style="display: none;">
-        <div class="empty-icon"><i class="fas fa-cube"></i></div>
-        <h3>No Registered Models</h3>
-        <p>Complete training runs with the Pusher component to register models in Vertex AI Model Registry.</p>
-    </div>
-
-    <!-- Schedules Section -->
-    <div id="trainingSchedulesSection" class="training-schedules-section hidden">
-        <div class="schedules-section-header">
-            <h3 class="schedules-section-title">
-                <i class="fas fa-clock"></i> Schedules
-            </h3>
-        </div>
-        <div id="schedulesList" class="schedules-list">
-            <!-- Schedule cards will be populated here by TrainingSchedules -->
-        </div>
-    </div>
-</div>
-<!-- End Chapter 3: Models Registry -->
+<!-- End Chapter 3: Training -->
 
 <!-- =============================================================================
      CONFIRMATION MODAL (Reusable styled confirmation dialog)
@@ -1879,13 +1893,21 @@
 <script src="{% static 'js/models_registry.js' %}?v=3"></script>
 <script>
 // =============================================================================
+// CHAPTER TOGGLE (collapsible chapter pattern)
+// =============================================================================
+function toggleChapter(header) {
+    const container = header.closest('.chapter-container');
+    container.classList.toggle('open');
+}
+
+// =============================================================================
 // BEST EXPERIMENTS - STATE & INITIALIZATION
 // =============================================================================
 
 let selectedBestExpModelType = 'retrieval';
 
 // =============================================================================
-// TRAINING RUNS (Chapter 2)
+// TRAINING RUNS (Chapter 3)
 // =============================================================================
 
 let trainingCardsInitialized = false;
@@ -1959,7 +1981,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load Training Runs immediately (all chapters visible)
     loadTrainingRuns();
 
-    // Initialize Models Registry (Chapter 3)
+    // Initialize Models Registry (Chapter 1)
     ModelsRegistry.init({
         containerId: '#modelsRegistryChapter',
         kpiContainerId: '#modelsKpiSummary',

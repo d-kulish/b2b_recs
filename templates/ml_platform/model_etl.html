@@ -7,6 +7,7 @@
 
 {% block extra_css %}
 {{ block.super }}
+<link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=17">
 <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
 <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=2">
 <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=3">
@@ -15,26 +16,25 @@
 {% block model_content %}
 <div class="space-y-6">
     <!-- ETL Dashboard -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
-                    <i class="fas fa-exchange-alt text-white text-lg"></i>
+    <div class="chapter-container" data-chapter="etl-dashboard">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon etl">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">ETL Dashboard</span>
+                        <span class="chapter-subtitle">Monitor pipeline health and performance (last 30 days)</span>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">ETL Dashboard</h2>
-                    <p class="chapter-subtitle">Monitor pipeline health and performance</p>
+                <div class="chapter-toggle">
+                    <i class="fas fa-chevron-right"></i>
                 </div>
             </div>
-            <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                <i class="fas fa-calendar mr-1"></i>
-                Last 30 days
-            </span>
-        </div>
+            <div class="chapter-divider"></div>
 
-        <!-- Dashboard Grid: KPI row on top, then Scheduled Jobs + Chart side by side -->
-        <div class="etl-dashboard-grid">
-            <!-- Row 1: KPI Cards in horizontal row -->
+            <!-- KPI Cards — always visible -->
             <div class="etl-kpi-row">
                 <div class="kpi-card">
                     <div class="kpi-icon-wrapper kpi-icon-blue">
@@ -96,9 +96,12 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Row 2: Scheduled Jobs (left) + Chart (right) -->
-            <div class="etl-dashboard-row-2">
+        </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <div class="chapter-divider" style="margin-top: 0;"></div>
+                <!-- Row 2: Scheduled Jobs (left) + Chart (right) -->
+                <div class="etl-dashboard-row-2">
                 <!-- Column 1: Scheduled Jobs Table -->
                 <div class="etl-scheduled-section">
                     <h3><i class="fas fa-calendar-alt mr-2 text-gray-400"></i>Scheduled Jobs</h3>
@@ -236,9 +239,9 @@
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
         </div>
-        <!-- End of etl-dashboard-grid -->
     </div>
     <!-- End of ETL Dashboard -->
 
@@ -2733,6 +2736,13 @@
 
 <!-- D3.js for Bubble Chart -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+function toggleChapter(header) {
+    const container = header.closest('.chapter-container');
+    container.classList.toggle('open');
+}
+</script>
 
 <script>
 // ============================================================================

@@ -485,48 +485,6 @@
     }
 
     /* =========================================================================
-       Pagination Styles
-       ========================================================================= */
-    .exp-pagination {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding-top: 12px;
-        border-top: 1px solid #e5e7eb;
-    }
-    .exp-pagination-info {
-        font-size: 13px;
-        color: #6b7280;
-    }
-    .exp-pagination-buttons {
-        display: flex;
-        gap: 4px;
-    }
-    .exp-pagination-btn {
-        padding: 6px 12px;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        font-size: 13px;
-        background: white;
-        color: #374151;
-        cursor: pointer;
-        transition: all 0.15s ease;
-    }
-    .exp-pagination-btn:hover:not(:disabled) {
-        border-color: #d1d5db;
-        background: #f9fafb;
-    }
-    .exp-pagination-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-    .exp-pagination-btn.active {
-        background: #2563eb;
-        border-color: #2563eb;
-        color: white;
-    }
-
-    /* =========================================================================
        Wizard Modal Styles (extending modals.css)
        ========================================================================= */
 
@@ -2565,12 +2523,10 @@
                     </div>
 
                     <!-- Pagination -->
-                    <div id="expPagination" class="exp-pagination hidden">
-                        <div class="exp-pagination-info">
-                            Showing <span id="expShowingStart">1</span>-<span id="expShowingEnd">10</span> of <span id="expTotalCount">0</span>
-                        </div>
-                        <div class="exp-pagination-buttons" id="expPaginationButtons">
-                            <!-- Pagination buttons rendered by JavaScript -->
+                    <div id="expPagination" class="hidden mt-4 pt-4 border-t border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div id="expPaginationInfo" class="text-sm text-gray-600"></div>
+                            <div id="expPaginationButtons" class="flex items-center gap-2"></div>
                         </div>
                     </div>
                 </div>
@@ -4041,53 +3997,62 @@ function renderStagesBar(stages) {
 }
 
 function renderPagination() {
+    const container = document.getElementById('expPagination');
     if (pagination.total_pages <= 1) {
-        document.getElementById('expPagination').classList.add('hidden');
+        container.classList.add('hidden');
         return;
     }
 
-    document.getElementById('expPagination').classList.remove('hidden');
+    container.classList.remove('hidden');
 
     const start = (pagination.page - 1) * pagination.page_size + 1;
     const end = Math.min(pagination.page * pagination.page_size, pagination.total_count);
 
-    document.getElementById('expShowingStart').textContent = start;
-    document.getElementById('expShowingEnd').textContent = end;
-    document.getElementById('expTotalCount').textContent = pagination.total_count;
+    document.getElementById('expPaginationInfo').textContent = `Showing ${start}-${end} of ${pagination.total_count}`;
 
-    // Generate page buttons
     const buttonsContainer = document.getElementById('expPaginationButtons');
     let buttonsHtml = '';
 
-    // Previous button
-    buttonsHtml += `
-        <button class="exp-pagination-btn" onclick="goToPage(${pagination.page - 1})" ${!pagination.has_prev ? 'disabled' : ''}>
-            Previous
-        </button>
-    `;
-
-    // Page numbers (show max 5)
-    const maxButtons = 5;
-    let startPage = Math.max(1, pagination.page - Math.floor(maxButtons / 2));
-    let endPage = Math.min(pagination.total_pages, startPage + maxButtons - 1);
-    startPage = Math.max(1, endPage - maxButtons + 1);
-
-    for (let i = startPage; i <= endPage; i++) {
-        buttonsHtml += `
-            <button class="exp-pagination-btn ${i === pagination.page ? 'active' : ''}" onclick="goToPage(${i})">
-                ${i}
-            </button>
-        `;
+    // Previous button (hidden when on first page)
+    if (pagination.has_prev) {
+        buttonsHtml += `<button onclick="goToPage(${pagination.page - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
-    // Next button
-    buttonsHtml += `
-        <button class="exp-pagination-btn" onclick="goToPage(${pagination.page + 1})" ${!pagination.has_next ? 'disabled' : ''}>
-            Next
-        </button>
-    `;
+    // Page numbers with ellipsis
+    const totalPages = pagination.total_pages;
+    if (totalPages <= 4) {
+        for (let i = 1; i <= totalPages; i++) {
+            buttonsHtml += expPageButton(i);
+        }
+    } else {
+        buttonsHtml += expPageButton(1);
+        if (pagination.page > 3) {
+            buttonsHtml += `<span class="px-1 text-gray-400">...</span>`;
+        }
+        const s = Math.max(2, pagination.page - 1);
+        const e = Math.min(totalPages - 1, pagination.page + 1);
+        for (let i = s; i <= e; i++) {
+            buttonsHtml += expPageButton(i);
+        }
+        if (pagination.page < totalPages - 2) {
+            buttonsHtml += `<span class="px-1 text-gray-400">...</span>`;
+        }
+        buttonsHtml += expPageButton(totalPages);
+    }
+
+    // Next button (hidden when on last page)
+    if (pagination.has_next) {
+        buttonsHtml += `<button onclick="goToPage(${pagination.page + 1})" class="btn btn-secondary btn-xs">Next</button>`;
+    }
 
     buttonsContainer.innerHTML = buttonsHtml;
+}
+
+function expPageButton(pageNum) {
+    if (pageNum === pagination.page) {
+        return `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${pageNum}</button>`;
+    }
+    return `<button onclick="goToPage(${pageNum})" class="btn btn-secondary btn-xs">${pageNum}</button>`;
 }
 
 async function goToPage(page) {

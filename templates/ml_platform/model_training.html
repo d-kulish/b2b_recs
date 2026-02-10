@@ -962,6 +962,10 @@
         font-size: 18px;
     }
 
+    .chapter-icon.training {
+        background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    }
+
     /* Chapter Subtitle */
     .chapter-subtitle {
         font-size: 13px;
@@ -1794,14 +1798,14 @@
 
 <!-- CHAPTER 3: TRAINING -->
 <div class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
-    <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-3">
-            <div class="chapter-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
-                <i class="fas fa-cogs text-white text-lg"></i>
+    <div class="chapter-header-top" style="margin-bottom: 24px;">
+        <div class="chapter-title-wrapper">
+            <div class="chapter-icon training">
+                <i class="fas fa-cogs"></i>
             </div>
-            <div>
-                <h2 class="text-lg font-bold text-gray-900">Training Runs</h2>
-                <p class="chapter-subtitle">Launch and monitor model training jobs</p>
+            <div class="chapter-title-text">
+                <span class="chapter-title">Training Runs</span>
+                <span class="chapter-subtitle">Launch and monitor model training jobs</span>
             </div>
         </div>
         <button onclick="TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 140px;">

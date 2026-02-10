@@ -1177,55 +1177,6 @@
 }
 
 /* Scheduled Jobs Pagination (compact) */
-.scheduled-pagination {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 12px;
-    margin-top: auto;
-    border-top: 1px solid #e5e7eb;
-    font-size: 11px;
-}
-
-.scheduled-pagination .page-info {
-    color: #6b7280;
-}
-
-.scheduled-pagination .page-controls {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.scheduled-pagination .page-btn {
-    padding: 4px 8px;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-    background: white;
-    color: #374151;
-    font-size: 11px;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-}
-
-.scheduled-pagination .page-btn:hover {
-    background-color: #f3f4f6;
-    border-color: #9ca3af;
-}
-
-.scheduled-pagination .page-btn.active {
-    background-color: #2563eb;
-    color: white;
-    border-color: #2563eb;
-}
-
-.scheduled-pagination .page-btn.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
 /* Empty state for scheduled jobs */
 .scheduled-empty-state {
     flex: 1;

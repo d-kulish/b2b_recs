@@ -7923,19 +7923,19 @@ function ds_renderPagination(pagination) {
 
     let buttons = '';
     if (pagination.page > 1) {
-        buttons += `<button onclick="ds_loadDatasets(${pagination.page - 1})" class="btn btn-secondary btn-sm">Previous</button>`;
+        buttons += `<button onclick="ds_loadDatasets(${pagination.page - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
     for (let i = 1; i <= totalPages; i++) {
         if (i === pagination.page) {
-            buttons += `<button class="btn btn-primary btn-sm" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
+            buttons += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
         } else {
-            buttons += `<button onclick="ds_loadDatasets(${i})" class="btn btn-secondary btn-sm">${i}</button>`;
+            buttons += `<button onclick="ds_loadDatasets(${i})" class="btn btn-secondary btn-xs">${i}</button>`;
         }
     }
 
     if (pagination.page < totalPages) {
-        buttons += `<button onclick="ds_loadDatasets(${pagination.page + 1})" class="btn btn-secondary btn-sm">Next</button>`;
+        buttons += `<button onclick="ds_loadDatasets(${pagination.page + 1})" class="btn btn-secondary btn-xs">Next</button>`;
     }
 
     buttonsEl.innerHTML = buttons;
@@ -18873,19 +18873,19 @@ function fc_renderPagination(filtered) {
 
     let buttons = '';
     if (fc_currentPage > 1) {
-        buttons += `<button onclick="fc_goToPage(${fc_currentPage - 1})" class="btn btn-secondary btn-sm">Previous</button>`;
+        buttons += `<button onclick="fc_goToPage(${fc_currentPage - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
     for (let i = 1; i <= totalPages; i++) {
         if (i === fc_currentPage) {
-            buttons += `<button class="btn btn-primary btn-sm" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
+            buttons += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
         } else {
-            buttons += `<button onclick="fc_goToPage(${i})" class="btn btn-secondary btn-sm">${i}</button>`;
+            buttons += `<button onclick="fc_goToPage(${i})" class="btn btn-secondary btn-xs">${i}</button>`;
         }
     }
 
     if (fc_currentPage < totalPages) {
-        buttons += `<button onclick="fc_goToPage(${fc_currentPage + 1})" class="btn btn-secondary btn-sm">Next</button>`;
+        buttons += `<button onclick="fc_goToPage(${fc_currentPage + 1})" class="btn btn-secondary btn-xs">Next</button>`;
     }
 
     buttonsEl.innerHTML = buttons;
@@ -19706,19 +19706,19 @@ function mc_renderPagination(filtered) {
 
     let buttons = '';
     if (mc_currentPage > 1) {
-        buttons += `<button onclick="mc_goToPage(${mc_currentPage - 1})" class="btn btn-secondary btn-sm">Previous</button>`;
+        buttons += `<button onclick="mc_goToPage(${mc_currentPage - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
     for (let i = 1; i <= totalPages; i++) {
         if (i === mc_currentPage) {
-            buttons += `<button class="btn btn-primary btn-sm" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
+            buttons += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
         } else {
-            buttons += `<button onclick="mc_goToPage(${i})" class="btn btn-secondary btn-sm">${i}</button>`;
+            buttons += `<button onclick="mc_goToPage(${i})" class="btn btn-secondary btn-xs">${i}</button>`;
         }
     }
 
     if (mc_currentPage < totalPages) {
-        buttons += `<button onclick="mc_goToPage(${mc_currentPage + 1})" class="btn btn-secondary btn-sm">Next</button>`;
+        buttons += `<button onclick="mc_goToPage(${mc_currentPage + 1})" class="btn btn-secondary btn-xs">Next</button>`;
     }
 
     buttonsEl.innerHTML = buttons;

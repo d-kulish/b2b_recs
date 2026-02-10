@@ -290,49 +290,6 @@
 }
 
 /* =========================================================================
-   Pagination
-   ========================================================================= */
-.training-pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #e5e7eb;
-}
-
-.training-pagination-btn {
-    padding: 8px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    background: white;
-    font-size: 13px;
-    color: #374151;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    transition: all 0.15s ease;
-}
-
-.training-pagination-btn:hover:not(:disabled) {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-}
-
-.training-pagination-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.training-pagination-info {
-    font-size: 13px;
-    color: #6b7280;
-    padding: 0 12px;
-}
-
-/* =========================================================================
    Loading State
    ========================================================================= */
 .training-loading {

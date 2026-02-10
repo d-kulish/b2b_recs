@@ -132,6 +132,13 @@
    Button Sizes
    ============================================================================ */
 
+/* Extra Small Button (pagination) */
+.btn-xs {
+    padding: 5px 12px;
+    font-size: 12px;
+    min-width: auto;
+}
+
 /* Small Button */
 .btn-sm {
     padding: 6px 16px;

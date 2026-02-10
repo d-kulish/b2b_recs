@@ -145,29 +145,29 @@
                     </div>
 
                     {% if scheduled_jobs.paginator.num_pages > 1 %}
-                    <div class="scheduled-pagination">
-                        <span class="page-info">
-                            {{ scheduled_jobs.start_index }}-{{ scheduled_jobs.end_index }} of {{ scheduled_jobs.paginator.count }}
-                        </span>
-                        <div class="page-controls">
+                    <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                        <div class="text-sm text-gray-600">
+                            Showing {{ scheduled_jobs.start_index }}-{{ scheduled_jobs.end_index }} of {{ scheduled_jobs.paginator.count }}
+                        </div>
+                        <div class="flex items-center gap-2">
                             {% if scheduled_jobs.has_previous %}
-                            <a href="?sched_page={{ scheduled_jobs.previous_page_number }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="page-btn">Previous</a>
-                            {% else %}
-                            <span class="page-btn disabled">Previous</span>
+                            <a href="?sched_page={{ scheduled_jobs.previous_page_number }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="btn btn-secondary btn-xs" style="text-decoration: none;">Previous</a>
                             {% endif %}
 
                             {% for num in scheduled_jobs.paginator.page_range %}
                                 {% if scheduled_jobs.paginator.num_pages <= 5 or num == 1 or num == scheduled_jobs.paginator.num_pages or num >= scheduled_jobs.number|add:"-1" and num <= scheduled_jobs.number|add:"1" %}
-                                <a href="?sched_page={{ num }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="page-btn {% if scheduled_jobs.number == num %}active{% endif %}">{{ num }}</a>
+                                    {% if scheduled_jobs.number == num %}
+                                    <span class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">{{ num }}</span>
+                                    {% else %}
+                                    <a href="?sched_page={{ num }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="btn btn-secondary btn-xs" style="text-decoration: none;">{{ num }}</a>
+                                    {% endif %}
                                 {% elif num == scheduled_jobs.number|add:"-2" or num == scheduled_jobs.number|add:"2" %}
-                                <span class="text-gray-400">...</span>
+                                <span class="px-1 text-gray-400">...</span>
                                 {% endif %}
                             {% endfor %}
 
                             {% if scheduled_jobs.has_next %}
-                            <a href="?sched_page={{ scheduled_jobs.next_page_number }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="page-btn">Next</a>
-                            {% else %}
-                            <span class="page-btn disabled">Next</span>
+                            <a href="?sched_page={{ scheduled_jobs.next_page_number }}{% if page_obj.number != 1 %}&page={{ page_obj.number }}{% endif %}" class="btn btn-secondary btn-xs" style="text-decoration: none;">Next</a>
                             {% endif %}
                         </div>
                     </div>
@@ -3631,39 +3631,34 @@ function renderRunsPagination() {
     const isFiltered = runsSearchQuery || runsActiveStatuses.length > 0;
 
     let html = `
-        <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-4">
+        <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
             <div class="text-sm text-gray-600">
-                Showing <span class="font-semibold">${startIndex}</span>-<span class="font-semibold">${endIndex}</span>
-                of <span class="font-semibold">${filteredRunsData.length}</span> runs
+                Showing ${startIndex}-${endIndex} of ${filteredRunsData.length}
                 ${isFiltered ? '<span class="text-blue-600">(filtered)</span>' : ''}
             </div>
             <div class="flex items-center gap-2">
     `;
 
-    // Previous button
+    // Previous button (hidden when on first page)
     if (runsCurrentPage > 1) {
-        html += `<button onclick="goToRunsPage(${runsCurrentPage - 1})" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Previous</button>`;
-    } else {
-        html += `<span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>`;
+        html += `<button onclick="goToRunsPage(${runsCurrentPage - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
     // Page numbers
     const pageNumbers = getPageNumbers(runsCurrentPage, totalPages);
     for (const num of pageNumbers) {
         if (num === '...') {
-            html += `<span class="px-2 text-gray-500">...</span>`;
+            html += `<span class="px-1 text-gray-400">...</span>`;
         } else if (num === runsCurrentPage) {
-            html += `<button class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white">${num}</button>`;
+            html += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${num}</button>`;
         } else {
-            html += `<button onclick="goToRunsPage(${num})" class="w-10 h-10 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">${num}</button>`;
+            html += `<button onclick="goToRunsPage(${num})" class="btn btn-secondary btn-xs">${num}</button>`;
         }
     }
 
-    // Next button
+    // Next button (hidden when on last page)
     if (runsCurrentPage < totalPages) {
-        html += `<button onclick="goToRunsPage(${runsCurrentPage + 1})" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold bg-white hover:bg-gray-50">Next</button>`;
-    } else {
-        html += `<span class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>`;
+        html += `<button onclick="goToRunsPage(${runsCurrentPage + 1})" class="btn btn-secondary btn-xs">Next</button>`;
     }
 
     html += `
@@ -4769,52 +4764,42 @@ function generatePaginationControls(currentPage, totalItems, itemsPerPage, onCli
 
     let html = '';
 
-    // Previous button
+    // Previous button (hidden when on first page)
     if (currentPage > 1) {
-        html += `<button onclick="${onClickFn}(${currentPage - 1})" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold bg-white hover:bg-gray-50">Previous</button>`;
-    } else {
-        html += `<span class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Previous</span>`;
+        html += `<button onclick="${onClickFn}(${currentPage - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
-    // Page numbers
-    if (totalPages <= 7) {
-        // Show all pages if 7 or fewer
+    // Page numbers (max ~4 visible page numbers + ellipsis)
+    if (totalPages <= 4) {
         for (let i = 1; i <= totalPages; i++) {
             html += generatePageButton(i, currentPage, onClickFn);
         }
     } else {
-        // Dynamic pagination for many pages
-        if (currentPage <= 4) {
-            // Near the start: show 1,2,3,4,5 ... last
-            for (let i = 1; i <= 5; i++) {
-                html += generatePageButton(i, currentPage, onClickFn);
-            }
-            html += `<span class="px-2 text-gray-500">...</span>`;
-            html += generatePageButton(totalPages, currentPage, onClickFn);
-        } else if (currentPage > totalPages - 4) {
-            // Near the end: show 1 ... last-4,last-3,last-2,last-1,last
-            html += generatePageButton(1, currentPage, onClickFn);
-            html += `<span class="px-2 text-gray-500">...</span>`;
-            for (let i = totalPages - 4; i <= totalPages; i++) {
-                html += generatePageButton(i, currentPage, onClickFn);
-            }
-        } else {
-            // In the middle: show 1 ... current-1,current,current+1 ... last
-            html += generatePageButton(1, currentPage, onClickFn);
-            html += `<span class="px-2 text-gray-500">...</span>`;
-            for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-                html += generatePageButton(i, currentPage, onClickFn);
-            }
-            html += `<span class="px-2 text-gray-500">...</span>`;
-            html += generatePageButton(totalPages, currentPage, onClickFn);
+        // Always show first page
+        html += generatePageButton(1, currentPage, onClickFn);
+
+        if (currentPage > 3) {
+            html += `<span class="px-1 text-gray-400">...</span>`;
         }
+
+        // Pages around current
+        const start = Math.max(2, currentPage - 1);
+        const end = Math.min(totalPages - 1, currentPage + 1);
+        for (let i = start; i <= end; i++) {
+            html += generatePageButton(i, currentPage, onClickFn);
+        }
+
+        if (currentPage < totalPages - 2) {
+            html += `<span class="px-1 text-gray-400">...</span>`;
+        }
+
+        // Always show last page
+        html += generatePageButton(totalPages, currentPage, onClickFn);
     }
 
-    // Next button
+    // Next button (hidden when on last page)
     if (currentPage < totalPages) {
-        html += `<button onclick="${onClickFn}(${currentPage + 1})" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold bg-white hover:bg-gray-50">Next</button>`;
-    } else {
-        html += `<span class="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-semibold opacity-50 cursor-not-allowed bg-gray-100">Next</span>`;
+        html += `<button onclick="${onClickFn}(${currentPage + 1})" class="btn btn-secondary btn-xs">Next</button>`;
     }
 
     return html;
@@ -4823,20 +4808,20 @@ function generatePaginationControls(currentPage, totalItems, itemsPerPage, onCli
 function generatePageButton(pageNum, currentPage, onClickFn) {
     const isActive = pageNum === currentPage;
     if (isActive) {
-        return `<button class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-semibold bg-blue-600 text-white">${pageNum}</button>`;
+        return `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${pageNum}</button>`;
     } else {
-        return `<button onclick="${onClickFn}(${pageNum})" class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-blue-50 hover:border-blue-500">${pageNum}</button>`;
+        return `<button onclick="${onClickFn}(${pageNum})" class="btn btn-secondary btn-xs">${pageNum}</button>`;
     }
 }
 
 /**
  * Generate "Showing X-Y of Z" text
  */
-function generateShowingText(currentPage, totalItems, itemsPerPage, itemName) {
+function generateShowingText(currentPage, totalItems, itemsPerPage) {
     if (totalItems === 0) return '';
     const start = (currentPage - 1) * itemsPerPage + 1;
     const end = Math.min(currentPage * itemsPerPage, totalItems);
-    return `Showing <span class="font-semibold">${start}</span>-<span class="font-semibold">${end}</span> of <span class="font-semibold">${totalItems}</span> ${itemName}`;
+    return `Showing ${start}-${end} of ${totalItems}`;
 }
 
 // ============================================================================
@@ -4979,7 +4964,7 @@ function renderConnectionsList() {
 
     // Update pagination controls
     if (filtered.length > CONNECTIONS_PER_PAGE) {
-        showingTextEl.innerHTML = generateShowingText(connectionsCurrentPage, filtered.length, CONNECTIONS_PER_PAGE, 'connections');
+        showingTextEl.innerHTML = generateShowingText(connectionsCurrentPage, filtered.length, CONNECTIONS_PER_PAGE);
         controlsEl.innerHTML = generatePaginationControls(connectionsCurrentPage, filtered.length, CONNECTIONS_PER_PAGE, 'goToConnectionsPage');
         paginationContainer.classList.remove('hidden');
     } else {
@@ -5302,7 +5287,7 @@ function renderJobsList() {
 
     // Update pagination controls
     if (filtered.length > JOBS_PER_PAGE) {
-        showingTextEl.innerHTML = generateShowingText(jobsCurrentPage, filtered.length, JOBS_PER_PAGE, 'jobs');
+        showingTextEl.innerHTML = generateShowingText(jobsCurrentPage, filtered.length, JOBS_PER_PAGE);
         controlsEl.innerHTML = generatePaginationControls(jobsCurrentPage, filtered.length, JOBS_PER_PAGE, 'goToJobsPage');
         paginationContainer.classList.remove('hidden');
     } else {

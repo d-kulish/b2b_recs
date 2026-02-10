@@ -961,21 +961,21 @@ const EndpointsTable = (function() {
 
     function renderPageButton(pageNum, currentPage) {
         if (pageNum === currentPage) {
-            return `<button class="endpoints-page-btn active">${pageNum}</button>`;
+            return `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${pageNum}</button>`;
         }
-        return `<button class="endpoints-page-btn" onclick="EndpointsTable.goToPage(${pageNum})">${pageNum}</button>`;
+        return `<button class="btn btn-secondary btn-xs" onclick="EndpointsTable.goToPage(${pageNum})">${pageNum}</button>`;
     }
 
     function renderPageButtons(currentPage, totalPages) {
         const buttons = [];
-        if (totalPages <= 7) {
+        if (totalPages <= 4) {
             for (let i = 1; i <= totalPages; i++) {
                 buttons.push(renderPageButton(i, currentPage));
             }
         } else {
             buttons.push(renderPageButton(1, currentPage));
             if (currentPage > 3) {
-                buttons.push('<span class="endpoints-page-ellipsis">...</span>');
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
             }
             const start = Math.max(2, currentPage - 1);
             const end = Math.min(totalPages - 1, currentPage + 1);
@@ -983,7 +983,7 @@ const EndpointsTable = (function() {
                 buttons.push(renderPageButton(i, currentPage));
             }
             if (currentPage < totalPages - 2) {
-                buttons.push('<span class="endpoints-page-ellipsis">...</span>');
+                buttons.push('<span class="px-1 text-gray-400">...</span>');
             }
             buttons.push(renderPageButton(totalPages, currentPage));
         }
@@ -997,22 +997,16 @@ const EndpointsTable = (function() {
         const start = (page - 1) * pageSize + 1;
         const end = Math.min(page * pageSize, totalCount);
         const showingText = totalCount === 0
-            ? 'Showing 0 endpoints'
-            : `Showing ${start}-${end} of ${totalCount} endpoints`;
+            ? 'Showing 0'
+            : `Showing ${start}-${end} of ${totalCount}`;
 
         return `
-            <div class="endpoints-pagination">
-                <div class="endpoints-pagination-info">${showingText}</div>
-                <div class="endpoints-pagination-controls">
-                    <button class="endpoints-pagination-btn" onclick="EndpointsTable.prevPage()" ${!hasPrev ? 'disabled' : ''}>
-                        Previous
-                    </button>
-                    <div class="endpoints-pagination-pages">
-                        ${renderPageButtons(page, totalPages)}
-                    </div>
-                    <button class="endpoints-pagination-btn" onclick="EndpointsTable.nextPage()" ${!hasNext ? 'disabled' : ''}>
-                        Next
-                    </button>
+            <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                <div class="text-sm text-gray-600">${showingText}</div>
+                <div class="flex items-center gap-2">
+                    ${hasPrev ? `<button onclick="EndpointsTable.prevPage()" class="btn btn-secondary btn-xs">Previous</button>` : ''}
+                    ${renderPageButtons(page, totalPages)}
+                    ${hasNext ? `<button onclick="EndpointsTable.nextPage()" class="btn btn-secondary btn-xs">Next</button>` : ''}
                 </div>
             </div>
         `;

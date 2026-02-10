@@ -581,23 +581,22 @@ const ModelsRegistry = (function() {
     }
 
     function generateShowingText(currentPage, totalItems, itemsPerPage) {
-        if (totalItems === 0) return 'Showing 0 models';
+        if (totalItems === 0) return 'Showing 0';
         const start = (currentPage - 1) * itemsPerPage + 1;
         const end = Math.min(currentPage * itemsPerPage, totalItems);
-        return `Showing ${start}-${end} of ${totalItems} models`;
+        return `Showing ${start}-${end} of ${totalItems}`;
     }
 
     function generatePageButton(pageNum, currentPage) {
-        const isActive = pageNum === currentPage;
-        if (isActive) {
-            return `<button class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium bg-blue-600 text-white">${pageNum}</button>`;
+        if (pageNum === currentPage) {
+            return `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${pageNum}</button>`;
         }
-        return `<button onclick="ModelsRegistry.goToPage(${pageNum})" class="w-8 h-8 flex items-center justify-center rounded-md text-sm font-medium border border-gray-300 hover:bg-blue-50 text-gray-700">${pageNum}</button>`;
+        return `<button onclick="ModelsRegistry.goToPage(${pageNum})" class="btn btn-secondary btn-xs">${pageNum}</button>`;
     }
 
     function generatePaginationControls(currentPage, totalPages) {
         const buttons = [];
-        if (totalPages <= 7) {
+        if (totalPages <= 4) {
             for (let i = 1; i <= totalPages; i++) {
                 buttons.push(generatePageButton(i, currentPage));
             }
@@ -627,18 +626,12 @@ const ModelsRegistry = (function() {
         const pageButtons = generatePaginationControls(page, totalPages);
 
         return `
-            <div class="flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+            <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
                 <div class="text-sm text-gray-600">${showingText}</div>
-                <div class="flex items-center gap-1">
-                    <button onclick="ModelsRegistry.prevPage()" ${!hasPrev ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasPrev ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
-                        Previous
-                    </button>
-                    <div class="flex items-center gap-1 mx-2">
-                        ${pageButtons}
-                    </div>
-                    <button onclick="ModelsRegistry.nextPage()" ${!hasNext ? 'disabled' : ''} class="px-3 py-1.5 border rounded-md text-sm font-medium ${hasNext ? 'border-gray-300 hover:bg-blue-50 text-gray-700' : 'border-gray-200 text-gray-400 cursor-not-allowed'}">
-                        Next
-                    </button>
+                <div class="flex items-center gap-2">
+                    ${hasPrev ? `<button onclick="ModelsRegistry.prevPage()" class="btn btn-secondary btn-xs">Previous</button>` : ''}
+                    ${pageButtons}
+                    ${hasNext ? `<button onclick="ModelsRegistry.nextPage()" class="btn btn-secondary btn-xs">Next</button>` : ''}
                 </div>
             </div>
         `;

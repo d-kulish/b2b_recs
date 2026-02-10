@@ -263,23 +263,22 @@ const ModelDashboardEtl = (function() {
         // Build pagination with page numbers if needed
         let paginationHtml = '';
         if (totalPages > 1) {
-            const prevDisabled = page === 1 ? 'disabled' : '';
-            const nextDisabled = page === totalPages ? 'disabled' : '';
-
-            // Build page number buttons
             let pageNumbersHtml = '';
             for (let i = 1; i <= totalPages; i++) {
-                const isActive = i === page ? 'active' : '';
-                pageNumbersHtml += `<button class="page-btn ${isActive}" onclick="ModelDashboardEtl.goToScheduledJobsPage(${i})">${i}</button>`;
+                if (i === page) {
+                    pageNumbersHtml += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
+                } else {
+                    pageNumbersHtml += `<button class="btn btn-secondary btn-xs" onclick="ModelDashboardEtl.goToScheduledJobsPage(${i})">${i}</button>`;
+                }
             }
 
             paginationHtml = `
-                <div class="scheduled-pagination">
-                    <span class="page-info">${startIndex + 1}-${endIndex} of ${totalJobs}</span>
-                    <div class="page-controls">
-                        <button class="page-btn ${prevDisabled}" onclick="ModelDashboardEtl.goToScheduledJobsPage(${page - 1})" ${prevDisabled ? 'disabled' : ''}>Previous</button>
+                <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                    <div class="text-sm text-gray-600">Showing ${startIndex + 1}-${endIndex} of ${totalJobs}</div>
+                    <div class="flex items-center gap-2">
+                        ${page > 1 ? `<button class="btn btn-secondary btn-xs" onclick="ModelDashboardEtl.goToScheduledJobsPage(${page - 1})">Previous</button>` : ''}
                         ${pageNumbersHtml}
-                        <button class="page-btn ${nextDisabled}" onclick="ModelDashboardEtl.goToScheduledJobsPage(${page + 1})" ${nextDisabled ? 'disabled' : ''}>Next</button>
+                        ${page < totalPages ? `<button class="btn btn-secondary btn-xs" onclick="ModelDashboardEtl.goToScheduledJobsPage(${page + 1})">Next</button>` : ''}
                     </div>
                 </div>
             `;

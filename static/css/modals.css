@@ -160,6 +160,30 @@
     max-height: 80vh;
 }
 
+/* Connection wizard - wider to avoid internal scroll */
+.modal-container-wizard.modal-connection-wizard {
+    max-width: 1000px;
+    height: auto;
+    max-height: 85vh;
+}
+
+.modal-connection-wizard .wizard-selection-grid {
+    max-height: none;
+    overflow-y: visible;
+}
+
+/* ETL wizard - wider to avoid internal scroll */
+.modal-container-wizard.modal-etl-wizard {
+    max-width: 1000px;
+    height: auto;
+    max-height: 85vh;
+}
+
+.modal-etl-wizard .wizard-selection-grid {
+    max-height: none;
+    overflow-y: visible;
+}
+
 /* Dataset wizard - larger size for schema builder */
 .modal-container-wizard.modal-dataset-wizard {
     max-width: 1000px;

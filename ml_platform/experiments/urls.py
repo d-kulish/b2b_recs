@@ -30,6 +30,11 @@ urlpatterns = [
         api.quick_test_delete,
         name='quick_test_delete'
     ),
+    path(
+        'api/quick-tests/<int:quick_test_id>/rerun/',
+        api.quick_test_rerun,
+        name='quick_test_rerun'
+    ),
 
     # Artifact endpoints (lazy-loaded)
     path(

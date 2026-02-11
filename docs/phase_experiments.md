@@ -86,7 +86,7 @@ Each card displays:
 - Configuration summary (Dataset, Features, Model)
 - Metrics (Recall@K for retrieval, RMSE/MAE for ranking)
 - Progress bar (for running experiments)
-- Action buttons: View, Cancel/Delete
+- Action buttons: View, Rerun, Cancel/Delete
 
 #### Control Buttons
 - **[+ New Exp]**: Opens 2-step wizard
@@ -249,6 +249,7 @@ Unified table showing for each experiment:
 | POST | `/api/feature-configs/{id}/quick-test/` | Create experiment |
 | GET | `/api/quick-tests/{id}/` | Get experiment details |
 | POST | `/api/quick-tests/{id}/cancel/` | Cancel running experiment |
+| POST | `/api/quick-tests/{id}/rerun/` | Re-run experiment with same config |
 | DELETE | `/api/quick-tests/{id}/delete/` | Delete experiment + GCS artifacts |
 | GET | `/api/quick-tests/{id}/errors/` | Get error details |
 | GET | `/api/quick-tests/{id}/statistics/` | Get data insights |
@@ -392,6 +393,7 @@ Handles experiment lifecycle:
 - `create_quick_test()` - Validate config, submit to Cloud Build
 - `poll_experiment_status()` - Check Vertex AI pipeline status
 - `extract_results()` - Parse training_metrics.json from GCS
+- `rerun_quick_test()` - Re-run experiment with same configuration (terminal states only)
 - `cancel_quick_test()` - Cancel Cloud Build or Vertex pipeline
 - `delete_quick_test()` - Delete DB record and GCS artifacts
 
@@ -485,7 +487,7 @@ Fetches pipeline component logs from Cloud Logging for the Pipeline tab:
 - [x] View modal with Config/Data Insights/Training/Error tabs
 - [x] **View modal migrated to reusable ExpViewModal module** (2026-01-15)
 - [x] **Pipeline logs service with Cloud Logging integration** (2026-01-15)
-- [x] Cancel and Delete functionality
+- [x] Cancel, Delete, and Rerun functionality
 - [x] Experiments Dashboard with 8 analytical components
 - [x] Model type conditional filtering for dashboard
 - [x] Training heatmaps (epoch loss + final metrics)

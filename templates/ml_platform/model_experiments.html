@@ -3921,8 +3921,11 @@ function renderExpCard(exp) {
 
     // Show Cancel button - active only for running/submitting experiments
     const isRunning = exp.status === 'running' || exp.status === 'submitting';
+    const isTerminal = ['completed', 'failed', 'cancelled'].includes(exp.status);
     const viewBtn = `<button class="card-action-btn view" onclick="viewExpFromCard(event, ${exp.id})">View</button>`;
     const cancelBtn = `<button class="card-action-btn cancel" onclick="cancelExpFromCard(event, ${exp.id})" ${isRunning ? '' : 'disabled'}>Cancel</button>`;
+    // Rerun button - enabled only for terminal states
+    const rerunBtn = `<button class="card-action-btn rerun" onclick="rerunExpFromCard(event, ${exp.id})" title="Re-run with same configuration" ${isTerminal ? '' : 'disabled'}>Rerun</button>`;
     // Delete button - disabled for running/submitting experiments (must cancel first)
     const canDelete = !isRunning;
     const deleteBtn = `<button class="card-action-btn icon-only delete" onclick="deleteExpFromCard(event, ${exp.id})" title="Delete experiment" ${canDelete ? '' : 'disabled'}><i class="fas fa-trash"></i></button>`;
@@ -3961,7 +3964,7 @@ function renderExpCard(exp) {
                     <div class="ml-card-actions-grid">
                         <div></div>
                         ${viewBtn}
-                        <div></div>
+                        ${rerunBtn}
                         ${cancelBtn}
                         <div></div>
                         <div class="card-action-btn-group">
@@ -5218,6 +5221,52 @@ function deleteExpFromCard(event, expId) {
                 }
             } catch (error) {
                 showError('Failed to delete: ' + error.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+    });
+}
+
+function rerunExpFromCard(event, expId) {
+    event.stopPropagation(); // Prevent card click
+
+    const btn = event.target.closest('button');
+    const originalHtml = btn.innerHTML;
+
+    showConfirmModal({
+        title: 'Re-run Experiment',
+        message: 'Create a new experiment with the same configuration?',
+        confirmText: 'Ok',
+        cancelText: 'Cancel',
+        type: 'info',
+        confirmButtonClass: 'btn-neu-save',
+        cancelButtonClass: 'btn-neu-cancel',
+        onConfirm: async () => {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                const response = await fetch(`/api/quick-tests/${expId}/rerun/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(data.message || 'Re-run created');
+                    await loadExperiments(1); // Go to first page to see the new experiment
+                    startBackgroundPolling();
+                } else {
+                    showError(data.error || 'Failed to re-run experiment');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            } catch (error) {
+                showError('Failed to re-run: ' + error.message);
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
             }

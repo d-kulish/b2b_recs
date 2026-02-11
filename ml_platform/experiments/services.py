@@ -264,6 +264,61 @@ class ExperimentService:
 
         return quick_test
 
+    def rerun_quick_test(self, quick_test) -> 'QuickTest':
+        """
+        Re-run an experiment by creating a new QuickTest with the same configuration.
+
+        Works for any terminal state (completed, failed, cancelled).
+
+        Args:
+            quick_test: QuickTest instance to re-run
+
+        Returns:
+            New QuickTest instance
+
+        Raises:
+            ExperimentServiceError: If experiment is not in a terminal state
+        """
+        from ml_platform.models import QuickTest
+
+        TERMINAL_STATUSES = [
+            QuickTest.STATUS_COMPLETED,
+            QuickTest.STATUS_FAILED,
+            QuickTest.STATUS_CANCELLED,
+        ]
+
+        if quick_test.status not in TERMINAL_STATUSES:
+            raise ExperimentServiceError(
+                f"Cannot re-run experiment in '{quick_test.status}' state. "
+                "Only terminal states (completed, failed, cancelled) can be re-run."
+            )
+
+        new_quick_test = self.submit_quick_test(
+            feature_config=quick_test.feature_config,
+            model_config=quick_test.model_config,
+            user=quick_test.created_by,
+            split_strategy=quick_test.split_strategy,
+            holdout_days=quick_test.holdout_days,
+            date_column=quick_test.date_column,
+            data_sample_percent=quick_test.data_sample_percent,
+            epochs=quick_test.epochs,
+            batch_size=quick_test.batch_size,
+            learning_rate=quick_test.learning_rate,
+            train_days=quick_test.train_days,
+            val_days=quick_test.val_days,
+            test_days=quick_test.test_days,
+            machine_type=quick_test.machine_type,
+            experiment_name=quick_test.experiment_name,
+            experiment_description=f"Re-run of {quick_test.display_name}",
+        )
+
+        logger.info(
+            f"Created re-run {new_quick_test.display_name} "
+            f"for {quick_test.display_name}"
+        )
+
+        return new_quick_test
+
     def _populate_denormalized_fields(self, quick_test, feature_config, model_config):
         """
         Populate denormalized fields for hyperparameter analysis.

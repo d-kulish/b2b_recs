@@ -11,7 +11,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 
 from ml_platform.models import FeatureConfig, ModelConfig, QuickTest, Dataset
-from .services import ExperimentService, validate_experiment_config
+from .services import ExperimentService, ExperimentServiceError, validate_experiment_config
 from .artifact_service import ArtifactService
 
 logger = logging.getLogger(__name__)
@@ -704,6 +704,80 @@ def quick_test_delete(request, quick_test_id):
 
     except Exception as e:
         logger.exception(f"Error deleting quick test: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def quick_test_rerun(request, quick_test_id):
+    """
+    Re-run an experiment with the same configuration.
+
+    POST /api/quick-tests/<id>/rerun/
+
+    Creates a new QuickTest with the same configuration and submits it.
+    Works for any terminal state (completed, failed, cancelled).
+
+    Returns:
+    {
+        "success": true,
+        "quick_test": { ... new experiment ... },
+        "message": "Re-run created as Exp #N"
+    }
+    """
+    try:
+        model_endpoint = _get_model_endpoint(request)
+        if not model_endpoint:
+            return JsonResponse({
+                'success': False,
+                'error': 'No model endpoint selected'
+            }, status=400)
+
+        try:
+            quick_test = QuickTest.objects.select_related(
+                'feature_config', 'model_config'
+            ).get(
+                id=quick_test_id,
+                feature_config__dataset__model_endpoint=model_endpoint
+            )
+        except QuickTest.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': f'QuickTest {quick_test_id} not found'
+            }, status=404)
+
+        TERMINAL_STATUSES = [
+            QuickTest.STATUS_COMPLETED,
+            QuickTest.STATUS_FAILED,
+            QuickTest.STATUS_CANCELLED,
+        ]
+        if quick_test.status not in TERMINAL_STATUSES:
+            return JsonResponse({
+                'success': False,
+                'error': f"Cannot re-run experiment in '{quick_test.status}' state. "
+                         f"Only terminal states can be re-run."
+            }, status=400)
+
+        service = ExperimentService(model_endpoint)
+        try:
+            new_quick_test = service.rerun_quick_test(quick_test)
+        except ExperimentServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+        return JsonResponse({
+            'success': True,
+            'quick_test': _serialize_quick_test(new_quick_test),
+            'message': f"Re-run created as {new_quick_test.display_name}"
+        })
+
+    except Exception as e:
+        logger.exception(f"Error re-running experiment: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)

@@ -218,6 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configure ExpViewModal for model/experiment viewing
     ExpViewModal.configure({
         showTabs: ['overview', 'versions', 'artifacts', 'deployment', 'lineage'],
+        modelId: {{ model.id }},
         onClose: function() {
             ModelDashboardModels.refresh();
             ModelDashboardExperiments.refresh();
@@ -231,9 +232,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize and load all chapters
     ModelDashboardEndpoints.init({ modelId: {{ model.id }} });
     ModelDashboardEndpoints.load();
-    ModelDashboardModels.init();
+    ModelDashboardModels.init({ modelId: {{ model.id }} });
     ModelDashboardModels.load();
-    ModelDashboardExperiments.init();
+    ModelDashboardExperiments.init({ modelId: {{ model.id }} });
     ModelDashboardExperiments.load();
     ModelDashboardConfigs.init();
     ModelDashboardConfigs.load();

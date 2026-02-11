@@ -3228,6 +3228,12 @@ function toggleChapter(header) {
 // =============================================================================
 const modelId = {{ model.id }};
 
+function appendModelEndpointId(url) {
+    if (!modelId) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}model_endpoint_id=${modelId}`;
+}
+
 // Data
 let allFeatureConfigs = [];
 let allModelConfigs = [];
@@ -3650,6 +3656,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Configure the reusable ExpViewModal module
     ExpViewModal.configure({
+        modelId: modelId,
         showTabs: ['overview', 'pipeline', 'data', 'training'],
         onUpdate: function(exp) {
             // Refresh dashboard sections when experiment status changes
@@ -3663,9 +3670,9 @@ async function loadInitialData() {
     try {
         // Load Feature Configs, Model Configs, and Experiments in parallel
         const [fcResponse, mcResponse, expResponse] = await Promise.all([
-            fetch(`/api/models/${modelId}/feature-configs/`),
-            fetch(`/api/models/${modelId}/model-configs/`),
-            fetch('/api/quick-tests/?page=1&page_size=10')
+            fetch(appendModelEndpointId(`/api/models/${modelId}/feature-configs/`)),
+            fetch(appendModelEndpointId(`/api/models/${modelId}/model-configs/`)),
+            fetch(appendModelEndpointId('/api/quick-tests/?page=1&page_size=10'))
         ]);
 
         const fcData = await fcResponse.json();
@@ -4078,7 +4085,7 @@ async function loadExperiments(page = 1) {
     if (search) url += `&search=${encodeURIComponent(search)}`;
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(appendModelEndpointId(url));
         const data = await response.json();
 
         if (data.success) {
@@ -4308,7 +4315,7 @@ function onWizardFeatureChange() {
         document.getElementById('wizardFeatureContent').classList.add('hidden');
 
         // Fetch full feature config details
-        fetch(`/api/feature-configs/${fcId}/`)
+        fetch(appendModelEndpointId(`/api/feature-configs/${fcId}/`))
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
@@ -4651,7 +4658,7 @@ function onWizardModelChange() {
         document.getElementById('wizardModelContent').classList.add('hidden');
 
         // Fetch full model config details
-        fetch(`/api/model-configs/${mcId}/`)
+        fetch(appendModelEndpointId(`/api/model-configs/${mcId}/`))
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
@@ -4883,7 +4890,7 @@ async function loadWizardDateColumns(datasetId) {
     if (!datasetId) return;
 
     try {
-        const response = await fetch(`/api/datasets/${datasetId}/date-columns/`);
+        const response = await fetch(appendModelEndpointId(`/api/datasets/${datasetId}/date-columns/`));
         const data = await response.json();
 
         const select = document.getElementById('wizardDateColumn');
@@ -5062,7 +5069,7 @@ async function submitExperiment() {
     runBtn.querySelector('.btn-neu-inner').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     try {
-        const response = await fetch(`/api/feature-configs/${selectedFeatureConfig.id}/quick-test/`, {
+        const response = await fetch(appendModelEndpointId(`/api/feature-configs/${selectedFeatureConfig.id}/quick-test/`), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -5156,7 +5163,7 @@ function cancelExpFromCard(event, expId) {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
             try {
-                const response = await fetch(`/api/quick-tests/${expId}/cancel/`, {
+                const response = await fetch(appendModelEndpointId(`/api/quick-tests/${expId}/cancel/`), {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': getCookie('csrftoken')
@@ -5201,7 +5208,7 @@ function deleteExpFromCard(event, expId) {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
             try {
-                const response = await fetch(`/api/quick-tests/${expId}/delete/`, {
+                const response = await fetch(appendModelEndpointId(`/api/quick-tests/${expId}/delete/`), {
                     method: 'DELETE',
                     headers: {
                         'X-CSRFToken': getCookie('csrftoken')
@@ -5245,7 +5252,7 @@ function rerunExpFromCard(event, expId) {
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
             try {
-                const response = await fetch(`/api/quick-tests/${expId}/rerun/`, {
+                const response = await fetch(appendModelEndpointId(`/api/quick-tests/${expId}/rerun/`), {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': getCookie('csrftoken')
@@ -5319,7 +5326,7 @@ async function exp_openCompareModal() {
 
     // Fetch selectable experiments
     try {
-        const response = await fetch('/api/experiments/selectable/');
+        const response = await fetch(appendModelEndpointId('/api/experiments/selectable/'));
         const data = await response.json();
 
         if (data.success) {
@@ -5406,7 +5413,7 @@ function exp_onCompareSelectChange(side) {
     exp_showColumnLoading('right');
 
     // Fetch comparison data for both experiments
-    fetch('/api/experiments/compare/', {
+    fetch(appendModelEndpointId('/api/experiments/compare/'), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -6041,7 +6048,7 @@ async function loadExperimentsDashboard() {
 
     try {
         // Load dashboard stats first
-        const statsResponse = await fetch('/api/experiments/dashboard-stats/');
+        const statsResponse = await fetch(appendModelEndpointId('/api/experiments/dashboard-stats/'));
         const statsData = await statsResponse.json();
 
         if (!statsData.success) {
@@ -6138,7 +6145,7 @@ async function loadTrainingHeatmaps(modelType = null) {
     }
 
     try {
-        const response = await fetch(`/api/experiments/training-heatmaps/?model_type=${activeModelType}`);
+        const response = await fetch(appendModelEndpointId(`/api/experiments/training-heatmaps/?model_type=${activeModelType}`));
         const data = await response.json();
 
         if (!data.success || !data.experiments || data.experiments.length === 0) {
@@ -6511,7 +6518,7 @@ async function loadMetricsTrend(modelType = null) {
     }
 
     try {
-        const response = await fetch(`/api/experiments/metrics-trend/?model_type=${activeModelType}`);
+        const response = await fetch(appendModelEndpointId(`/api/experiments/metrics-trend/?model_type=${activeModelType}`));
         const data = await response.json();
 
         if (!data.success || !data.trend || data.trend.length < 2) {
@@ -6868,7 +6875,7 @@ async function loadTopConfigurations(modelType = null) {
     }
 
     try {
-        const response = await fetch(`/api/experiments/top-configurations/?limit=5&model_type=${activeModelType}`);
+        const response = await fetch(appendModelEndpointId(`/api/experiments/top-configurations/?limit=5&model_type=${activeModelType}`));
         const data = await response.json();
 
         if (!data.success || !data.configurations || data.configurations.length === 0) {
@@ -7000,7 +7007,7 @@ async function loadHyperparameterAnalysis(modelType = null) {
     }
 
     try {
-        const response = await fetch(`/api/experiments/hyperparameter-analysis/?model_type=${activeModelType}`);
+        const response = await fetch(appendModelEndpointId(`/api/experiments/hyperparameter-analysis/?model_type=${activeModelType}`));
         const data = await response.json();
 
         if (!data.success || !data.analysis) {
@@ -7343,7 +7350,7 @@ async function loadSuggestions() {
     const emptyEl = document.getElementById('suggestionsEmpty');
 
     try {
-        const response = await fetch('/api/experiments/suggestions/');
+        const response = await fetch(appendModelEndpointId('/api/experiments/suggestions/'));
         const data = await response.json();
 
         if (!data.success || !data.suggestions || data.suggestions.length === 0) {
@@ -7440,7 +7447,7 @@ async function loadDatasetComparison(modelType = null) {
     }
 
     try {
-        const response = await fetch(`/api/experiments/dataset-comparison/?model_type=${activeModelType}`);
+        const response = await fetch(appendModelEndpointId(`/api/experiments/dataset-comparison/?model_type=${activeModelType}`));
         const data = await response.json();
 
         if (!data.success || !data.datasets || data.datasets.length === 0) {

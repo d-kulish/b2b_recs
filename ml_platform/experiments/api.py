@@ -18,14 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 def _get_model_endpoint(request):
-    """Get model endpoint from session."""
+    """Get model endpoint from query param (preferred) or session (fallback)."""
     from ml_platform.models import ModelEndpoint
-    endpoint_id = request.session.get('model_endpoint_id')
+    endpoint_id = request.GET.get('model_endpoint_id') or request.session.get('model_endpoint_id')
     if not endpoint_id:
         return None
     try:
         return ModelEndpoint.objects.get(id=endpoint_id)
-    except ModelEndpoint.DoesNotExist:
+    except (ModelEndpoint.DoesNotExist, ValueError):
         return None
 
 

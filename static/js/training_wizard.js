@@ -137,6 +137,12 @@ const TrainingWizard = (function() {
         return cookieValue;
     }
 
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
+
     function buildUrl(template, params) {
         let url = template;
         for (const [key, value] of Object.entries(params)) {
@@ -221,7 +227,7 @@ const TrainingWizard = (function() {
         state.nameCheckTimeout = setTimeout(async () => {
             try {
                 // First check the RegisteredModel API for schedule info
-                const regModelResponse = await fetch(`/api/registered-models/check-name/?name=${encodeURIComponent(name)}`);
+                const regModelResponse = await fetch(appendModelEndpointId(`/api/registered-models/check-name/?name=${encodeURIComponent(name)}`));
                 const regModelData = await regModelResponse.json();
 
                 if (regModelData.success) {
@@ -253,7 +259,7 @@ const TrainingWizard = (function() {
                     } else {
                         // New model name - check training runs as fallback
                         state.modelHasSchedule = false;  // New model has no schedule
-                        const response = await fetch(`/api/training-runs/check-name/?name=${encodeURIComponent(name)}`);
+                        const response = await fetch(appendModelEndpointId(`/api/training-runs/check-name/?name=${encodeURIComponent(name)}`));
                         const data = await response.json();
 
                         if (data.success) {
@@ -366,7 +372,7 @@ const TrainingWizard = (function() {
      */
     async function loadTrainingRunConfig(runId) {
         try {
-            const response = await fetch(`/api/training-runs/${runId}/config/`);
+            const response = await fetch(appendModelEndpointId(`/api/training-runs/${runId}/config/`));
             const data = await response.json();
 
             if (data.success && data.config) {
@@ -736,7 +742,7 @@ const TrainingWizard = (function() {
 
         try {
             const url = `${config.endpoints.topConfigs}?limit=5&model_type=${state.formData.modelType}`;
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (data.success && data.configurations && data.configurations.length > 0) {
@@ -932,7 +938,7 @@ const TrainingWizard = (function() {
 
             try {
                 const url = `${config.endpoints.quickTests}?model_type=${state.formData.modelType}&status=completed&search=${encodeURIComponent(query)}`;
-                const response = await fetch(url);
+                const response = await fetch(appendModelEndpointId(url));
                 const data = await response.json();
 
                 if (data.success && data.quick_tests && data.quick_tests.length > 0) {
@@ -982,7 +988,7 @@ const TrainingWizard = (function() {
         }
 
         try {
-            const response = await fetch(`/api/quick-tests/${experimentId}/`);
+            const response = await fetch(appendModelEndpointId(`/api/quick-tests/${experimentId}/`));
             const data = await response.json();
 
             if (data.success && data.quick_test) {
@@ -1674,7 +1680,7 @@ const TrainingWizard = (function() {
 
             const endpoint = '/api/training/schedules/';
 
-            const response = await fetch(endpoint, {
+            const response = await fetch(appendModelEndpointId(endpoint), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1732,6 +1738,7 @@ const TrainingWizard = (function() {
 
         // Configure ScheduleModal callbacks
         ScheduleModal.configure({
+            modelId: config.modelId,
             onSuccess: function(schedule) {
                 // Close the wizard after successful schedule creation
                 close();
@@ -1824,7 +1831,7 @@ const TrainingWizard = (function() {
             const payload = buildEditPayload();
 
             // PATCH to update the config
-            const response = await fetch(`/api/training-runs/${state.editRunId}/config/`, {
+            const response = await fetch(appendModelEndpointId(`/api/training-runs/${state.editRunId}/config/`), {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',

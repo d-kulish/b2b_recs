@@ -68,6 +68,12 @@ const TrainingCards = (function() {
         autoCloseTimer: null
     };
 
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
+
     // Status configuration
     const STATUS_CONFIG = {
         pending: {
@@ -447,7 +453,7 @@ const TrainingCards = (function() {
             }
 
             const url = `${config.endpoints.list}?${params.toString()}`;
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (data.success) {
@@ -711,7 +717,7 @@ const TrainingCards = (function() {
 
     async function loadModelNames() {
         try {
-            const response = await fetch(config.endpoints.modelNames);
+            const response = await fetch(appendModelEndpointId(config.endpoints.modelNames));
             const data = await response.json();
 
             if (data.success && data.model_names) {
@@ -1379,7 +1385,7 @@ const TrainingCards = (function() {
 
                 try {
                     const url = buildUrl(config.endpoints.cancel, { id: runId });
-                    const response = await fetch(url, {
+                    const response = await fetch(appendModelEndpointId(url), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1419,7 +1425,7 @@ const TrainingCards = (function() {
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.delete, { id: runId });
-                    const response = await fetch(url, {
+                    const response = await fetch(appendModelEndpointId(url), {
                         method: 'DELETE',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1445,7 +1451,7 @@ const TrainingCards = (function() {
     async function submitRun(runId) {
         try {
             const url = buildUrl(config.endpoints.submit, { id: runId });
-            const response = await fetch(url, {
+            const response = await fetch(appendModelEndpointId(url), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1478,7 +1484,7 @@ const TrainingCards = (function() {
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.rerun, { id: runId });
-                    const response = await fetch(url, {
+                    const response = await fetch(appendModelEndpointId(url), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1514,7 +1520,7 @@ const TrainingCards = (function() {
 
             try {
                 const url = buildUrl(config.endpoints.deploy, { id: runId });
-                const response = await fetch(url, {
+                const response = await fetch(appendModelEndpointId(url), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1549,7 +1555,7 @@ const TrainingCards = (function() {
 
             try {
                 const url = buildUrl(config.endpoints.deployCloudRun, { id: runId });
-                const response = await fetch(url, {
+                const response = await fetch(appendModelEndpointId(url), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1579,7 +1585,7 @@ const TrainingCards = (function() {
 
         try {
             const url = buildUrl(config.endpoints.push, { id: runId });
-            const response = await fetch(url, {
+            const response = await fetch(appendModelEndpointId(url), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1605,6 +1611,7 @@ const TrainingCards = (function() {
         // Configure the schedule modal with success callback
         if (typeof ScheduleModal !== 'undefined') {
             ScheduleModal.configure({
+                modelId: config.modelId,
                 onSuccess: function(schedule) {
                     showToast(`Schedule "${schedule.name}" created successfully`, 'success');
                     // Refresh training runs to show updated schedule status
@@ -1709,7 +1716,8 @@ const TrainingSchedules = (function() {
             resume: '/api/training/schedules/{id}/resume/',
             cancel: '/api/training/schedules/{id}/cancel/',
             trigger: '/api/training/schedules/{id}/trigger/'
-        }
+        },
+        modelId: null
     };
 
     let state = {
@@ -1797,6 +1805,19 @@ const TrainingSchedules = (function() {
         return url;
     }
 
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
+
+    function configure(options) {
+        if (options.modelId) config.modelId = options.modelId;
+        if (options.endpoints) {
+            config.endpoints = { ...config.endpoints, ...options.endpoints };
+        }
+    }
+
     function formatDateTime(isoString) {
         if (!isoString) return '-';
         const date = new Date(isoString);
@@ -1845,7 +1866,7 @@ const TrainingSchedules = (function() {
     async function loadSchedules() {
         state.isLoading = true;
         try {
-            const response = await fetch(`${config.endpoints.list}?status=active`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.list}?status=active`));
             const data = await response.json();
 
             if (data.success && data.schedules) {
@@ -1978,7 +1999,7 @@ const TrainingSchedules = (function() {
     async function loadAllSchedules() {
         try {
             // Load both active and paused schedules
-            const response = await fetch(config.endpoints.list);
+            const response = await fetch(appendModelEndpointId(config.endpoints.list));
             const data = await response.json();
 
             if (data.success && data.schedules) {
@@ -2087,7 +2108,7 @@ const TrainingSchedules = (function() {
     async function pauseSchedule(scheduleId) {
         try {
             const url = buildUrl(config.endpoints.pause, { id: scheduleId });
-            const response = await fetch(url, {
+            const response = await fetch(appendModelEndpointId(url), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2109,7 +2130,7 @@ const TrainingSchedules = (function() {
     async function resumeSchedule(scheduleId) {
         try {
             const url = buildUrl(config.endpoints.resume, { id: scheduleId });
-            const response = await fetch(url, {
+            const response = await fetch(appendModelEndpointId(url), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2140,7 +2161,7 @@ const TrainingSchedules = (function() {
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.detail, { id: scheduleId });
-                    const response = await fetch(url, {
+                    const response = await fetch(appendModelEndpointId(url), {
                         method: 'DELETE',
                         headers: {
                             'Content-Type': 'application/json',
@@ -2174,7 +2195,7 @@ const TrainingSchedules = (function() {
             onConfirm: async () => {
                 try {
                     const url = buildUrl(config.endpoints.trigger, { id: scheduleId });
-                    const response = await fetch(url, {
+                    const response = await fetch(appendModelEndpointId(url), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -2217,6 +2238,7 @@ const TrainingSchedules = (function() {
         // Open the schedule modal in edit mode
         if (typeof ScheduleModal !== 'undefined' && ScheduleModal.openForEdit) {
             ScheduleModal.configure({
+                modelId: config.modelId,
                 onSuccess: function(schedule) {
                     showToast(`Schedule "${schedule.name}" updated successfully`, 'success');
                     // Refresh schedules list
@@ -2242,6 +2264,7 @@ const TrainingSchedules = (function() {
     // =============================================================================
 
     return {
+        configure: configure,
         init: init,
         loadSchedules: loadAllSchedules,
         pauseSchedule: pauseSchedule,

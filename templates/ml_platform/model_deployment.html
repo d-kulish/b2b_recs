@@ -286,8 +286,17 @@ function toggleChapter(header) {
 
 document.addEventListener('DOMContentLoaded', function() {
     // Configure DeployWizard to refresh endpoints table and modal on success
+    // Configure modules with modelId for cross-tab safety
+    if (typeof ExpViewModal !== 'undefined') {
+        ExpViewModal.configure({ modelId: {{ model.id }} });
+    }
+    if (typeof IntegrateModal !== 'undefined') {
+        IntegrateModal.configure({ modelId: {{ model.id }} });
+    }
+
     if (typeof DeployWizard !== 'undefined') {
         DeployWizard.configure({
+            modelId: {{ model.id }},
             onSuccess: function(result) {
                 // Refresh the endpoints table
                 if (typeof EndpointsTable !== 'undefined') {
@@ -312,6 +321,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterBarId: '#endpointsFilterBar',
         tableContainerId: '#endpointsTable',
         emptyStateId: '#endpointsEmptyState',
+        modelId: {{ model.id }},
         // GCP configuration
         region: 'europe-central2',
         project: 'b2b-recs'

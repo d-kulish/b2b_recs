@@ -22,6 +22,7 @@ const ModelDashboardExperiments = (function() {
     const config = {
         kpiTrendContainerId: '#experimentsKpiTrendRow',
         topConfigsContainerId: '#experimentsTopConfigsSection',
+        modelId: null,
         endpoints: {
             dashboardStats: '/api/experiments/dashboard-stats/',
             metricsTrend: '/api/experiments/metrics-trend/',
@@ -30,6 +31,12 @@ const ModelDashboardExperiments = (function() {
         chartHeight: 200,
         topConfigsLimit: 5
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     // =============================================================================
     // INITIALIZATION
@@ -171,7 +178,7 @@ const ModelDashboardExperiments = (function() {
 
     async function loadKpis() {
         try {
-            const response = await fetch(config.endpoints.dashboardStats);
+            const response = await fetch(appendModelEndpointId(config.endpoints.dashboardStats));
             const data = await response.json();
 
             if (!data.success) {
@@ -253,7 +260,7 @@ const ModelDashboardExperiments = (function() {
         }
 
         try {
-            const response = await fetch(`${config.endpoints.metricsTrend}?model_type=${activeModelType}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.metricsTrend}?model_type=${activeModelType}`));
             const data = await response.json();
 
             if (!data.success || !data.trend || data.trend.length < 2) {
@@ -609,7 +616,7 @@ const ModelDashboardExperiments = (function() {
         }
 
         try {
-            const response = await fetch(`${config.endpoints.topConfigurations}?limit=${config.topConfigsLimit}&model_type=${activeModelType}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.topConfigurations}?limit=${config.topConfigsLimit}&model_type=${activeModelType}`));
             const data = await response.json();
 
             if (!data.success || !data.configurations || data.configurations.length === 0) {

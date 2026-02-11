@@ -17,12 +17,19 @@ const IntegrateModal = (function() {
     // =============================================================================
 
     const config = {
+        modelId: null,
         endpoints: {
             integration: '/api/deployed-endpoints/{id}/integration/',
             sample: '/api/deployed-endpoints/{id}/integration/sample/',
             test: '/api/deployed-endpoints/{id}/integration/test/'
         }
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     let state = {
         endpointId: null,
@@ -96,7 +103,7 @@ const IntegrateModal = (function() {
         state.loading = true;
         try {
             const url = buildUrl(config.endpoints.integration, { id: endpointId });
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (data.success) {
@@ -111,7 +118,7 @@ const IntegrateModal = (function() {
 
     async function fetchSampleData(endpointId) {
         const url = buildUrl(config.endpoints.sample, { id: endpointId });
-        const response = await fetch(url);
+        const response = await fetch(appendModelEndpointId(url));
         const data = await response.json();
 
         if (data.success) {
@@ -131,7 +138,7 @@ const IntegrateModal = (function() {
             body.instance = instance;
         }
 
-        const response = await fetch(url, {
+        const response = await fetch(appendModelEndpointId(url), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -264,6 +271,10 @@ const IntegrateModal = (function() {
     // =============================================================================
     // PUBLIC API
     // =============================================================================
+
+    function configure(options) {
+        if (options.modelId) config.modelId = options.modelId;
+    }
 
     async function open(endpointId) {
         state.endpointId = endpointId;
@@ -504,6 +515,7 @@ const IntegrateModal = (function() {
     // =============================================================================
 
     return {
+        configure,
         open,
         close,
         refreshSample,

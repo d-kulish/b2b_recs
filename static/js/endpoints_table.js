@@ -26,6 +26,7 @@ const EndpointsTable = (function() {
         filterBarId: null,
         tableContainerId: null,
         emptyStateId: null,
+        modelId: null,
         endpoints: {
             list: '/api/deployed-endpoints/',
             detail: '/api/deployed-endpoints/{id}/',
@@ -78,6 +79,12 @@ const EndpointsTable = (function() {
     // =============================================================================
     // UTILITY FUNCTIONS
     // =============================================================================
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     function buildUrl(template, params) {
         let url = template;
@@ -180,7 +187,7 @@ const EndpointsTable = (function() {
                 params.append('search', state.filters.search);
             }
 
-            const response = await fetch(`${config.endpoints.list}?${params.toString()}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.list}?${params.toString()}`));
             const data = await response.json();
 
             if (data.success) {
@@ -211,7 +218,7 @@ const EndpointsTable = (function() {
 
     async function undeployEndpoint(endpointId) {
         try {
-            const response = await fetch(buildUrl(config.endpoints.undeploy, { id: endpointId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.undeploy, { id: endpointId })), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -237,7 +244,7 @@ const EndpointsTable = (function() {
             // Show loading spinner
             showLoadingModal('Deploying', 'Deploying endpoint...');
 
-            const response = await fetch(buildUrl(config.endpoints.deploy, { id: endpointId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.deploy, { id: endpointId })), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -287,7 +294,7 @@ const EndpointsTable = (function() {
     async function updateEndpointConfig(endpointId, newConfig) {
         try {
             showToast('Updating endpoint configuration...', 'info');
-            const response = await fetch(buildUrl(config.endpoints.config, { id: endpointId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.config, { id: endpointId })), {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -312,7 +319,7 @@ const EndpointsTable = (function() {
 
     async function deleteEndpoint(endpointId) {
         try {
-            const response = await fetch(buildUrl(config.endpoints.delete, { id: endpointId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.delete, { id: endpointId })), {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -908,7 +915,7 @@ const EndpointsTable = (function() {
 
         try {
             const url = buildUrl(config.endpoints.healthCheck, { id: endpointId });
-            const response = await fetch(url, {
+            const response = await fetch(appendModelEndpointId(url), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1441,6 +1448,7 @@ const EndpointsTable = (function() {
         config.tableContainerId = options.tableContainerId || '#endpointsTable';
         config.emptyStateId = options.emptyStateId || '#endpointsEmptyState';
 
+        if (options.modelId) config.modelId = options.modelId;
         if (options.onEndpointClick) config.onEndpointClick = options.onEndpointClick;
         if (options.onViewDetails) config.onViewDetails = options.onViewDetails;
         if (options.region) config.region = options.region;

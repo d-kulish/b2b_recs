@@ -18,12 +18,19 @@ const ScheduleCalendar = (function() {
 
     const config = {
         containerId: null,
+        modelId: null,
         endpoint: '/api/training-schedules/calendar/',
         weeksToShow: 40,  // 10 past + 30 future
         onDayClick: null,
         onRunClick: null,
         onScheduleClick: null
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     let state = {
         calendarData: {},
@@ -86,7 +93,7 @@ const ScheduleCalendar = (function() {
 
     async function fetchCalendarData() {
         try {
-            const response = await fetch(config.endpoint);
+            const response = await fetch(appendModelEndpointId(config.endpoint));
             const data = await response.json();
 
             if (data.success) {
@@ -480,6 +487,7 @@ const ScheduleCalendar = (function() {
     function init(containerId, options = {}) {
         config.containerId = containerId;
 
+        if (options.modelId) config.modelId = options.modelId;
         if (options.endpoint) config.endpoint = options.endpoint;
         if (options.onDayClick) config.onDayClick = options.onDayClick;
         if (options.onRunClick) config.onRunClick = options.onRunClick;

@@ -28,6 +28,7 @@ const ScheduleModal = (function() {
     // =============================================================================
 
     let config = {
+        modelId: null,
         endpoints: {
             preview: '/api/training/schedules/preview/',
             createFromRun: '/api/training/schedules/from-run/',
@@ -38,6 +39,12 @@ const ScheduleModal = (function() {
         onSuccess: null,
         onError: null
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     let state = {
         mode: null,         // 'training_run', 'model', 'registered_model', 'wizard', or 'edit'
@@ -113,6 +120,7 @@ const ScheduleModal = (function() {
     // =============================================================================
 
     function configure(options) {
+        if (options.modelId) config.modelId = options.modelId;
         if (options.endpoints) {
             config.endpoints = { ...config.endpoints, ...options.endpoints };
         }
@@ -305,7 +313,7 @@ const ScheduleModal = (function() {
     async function loadScheduleForEdit(scheduleId) {
         try {
             const url = config.endpoints.detail.replace('{id}', scheduleId);
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (!data.success) {
@@ -412,7 +420,7 @@ const ScheduleModal = (function() {
         // This is called when openForModel is used with a training run ID
         // (for backward compatibility with ModelsRegistry)
         try {
-            const response = await fetch(`${config.endpoints.preview}?source_run_id=${trainingRunId}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.preview}?source_run_id=${trainingRunId}`));
             const data = await response.json();
 
             if (!data.success) {
@@ -443,7 +451,7 @@ const ScheduleModal = (function() {
     async function loadRegisteredModelDetails(registeredModelId) {
         try {
             // Get registered model details
-            const response = await fetch(`/api/registered-models/${registeredModelId}/`);
+            const response = await fetch(appendModelEndpointId(`/api/registered-models/${registeredModelId}/`));
             const data = await response.json();
 
             if (!data.success) {
@@ -582,7 +590,7 @@ const ScheduleModal = (function() {
 
     async function loadPreviewData(runId) {
         try {
-            const response = await fetch(`${config.endpoints.preview}?source_run_id=${runId}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.preview}?source_run_id=${runId}`));
             const data = await response.json();
 
             if (!data.success) {
@@ -963,7 +971,7 @@ const ScheduleModal = (function() {
         document.getElementById('scheduleCreateBtn').disabled = true;
 
         try {
-            const response = await fetch(endpoint, {
+            const response = await fetch(appendModelEndpointId(endpoint), {
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',

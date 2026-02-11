@@ -27,6 +27,7 @@ const ModelsRegistry = (function() {
         filterBarId: null,
         tableContainerId: null,
         emptyStateId: null,
+        modelId: null,
         endpoints: {
             list: '/api/models/',
             detail: '/api/models/{id}/',
@@ -37,6 +38,12 @@ const ModelsRegistry = (function() {
         onModelClick: null,
         onViewDetails: null
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     let state = {
         models: [],
@@ -180,7 +187,7 @@ const ModelsRegistry = (function() {
                 params.append('search', state.filters.search);
             }
 
-            const response = await fetch(`${config.endpoints.list}?${params.toString()}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.list}?${params.toString()}`));
             const data = await response.json();
 
             if (data.success) {
@@ -210,7 +217,7 @@ const ModelsRegistry = (function() {
 
     async function deployModel(modelId) {
         try {
-            const response = await fetch(buildUrl(config.endpoints.deploy, { id: modelId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.deploy, { id: modelId })), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -233,7 +240,7 @@ const ModelsRegistry = (function() {
 
     async function undeployModel(modelId) {
         try {
-            const response = await fetch(buildUrl(config.endpoints.undeploy, { id: modelId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.undeploy, { id: modelId })), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -753,6 +760,7 @@ const ModelsRegistry = (function() {
         // Use ScheduleModal to create a schedule for this model's training run
         if (typeof ScheduleModal !== 'undefined') {
             ScheduleModal.configure({
+                modelId: config.modelId,
                 onSuccess: function(schedule) {
                     showToast(`Schedule "${schedule.name}" created successfully`, 'success');
                     fetchModels();
@@ -821,7 +829,7 @@ const ModelsRegistry = (function() {
 
     async function deleteModel(modelId) {
         try {
-            const response = await fetch(buildUrl(config.endpoints.delete, { id: modelId }), {
+            const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.delete, { id: modelId })), {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -909,6 +917,7 @@ const ModelsRegistry = (function() {
         config.filterBarId = options.filterBarId || '#modelsFilterBar';
         config.tableContainerId = options.tableContainerId || '#modelsTable';
         config.emptyStateId = options.emptyStateId || '#modelsEmptyState';
+        if (options.modelId) config.modelId = options.modelId;
 
         if (options.onModelClick) config.onModelClick = options.onModelClick;
         if (options.onViewDetails) config.onViewDetails = options.onViewDetails;
@@ -927,6 +936,7 @@ const ModelsRegistry = (function() {
         // Initialize calendar if container exists
         if (typeof ScheduleCalendar !== 'undefined' && document.querySelector(config.calendarContainerId)) {
             ScheduleCalendar.init(config.calendarContainerId, {
+                modelId: config.modelId,
                 onRunClick: (runId) => {
                     if (typeof ExpViewModal !== 'undefined') {
                         ExpViewModal.openForTrainingRun(runId);

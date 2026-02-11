@@ -66,7 +66,8 @@ const ExpViewModal = (function() {
         showTabs: ['overview', 'pipeline', 'data', 'training'],
         showVersionDeployButtons: false,  // Show Deploy/Undeploy buttons in Versions tab
         onClose: null,
-        onUpdate: null
+        onUpdate: null,
+        modelId: null
     };
 
     let state = {
@@ -182,6 +183,12 @@ const ExpViewModal = (function() {
         { id: 'deploy', name: 'Deploy', icon: 'fa-rocket' }
     ];
 
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
+
     // =============================================================================
     // UTILITY FUNCTIONS
     // =============================================================================
@@ -258,6 +265,7 @@ const ExpViewModal = (function() {
         if (options.endpoints) {
             config.endpoints = { ...config.endpoints, ...options.endpoints };
         }
+        if (options.modelId) config.modelId = options.modelId;
     }
 
     async function open(id, options = {}) {
@@ -275,7 +283,7 @@ const ExpViewModal = (function() {
                 dataKey = 'quick_test';
             }
 
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (!data.success) {
@@ -802,7 +810,7 @@ const ExpViewModal = (function() {
         if (!confirm('Are you sure you want to push this model to the registry?')) return;
 
         try {
-            const response = await fetch(`/api/training-runs/${runId}/push/`, {
+            const response = await fetch(appendModelEndpointId(`/api/training-runs/${runId}/push/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -854,7 +862,7 @@ const ExpViewModal = (function() {
         };
 
         try {
-            const response = await fetch(`/api/training-runs/${runId}/register/`, {
+            const response = await fetch(appendModelEndpointId(`/api/training-runs/${runId}/register/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -887,7 +895,7 @@ const ExpViewModal = (function() {
         if (!confirm('Are you sure you want to deploy this model to a Vertex AI Endpoint?')) return;
 
         try {
-            const response = await fetch(`/api/training-runs/${runId}/deploy/`, {
+            const response = await fetch(appendModelEndpointId(`/api/training-runs/${runId}/deploy/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -920,7 +928,7 @@ const ExpViewModal = (function() {
         if (!confirm('Are you sure you want to deploy this model to Cloud Run? This will create a serverless TF Serving endpoint.')) return;
 
         try {
-            const response = await fetch(`/api/training-runs/${runId}/deploy-cloud-run/`, {
+            const response = await fetch(appendModelEndpointId(`/api/training-runs/${runId}/deploy-cloud-run/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -954,7 +962,7 @@ const ExpViewModal = (function() {
                 return;
             }
 
-            const response = await fetch(`/api/models/${run.model_id}/undeploy/`, {
+            const response = await fetch(appendModelEndpointId(`/api/models/${run.model_id}/undeploy/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1016,7 +1024,7 @@ const ExpViewModal = (function() {
         });
 
         try {
-            const response = await fetch(`/api/deployed-endpoints/${endpointId}/undeploy/`, {
+            const response = await fetch(appendModelEndpointId(`/api/deployed-endpoints/${endpointId}/undeploy/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1058,6 +1066,7 @@ const ExpViewModal = (function() {
         // Open schedule modal for this training run
         if (typeof ScheduleModal !== 'undefined') {
             ScheduleModal.configure({
+                modelId: config.modelId,
                 onSuccess: function(schedule) {
                     // Show success modal
                     if (typeof TrainingCards !== 'undefined' && TrainingCards.showConfirmModal) {
@@ -1133,7 +1142,7 @@ const ExpViewModal = (function() {
         state.pollInterval = setInterval(async () => {
             try {
                 const url = buildUrl(config.endpoints.trainingRunDetails, { id: runId });
-                const response = await fetch(url);
+                const response = await fetch(appendModelEndpointId(url));
                 const data = await response.json();
 
                 if (data.success) {
@@ -1200,7 +1209,7 @@ const ExpViewModal = (function() {
 
         try {
             const url = `/api/models/${modelId}/`;
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (!data.success) {
@@ -1538,7 +1547,7 @@ const ExpViewModal = (function() {
         `;
 
         try {
-            const response = await fetch(`/api/models/${modelId}/versions/`);
+            const response = await fetch(appendModelEndpointId(`/api/models/${modelId}/versions/`));
             const data = await response.json();
 
             if (data.success) {
@@ -2143,7 +2152,7 @@ const ExpViewModal = (function() {
         `;
 
         try {
-            const response = await fetch(`/api/models/${modelId}/lineage/`);
+            const response = await fetch(appendModelEndpointId(`/api/models/${modelId}/lineage/`));
             const data = await response.json();
 
             if (data.success) {
@@ -2221,7 +2230,7 @@ const ExpViewModal = (function() {
 
         try {
             const url = `/api/deployed-endpoints/${endpointId}/`;
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (!data.success) {
@@ -2606,7 +2615,7 @@ const ExpViewModal = (function() {
         btn.querySelector('i').classList.add('fa-spin');
 
         try {
-            const response = await fetch(`/api/deployed-endpoints/${endpoint.id}/logs/?limit=100`);
+            const response = await fetch(appendModelEndpointId(`/api/deployed-endpoints/${endpoint.id}/logs/?limit=100`));
             const data = await response.json();
 
             if (data.success && data.logs.available) {
@@ -2675,7 +2684,7 @@ const ExpViewModal = (function() {
         `;
 
         try {
-            const response = await fetch(`/api/deployed-endpoints/${endpointId}/versions/`);
+            const response = await fetch(appendModelEndpointId(`/api/deployed-endpoints/${endpointId}/versions/`));
             const data = await response.json();
 
             if (data.success) {
@@ -2711,7 +2720,7 @@ const ExpViewModal = (function() {
         if (!confirm('Are you sure you want to deploy this model?')) return;
 
         try {
-            const response = await fetch(`/api/models/${modelId}/deploy/`, {
+            const response = await fetch(appendModelEndpointId(`/api/models/${modelId}/deploy/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2737,7 +2746,7 @@ const ExpViewModal = (function() {
         if (!confirm('Are you sure you want to undeploy this model? It will no longer serve predictions.')) return;
 
         try {
-            const response = await fetch(`/api/models/${modelId}/undeploy/`, {
+            const response = await fetch(appendModelEndpointId(`/api/models/${modelId}/undeploy/`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3134,7 +3143,7 @@ const ExpViewModal = (function() {
 
         const url = buildUrl(config.endpoints.datasetSummary, { id: datasetId });
 
-        fetch(url, {
+        fetch(appendModelEndpointId(url), {
             headers: { 'X-CSRFToken': getCookie('csrftoken') }
         })
         .then(response => response.json())
@@ -3267,7 +3276,7 @@ const ExpViewModal = (function() {
 
         const url = buildUrl(config.endpoints.featureConfig, { id: featureConfigId });
 
-        fetch(url, {
+        fetch(appendModelEndpointId(url), {
             headers: { 'X-CSRFToken': getCookie('csrftoken') }
         })
         .then(response => response.json())
@@ -3499,7 +3508,7 @@ const ExpViewModal = (function() {
 
         const url = buildUrl(config.endpoints.modelConfig, { id: modelConfigId });
 
-        fetch(url, {
+        fetch(appendModelEndpointId(url), {
             headers: { 'X-CSRFToken': getCookie('csrftoken') }
         })
         .then(response => response.json())
@@ -3870,8 +3879,8 @@ const ExpViewModal = (function() {
             const schemaUrl = buildUrl(schemaEndpoint, { id });
 
             const [statsRes, schemaRes] = await Promise.all([
-                fetch(statsUrl),
-                fetch(schemaUrl)
+                fetch(appendModelEndpointId(statsUrl)),
+                fetch(appendModelEndpointId(schemaUrl))
             ]);
 
             const statsData = await statsRes.json();
@@ -3976,8 +3985,8 @@ const ExpViewModal = (function() {
             const schemaUrl = buildUrl(schemaEndpoint, { id });
 
             const [statsRes, schemaRes] = await Promise.all([
-                fetch(statsUrl),
-                fetch(schemaUrl)
+                fetch(appendModelEndpointId(statsUrl)),
+                fetch(appendModelEndpointId(schemaUrl))
             ]);
 
             const statsData = await statsRes.json();
@@ -4281,7 +4290,7 @@ const ExpViewModal = (function() {
 
         try {
             const url = buildUrl(config.endpoints.trainingHistory, { id: state.expId });
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (data.success && data.training_history?.available) {
@@ -4346,7 +4355,7 @@ const ExpViewModal = (function() {
                 ? config.endpoints.trainingRunTrainingHistory
                 : config.endpoints.trainingHistory;
             const url = buildUrl(endpoint, { id: id });
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             loadingEl.classList.add('hidden');
@@ -4818,7 +4827,7 @@ const ExpViewModal = (function() {
                 ? config.endpoints.trainingRunHistogramData
                 : (config.endpoints.histogramData || '/api/quick-tests/{id}/histogram-data/');
             const url = buildUrl(endpoint, { id: id });
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             // Mark fetch attempted to prevent infinite loops
@@ -5176,7 +5185,7 @@ const ExpViewModal = (function() {
         state.pollInterval = setInterval(async () => {
             try {
                 const url = buildUrl(config.endpoints.experimentDetails, { id: expId });
-                const response = await fetch(url);
+                const response = await fetch(appendModelEndpointId(url));
                 const data = await response.json();
 
                 if (data.success) {

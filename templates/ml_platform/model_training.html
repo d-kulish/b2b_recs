@@ -1897,6 +1897,21 @@
 <script src="{% static 'js/models_registry.js' %}?v=3"></script>
 <script>
 // =============================================================================
+// CROSS-TAB DATA ISOLATION HELPER
+// =============================================================================
+const modelEndpointId = {{ model.id }};
+function appendModelEndpointId(url) {
+    if (!modelEndpointId) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}model_endpoint_id=${modelEndpointId}`;
+}
+
+// Set model endpoint ID for pipeline DAG module
+if (typeof setPipelineDagModelEndpointId === 'function') {
+    setPipelineDagModelEndpointId({{ model.id }});
+}
+
+// =============================================================================
 // CHAPTER TOGGLE (collapsible chapter pattern)
 // =============================================================================
 function toggleChapter(header) {
@@ -1926,6 +1941,9 @@ async function loadTrainingRuns() {
             }
         });
         TrainingCards.init();
+        TrainingSchedules.configure({
+            modelId: {{ model.id }}
+        });
         TrainingSchedules.init();
         trainingCardsInitialized = true;
     } else {
@@ -1942,6 +1960,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Configure ExpViewModal with endpoints and callbacks
     ExpViewModal.configure({
+        modelId: {{ model.id }},
         showTabs: ['overview', 'pipeline', 'data', 'training'],
         showVersionDeployButtons: true,  // Enable Deploy/Undeploy in Versions tab
         onClose: function() {
@@ -1973,6 +1992,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configure DeployWizard
     const projectSlug = '{{ model.name|lower }}'.replace(/_/g, '-').replace(/ /g, '-').replace(/[^a-z0-9-]/g, '').replace(/--+/g, '-').replace(/^-|-$/g, '').substring(0, 20);
     DeployWizard.configure({
+        modelId: {{ model.id }},
         projectSlug: projectSlug,
         onSuccess: function(result) {
             // Refresh training cards to show updated deployment status
@@ -1993,6 +2013,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterBarId: '#modelsFilterBar',
         tableContainerId: '#modelsTable',
         emptyStateId: '#modelsEmptyState',
+        modelId: {{ model.id }},
         onViewDetails: function(modelId, tab) {
             ExpViewModal.openForModel(modelId, { tab: tab || 'overview' });
         }
@@ -2011,7 +2032,7 @@ async function loadBestExperiments() {
 
     try {
         // Load dashboard stats
-        const statsResponse = await fetch('/api/experiments/dashboard-stats/');
+        const statsResponse = await fetch(appendModelEndpointId('/api/experiments/dashboard-stats/'));
         const statsData = await statsResponse.json();
 
         if (!statsData.success) {
@@ -2184,7 +2205,7 @@ async function loadBestExpConfigurations(modelType = null) {
     }
 
     try {
-        const response = await fetch(`/api/experiments/top-configurations/?limit=10&model_type=${activeModelType}`);
+        const response = await fetch(appendModelEndpointId(`/api/experiments/top-configurations/?limit=10&model_type=${activeModelType}`));
         const data = await response.json();
 
         if (!data.success || !data.configurations || data.configurations.length === 0) {

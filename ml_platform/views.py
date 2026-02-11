@@ -215,6 +215,9 @@ def model_dashboard(request, model_id):
     """
     model = get_object_or_404(ModelEndpoint, id=model_id)
 
+    # Set session for API calls
+    request.session['model_endpoint_id'] = model_id
+
     # Get recent pipeline runs
     recent_runs = model.pipeline_runs.all()[:10]
 
@@ -255,6 +258,9 @@ def model_training(request, model_id):
     """
     model = get_object_or_404(ModelEndpoint, id=model_id)
 
+    # Set session for API calls
+    request.session['model_endpoint_id'] = model_id
+
     pipeline_runs = model.pipeline_runs.all()[:20]
 
     context = {
@@ -293,6 +299,7 @@ def model_deployment(request, model_id):
     Deployment Manager - Deploy models, manage versions, rollback.
     """
     model = get_object_or_404(ModelEndpoint, id=model_id)
+    request.session['model_endpoint_id'] = model_id
 
     deployments = model.deployments.all()
     trained_models = model.trained_models.filter(status='completed')

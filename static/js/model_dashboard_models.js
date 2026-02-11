@@ -26,10 +26,17 @@ const ModelDashboardModels = (function() {
         filterBarId: '#modelsChapterFilterBar',
         tableContainerId: '#modelsChapterTable',
         emptyStateId: '#modelsChapterEmptyState',
+        modelId: null,
         endpoints: {
             list: '/api/models/'
         }
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     let state = {
         models: [],
@@ -130,7 +137,7 @@ const ModelDashboardModels = (function() {
                 params.append('search', state.filters.search);
             }
 
-            const response = await fetch(`${config.endpoints.list}?${params.toString()}`);
+            const response = await fetch(appendModelEndpointId(`${config.endpoints.list}?${params.toString()}`));
             const data = await response.json();
 
             if (data.success) {
@@ -587,6 +594,7 @@ const ModelDashboardModels = (function() {
     function initCalendar() {
         if (typeof ScheduleCalendar !== 'undefined' && document.querySelector(config.calendarContainerId)) {
             ScheduleCalendar.init(config.calendarContainerId, {
+                modelId: config.modelId,
                 onRunClick: (runId) => {
                     if (typeof ExpViewModal !== 'undefined') {
                         ExpViewModal.openForTrainingRun(runId);
@@ -608,6 +616,7 @@ const ModelDashboardModels = (function() {
         if (options.filterBarId) config.filterBarId = options.filterBarId;
         if (options.tableContainerId) config.tableContainerId = options.tableContainerId;
         if (options.emptyStateId) config.emptyStateId = options.emptyStateId;
+        if (options.modelId) config.modelId = options.modelId;
 
         state.initialized = true;
         return ModelDashboardModels;

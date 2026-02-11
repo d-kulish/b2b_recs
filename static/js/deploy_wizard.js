@@ -25,6 +25,7 @@ const DeployWizard = (function() {
     // =============================================================================
 
     let config = {
+        modelId: null,
         endpoints: {
             runDetails: '/api/training-runs/{id}/',
             deployCloudRun: '/api/training-runs/{id}/deploy-cloud-run/',
@@ -34,6 +35,12 @@ const DeployWizard = (function() {
         onSuccess: null,
         onError: null
     };
+
+    function appendModelEndpointId(url) {
+        if (!config.modelId) return url;
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}model_endpoint_id=${config.modelId}`;
+    }
 
     // Preset configurations
     const PRESETS = {
@@ -137,6 +144,7 @@ const DeployWizard = (function() {
     // =============================================================================
 
     function configure(options) {
+        if (options.modelId) config.modelId = options.modelId;
         if (options.endpoints) {
             config.endpoints = { ...config.endpoints, ...options.endpoints };
         }
@@ -234,7 +242,7 @@ const DeployWizard = (function() {
     async function loadTrainingRunData(runId) {
         try {
             const url = buildUrl(config.endpoints.runDetails, { id: runId });
-            const response = await fetch(url);
+            const response = await fetch(appendModelEndpointId(url));
             const data = await response.json();
 
             if (!data.success) {
@@ -439,7 +447,7 @@ const DeployWizard = (function() {
 
         try {
             // Use model-scoped endpoint instead of global services list
-            const response = await fetch(`/api/registered-models/${state.registeredModelId}/endpoints/`);
+            const response = await fetch(appendModelEndpointId(`/api/registered-models/${state.registeredModelId}/endpoints/`));
             const data = await response.json();
 
             if (data.success) {
@@ -640,7 +648,7 @@ const DeployWizard = (function() {
                 requestBody.service_name = serviceName;
             }
 
-            const response = await fetch(url, {
+            const response = await fetch(appendModelEndpointId(url), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

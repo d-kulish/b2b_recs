@@ -123,6 +123,17 @@ const STATUS_BADGE_ICONS = {
 let selectedComponentId = null;
 let currentStageDetails = [];
 let stageMap = {};
+let pipelineDagModelEndpointId = null;
+
+function setPipelineDagModelEndpointId(modelId) {
+    pipelineDagModelEndpointId = modelId;
+}
+
+function appendPipelineDagModelEndpointId(url) {
+    if (!pipelineDagModelEndpointId) return url;
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}model_endpoint_id=${pipelineDagModelEndpointId}`;
+}
 
 // =============================================================================
 // UTILITIES
@@ -514,7 +525,7 @@ async function loadComponentLogs(componentId, experimentId, mode) {
         const endpoint = currentMode === 'training_run'
             ? `/api/training-runs/${experimentId}/logs/${componentId}/`
             : `/api/quick-tests/${experimentId}/logs/${componentId}/`;
-        const response = await fetch(endpoint);
+        const response = await fetch(appendPipelineDagModelEndpointId(endpoint));
         const data = await response.json();
 
         if (data.success && data.logs?.available) {

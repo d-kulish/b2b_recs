@@ -15521,7 +15521,7 @@ function fc_openWizard(configId = null) {
     }
 }
 
-function fc_fc_closeWizard() {
+function fc_closeWizard() {
     document.getElementById('featureConfigWizardModal').classList.add('hidden');
     editingConfigId = null;
 }
@@ -15638,7 +15638,7 @@ function updateWizardStep() {
     document.getElementById('currentStep').textContent = currentStep;
 }
 
-function fc_fc_nextStep() {
+function fc_nextStep() {
     // Block navigation while loading config data
     if (isLoadingConfigForEdit) {
         return;
@@ -15682,7 +15682,7 @@ function fc_fc_nextStep() {
     }
 }
 
-function fc_fc_prevStep() {
+function fc_prevStep() {
     if (currentStep > 1) {
         currentStep--;
         updateWizardStep();

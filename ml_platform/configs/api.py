@@ -744,7 +744,9 @@ def get_schema_with_sample(request, dataset_id):
         base_query = bq_service.generate_query(dataset)
 
         # Execute with LIMIT to get schema + sample
-        sample_query = f"SELECT * FROM ({base_query}) LIMIT 10"
+        # Append LIMIT directly instead of wrapping in subquery,
+        # because base_query may contain WITH/CTEs which can't be nested
+        sample_query = f"{base_query}\nLIMIT 10"
 
         logger.info(f"Executing schema sample query for dataset {dataset_id}")
         result = bq_service.client.query(sample_query).result()

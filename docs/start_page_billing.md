@@ -268,7 +268,7 @@ GCP Billing Export is enabled at the billing account level and writes cost data 
 
 **Billing account:** `0155F9-5165FE-BBC88A` ("My Billing Account"), currency USD.
 
-**Location:** `b2b-recs.billing_export` — a dedicated dataset in the `b2b-recs` project, `europe-central2`.
+**Location:** `b2b-recs.billing_export` — a dedicated dataset in the `b2b-recs` project, **EU multi-region** (switched from `europe-central2` on 2026-02-11 for retroactive backfill).
 
 **Setup steps (completed 2026-02-09):**
 1. Enabled BigQuery Data Transfer Service API (`bigquerydatatransfer.googleapis.com`)
@@ -398,9 +398,10 @@ python manage.py setup_billing_scheduler --delete
 ### Phase 1: GCP Setup
 - [x] Enable GCP Billing Export to BigQuery (Standard + Detailed usage cost) — 2026-02-09
 - [x] Create `billing_export` dataset in `b2b-recs` project — 2026-02-09
+- [x] Recreate `billing_export` dataset in **EU multi-region** (was `europe-central2`) — 2026-02-11. EU multi-region gets retroactive backfill from Jan 1, 2026; regional does not.
 - [x] Enable BigQuery Data Transfer Service API — 2026-02-09
 - [x] Enable Cloud Billing API — 2026-02-09
-- [ ] Verify export data appears (~24h after enabling)
+- [ ] Verify export data appears (up to 5 days for EU multi-region initial backfill)
 - [ ] Grant cross-project `bigquery.dataViewer` on `billing_export` to client service accounts
 
 ### Phase 2: Data Layer

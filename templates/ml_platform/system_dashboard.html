@@ -332,7 +332,7 @@
         }
 
         .chapter-container.open .chapter-content {
-            max-height: 1000px;
+            max-height: 5000px;
             transition: max-height 0.5s ease-in;
         }
 
@@ -554,6 +554,88 @@
             font-size: 13px;
             font-weight: 600;
             border-radius: 6px;
+        }
+
+        /* Billing progress bar */
+        .billing-progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .billing-progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            transition: width 0.5s ease;
+        }
+
+        /* Billing invoice table */
+        .billing-invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .billing-invoice-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+            font-size: 13px;
+        }
+
+        .billing-invoice-table th:not(:first-child) {
+            text-align: right;
+        }
+
+        .billing-invoice-table td {
+            padding: 10px 12px;
+            color: #4b5563;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .billing-invoice-table td:not(:first-child) {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .billing-invoice-table tr.separator td {
+            padding: 0;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .billing-invoice-table tr.total-row td {
+            font-weight: 700;
+            color: #111827;
+            border-bottom: none;
+            padding-top: 12px;
+        }
+
+        .billing-invoice-table tr.subtotal-row td {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        /* Billing license badge */
+        .billing-license-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .billing-license-badge.neutral {
+            background: #f3f4f6;
+            color: #4b5563;
         }
 
         /* Header User Profile Icon - identical to model page */
@@ -993,30 +1075,12 @@
                     <div class="chapter-divider"></div>
                     <div class="chapter-kpi-row">
                         <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon pink">
-                                <i class="fas fa-crown"></i>
+                            <div class="chapter-kpi-icon orange">
+                                <i class="fas fa-calendar-alt"></i>
                             </div>
                             <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value">Pro</span>
-                                <span class="chapter-kpi-label">Current Plan</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon blue">
-                                <i class="fas fa-clock"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value">12.5 / 100</span>
-                                <span class="chapter-kpi-label">Training Hours</span>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon purple">
-                                <i class="fas fa-exchange-alt"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value">47.2K</span>
-                                <span class="chapter-kpi-label">API Requests</span>
+                                <span class="chapter-kpi-value" id="billingPeriod">--</span>
+                                <span class="chapter-kpi-label">Billing Period</span>
                             </div>
                         </div>
                         <div class="chapter-kpi-card">
@@ -1024,39 +1088,158 @@
                                 <i class="fas fa-dollar-sign"></i>
                             </div>
                             <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value active">$0.00</span>
-                                <span class="chapter-kpi-label">Current Charges</span>
+                                <span class="chapter-kpi-value" id="billingTotal">--</span>
+                                <span class="chapter-kpi-label">Estimated Total</span>
+                            </div>
+                        </div>
+                        <div class="chapter-kpi-card">
+                            <div class="chapter-kpi-icon blue">
+                                <i class="fas fa-certificate"></i>
+                            </div>
+                            <div class="chapter-kpi-content">
+                                <span class="chapter-kpi-value" id="billingLicense">--</span>
+                                <span class="chapter-kpi-label">License</span>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="chapter-content">
                     <div class="chapter-content-inner">
-                        <div class="info-card">
-                            <div class="billing-summary">
-                                <span class="billing-label">Current Plan</span>
-                                <span class="plan-badge">
-                                    <i class="fas fa-crown"></i>
-                                    Pro
-                                </span>
-                            </div>
-                            <div class="billing-summary">
-                                <span class="billing-label">Billing Period</span>
-                                <span class="billing-value">Feb 1 - Feb 28, 2026</span>
-                            </div>
-                            <div class="billing-summary">
-                                <span class="billing-label">Training Hours Used</span>
-                                <span class="billing-value">12.5 / 100 hrs</span>
-                            </div>
-                            <div class="billing-summary">
-                                <span class="billing-label">API Requests</span>
-                                <span class="billing-value">47,250 / Unlimited</span>
-                            </div>
-                            <div class="billing-summary">
-                                <span class="billing-label">Current Charges</span>
-                                <span class="billing-value free">$0.00</span>
+                        <div class="chapter-divider" style="margin-top: 0;"></div>
+
+                        <!-- Summary Bar -->
+                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;">
+                            <div style="display: flex; align-items: center; gap: 32px; flex-wrap: wrap;">
+                                <div style="flex-shrink: 0;">
+                                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 2px;">Period</div>
+                                    <div style="font-size: 15px; font-weight: 600; color: #1f2937;" id="billingSummaryPeriod">--</div>
+                                </div>
+                                <div style="flex-shrink: 0;">
+                                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 2px;">Estimated Total</div>
+                                    <div style="font-size: 28px; font-weight: 700; color: #111827; line-height: 1.1;" id="billingSummaryTotal">--</div>
+                                </div>
+                                <div style="flex: 1; min-width: 200px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-bottom: 4px;">
+                                        <span>Period Progress</span>
+                                        <span id="billingSummaryProgressLabel">--</span>
+                                    </div>
+                                    <div class="billing-progress-bar">
+                                        <div class="billing-progress-fill" id="billingSummaryProgress" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                                <div style="flex-shrink: 0;">
+                                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">License</div>
+                                    <span class="billing-license-badge neutral" id="billingSummaryLicense">--</span>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Chart Grid Row 1: 3 columns -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
+
+                            <!-- Monthly Cost Trend -->
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b, #fbbf24); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-chart-bar" style="color: white; font-size: 13px;"></i>
+                                    </div>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Monthly Cost Trend</h4>
+                                </div>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Stacked by service (6 months)</h5>
+                                <div style="height: 200px; position: relative;">
+                                    <canvas id="chartMonthlyTrend"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Cost Breakdown -->
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #00bcd4, #4dd0e1); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-chart-pie" style="color: white; font-size: 13px;"></i>
+                                    </div>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost Breakdown</h4>
+                                </div>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Current month by service</h5>
+                                <div style="height: 200px; position: relative;">
+                                    <canvas id="chartCostBreakdown"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Daily Spend -->
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #10b981, #34d399); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-chart-line" style="color: white; font-size: 13px;"></i>
+                                    </div>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Daily Spend</h4>
+                                </div>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Actual + forecast</h5>
+                                <div style="height: 200px; position: relative;">
+                                    <canvas id="chartDailySpend"></canvas>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Chart Grid Row 2: 2 columns, centered -->
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 67%; margin-bottom: 24px;">
+
+                            <!-- Cost per Training -->
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-graduation-cap" style="color: white; font-size: 13px;"></i>
+                                    </div>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost per Training</h4>
+                                </div>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Last 10 training runs</h5>
+                                <div style="height: 200px; position: relative;">
+                                    <canvas id="chartCostPerTraining"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Cost by Service Over Time -->
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #5c6bc0, #7986cb); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-layer-group" style="color: white; font-size: 13px;"></i>
+                                    </div>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost by Service Over Time</h4>
+                                </div>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Daily stacked area (30d)</h5>
+                                <div style="height: 200px; position: relative;">
+                                    <canvas id="chartServiceOverTime"></canvas>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Invoice Preview Table -->
+                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                                <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #374151, #6b7280); display: flex; align-items: center; justify-content: center;">
+                                    <i class="fas fa-file-invoice-dollar" style="color: white; font-size: 13px;"></i>
+                                </div>
+                                <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Invoice Preview</h4>
+                            </div>
+                            <table class="billing-invoice-table">
+                                <thead>
+                                    <tr>
+                                        <th>Service</th>
+                                        <th>GCP Cost</th>
+                                        <th>Platform Fee</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="billingInvoiceBody">
+                                    <tr><td colspan="4" style="text-align: center; color: #9ca3af; padding: 24px;">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                            <div style="font-size: 11px; color: #9ca3af; margin-top: 12px; text-align: right;">
+                                <i class="fas fa-info-circle"></i> Costs reflect data up to 24 hours ago. Final invoice may differ.
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -1514,6 +1697,451 @@
             init();
 
             return { loadKPIs, loadCharts };
+        })();
+
+        // Billing Dashboard Module
+        const BillingDashboard = (function() {
+            let charts = {};
+
+            const SERVICE_COLORS = {
+                'BigQuery': '#4285f4',
+                'Cloud Storage': '#00bcd4',
+                'Cloud SQL': '#5c6bc0',
+                'Vertex AI': '#f59e0b',
+                'Cloud Run': '#34a853',
+                'Dataflow': '#9c27b0',
+                'Artifact Registry': '#e91e63',
+            };
+            const FALLBACK_COLORS = ['#78909c', '#8d6e63', '#26a69a', '#7e57c2', '#ef5350'];
+
+            function getServiceColor(service, idx) {
+                return SERVICE_COLORS[service] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+            }
+
+            function setText(id, value) {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value;
+            }
+
+            function formatDate(dateStr) {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+
+            function formatMonth(dateStr) {
+                const d = new Date(dateStr + '-01');
+                return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+            }
+
+            function formatUSD(val) {
+                return '$' + Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+
+            function showNoData(ctx) {
+                const parent = ctx.parentElement;
+                parent.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #9ca3af; font-size: 14px;">No data available</div>';
+            }
+
+            function getChartOptions(yTitle) {
+                return {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                        y: {
+                            beginAtZero: true,
+                            title: yTitle ? { display: true, text: yTitle } : { display: false }
+                        }
+                    }
+                };
+            }
+
+            // ---- Data Loading ----
+
+            async function loadSummary() {
+                try {
+                    const response = await fetch('/api/system/billing/summary/');
+                    if (!response.ok) throw new Error('Failed to fetch billing summary');
+                    const result = await response.json();
+
+                    if (result.success && result.data) {
+                        const d = result.data;
+
+                        // KPI header cards
+                        setText('billingPeriod', d.period_label);
+                        setText('billingTotal', formatUSD(d.grand_total));
+                        const licenseEl = document.getElementById('billingLicense');
+                        if (licenseEl) {
+                            if (d.license_discount_pct > 0) {
+                                licenseEl.textContent = '-' + d.license_discount_pct + '%';
+                            } else {
+                                licenseEl.textContent = formatUSD(d.license_fee);
+                            }
+                        }
+
+                        // Summary bar
+                        setText('billingSummaryPeriod', d.period_label);
+                        setText('billingSummaryTotal', formatUSD(d.grand_total));
+
+                        const progressFill = document.getElementById('billingSummaryProgress');
+                        if (progressFill) progressFill.style.width = d.pct_elapsed + '%';
+                        setText('billingSummaryProgressLabel', d.days_elapsed + ' / ' + d.days_total + ' days (' + Math.round(d.pct_elapsed) + '%)');
+
+                        const badgeEl = document.getElementById('billingSummaryLicense');
+                        if (badgeEl) {
+                            if (d.license_discount_pct > 0) {
+                                badgeEl.className = 'billing-license-badge';
+                                badgeEl.innerHTML = '<i class="fas fa-check-circle"></i> ' + d.license_discount_pct + '% discount';
+                            } else {
+                                badgeEl.className = 'billing-license-badge neutral';
+                                badgeEl.textContent = formatUSD(d.license_fee);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to load billing summary:', error);
+                }
+            }
+
+            async function loadCharts() {
+                try {
+                    const response = await fetch('/api/system/billing/charts/');
+                    if (!response.ok) throw new Error('Failed to fetch billing charts');
+                    const result = await response.json();
+
+                    if (result.success && result.data) {
+                        renderMonthlyTrend(result.data.monthly_trend);
+                        renderCostBreakdown(result.data.cost_breakdown);
+                        renderDailySpend(result.data.daily_spend);
+                        renderCostPerTraining(result.data.cost_per_training);
+                        renderServiceOverTime(result.data.service_over_time);
+                    }
+                } catch (error) {
+                    console.error('Failed to load billing charts:', error);
+                }
+            }
+
+            async function loadInvoice() {
+                try {
+                    const response = await fetch('/api/system/billing/invoice/');
+                    if (!response.ok) throw new Error('Failed to fetch billing invoice');
+                    const result = await response.json();
+
+                    if (result.success && result.data) {
+                        renderInvoice(result.data);
+                    }
+                } catch (error) {
+                    console.error('Failed to load billing invoice:', error);
+                }
+            }
+
+            // ---- Chart Renderers ----
+
+            function renderMonthlyTrend(data) {
+                const ctx = document.getElementById('chartMonthlyTrend');
+                if (!ctx) return;
+                if (charts.monthlyTrend) charts.monthlyTrend.destroy();
+
+                if (!data.labels || data.labels.length === 0) {
+                    showNoData(ctx);
+                    return;
+                }
+
+                const services = Object.keys(data.services);
+                const datasets = services.map((svc, i) => ({
+                    label: svc,
+                    data: data.services[svc],
+                    backgroundColor: getServiceColor(svc, i),
+                }));
+
+                charts.monthlyTrend = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.labels.map(formatMonth),
+                        datasets: datasets
+                    },
+                    options: {
+                        ...getChartOptions('USD'),
+                        scales: {
+                            x: {
+                                stacked: true,
+                                grid: { display: false },
+                                ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }
+                            },
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'USD' } }
+                        }
+                    }
+                });
+            }
+
+            function renderCostBreakdown(data) {
+                const ctx = document.getElementById('chartCostBreakdown');
+                if (!ctx) return;
+                if (charts.costBreakdown) charts.costBreakdown.destroy();
+
+                if (!data.labels || data.labels.length === 0) {
+                    showNoData(ctx);
+                    return;
+                }
+
+                const colors = data.labels.map((svc, i) => getServiceColor(svc, i));
+                const grandTotal = data.total.reduce((a, b) => a + b, 0);
+
+                const centerTextPlugin = {
+                    id: 'billingCenterText',
+                    afterDraw(chart) {
+                        const { ctx: drawCtx, chartArea } = chart;
+                        const cx = (chartArea.left + chartArea.right) / 2;
+                        const cy = (chartArea.top + chartArea.bottom) / 2;
+                        drawCtx.save();
+                        drawCtx.font = 'bold 16px sans-serif';
+                        drawCtx.fillStyle = '#111827';
+                        drawCtx.textAlign = 'center';
+                        drawCtx.textBaseline = 'middle';
+                        drawCtx.fillText(formatUSD(grandTotal), cx, cy);
+                        drawCtx.restore();
+                    }
+                };
+
+                charts.costBreakdown = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            data: data.total,
+                            backgroundColor: colors,
+                            borderWidth: 2,
+                            borderColor: '#fff',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '60%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + formatUSD(context.parsed);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [centerTextPlugin]
+                });
+            }
+
+            function renderDailySpend(data) {
+                const ctx = document.getElementById('chartDailySpend');
+                if (!ctx) return;
+                if (charts.dailySpend) charts.dailySpend.destroy();
+
+                if (!data.labels || data.labels.length === 0) {
+                    showNoData(ctx);
+                    return;
+                }
+
+                const datasets = [
+                    {
+                        label: 'Actual',
+                        data: data.actual,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 2,
+                        spanGaps: false,
+                    },
+                    {
+                        label: 'Forecast',
+                        data: data.forecast,
+                        borderColor: '#9ca3af',
+                        borderDash: [5, 5],
+                        backgroundColor: 'rgba(156, 163, 175, 0.05)',
+                        tension: 0.3,
+                        fill: false,
+                        pointRadius: 0,
+                        spanGaps: true,
+                    }
+                ];
+
+                if (data.prev_month_total > 0) {
+                    const dailyAvg = data.prev_month_total / data.labels.length;
+                    datasets.push({
+                        label: 'Prev Month Avg',
+                        data: data.labels.map(() => dailyAvg),
+                        borderColor: '#f59e0b',
+                        borderDash: [3, 3],
+                        backgroundColor: 'transparent',
+                        pointRadius: 0,
+                        fill: false,
+                    });
+                }
+
+                charts.dailySpend = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels.map(formatDate),
+                        datasets: datasets
+                    },
+                    options: getChartOptions('USD')
+                });
+            }
+
+            function renderCostPerTraining(data) {
+                const ctx = document.getElementById('chartCostPerTraining');
+                if (!ctx) return;
+                if (charts.costPerTraining) charts.costPerTraining.destroy();
+
+                if (!data.labels || data.labels.length === 0) {
+                    showNoData(ctx);
+                    return;
+                }
+
+                const MODEL_TYPE_COLORS = {
+                    'retrieval': '#4285f4',
+                    'ranking': '#34a853',
+                    'multitask': '#e91e63',
+                };
+
+                const barColors = data.model_types.map((mt, i) =>
+                    MODEL_TYPE_COLORS[mt] || FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+                );
+
+                charts.costPerTraining = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Cost (USD)',
+                            data: data.costs,
+                            backgroundColor: barColors,
+                            borderRadius: 3,
+                        }]
+                    },
+                    options: {
+                        ...getChartOptions('USD'),
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 10 } },
+                            y: { beginAtZero: true, title: { display: true, text: 'USD' } }
+                        }
+                    }
+                });
+            }
+
+            function renderServiceOverTime(data) {
+                const ctx = document.getElementById('chartServiceOverTime');
+                if (!ctx) return;
+                if (charts.serviceOverTime) charts.serviceOverTime.destroy();
+
+                if (!data.labels || data.labels.length === 0) {
+                    showNoData(ctx);
+                    return;
+                }
+
+                const services = Object.keys(data.services);
+                const datasets = services.map((svc, i) => ({
+                    label: svc,
+                    data: data.services[svc],
+                    borderColor: getServiceColor(svc, i),
+                    backgroundColor: getServiceColor(svc, i) + '33',
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 0,
+                }));
+
+                charts.serviceOverTime = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels.map(formatDate),
+                        datasets: datasets
+                    },
+                    options: {
+                        ...getChartOptions('USD'),
+                        scales: {
+                            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'USD' } }
+                        }
+                    }
+                });
+            }
+
+            // ---- Invoice Renderer ----
+
+            function renderInvoice(data) {
+                const tbody = document.getElementById('billingInvoiceBody');
+                if (!tbody) return;
+
+                let html = '';
+
+                // Service rows
+                (data.items || []).forEach(item => {
+                    html += '<tr>';
+                    html += '<td>' + item.service + '</td>';
+                    html += '<td>' + formatUSD(item.gcp_cost) + '</td>';
+                    html += '<td>' + formatUSD(item.platform_fee) + ' <span style="color:#9ca3af;font-size:11px;">(' + item.margin_pct + '%)</span></td>';
+                    html += '<td>' + formatUSD(item.total) + '</td>';
+                    html += '</tr>';
+                });
+
+                // Separator
+                html += '<tr class="separator"><td colspan="4"></td></tr>';
+
+                // Subtotal
+                html += '<tr class="subtotal-row">';
+                html += '<td>Subtotal</td>';
+                html += '<td>' + formatUSD(data.subtotal_gcp) + '</td>';
+                html += '<td>' + formatUSD(data.subtotal_platform_fee) + '</td>';
+                html += '<td>' + formatUSD(data.subtotal) + '</td>';
+                html += '</tr>';
+
+                // License row
+                html += '<tr>';
+                html += '<td>License Fee</td>';
+                html += '<td colspan="2" style="text-align:right;color:#6b7280;">';
+                if (data.license_discount_pct > 0) {
+                    html += '<span style="text-decoration:line-through;color:#9ca3af;">' + formatUSD(data.license_fee) + '</span> ';
+                    html += '<span class="billing-license-badge" style="font-size:11px;">-' + data.license_discount_pct + '%</span>';
+                } else {
+                    html += formatUSD(data.license_fee);
+                }
+                html += '</td>';
+                html += '<td>' + formatUSD(data.license_net) + '</td>';
+                html += '</tr>';
+
+                // Grand total
+                html += '<tr class="total-row">';
+                html += '<td>Grand Total</td>';
+                html += '<td></td>';
+                html += '<td></td>';
+                html += '<td>' + formatUSD(data.grand_total) + '</td>';
+                html += '</tr>';
+
+                tbody.innerHTML = html;
+            }
+
+            // ---- Init ----
+
+            function init() {
+                loadSummary();
+                loadCharts();
+                loadInvoice();
+            }
+
+            init();
+
+            return { loadSummary, loadCharts, loadInvoice };
         })();
     </script>
 

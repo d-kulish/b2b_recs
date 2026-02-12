@@ -38,6 +38,7 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 | API: `/api/system/billing/summary/` | Done | Current month summary bar data with license info from `BillingConfig` |
 | API: `/api/system/billing/charts/` | Done | 5 chart datasets: monthly_trend, cost_breakdown, daily_spend, cost_per_training, service_over_time |
 | API: `/api/system/billing/invoice/` | Done | Invoice preview rows grouped by service with margin calculation |
+| Frontend (Phase 5) | Done | Summary bar, 3 KPI cards, 5 Chart.js charts, invoice preview table — all powered by billing API |
 
 ### Awaiting
 
@@ -45,7 +46,6 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 |------|--------|---------|
 | Deploy to Cloud Run | Not started | Required before creating the scheduler job |
 | Create Cloud Scheduler job | Blocked by deploy | `python manage.py setup_billing_scheduler --url https://django-app-...` |
-| Frontend (summary bar, 5 charts, invoice table) | Not started | Replace hardcoded Chapter 3 placeholder |
 
 ### Decisions Made
 
@@ -435,13 +435,13 @@ python manage.py setup_billing_scheduler --delete
 - [x] `/api/system/billing/invoice/` endpoint — 2026-02-12. Per-service rows with margin, license, grand total
 
 ### Phase 5: Frontend
-- [ ] Summary bar (period, estimated total, license status, progress)
-- [ ] Chart 1: Monthly Cost Trend (stacked bar, 6mo)
-- [ ] Chart 2: Cost Breakdown (donut, current month)
-- [ ] Chart 3: Daily Spend (line + forecast)
-- [ ] Chart 4: Cost per Training Run (bar, last 10 runs)
-- [ ] Chart 5: Cost by Service Over Time (stacked area, 30d)
-- [ ] Invoice Preview Table (full width)
+- [x] Summary bar (period, estimated total, license status, progress) — 2026-02-12
+- [x] Chart 1: Monthly Cost Trend (stacked bar, 6mo) — 2026-02-12
+- [x] Chart 2: Cost Breakdown (donut, current month) — 2026-02-12
+- [x] Chart 3: Daily Spend (line + forecast) — 2026-02-12
+- [x] Chart 4: Cost per Training Run (bar, last 10 runs) — 2026-02-12
+- [x] Chart 5: Cost by Service Over Time (stacked area, 30d) — 2026-02-12
+- [x] Invoice Preview Table (full width) — 2026-02-12
 
 ### Phase 6: Scheduler Integration
 - [x] Create `setup_billing_scheduler` management command — 2026-02-09

@@ -250,6 +250,10 @@
         background: #d1d5db;
         color: #6b7280;
     }
+    .exp-stage-segment.cancelled {
+        background: #f59e0b;
+        color: white;
+    }
     @keyframes stage-pulse {
         0%, 100% { background-position: 0% 50%; }
         50% { background-position: 100% 50%; }
@@ -3334,6 +3338,13 @@ function showConfirmModal(options) {
     // Set cancel button class (default: btn-neu-secondary for grey)
     cancelBtn.className = `${baseClasses} ${options.cancelButtonClass || 'btn-neu-secondary'}`;
 
+    // Hide cancel button if requested (for notification modals)
+    if (options.hideCancel) {
+        cancelBtn.style.display = 'none';
+    } else {
+        cancelBtn.style.display = '';
+    }
+
     // Remove old event listeners by cloning
     const newConfirmBtn = confirmBtn.cloneNode(true);
     const newCancelBtn = cancelBtn.cloneNode(true);
@@ -3372,11 +3383,27 @@ function showConfirmModal(options) {
         }
     }
     document.addEventListener('keydown', escapeHandler);
+
+    // Auto-close after specified time if requested
+    if (options.autoClose && options.autoClose > 0) {
+        if (window._confirmModalAutoCloseTimer) {
+            clearTimeout(window._confirmModalAutoCloseTimer);
+        }
+        window._confirmModalAutoCloseTimer = setTimeout(() => {
+            hideConfirmModal();
+            if (options.onConfirm) options.onConfirm();
+        }, options.autoClose);
+    }
 }
 
 function hideConfirmModal() {
     const modal = document.getElementById('confirmModal');
     modal.classList.add('hidden');
+    // Clear any auto-close timer
+    if (window._confirmModalAutoCloseTimer) {
+        clearTimeout(window._confirmModalAutoCloseTimer);
+        window._confirmModalAutoCloseTimer = null;
+    }
 }
 
 // =============================================================================
@@ -3907,7 +3934,7 @@ function renderExpCard(exp) {
     const icon = statusIcons[exp.status] || 'fa-clock';
 
     // Build the progress bar
-    const stagesHtml = renderStagesBar(exp.stage_details || getDefaultStages());
+    const stagesHtml = renderStagesBar(exp.stage_details || getDefaultStages(), exp.status);
 
     // Truncate description to 50 chars
     const descTruncated = exp.experiment_description
@@ -3983,13 +4010,19 @@ function renderExpCard(exp) {
     `;
 }
 
-function renderStagesBar(stages) {
+function renderStagesBar(stages, expStatus) {
     // Render the 6-stage progress bar (tensor-breakdown-bar style)
     // Green gradient palette for completed stages - saturated enough for white text
     const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#6ee7b7'];
 
     const stagesHtml = stages.map((stage, idx) => {
-        const status = stage.status || 'pending';
+        let status = stage.status || 'pending';
+        // If experiment is in a terminal state, override any stale 'running' stages
+        if (status === 'running' && expStatus === 'cancelled') {
+            status = 'cancelled';
+        } else if (status === 'running' && expStatus === 'failed') {
+            status = 'failed';
+        }
         // Apply gradient color for completed stages based on position
         const style = status === 'completed' ? `style="background: ${completedColors[idx % completedColors.length]}"` : '';
         return `<div class="exp-stage-segment ${status}" ${style} title="${stage.name}">${stage.name}</div>`;
@@ -5945,11 +5978,26 @@ function closeToast(btn) {
 }
 
 function showError(message) {
-    showToast('error', 'Error', message);
+    showConfirmModal({
+        title: 'Error',
+        message: message,
+        type: 'danger',
+        confirmText: 'Close',
+        hideCancel: true,
+        onConfirm: () => {}
+    });
 }
 
 function showSuccess(message) {
-    showToast('success', 'Success', message);
+    showConfirmModal({
+        title: 'Success',
+        message: message,
+        type: 'success',
+        confirmText: 'Close',
+        hideCancel: true,
+        autoClose: 4000,
+        onConfirm: () => {}
+    });
 }
 
 // =============================================================================

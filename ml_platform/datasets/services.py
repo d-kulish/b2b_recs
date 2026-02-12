@@ -1114,10 +1114,16 @@ class BigQueryService:
             # Build column type lookup for TFX TIMESTAMP conversion
             # TFX BigQueryExampleGen doesn't support TIMESTAMP/DATE/DATETIME types
             column_types = {}
+            nullable_columns = set()
             if for_tfx and dataset.summary_snapshot:
                 column_stats = dataset.summary_snapshot.get('column_stats', {})
                 for col_key, stats in column_stats.items():
                     column_types[col_key] = stats.get('type', 'STRING')
+                    # Track columns with NULLs in source data (intrinsic nullability)
+                    # Used to apply COALESCE regardless of whether NULLs come from
+                    # JOINs or source data
+                    if stats.get('null_count', 0) > 0:
+                        nullable_columns.add(col_key)
 
             # Build set of LEFT-JOINed table aliases (columns may be NULL from unmatched rows)
             left_join_tables = set()
@@ -1128,9 +1134,11 @@ class BigQueryService:
                         left_join_tables.add(sec_table.split('.')[-1])
 
             def _coalesce_expr(table_alias, col, col_type):
-                """Wrap a column reference with COALESCE if it comes from a LEFT-JOINed table."""
+                """Wrap a column reference with COALESCE if it comes from a LEFT-JOINed table
+                or has intrinsic NULLs in the source data."""
                 raw = f"{table_alias}.`{col}`"
-                if table_alias not in left_join_tables:
+                col_key = f"{table_alias}.{col}"
+                if table_alias not in left_join_tables and col_key not in nullable_columns:
                     return raw
                 bq_type = col_type.upper()
                 if bq_type in ('STRING', 'BYTES'):
@@ -1159,10 +1167,11 @@ class BigQueryService:
                     col_type = column_types.get(col_key, 'STRING')
                     needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
-                    # Build column expression, wrapping with COALESCE for LEFT-JOINed tables
+                    # Build column expression, wrapping with COALESCE for LEFT-JOINed
+                    # tables or columns with intrinsic NULLs in source data
                     if needs_conversion:
                         raw = f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP))"
-                        if table_alias in left_join_tables:
+                        if table_alias in left_join_tables or col_key in nullable_columns:
                             col_expr = f"COALESCE({raw}, 0)"
                         else:
                             col_expr = raw
@@ -1225,10 +1234,11 @@ class BigQueryService:
                         col_type = column_types.get(col_key, 'STRING')
                         needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
-                        # Build column expression with COALESCE for LEFT-JOINed tables
+                        # Build column expression with COALESCE for LEFT-JOINed
+                        # tables or columns with intrinsic NULLs in source data
                         if needs_conversion:
                             raw = f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP))"
-                            if table_alias in left_join_tables:
+                            if table_alias in left_join_tables or col_key in nullable_columns:
                                 col_expr = f"COALESCE({raw}, 0)"
                             else:
                                 col_expr = raw

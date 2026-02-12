@@ -457,3 +457,100 @@ The COALESCE code was active when qt-127 was submitted (3m44s after commit, Djan
 ### 10.6. Conclusion
 
 The fix must ensure **no NULLs reach TFRecords regardless of source** — whether from LEFT JOIN mismatches, intrinsic source data NULLs, or any other origin. The COALESCE wrapping in `generate_query()` must apply to **all columns** when `for_tfx=True`, not just columns from LEFT-JOINed tables. Default fill values: `'unknown'` for strings, `0` for integers, `0.0` for floats.
+
+---
+
+## 11. COALESCE All Nullable Columns via `column_stats` (qt-127 resolution)
+
+**Date**: 2026-02-12
+
+### 11.1. Problem
+
+Experiments qt-122 through qt-127 fail with a shape mismatch at `tf.saved_model.save()` during the Trainer step. The `segment` column has 11.92% intrinsic NULLs (242,626 rows — customers without an assigned segment) in the BigQuery view `raw_data.tfrs_training_examples`. These NULLs pass through to SchemaGen, which marks `segment` as `NULLABLE` (`VarLenFeature` / SparseTensor). The Trainer's serve function provides all inputs as dense tensors via `tf.expand_dims()`, but the transform graph expects a SparseTensor for `segment`, producing:
+
+```
+ValueError: Tensor("ExpandDims_3:0", shape=(None, 2) and (None, 1) are incompatible
+```
+
+### 11.2. Discovered Root Cause
+
+The COALESCE fix from Section 9.3 only targets columns from LEFT-JOINed secondary tables. It builds `left_join_tables` from `dataset.secondary_tables`:
+
+```python
+left_join_tables = set()
+for sec_table in (dataset.secondary_tables or []):  # empty list → loop never runs
+    ...
+```
+
+The dataset `Lviv_retrival_v1` has **no secondary tables and no joins** — it reads from a single denormalized view. `left_join_tables` is always empty, so `_coalesce_expr()` returns every column raw (no COALESCE wrapping). The NULLs are intrinsic to the source data, not from any JOIN operation.
+
+The underlying assumption was wrong: NULLs only come from LEFT JOIN mismatches. In reality, NULLs can exist in the source data itself.
+
+### 11.3. Applied Fix
+
+Modified `BigQueryService.generate_query()` in `ml_platform/datasets/services.py` to use the existing `column_stats` data (already stored in `dataset.summary_snapshot`) to detect ANY column with NULLs and apply COALESCE when `for_tfx=True`.
+
+**1. Build `nullable_columns` set** — alongside the existing `column_types` dict, from `column_stats` entries where `null_count > 0`:
+
+```python
+nullable_columns = set()
+if for_tfx and dataset.summary_snapshot:
+    column_stats = dataset.summary_snapshot.get('column_stats', {})
+    for col_key, stats in column_stats.items():
+        if stats.get('null_count', 0) > 0:
+            nullable_columns.add(col_key)
+```
+
+**2. Extend `_coalesce_expr()` guard** — apply COALESCE when a column is in a LEFT-JOINed table OR has intrinsic NULLs:
+
+```python
+# Before
+if table_alias not in left_join_tables:
+    return raw
+# After
+col_key = f"{table_alias}.{col}"
+if table_alias not in left_join_tables and col_key not in nullable_columns:
+    return raw
+```
+
+**3. Extend TIMESTAMP COALESCE guards** — same change in both the main SELECT loop and the `filtered_data` CTE loop:
+
+```python
+# Before
+if table_alias in left_join_tables:
+# After
+if table_alias in left_join_tables or col_key in nullable_columns:
+```
+
+The fix is additive: `left_join_tables` still handles the JOIN-based case (even for columns not yet in `column_stats`), while `nullable_columns` catches intrinsic NULLs that `left_join_tables` misses.
+
+### 11.4. Expected Behavior
+
+With this fix, `generate_query(for_tfx=True)` produces COALESCE-wrapped SQL for any column that has NULLs in its source data:
+
+```sql
+-- Before (no COALESCE — NULLs pass through to TFRecords)
+SELECT
+  tfrs_training_examples.`segment` AS `segment`
+
+-- After (COALESCE applied based on column_stats null_count)
+SELECT
+  COALESCE(tfrs_training_examples.`segment`, '') AS `segment`
+```
+
+The downstream pipeline chain becomes:
+
+1. **BigQueryExampleGen** reads the COALESCE-wrapped query — no NULLs in output
+2. **SchemaGen** marks all columns as `REQUIRED` (`FixedLenFeature` / dense tensors)
+3. **Transform** receives dense tensors — `_densify` is a no-op (defense-in-depth preserved)
+4. **Trainer** serve function provides dense `(batch, 1)` tensors — matches transform graph input signatures
+5. **`tf.saved_model.save()`** succeeds — no shape mismatch
+
+Non-TFX paths (`for_tfx=False`) are unaffected — no COALESCE wrapping is applied.
+
+### 11.5. Files Changed
+
+| File | Change |
+|---|---|
+| `ml_platform/datasets/services.py` | Added `nullable_columns` set from `column_stats`, extended `_coalesce_expr()` guard and both TIMESTAMP COALESCE guards to check `nullable_columns` |
+| `docs/transform_nulls.md` | Added Section 11 (this section) |

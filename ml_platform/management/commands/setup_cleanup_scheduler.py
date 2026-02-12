@@ -68,7 +68,7 @@ class Command(BaseCommand):
         service_account = (
             getattr(settings, 'GCP_SERVICE_ACCOUNT_EMAIL', None)
             or os.getenv('GCP_SERVICE_ACCOUNT_EMAIL')
-            or f'{project_id}@appspot.gserviceaccount.com'
+            or f'etl-runner@{project_id}.iam.gserviceaccount.com'
         )
 
         # OIDC audience is the base URL (scheme + netloc)

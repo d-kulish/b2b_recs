@@ -39,13 +39,12 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 | API: `/api/system/billing/charts/` | Done | 5 chart datasets: monthly_trend, cost_breakdown, daily_spend, cost_per_training, service_over_time |
 | API: `/api/system/billing/invoice/` | Done | Invoice preview rows grouped by service with margin calculation |
 | Frontend (Phase 5) | Done | Summary bar, 3 KPI cards, 5 Chart.js charts, invoice preview table — all powered by billing API |
+| Deploy to Cloud Run | Done | Revision `django-app-00112-fbm`, URL `https://django-app-555035914949.europe-central2.run.app` |
+| Cloud Scheduler job | Done | `collect-billing-snapshots` at 05:00 UTC, OIDC via `etl-runner@b2b-recs.iam.gserviceaccount.com`, verified with manual trigger |
 
 ### Awaiting
 
-| Step | Status | Details |
-|------|--------|---------|
-| Deploy to Cloud Run | Not started | Required before creating the scheduler job |
-| Create Cloud Scheduler job | Blocked by deploy | `python manage.py setup_billing_scheduler --url https://django-app-...` |
+All phases complete. No pending items.
 
 ### Decisions Made
 
@@ -446,8 +445,8 @@ python manage.py setup_billing_scheduler --delete
 ### Phase 6: Scheduler Integration
 - [x] Create `setup_billing_scheduler` management command — 2026-02-09
 - [x] Create webhook `POST /api/system/collect-billing-webhook/` — 2026-02-09
-- [ ] Deploy to Cloud Run
-- [ ] Create Cloud Scheduler job via `setup_billing_scheduler --url`
+- [x] Deploy to Cloud Run — 2026-02-12. Revision `django-app-00112-fbm`
+- [x] Create Cloud Scheduler job — 2026-02-12. Created via `gcloud scheduler jobs create http`, verified with manual trigger (status `{}`)
 
 ---
 

@@ -361,3 +361,99 @@ The `_densify` helper in the generated `preprocessing_fn` remains as defense-in-
 |---|---|
 | `ml_platform/datasets/services.py` | Added `left_join_tables` set, `_coalesce_expr()` helper, COALESCE wrapping in both SELECT loops of `generate_query()` |
 | `docs/transform_nulls.md` | Added Section 9 (this section) |
+
+---
+
+## 10. COALESCE Fix Fails — Intrinsic NULLs in Source Data (qt-127)
+
+**Date**: 2026-02-12
+
+### 10.1. The Problem
+
+Experiment `qt-127` (`quicktest-qt-127-20260212-171803-20260212172027`) fails with the identical error as qt-126: shape mismatch at `tf.saved_model.save()` during the Trainer step.
+
+**Pipeline**: `quicktest-qt-127-20260212-171803-20260212172027`
+**Experiment**: `quick-tests/127`
+**Configs**: Same as qt-122/126 — Dataset `Lviv_retrival_v1`, Features `Lviv_features_retrival_v1`, Model `Lviv_retrival_v1`
+
+### 10.2. Error Logs (Vertex AI worker)
+
+Training completes successfully — metrics are saved to GCS at `18:32:54 UTC`. The crash occurs immediately after, during model export:
+
+```
+File "/tmp/tmpqve6fosu/trainer_module.py", line 1521, in run_fn
+    tf.saved_model.save(
+...
+File "/tmp/tmpqve6fosu/trainer_module.py", line 600, in serve
+    transformed_features = self.tft_layer(raw_features)
+...
+File "/opt/conda/lib/python3.10/site-packages/tensorflow_transform/saved/saved_transform_io_v2.py", line 348, in _apply_v2_transform_model
+    raise ValueError('{}: {}'.format(input_t, e))
+
+ValueError: Tensor("ExpandDims_3:0", shape=(None, 2) and (None, 1) are incompatible
+```
+
+Call arguments received by `TransformFeaturesLayer`:
+```
+inputs={
+    'customer_id': 'tf.Tensor(shape=(None, 1), dtype=int64)',
+    'date':        'tf.Tensor(shape=(None, 1), dtype=int64)',
+    'cust_value':  'tf.Tensor(shape=(None, 1), dtype=float32)',
+    'segment':     'tf.Tensor(shape=(None, 1), dtype=string)'
+}
+```
+
+`ExpandDims_3` is the 4th input (0-indexed) — `segment`. The transform graph expects `(None, 2)` (SparseTensor indices for a NULLABLE VarLenFeature), but the serve function provides `(None, 1)` (dense tensor from `tf.expand_dims(segment, -1)`).
+
+The error mechanism is identical to qt-126 (Section 9.1): SchemaGen marks `segment` as NULLABLE → SparseTensor input in transform graph → serve function provides dense tensor → shape mismatch.
+
+### 10.3. Why the COALESCE Fix (Section 9.3) Did Not Apply
+
+The COALESCE fix targets columns from LEFT-JOINed secondary tables. The dataset `Lviv_retrival_v1` has **no secondary tables and no joins**:
+
+```
+PRIMARY TABLE:    raw_data.tfrs_training_examples  (a BigQuery VIEW)
+SECONDARY TABLES: []
+JOIN CONFIG:      {}
+```
+
+All 11 columns come from a single denormalized view. The COALESCE logic in `generate_query()` builds `left_join_tables` from `dataset.secondary_tables`:
+
+```python
+left_join_tables = set()
+if for_tfx:
+    for sec_table in (dataset.secondary_tables or []):  # ← empty list, loop never executes
+        ...
+```
+
+Result: `left_join_tables` is empty. The `_coalesce_expr()` guard `if table_alias not in left_join_tables: return raw` fires for every column. No column gets COALESCE wrapping. The generated SQL confirms:
+
+```sql
+tfrs_training_examples.`segment` AS `segment`   -- raw, no COALESCE
+```
+
+### 10.4. Source of NULLs
+
+The NULLs are intrinsic to the source data in the BigQuery view `raw_data.tfrs_training_examples`. The dataset's `summary_snapshot.column_stats` shows:
+
+| Column | Type | Null Count | Null % |
+|--------|------|-----------|--------|
+| `segment` | STRING | 242,626 | 11.92% |
+| All other 10 columns | various | 0 | 0% |
+
+11.92% of rows have `segment = NULL` — customers without an assigned segment. These NULLs exist in the source view, not from any JOIN operation. The COALESCE fix (Section 9.3) was built on a false assumption: that NULLs originate from LEFT JOIN mismatches. This dataset has no joins at all.
+
+### 10.5. Timeline
+
+| Time (UTC) | Event |
+|------------|-------|
+| 17:14:19 | Commit `a207a34` — COALESCE fix committed |
+| 17:18:03 | `_submit_pipeline()` generates SQL for qt-127 (`run_id` timestamp via `datetime.utcnow()`) |
+| 17:20:27 | Vertex AI pipeline starts |
+| 18:32:54 | Training completes, `tf.saved_model.save()` crashes |
+
+The COALESCE code was active when qt-127 was submitted (3m44s after commit, Django auto-reload via `runserver`). The fix was present but irrelevant — it only inspects `secondary_tables`, which is empty.
+
+### 10.6. Conclusion
+
+The fix must ensure **no NULLs reach TFRecords regardless of source** — whether from LEFT JOIN mismatches, intrinsic source data NULLs, or any other origin. The COALESCE wrapping in `generate_query()` must apply to **all columns** when `for_tfx=True`, not just columns from LEFT-JOINed tables. Default fill values: `'unknown'` for strings, `0` for integers, `0.0` for floats.

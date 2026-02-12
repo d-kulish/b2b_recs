@@ -890,6 +890,7 @@ class PreprocessingFnGenerator:
         header = self._generate_header()
         imports = self._generate_imports()
         constants = self._generate_constants()
+        helpers = self._generate_helpers()
 
         fn_start = self._generate_function_start()
         text_code = self._generate_text_transforms(all_features['text'])
@@ -904,6 +905,7 @@ class PreprocessingFnGenerator:
             header,
             imports,
             constants,
+            helpers,
             fn_start,
         ]
 
@@ -998,6 +1000,16 @@ import tensorflow_transform as tft
     def _generate_constants(self) -> str:
         """Generate module constants."""
         return f'''NUM_OOV_BUCKETS = {self.NUM_OOV_BUCKETS}
+'''
+
+    def _generate_helpers(self) -> str:
+        """Generate module-level helper functions for the transform module."""
+        return '''
+def _densify(tensor, default_value):
+    """Convert SparseTensor to dense if needed. Handles nullable BigQuery columns."""
+    if isinstance(tensor, tf.SparseTensor):
+        return tf.sparse.to_dense(tensor, default_value=default_value)
+    return tensor
 '''
 
     def _generate_function_start(self) -> str:
@@ -1095,7 +1107,7 @@ def preprocessing_fn(inputs):
         if not has_any_transform:
             # No transforms - just pass through as float
             lines.append(f"    # Target: {col} (raw, no transforms)")
-            lines.append(f"    outputs['{col}_target'] = tf.cast(inputs['{col}'], tf.float32)")
+            lines.append(f"    outputs['{col}_target'] = tf.cast(_densify(inputs['{col}'], 0.0), tf.float32)")
             lines.append('')
             return '\n'.join(lines)
 
@@ -1114,7 +1126,7 @@ def preprocessing_fn(inputs):
             transform_desc.append("normalize")
 
         lines.append(f"    # Target: {col} (transforms: {' -> '.join(transform_desc)})")
-        lines.append(f"    {col}_float = tf.cast(inputs['{col}'], tf.float32)")
+        lines.append(f"    {col}_float = tf.cast(_densify(inputs['{col}'], 0.0), tf.float32)")
         current_var = f"{col}_float"
 
         # =====================================================================
@@ -1210,7 +1222,7 @@ def preprocessing_fn(inputs):
 
             lines.append(f"    # {col}: {bq_type} → vocab index (embedding_dim={embed_dim} in Trainer)")
             lines.append(f"    outputs['{col}'] = tft.compute_and_apply_vocabulary(")
-            lines.append(f"        inputs['{col}'],")
+            lines.append(f"        _densify(inputs['{col}'], b''),")
             lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS,")
             lines.append(f"        vocab_filename='{col}_vocab'")
             lines.append(f"    )")
@@ -1262,7 +1274,7 @@ def preprocessing_fn(inputs):
             lines.append(f"    # {col}: {bq_type} → {' + '.join(transform_desc)}")
 
             # Cast to float
-            lines.append(f"    {col}_float = tf.cast(inputs['{col}'], tf.float32)")
+            lines.append(f"    {col}_float = tf.cast(_densify(inputs['{col}'], 0), tf.float32)")
 
             if has_normalize:
                 lines.append(f"    outputs['{col}_norm'] = tft.scale_to_z_score({col}_float)")
@@ -1335,7 +1347,7 @@ def preprocessing_fn(inputs):
             lines.append(f"    # {col}: {bq_type} → {' + '.join(transform_desc)}")
             lines.append(f"    # Convert timestamp to float seconds since epoch")
             lines.append(f"    {col}_seconds = tf.cast(")
-            lines.append(f"        tf.cast(inputs['{col}'], tf.int64),")
+            lines.append(f"        tf.cast(_densify(inputs['{col}'], 0), tf.int64),")
             lines.append(f"        tf.float32")
             lines.append(f"    )")
             lines.append('')
@@ -1455,7 +1467,7 @@ def preprocessing_fn(inputs):
                         bucketized_for_cross.add(bucket_var)
                         lines.append(f"    # Bucketize {col} for crossing ({crossing_buckets} buckets)")
                         lines.append(f"    {bucket_var} = tft.bucketize(")
-                        lines.append(f"        tf.cast(inputs['{col}'], tf.float32),")
+                        lines.append(f"        tf.cast(_densify(inputs['{col}'], 0), tf.float32),")
                         lines.append(f"        num_buckets={crossing_buckets}")
                         lines.append(f"    )")
                         lines.append('')
@@ -1463,7 +1475,7 @@ def preprocessing_fn(inputs):
                     string_parts.append(f"tf.strings.as_string({bucket_var})")
                 else:
                     # Text feature - use directly (ensure it's string type)
-                    string_parts.append(f"tf.strings.as_string(inputs['{col}'])")
+                    string_parts.append(f"tf.strings.as_string(_densify(inputs['{col}'], b''))")
 
             # Generate cross name
             cross_name = '_x_'.join(feature_names) + '_cross'

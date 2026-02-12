@@ -177,7 +177,7 @@ class ExperimentService:
         train_days: int = 60,
         val_days: int = 7,
         test_days: int = 7,
-        machine_type: str = 'n1-standard-4',
+        machine_type: str = 'e2-standard-4',
         experiment_name: str = '',
         experiment_description: str = '',
     ):
@@ -883,7 +883,7 @@ class ExperimentService:
         trainer_module_path: str,
         gcs_output_path: str,
         run_id: str,
-        machine_type: str = 'n1-standard-4',
+        machine_type: str = 'e2-standard-4',
     ):
         """
         Submit the TFX pipeline to Vertex AI via Cloud Build (async).
@@ -940,7 +940,7 @@ class ExperimentService:
         batch_size: int,
         learning_rate: float,
         split_strategy: str = 'random',
-        machine_type: str = 'n1-standard-4',
+        machine_type: str = 'e2-standard-4',
     ) -> str:
         """
         Trigger Cloud Build to compile and submit TFX pipeline.
@@ -1080,7 +1080,7 @@ def create_tfx_pipeline(
     batch_size: int = 4096,
     learning_rate: float = 0.001,
     split_strategy: str = 'random',
-    machine_type: str = 'n1-standard-4',
+    machine_type: str = 'e2-standard-4',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -1178,7 +1178,7 @@ def create_tfx_pipeline(
     # europe-central2 (Warsaw) is a small region prone to ZONE_RESOURCE_POOL_EXHAUSTED.
     # e2-standard-4 uses dynamic resource pool with better availability than n1.
     dataflow_region = 'europe-west1'
-    dataflow_machine_type = 'e2-standard-4'
+    dataflow_machine_type = machine_type
     staging_bucket = f'{project_id}-pipeline-staging'
     beam_pipeline_args = [
         '--runner=DataflowRunner',
@@ -1266,7 +1266,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--split-strategy", default="random", help="Split strategy: random, time_holdout, strict_time")
-    parser.add_argument("--machine-type", default="n1-standard-4", help="Machine type for Trainer and Dataflow workers")
+    parser.add_argument("--machine-type", default="e2-standard-4", help="Machine type for pipeline workers")
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--region", default="europe-central2")
     args = parser.parse_args()

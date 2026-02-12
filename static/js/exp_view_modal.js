@@ -3699,14 +3699,16 @@ const ExpViewModal = (function() {
         if (!container) return;
 
         const hardwareSpecs = {
+            'e2-standard-4': { name: 'Small', cpu: '4 vCPUs', memory: '16 GB' },
+            'e2-standard-8': { name: 'Medium', cpu: '8 vCPUs', memory: '32 GB' },
+            'e2-standard-16': { name: 'Large', cpu: '16 vCPUs', memory: '64 GB' },
+            // Legacy n1-series (for older experiments)
             'n1-standard-4': { name: 'Small', cpu: '4 vCPUs', memory: '15 GB' },
             'n1-standard-8': { name: 'Medium', cpu: '8 vCPUs', memory: '30 GB' },
             'n1-standard-16': { name: 'Large', cpu: '16 vCPUs', memory: '60 GB' },
-            'n1-highmem-4': { name: 'High Memory', cpu: '4 vCPUs', memory: '26 GB' },
-            'n1-highmem-8': { name: 'High Memory', cpu: '8 vCPUs', memory: '52 GB' }
         };
 
-        const machineType = exp.machine_type || 'n1-standard-4';
+        const machineType = exp.machine_type || 'e2-standard-4';
         const hwSpec = hardwareSpecs[machineType] || { name: 'Custom', cpu: '-', memory: '-' };
         const hardwareDisplay = `${hwSpec.cpu}, ${hwSpec.memory}`;
 

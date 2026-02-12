@@ -1822,21 +1822,21 @@ class QuickTest(models.Model):
     )
 
     # Hardware configuration
-    MACHINE_TYPE_SMALL = 'n1-standard-4'
-    MACHINE_TYPE_MEDIUM = 'n1-standard-8'
-    MACHINE_TYPE_LARGE = 'n1-standard-16'
+    MACHINE_TYPE_SMALL = 'e2-standard-4'
+    MACHINE_TYPE_MEDIUM = 'e2-standard-8'
+    MACHINE_TYPE_LARGE = 'e2-standard-16'
 
     MACHINE_TYPE_CHOICES = [
-        (MACHINE_TYPE_SMALL, 'Small (n1-standard-4: 4 vCPU, 15 GB)'),
-        (MACHINE_TYPE_MEDIUM, 'Medium (n1-standard-8: 8 vCPU, 30 GB)'),
-        (MACHINE_TYPE_LARGE, 'Large (n1-standard-16: 16 vCPU, 60 GB)'),
+        (MACHINE_TYPE_SMALL, 'Small (e2-standard-4: 4 vCPU, 16 GB)'),
+        (MACHINE_TYPE_MEDIUM, 'Medium (e2-standard-8: 8 vCPU, 32 GB)'),
+        (MACHINE_TYPE_LARGE, 'Large (e2-standard-16: 16 vCPU, 64 GB)'),
     ]
 
     machine_type = models.CharField(
         max_length=50,
         choices=MACHINE_TYPE_CHOICES,
         default=MACHINE_TYPE_SMALL,
-        help_text="Compute machine type for Trainer and Dataflow workers"
+        help_text="Compute machine type for Dataflow workers (BigQueryExampleGen, StatisticsGen, Transform)"
     )
 
     # Rating column for ranking models

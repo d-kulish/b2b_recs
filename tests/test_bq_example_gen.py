@@ -116,7 +116,7 @@ def create_bq_example_gen_pipeline(
         f'--zone={region}-b',  # Explicitly set zone to avoid exhausted zones (a and c are exhausted)
         f'--temp_location=gs://{staging_bucket}/dataflow_temp',
         f'--staging_location=gs://{staging_bucket}/dataflow_staging',
-        '--machine_type=n1-standard-4',
+        '--machine_type=e2-standard-4',
         '--disk_size_gb=50',
         '--experiments=use_runner_v2',
         '--max_num_workers=10',

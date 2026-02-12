@@ -47,7 +47,7 @@ def create_tfx_pipeline(
     batch_size: int = 4096,
     learning_rate: float = 0.001,
     split_strategy: str = 'random',
-    machine_type: str = 'n1-standard-4',
+    machine_type: str = 'e2-standard-4',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -137,20 +137,25 @@ def create_tfx_pipeline(
 
     # Configure Dataflow for StatisticsGen and Transform components
     # This ensures scalable processing for large datasets
+    # Dataflow runs in europe-west1 (Belgium) - largest EU region with best capacity.
+    # europe-central2 (Warsaw) is a small region prone to ZONE_RESOURCE_POOL_EXHAUSTED.
+    # e2-standard-4 uses dynamic resource pool with better availability than n1.
+    dataflow_region = 'europe-west1'
+    dataflow_machine_type = machine_type
     staging_bucket = f'{project_id}-pipeline-staging'
     beam_pipeline_args = [
         '--runner=DataflowRunner',
         f'--project={project_id}',
-        f'--region={region}',
+        f'--region={dataflow_region}',
         f'--temp_location=gs://{staging_bucket}/dataflow_temp',
         f'--staging_location=gs://{staging_bucket}/dataflow_staging',
-        f'--machine_type={machine_type}',
+        f'--machine_type={dataflow_machine_type}',
         '--disk_size_gb=50',
         '--experiments=use_runner_v2',
         '--max_num_workers=10',
         '--autoscaling_algorithm=THROUGHPUT_BASED',
     ]
-    logger.info(f"Dataflow configured with machine_type={machine_type}, region={region}")
+    logger.info(f"Dataflow configured with machine_type={dataflow_machine_type}, region={dataflow_region}")
 
     pipeline = tfx_pipeline.Pipeline(
         pipeline_name=pipeline_name,
@@ -234,7 +239,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=4096, help='Batch size')
     parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--split-strategy', default='random', help='Split strategy: random, time_holdout, strict_time')
-    parser.add_argument('--machine-type', default='n1-standard-4', help='Machine type for Trainer and Dataflow workers')
+    parser.add_argument('--machine-type', default='e2-standard-4', help='Machine type for Dataflow workers (BigQueryExampleGen, StatisticsGen, Transform)')
     parser.add_argument('--project-id', required=True, help='GCP project ID')
     parser.add_argument('--region', default='europe-central2', help='GCP region')
 

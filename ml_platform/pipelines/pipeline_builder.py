@@ -27,7 +27,7 @@ def build_quicktest_pipeline_params(
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
-    machine_type: str = 'n1-standard-4',
+    machine_type: str = 'e2-standard-4',
 ) -> Dict[str, Any]:
     """
     Build parameters for the Quick Test pipeline.
@@ -405,7 +405,7 @@ try:
         epochs: int = 10,
         batch_size: int = 4096,
         learning_rate: float = 0.001,
-        machine_type: str = 'n1-standard-4',
+        machine_type: str = 'e2-standard-4',
         project_id: str = 'b2b-recs',
     ):
         """

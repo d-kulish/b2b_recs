@@ -2916,34 +2916,34 @@
                     <div class="hardware-recommendation" id="hardwareRecommendation">
                         Recommended: <strong>Small</strong> based on dataset size
                     </div>
-                    <input type="hidden" id="wizardMachineType" value="n1-standard-4">
+                    <input type="hidden" id="wizardMachineType" value="e2-standard-4">
                     <div class="hardware-options">
-                        <div class="hardware-card selected recommended" data-machine="n1-standard-4" onclick="selectHardware('n1-standard-4')">
+                        <div class="hardware-card selected recommended" data-machine="e2-standard-4" onclick="selectHardware('e2-standard-4')">
                             <div class="hardware-card-title">Small</div>
-                            <div class="hardware-card-type">n1-standard-4</div>
-                            <div class="hardware-card-specs">4 vCPU<br>15 GB RAM</div>
+                            <div class="hardware-card-type">e2-standard-4</div>
+                            <div class="hardware-card-specs">4 vCPU<br>16 GB RAM</div>
                         </div>
-                        <div class="hardware-card" data-machine="n1-standard-8" onclick="selectHardware('n1-standard-8')">
+                        <div class="hardware-card" data-machine="e2-standard-8" onclick="selectHardware('e2-standard-8')">
                             <div class="hardware-card-title">Medium</div>
-                            <div class="hardware-card-type">n1-standard-8</div>
-                            <div class="hardware-card-specs">8 vCPU<br>30 GB RAM</div>
+                            <div class="hardware-card-type">e2-standard-8</div>
+                            <div class="hardware-card-specs">8 vCPU<br>32 GB RAM</div>
                         </div>
-                        <div class="hardware-card" data-machine="n1-standard-16" onclick="selectHardware('n1-standard-16')">
+                        <div class="hardware-card" data-machine="e2-standard-16" onclick="selectHardware('e2-standard-16')">
                             <div class="hardware-card-title">Large</div>
-                            <div class="hardware-card-type">n1-standard-16</div>
-                            <div class="hardware-card-specs">16 vCPU<br>60 GB RAM</div>
+                            <div class="hardware-card-type">e2-standard-16</div>
+                            <div class="hardware-card-specs">16 vCPU<br>64 GB RAM</div>
                         </div>
                         <div class="hardware-card disabled" title="GPU acceleration coming soon">
                             <div class="hardware-card-lock"><i class="fas fa-lock"></i></div>
                             <div class="hardware-card-title">GPU T4</div>
-                            <div class="hardware-card-type">n1-standard-4 + T4</div>
-                            <div class="hardware-card-specs">4 vCPU, 15 GB RAM<br>16 GB GPU</div>
+                            <div class="hardware-card-type">e2-standard-4 + T4</div>
+                            <div class="hardware-card-specs">4 vCPU, 16 GB RAM<br>16 GB GPU</div>
                         </div>
                         <div class="hardware-card disabled" title="GPU acceleration coming soon">
                             <div class="hardware-card-lock"><i class="fas fa-lock"></i></div>
                             <div class="hardware-card-title">GPU V100</div>
-                            <div class="hardware-card-type">n1-standard-8 + V100</div>
-                            <div class="hardware-card-specs">8 vCPU, 30 GB RAM<br>16 GB GPU</div>
+                            <div class="hardware-card-type">e2-standard-8 + V100</div>
+                            <div class="hardware-card-specs">8 vCPU, 32 GB RAM<br>16 GB GPU</div>
                         </div>
                     </div>
                 </div>
@@ -4604,9 +4604,9 @@ function setParam(param, value) {
 
 // Hardware selection functions
 const hardwareTiers = {
-    'n1-standard-4': { name: 'Small', vcpu: 4, ram: 15 },
-    'n1-standard-8': { name: 'Medium', vcpu: 8, ram: 30 },
-    'n1-standard-16': { name: 'Large', vcpu: 16, ram: 60 },
+    'e2-standard-4': { name: 'Small', vcpu: 4, ram: 16 },
+    'e2-standard-8': { name: 'Medium', vcpu: 8, ram: 32 },
+    'e2-standard-16': { name: 'Large', vcpu: 16, ram: 64 },
 };
 
 function selectHardware(machineType) {
@@ -4630,14 +4630,14 @@ function updateHardwareRecommendation() {
     ) : 0;
 
     // Determine recommendation
-    let recommended = 'n1-standard-4';
+    let recommended = 'e2-standard-4';
     let reason = 'dataset size';
 
     if (rowCount > 500000 || modelParams > 5000000) {
-        recommended = 'n1-standard-16';
+        recommended = 'e2-standard-16';
         reason = rowCount > 500000 ? 'large dataset (>500K rows)' : 'complex model (>5M params)';
     } else if (rowCount > 100000 || modelParams > 1000000) {
-        recommended = 'n1-standard-8';
+        recommended = 'e2-standard-8';
         reason = rowCount > 100000 ? 'medium dataset (>100K rows)' : 'model complexity';
     }
 
@@ -4653,7 +4653,7 @@ function updateHardwareRecommendation() {
 
     // Auto-select if nothing selected yet or if this is initial load
     const currentSelection = document.getElementById('wizardMachineType').value;
-    if (!currentSelection || currentSelection === 'n1-standard-4') {
+    if (!currentSelection || currentSelection === 'e2-standard-4') {
         selectHardware(recommended);
     }
 }
@@ -5084,7 +5084,7 @@ async function submitExperiment() {
         val_days: parseInt(document.getElementById('wizardValDays').value) || 7,
         test_days: parseInt(document.getElementById('wizardTestDays').value) || 7,
         // Hardware configuration
-        machine_type: document.getElementById('wizardMachineType').value || 'n1-standard-4',
+        machine_type: document.getElementById('wizardMachineType').value || 'e2-standard-4',
         // Experiment metadata (optional)
         experiment_name: document.getElementById('wizardExpName').value.trim(),
         experiment_description: document.getElementById('wizardExpDescription').value.trim()

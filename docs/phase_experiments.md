@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-01-15 (View Modal migrated to reusable module)
+**Last Updated**: 2026-02-12 (Fix: Wizard machine_type now controls Dataflow workers end-to-end)
 
 ---
 
@@ -145,7 +145,7 @@ Clicking a KPI filters all dashboard content by that model type.
 | **Epochs** | 1-50 | 3 |
 | **Batch Size** | 256, 512, 1024, 2048, 4096, 8192 | 4096 |
 | **Learning Rate** | 0.001 - 1.0 | From ModelConfig |
-| **Hardware** | Small / Medium / Large CPU | Auto-recommended |
+| **Hardware** | Small (e2-standard-4) / Medium (e2-standard-8) / Large (e2-standard-16) | Auto-recommended |
 
 ---
 
@@ -378,6 +378,10 @@ class QuickTest(models.Model):
 |----------|--------|-----------|
 | Pipeline Framework | Native TFX SDK | Full TFX component support |
 | Data Flow | BigQuery → TFRecords → TFX | Standard TFX pattern |
+| Dataflow Region | `europe-west1` (Belgium) | Hardcoded. Largest EU region with best worker capacity. `europe-central2` (Warsaw) is prone to `ZONE_RESOURCE_POOL_EXHAUSTED` |
+| Dataflow Machine Type | User-selected via wizard | Flows from wizard → DB → Cloud Build CLI arg → compile script → `beam_pipeline_args`. Defaults to `e2-standard-4` |
+| Pipeline Orchestration Region | `europe-central2` (Warsaw) | Co-located with BigQuery data and GCS buckets |
+| Hardware Tiers (Wizard) | `e2-standard-4/8/16` | e2-series for better availability; auto-recommended based on dataset size and model complexity |
 | Metrics Storage | GCS JSON files | Simple, no extra infrastructure |
 | Training Cache | Django JSONField | Instant UI loading (<1s) |
 | Histogram Data | On-demand fetch | Large data, rarely needed |
@@ -473,6 +477,71 @@ Fetches pipeline component logs from Cloud Logging for the Pipeline tab:
 - Color-coded severity (ERROR=red, WARNING=amber, INFO=blue, DEBUG=gray)
 - Manual refresh only (no auto-load on node click)
 - Matches Google Logs Explorer styling
+
+---
+
+## Bug Fix: Wizard machine_type Was Dead Code (2026-02-12)
+
+### Problem
+
+The experiment wizard lets users select a hardware tier (Small / Medium / Large) which maps to `e2-standard-4/8/16`. This value was saved to the `QuickTest.machine_type` field and passed through 8 layers of code — API → ExperimentService → Cloud Build substitution → CLI argument → compile script — but the compile scripts **silently ignored it**. Both `ml_platform/experiments/services.py` (inline compile script) and `cloudbuild/compile_and_submit.py` (standalone compile script) hardcoded:
+
+```python
+dataflow_machine_type = 'e2-standard-4'  # ignores machine_type parameter
+```
+
+This meant every experiment ran on `e2-standard-4` regardless of what the user selected in the wizard. The `machine_type` parameter was accepted by both `create_tfx_pipeline()` functions but never used for Dataflow worker configuration.
+
+### Analysis
+
+The `machine_type` parameter flows through this call chain:
+
+```
+Wizard UI → POST /api/.../quick-test/ → ExperimentService.create_quick_test()
+  → _submit_pipeline_via_cloud_build() → Cloud Build --machine-type=$_MACHINE_TYPE
+    → compile_and_submit.py create_tfx_pipeline(machine_type=...)
+      → beam_pipeline_args['--machine_type=???']  ← HERE: hardcoded, not from param
+```
+
+The inline script in `ExperimentService` had the same issue at line 1181.
+
+Additionally, all intermediate function defaults still referenced the old `n1-standard-4` machine series, even though:
+- The model choices were updated to `e2-standard` (better availability, dynamic resource pool)
+- The `n1-standard` series is legacy and prone to capacity issues
+- The help_text incorrectly stated the machine_type controlled "Trainer and Dataflow workers" — the Trainer actually runs on the Vertex AI pipeline worker VM, not a user-selected VM
+
+### Fix Applied
+
+**Core fix** — use the `machine_type` parameter instead of hardcoding:
+```python
+# Both compile scripts: experiments/services.py:1181 and compile_and_submit.py:144
+dataflow_machine_type = machine_type  # was: 'e2-standard-4'
+```
+
+**Default updates** — aligned 7 stale `n1-standard-4` defaults to `e2-standard-4` across:
+- `ml_platform/experiments/services.py` (3 function signatures)
+- `cloudbuild/compile_and_submit.py` (function param + argparse default)
+- `ml_platform/pipelines/pipeline_builder.py` (2 function signatures)
+- `ml_platform/pipelines/services.py` (settings fallback)
+
+**Model + migration** — updated `QuickTest.machine_type` field choices, default, and help_text. Migration `0060_update_machine_type_choices.py` updates the field metadata (no data migration needed — CharField doesn't enforce choices at DB level, so existing `n1-standard` values are preserved).
+
+### Expected Behaviour
+
+After the fix, the wizard selection controls Dataflow workers end-to-end:
+
+| Wizard Selection | DB Value | Cloud Build Arg | Dataflow Workers |
+|-----------------|----------|-----------------|------------------|
+| Small | `e2-standard-4` | `--machine-type=e2-standard-4` | 4 vCPU, 16 GB |
+| Medium | `e2-standard-8` | `--machine-type=e2-standard-8` | 8 vCPU, 32 GB |
+| Large | `e2-standard-16` | `--machine-type=e2-standard-16` | 16 vCPU, 64 GB |
+
+The Dataflow **region** stays hardcoded to `europe-west1` (Belgium) — this is intentional to avoid `ZONE_RESOURCE_POOL_EXHAUSTED` errors in `europe-central2` (Warsaw).
+
+### Out of Scope
+
+- `ml_platform/training/services.py:3176` — Training pipeline Dataflow also hardcodes `n1-standard-4`. Separate domain, separate fix.
+- `cloudbuild/tfx-trainer-gpu/` — GPU Custom Jobs require `n1-standard` (GPUs don't attach to e2 VMs).
 
 ---
 

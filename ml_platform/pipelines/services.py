@@ -239,7 +239,7 @@ class PipelineService:
             "pipeline_root": f"gs://{self.staging_bucket}/runs/quicktest-{quick_test.pk}",
 
             # Compute settings
-            "machine_type": getattr(settings, 'QUICKTEST_MACHINE_TYPE', 'n1-standard-4'),
+            "machine_type": getattr(settings, 'QUICKTEST_MACHINE_TYPE', 'e2-standard-4'),
         }
 
     def _submit_pipeline(self, params: Dict[str, Any], quick_test):

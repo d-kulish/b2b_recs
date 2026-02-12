@@ -189,7 +189,7 @@ GCS_TRAINING_BUCKET = os.environ.get('GCS_TRAINING_BUCKET', 'b2b-recs-training-a
 GCS_PIPELINE_STAGING_BUCKET = os.environ.get('GCS_PIPELINE_STAGING_BUCKET', 'b2b-recs-pipeline-staging')
 
 # Pipeline compute defaults
-QUICKTEST_MACHINE_TYPE = os.environ.get('QUICKTEST_MACHINE_TYPE', 'n1-standard-4')
+QUICKTEST_MACHINE_TYPE = os.environ.get('QUICKTEST_MACHINE_TYPE', 'e2-standard-4')
 QUICKTEST_DEFAULT_EPOCHS = int(os.environ.get('QUICKTEST_DEFAULT_EPOCHS', '10'))
 QUICKTEST_DEFAULT_BATCH_SIZE = int(os.environ.get('QUICKTEST_DEFAULT_BATCH_SIZE', '4096'))
 QUICKTEST_DEFAULT_LEARNING_RATE = float(os.environ.get('QUICKTEST_DEFAULT_LEARNING_RATE', '0.001'))

@@ -171,5 +171,5 @@ class Command(BaseCommand):
             ]
         )
 
-        result = client.query(query, job_config=job_config, location='europe-central2')
+        result = client.query(query, job_config=job_config)
         return [{'service_name': row.service_name, 'gcp_cost': row.gcp_cost} for row in result]

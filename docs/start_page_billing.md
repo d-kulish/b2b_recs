@@ -8,7 +8,7 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 
 ---
 
-## Current Status (2026-02-09)
+## Current Status (2026-02-12)
 
 ### Completed
 
@@ -26,17 +26,25 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 | Webhook endpoint | Done | `POST /api/system/collect-billing-webhook/` — collects yesterday's data |
 | Option B chosen | Done | Separate command/scheduler, isolated from `collect_resource_metrics` |
 
+### Completed (2026-02-12)
+
+| Step | Status | Details |
+|------|--------|---------|
+| Billing export data in BigQuery | Done | 10 days loaded (Feb 2–11), 16,288 rows, both `gcp_billing_export_v1_*` and `gcp_billing_export_resource_v1_*` tables |
+| Fix query location bug | Done | Removed hardcoded `location='europe-central2'` (dataset is EU multi-region) |
+| First dry-run test | Done | 7 services for Feb 11, margins applied correctly (100% default, 50% Vertex AI) |
+| Historical backfill | Done | 55 service-day records (Feb 3–11), $15.14 GCP / $28.53 total with margin |
+| ETL dataset isolation | Done | `billing_export` blocked in `list_bq_tables()` via `EXCLUDED_DATASETS` set — returns 403 |
+| API: `/api/system/billing/summary/` | Done | Current month summary bar data with license info from `BillingConfig` |
+| API: `/api/system/billing/charts/` | Done | 5 chart datasets: monthly_trend, cost_breakdown, daily_spend, cost_per_training, service_over_time |
+| API: `/api/system/billing/invoice/` | Done | Invoice preview rows grouped by service with margin calculation |
+
 ### Awaiting
 
 | Step | Status | Details |
 |------|--------|---------|
-| Billing export data in BigQuery | Waiting ~24h | Table `gcp_billing_export_v1_0155F9_5165FE_BBC88A` will auto-appear |
-| First dry-run test | Blocked by above | `python manage.py collect_billing_snapshots --dry-run` |
-| Historical backfill | Blocked by above | `python manage.py collect_billing_snapshots --backfill --days 30` |
 | Deploy to Cloud Run | Not started | Required before creating the scheduler job |
 | Create Cloud Scheduler job | Blocked by deploy | `python manage.py setup_billing_scheduler --url https://django-app-...` |
-| ETL dataset isolation | Not started | Filter `billing_export` from ETL dataset browser |
-| API endpoints (3) | Not started | `/api/system/billing/summary/`, `/charts/`, `/invoice/` |
 | Frontend (summary bar, 5 charts, invoice table) | Not started | Replace hardcoded Chapter 3 placeholder |
 
 ### Decisions Made
@@ -319,13 +327,16 @@ Helper methods: `get_solo()` (singleton access), `get_margin_pct(service_name)` 
 
 **Migration:** `ml_platform/migrations/0059_billing_models.py` (applied).
 
-### API Endpoints
+### API Endpoints (implemented)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/system/billing/summary/` | GET | Summary bar data (period, estimated total, license status, % elapsed) |
 | `/api/system/billing/charts/` | GET | All 5 chart datasets |
 | `/api/system/billing/invoice/` | GET | Current month invoice preview rows |
+
+**File:** `ml_platform/views.py` — follows the `api_system_resource_charts()` pattern (`@login_required`, `JsonResponse`, `try/except`).
+**Routes:** `ml_platform/urls.py` — under the system-level API endpoints section.
 
 ---
 
@@ -401,7 +412,7 @@ python manage.py setup_billing_scheduler --delete
 - [x] Recreate `billing_export` dataset in **EU multi-region** (was `europe-central2`) — 2026-02-11. EU multi-region gets retroactive backfill from Jan 1, 2026; regional does not.
 - [x] Enable BigQuery Data Transfer Service API — 2026-02-09
 - [x] Enable Cloud Billing API — 2026-02-09
-- [ ] Verify export data appears (up to 5 days for EU multi-region initial backfill)
+- [x] Verify export data appears — 2026-02-12. 10 days loaded (Feb 2–11), 16,288 rows, 2 projects, 17 services
 - [ ] Grant cross-project `bigquery.dataViewer` on `billing_export` to client service accounts
 
 ### Phase 2: Data Layer
@@ -410,17 +421,18 @@ python manage.py setup_billing_scheduler --delete
 - [x] Run migration (`0059_billing_models`) — 2026-02-09
 - [x] Create management command `collect_billing_snapshots` — 2026-02-09
 - [x] Backfill support (`--backfill --days N`) — 2026-02-09
-- [ ] Test with real billing export data (after ~24h)
-- [ ] Run backfill for available historical data
+- [x] Fix query location bug (`europe-central2` → auto-detect for EU multi-region dataset) — 2026-02-12
+- [x] Dry-run test with real billing data — 2026-02-12. 7 services for Feb 11 with correct margins (100% default, 50% Vertex AI)
+- [x] Backfill historical data — 2026-02-12. 55 service-day records (Feb 3–11), $15.14 GCP / $28.53 total
 
 ### Phase 3: ETL Isolation
-- [ ] Update ETL dataset browser to filter out `billing_export` dataset
-- [ ] Verify `billing_export` is not visible in any client-facing UI
+- [x] Block `billing_export` in ETL dataset browser — 2026-02-12. `EXCLUDED_DATASETS` blocklist in `list_bq_tables()` returns 403
+- [x] Verify `billing_export` is not visible in any client-facing UI — 2026-02-12. Configs page hardcodes `raw_data`; ETL API now blocks `billing_export`
 
 ### Phase 4: API
-- [ ] `/api/system/billing/summary/` endpoint
-- [ ] `/api/system/billing/charts/` endpoint
-- [ ] `/api/system/billing/invoice/` endpoint
+- [x] `/api/system/billing/summary/` endpoint — 2026-02-12. Period info, cost totals, license info
+- [x] `/api/system/billing/charts/` endpoint — 2026-02-12. 5 chart datasets (monthly_trend, cost_breakdown, daily_spend, cost_per_training, service_over_time)
+- [x] `/api/system/billing/invoice/` endpoint — 2026-02-12. Per-service rows with margin, license, grand total
 
 ### Phase 5: Frontend
 - [ ] Summary bar (period, estimated total, license status, progress)

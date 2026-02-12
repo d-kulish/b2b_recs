@@ -10,7 +10,10 @@ This module contains:
 ETL-related views and APIs have been migrated to ml_platform.etl
 Connection-related APIs have been migrated to ml_platform.connections
 """
-from datetime import timedelta
+import calendar
+from collections import defaultdict
+from datetime import date, timedelta
+from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -34,6 +37,8 @@ from .models import (
     QuickTest,
     ResourceMetrics,
     ProjectMetrics,
+    BillingSnapshot,
+    BillingConfig,
 )
 from .training.models import TrainingRun, DeployedEndpoint, RegisteredModel
 
@@ -1264,5 +1269,327 @@ def api_setup_orphan_cleanup_scheduler(request):
         logger.error(f'Failed to create orphan cleanup scheduler: {e}')
         return JsonResponse({
             'status': 'error',
+            'message': str(e),
+        }, status=500)
+
+
+# ============================================================================
+# BILLING API ENDPOINTS
+# ============================================================================
+
+@login_required
+def api_system_billing_summary(request):
+    """
+    Return summary bar data for the current billing period.
+    Combines BillingSnapshot totals with BillingConfig license info.
+    """
+    try:
+        today = timezone.now().date()
+        period_start = today.replace(day=1)
+        days_in_month = calendar.monthrange(today.year, today.month)[1]
+        period_end = today.replace(day=days_in_month)
+
+        days_elapsed = (today - period_start).days + 1
+        pct_elapsed = round(days_elapsed / days_in_month * 100, 1)
+
+        snapshots = BillingSnapshot.objects.filter(
+            date__gte=period_start, date__lte=period_end
+        )
+        totals = snapshots.aggregate(
+            gcp=Sum('gcp_cost'),
+            fee=Sum('platform_fee'),
+            total=Sum('total_cost'),
+        )
+        estimated_gcp = float(totals['gcp'] or 0)
+        estimated_platform_fee = float(totals['fee'] or 0)
+        estimated_total = float(totals['total'] or 0)
+
+        config = BillingConfig.get_solo()
+        license_fee = float(config.license_fee)
+        license_discount_pct = config.license_discount_pct
+        license_net = round(license_fee * (1 - license_discount_pct / 100), 2)
+        grand_total = round(estimated_total + license_net, 2)
+
+        period_label = (
+            f"{period_start.strftime('%b %-d')} \u2013 "
+            f"{period_end.strftime('%b %-d, %Y')}"
+        )
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'period_start': period_start.isoformat(),
+                'period_end': period_end.isoformat(),
+                'period_label': period_label,
+                'days_elapsed': days_elapsed,
+                'days_total': days_in_month,
+                'pct_elapsed': pct_elapsed,
+                'estimated_gcp': round(estimated_gcp, 2),
+                'estimated_platform_fee': round(estimated_platform_fee, 2),
+                'estimated_total': round(estimated_total, 2),
+                'license_fee': license_fee,
+                'license_discount_pct': license_discount_pct,
+                'license_net': license_net,
+                'grand_total': grand_total,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+def api_system_billing_charts(request):
+    """
+    Return all 5 chart datasets for the billing chapter:
+    monthly_trend, cost_breakdown, daily_spend, cost_per_training, service_over_time.
+    """
+    try:
+        today = timezone.now().date()
+        period_start = today.replace(day=1)
+        days_in_month = calendar.monthrange(today.year, today.month)[1]
+        period_end = today.replace(day=days_in_month)
+
+        # ------------------------------------------------------------------
+        # 1. Monthly Trend — last 6 months, grouped by month + service
+        # ------------------------------------------------------------------
+        six_months_ago = (period_start - timedelta(days=180)).replace(day=1)
+        trend_qs = (
+            BillingSnapshot.objects
+            .filter(date__gte=six_months_ago)
+            .values('date', 'service_name', 'total_cost')
+            .order_by('date')
+        )
+        month_service = defaultdict(lambda: defaultdict(Decimal))
+        all_services = set()
+        for row in trend_qs:
+            month_key = row['date'].strftime('%Y-%m')
+            month_service[month_key][row['service_name']] += row['total_cost']
+            all_services.add(row['service_name'])
+
+        month_labels = sorted(month_service.keys())
+        monthly_trend = {
+            'labels': month_labels,
+            'services': {
+                svc: [float(month_service[m].get(svc, 0)) for m in month_labels]
+                for svc in sorted(all_services)
+            },
+        }
+
+        # ------------------------------------------------------------------
+        # 2. Cost Breakdown — current month per-service totals (donut)
+        # ------------------------------------------------------------------
+        breakdown_qs = (
+            BillingSnapshot.objects
+            .filter(date__gte=period_start, date__lte=period_end)
+            .values('service_name')
+            .annotate(
+                gcp=Sum('gcp_cost'),
+                fee=Sum('platform_fee'),
+                total=Sum('total_cost'),
+            )
+            .order_by('-total')
+        )
+        cost_breakdown = {
+            'labels': [r['service_name'] for r in breakdown_qs],
+            'gcp_cost': [float(r['gcp']) for r in breakdown_qs],
+            'platform_fee': [float(r['fee']) for r in breakdown_qs],
+            'total': [float(r['total']) for r in breakdown_qs],
+        }
+
+        # ------------------------------------------------------------------
+        # 3. Daily Spend — current month daily totals + linear forecast
+        # ------------------------------------------------------------------
+        daily_qs = (
+            BillingSnapshot.objects
+            .filter(date__gte=period_start, date__lte=period_end)
+            .values('date')
+            .annotate(day_total=Sum('total_cost'))
+            .order_by('date')
+        )
+        daily_map = {r['date']: float(r['day_total']) for r in daily_qs}
+
+        # All days in current month
+        all_days = [
+            period_start + timedelta(days=i) for i in range(days_in_month)
+        ]
+        actual = []
+        for d in all_days:
+            actual.append(daily_map.get(d))
+
+        # Linear forecast: average of days that have data, extend to month end
+        recorded_values = [v for v in actual if v is not None]
+        avg_daily = (
+            sum(recorded_values) / len(recorded_values)
+            if len(recorded_values) >= 5 else None
+        )
+        forecast = []
+        for i, d in enumerate(all_days):
+            if actual[i] is not None:
+                forecast.append(None)
+            elif avg_daily is not None:
+                forecast.append(round(avg_daily, 2))
+            else:
+                forecast.append(None)
+
+        # Previous month total as reference
+        prev_month_end = period_start - timedelta(days=1)
+        prev_month_start = prev_month_end.replace(day=1)
+        prev_total = (
+            BillingSnapshot.objects
+            .filter(date__gte=prev_month_start, date__lte=prev_month_end)
+            .aggregate(t=Sum('total_cost'))['t']
+        )
+        daily_spend = {
+            'labels': [d.isoformat() for d in all_days],
+            'actual': [round(v, 2) if v is not None else None for v in actual],
+            'forecast': forecast,
+            'prev_month_total': float(prev_total or 0),
+        }
+
+        # ------------------------------------------------------------------
+        # 4. Cost Per Training — last 10 TrainingRun records w/ Vertex AI overlap
+        # ------------------------------------------------------------------
+        recent_runs = list(
+            TrainingRun.objects
+            .filter(started_at__isnull=False, completed_at__isnull=False)
+            .order_by('-created_at')[:10]
+        )
+        cost_per_training = {'labels': [], 'costs': [], 'model_types': []}
+        for run in reversed(recent_runs):
+            run_start = run.started_at.date()
+            run_end = run.completed_at.date()
+            vertex_cost = (
+                BillingSnapshot.objects
+                .filter(
+                    date__gte=run_start,
+                    date__lte=run_end,
+                    service_name__icontains='Vertex AI',
+                )
+                .aggregate(t=Sum('total_cost'))['t']
+            )
+            if vertex_cost:
+                label = f"TR-{run.run_number}"
+                cost_per_training['labels'].append(label)
+                cost_per_training['costs'].append(float(vertex_cost))
+                cost_per_training['model_types'].append(
+                    run.get_model_type_display()
+                )
+
+        # ------------------------------------------------------------------
+        # 5. Service Over Time — last 30 days, daily per-service (stacked area)
+        # ------------------------------------------------------------------
+        cutoff_30d = today - timedelta(days=30)
+        sot_qs = (
+            BillingSnapshot.objects
+            .filter(date__gte=cutoff_30d)
+            .values('date', 'service_name', 'total_cost')
+            .order_by('date')
+        )
+        sot_dates = set()
+        sot_data = defaultdict(lambda: defaultdict(Decimal))
+        sot_services = set()
+        for row in sot_qs:
+            d = row['date']
+            sot_dates.add(d)
+            sot_data[d][row['service_name']] += row['total_cost']
+            sot_services.add(row['service_name'])
+
+        sot_labels = sorted(sot_dates)
+        service_over_time = {
+            'labels': [d.isoformat() for d in sot_labels],
+            'services': {
+                svc: [float(sot_data[d].get(svc, 0)) for d in sot_labels]
+                for svc in sorted(sot_services)
+            },
+        }
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'monthly_trend': monthly_trend,
+                'cost_breakdown': cost_breakdown,
+                'daily_spend': daily_spend,
+                'cost_per_training': cost_per_training,
+                'service_over_time': service_over_time,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e),
+        }, status=500)
+
+
+@login_required
+def api_system_billing_invoice(request):
+    """
+    Return current month invoice preview rows grouped by service.
+    """
+    try:
+        today = timezone.now().date()
+        period_start = today.replace(day=1)
+        days_in_month = calendar.monthrange(today.year, today.month)[1]
+        period_end = today.replace(day=days_in_month)
+
+        items_qs = (
+            BillingSnapshot.objects
+            .filter(date__gte=period_start, date__lte=period_end)
+            .values('service_name')
+            .annotate(
+                gcp_cost=Sum('gcp_cost'),
+                platform_fee=Sum('platform_fee'),
+                total=Sum('total_cost'),
+            )
+            .order_by('-total')
+        )
+
+        items = []
+        subtotal_gcp = Decimal('0')
+        subtotal_fee = Decimal('0')
+        subtotal = Decimal('0')
+        for row in items_qs:
+            # Derive the margin_pct from the aggregated values
+            gcp = row['gcp_cost']
+            fee = row['platform_fee']
+            margin_pct = round(float(fee) / float(gcp) * 100) if gcp else 0
+            items.append({
+                'service': row['service_name'],
+                'gcp_cost': float(gcp),
+                'margin_pct': margin_pct,
+                'platform_fee': float(fee),
+                'total': float(row['total']),
+            })
+            subtotal_gcp += gcp
+            subtotal_fee += fee
+            subtotal += row['total']
+
+        config = BillingConfig.get_solo()
+        license_fee = float(config.license_fee)
+        license_discount_pct = config.license_discount_pct
+        license_net = round(license_fee * (1 - license_discount_pct / 100), 2)
+        grand_total = round(float(subtotal) + license_net, 2)
+
+        period_label = today.strftime('%B %Y')
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'period': period_label,
+                'items': items,
+                'subtotal_gcp': float(subtotal_gcp),
+                'subtotal_platform_fee': float(subtotal_fee),
+                'subtotal': float(subtotal),
+                'license_fee': license_fee,
+                'license_discount_pct': license_discount_pct,
+                'license_net': license_net,
+                'grand_total': grand_total,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
             'message': str(e),
         }, status=500)

@@ -1723,6 +1723,10 @@ def list_bq_tables(request, dataset_id):
             ]
         }
     """
+    EXCLUDED_DATASETS = {'billing_export'}
+    if dataset_id in EXCLUDED_DATASETS:
+        return JsonResponse({'status': 'error', 'message': 'Dataset not accessible'}, status=403)
+
     from ml_platform.utils.bigquery_manager import BigQueryTableManager
     import os
     from django.conf import settings

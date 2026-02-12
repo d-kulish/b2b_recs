@@ -53,6 +53,11 @@ urlpatterns = [
     path('api/system/resource-charts/', views.api_system_resource_charts, name='api_system_resource_charts'),
     path('api/system/recent-activity/', views.api_system_recent_activity, name='api_system_recent_activity'),
 
+    # Billing API
+    path('api/system/billing/summary/', views.api_system_billing_summary, name='api_billing_summary'),
+    path('api/system/billing/charts/', views.api_system_billing_charts, name='api_billing_charts'),
+    path('api/system/billing/invoice/', views.api_system_billing_invoice, name='api_billing_invoice'),
+
     # =========================================================================
     # SCHEDULER WEBHOOKS
     # =========================================================================

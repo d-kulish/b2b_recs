@@ -1174,21 +1174,25 @@ def create_tfx_pipeline(
 
     # Configure Dataflow for StatisticsGen and Transform components
     # This ensures scalable processing for large datasets
+    # Dataflow runs in europe-west1 (Belgium) - largest EU region with best capacity.
+    # europe-central2 (Warsaw) is a small region prone to ZONE_RESOURCE_POOL_EXHAUSTED.
+    # e2-standard-4 uses dynamic resource pool with better availability than n1.
+    dataflow_region = 'europe-west1'
+    dataflow_machine_type = 'e2-standard-4'
     staging_bucket = f'{project_id}-pipeline-staging'
     beam_pipeline_args = [
         '--runner=DataflowRunner',
         f'--project={project_id}',
-        f'--region={region}',
-        # Zone auto-selected by Dataflow based on availability (don't hardcode - zones get exhausted)
+        f'--region={dataflow_region}',
         f'--temp_location=gs://{staging_bucket}/dataflow_temp',
         f'--staging_location=gs://{staging_bucket}/dataflow_staging',
-        f'--machine_type={machine_type}',
+        f'--machine_type={dataflow_machine_type}',
         '--disk_size_gb=50',
         '--experiments=use_runner_v2',
         '--max_num_workers=10',
         '--autoscaling_algorithm=THROUGHPUT_BASED',
     ]
-    logger.info(f"Dataflow configured with machine_type={machine_type}, region={region}")
+    logger.info(f"Dataflow configured with machine_type={dataflow_machine_type}, region={dataflow_region}")
 
     pipeline = tfx_pipeline.Pipeline(
         pipeline_name=pipeline_name,

@@ -125,13 +125,27 @@ Added `_generate_helpers()` method to `PreprocessingFnGenerator` that emits a mo
 
 ```python
 def _densify(tensor, default_value):
-    """Convert SparseTensor to dense if needed. Handles nullable BigQuery columns."""
+    """Convert SparseTensor to dense if needed. Handles nullable BigQuery columns.
+
+    VarLenFeature SparseTensors have shape (batch, ?). We force dense_shape
+    to (batch, 1) and densify — matching the rank-2 shape that non-nullable
+    FixedLenFeature columns produce.
+    """
     if isinstance(tensor, tf.SparseTensor):
-        return tf.sparse.to_dense(tensor, default_value=default_value)
+        return tf.sparse.to_dense(
+            tf.SparseTensor(
+                indices=tensor.indices,
+                values=tensor.values,
+                dense_shape=[tensor.dense_shape[0], 1]
+            ),
+            default_value=default_value
+        )
     return tensor
 ```
 
 This function is placed between the module constants and `preprocessing_fn` definition in the generated output.
+
+The shape handling is critical — a plain `tf.sparse.to_dense()` preserves the SparseTensor's `dense_shape = (batch, ?)` with an unknown inner dimension, which TFX rejects. Forcing `dense_shape=[batch, 1]` produces `(batch, 1)` — matching the rank-2 shape that non-nullable `FixedLenFeature(shape=[1])` columns produce.
 
 ### 4.2. Wrapped Input Accesses
 
@@ -200,8 +214,77 @@ The key insight: at serving time, the application always sends concrete values (
 
 ---
 
-## 6. Verification Steps
+## 6. Custom Job Testing
 
-1. **Regenerate transform code**: Trigger `generate_and_save()` for any feature config and inspect the `generated_transform_code` field — confirm `_densify` function and wrapped `inputs` calls appear
-2. **Run tests**: `python -m pytest ml_platform/tests/ -x`
-3. **Re-run experiment**: Re-run `quick-tests/122` — confirm the Transform node succeeds and the pipeline progresses to Trainer
+The fix was validated using `scripts/test_services_transform.py`, which runs the Transform component in isolation on Vertex AI as a CustomJob, reusing BigQueryExampleGen and SchemaGen artifacts from the failed experiment `qt-122-20260211-200453`.
+
+**Test config**: FeatureConfig ID 10 (`Lviv_features_retrival_v1`), 11 features, ~515k rows.
+
+### 6.1. Job 1 — `NameError: name 'tft' is not defined`
+
+**Job ID**: `1288393431776755712` — FAILED
+
+The test runner script used `importlib.util.spec_from_file_location` to load the transform module. This does not register the module in `sys.modules`. Apache Beam's FnApiRunner serializes DoFns via `cloudpickle` — when the module is not registered, `preprocessing_fn` loses its module-level globals (`tf`, `tft`) on deserialization, causing `NameError`.
+
+**Fix** (`scripts/test_services_transform.py`): Replaced `importlib` loading with standard `import transform_module` (after inserting the work directory into `sys.path`). Standard imports auto-register in `sys.modules`, preserving globals through cloudpickle serialization.
+
+### 6.2. Job 2 — `ValueError: invalid shape (None, None) for FixedLenFeature`
+
+**Job ID**: `8737347215447556096` — FAILED
+
+The initial `_densify` used plain `tf.sparse.to_dense(tensor, default_value=default_value)`. This preserves the SparseTensor's original `dense_shape = (batch, ?)` — an unknown inner dimension. TFX Transform writes the output using `FixedLenFeature`, which requires a known shape. Shape `(None, None)` is rejected.
+
+**Fix** (`ml_platform/configs/services.py`): Force `dense_shape` to `[tensor.dense_shape[0], 1]` before densifying. This produces `(batch, 1)` — a known inner dimension that TFX accepts.
+
+### 6.3. Job 3 — `ValueError: Shapes must be equal rank, but are 1 and 2`
+
+**Job ID**: `2792595707318501376` — FAILED
+
+After forcing `dense_shape=[batch, 1]`, the code also applied `tf.squeeze(dense, axis=1)` to produce `(batch,)` — rank 1. But non-nullable columns from the schema have shape `(batch, 1)` — rank 2. In cross features, `tf.strings.join` received mismatched ranks:
+
+```
+input shapes: [?], [], [?,1]
+               ↑              ↑
+         segment (squeezed)   cust_value (non-nullable, rank 2)
+```
+
+Only `segment` was nullable (`no shape → varlen_sparse_tensor`); all other features had `shape dim { size: 1 } → DenseTensor`.
+
+**Fix** (`ml_platform/configs/services.py`): Removed `tf.squeeze(dense, axis=1)`. Output stays `(batch, 1)` — matching the rank-2 shape that non-nullable `FixedLenFeature(shape=[1])` columns produce.
+
+### 6.4. Job 4 — SUCCESS
+
+**Job ID**: `4206725990312837120` — `JOB_STATE_SUCCEEDED`
+
+Transform completed on all 515,210 elements across 558 batches. Generated artifacts:
+- `transform_fn/saved_model.pb` — the serialized transform graph
+- `transform_fn/assets/` — 5 vocabulary files (category, sub_category, segment, product_id, customer_id)
+- `transform_fn/variables/` — model variables
+- `transformed_metadata/schema.pbtxt` — output schema
+
+Schema confirmed: `segment` loaded as `varlen_sparse_tensor` (nullable), all 10 other features loaded as `DenseTensor` with `shape dim { size: 1 }` (non-nullable). The `_densify` function correctly converted `segment`'s SparseTensor to dense `(batch, 1)`, matching the other features.
+
+---
+
+## 7. Pipeline Integration
+
+No changes needed to experiment compilation. The pipeline (`ml_platform/experiments/services.py`) regenerates the transform code fresh at submission time:
+
+```
+ExperimentService._submit_pipeline()
+  → PreprocessingFnGenerator(feature_config).generate()   # fresh generation with _densify
+  → upload to GCS as transform_module.py
+  → pass GCS path to TFX Transform component
+```
+
+Any new experiment run automatically gets the fix.
+
+---
+
+## 8. Files Changed
+
+| File | Change |
+|---|---|
+| `ml_platform/configs/services.py` | Added `_generate_helpers()` method, inserted into `generate()` assembly, wrapped 7 `inputs[col]` accesses with `_densify()` |
+| `scripts/test_services_transform.py` | Fixed module import (standard import instead of `importlib.util`) |
+| `docs/transform_nulls.md` | This document |

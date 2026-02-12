@@ -1006,9 +1006,21 @@ import tensorflow_transform as tft
         """Generate module-level helper functions for the transform module."""
         return '''
 def _densify(tensor, default_value):
-    """Convert SparseTensor to dense if needed. Handles nullable BigQuery columns."""
+    """Convert SparseTensor to dense if needed. Handles nullable BigQuery columns.
+
+    VarLenFeature SparseTensors have shape (batch, ?). We force dense_shape
+    to (batch, 1) and densify — matching the rank-2 shape that non-nullable
+    FixedLenFeature columns produce.
+    """
     if isinstance(tensor, tf.SparseTensor):
-        return tf.sparse.to_dense(tensor, default_value=default_value)
+        return tf.sparse.to_dense(
+            tf.SparseTensor(
+                indices=tensor.indices,
+                values=tensor.values,
+                dense_shape=[tensor.dense_shape[0], 1]
+            ),
+            default_value=default_value
+        )
     return tensor
 '''
 

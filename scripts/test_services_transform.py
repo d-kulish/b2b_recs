@@ -138,11 +138,12 @@ def main():
     logger.info(f"Loaded schema with {{len(schema.feature)}} features")
 
     # Import preprocessing_fn
+    # IMPORTANT: Use standard import (not importlib.util.spec_from_file_location)
+    # so the module is registered in sys.modules. Beam's FnApiRunner serializes
+    # DoFns via cloudpickle — if the module isn't registered, preprocessing_fn
+    # loses its globals (tf, tft) on deserialization, causing NameError.
     sys.path.insert(0, work_dir)
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("transform_module", transform_local)
-    transform_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(transform_module)
+    import transform_module
     preprocessing_fn = transform_module.preprocessing_fn
     logger.info("Loaded preprocessing_fn from transform_module")
 

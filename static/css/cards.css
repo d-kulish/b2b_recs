@@ -442,6 +442,10 @@
     background: #d1d5db;
     color: #6b7280;
 }
+.ml-stage-segment.cancelled {
+    background: #f59e0b;
+    color: white;
+}
 .ml-stage-segment.skipped {
     background: #e5e7eb;
     color: #9ca3af;

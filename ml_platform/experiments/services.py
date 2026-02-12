@@ -1997,7 +1997,14 @@ if __name__ == "__main__":
         # Update status
         quick_test.status = quick_test.STATUS_CANCELLED
         quick_test.completed_at = timezone.now()
-        quick_test.save(update_fields=['status', 'completed_at'])
+
+        # Update stage_details: mark any running stages as cancelled
+        if quick_test.stage_details:
+            for stage in quick_test.stage_details:
+                if stage['status'] == 'running':
+                    stage['status'] = 'cancelled'
+
+        quick_test.save(update_fields=['status', 'completed_at', 'stage_details'])
 
         # Log summary
         if cloud_build_cancelled and vertex_pipeline_cancelled:

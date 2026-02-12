@@ -1250,7 +1250,14 @@ class TrainingService:
         # Update status
         training_run.status = TrainingRun.STATUS_CANCELLED
         training_run.completed_at = timezone.now()
-        training_run.save(update_fields=['status', 'completed_at', 'updated_at'])
+
+        # Update stage_details: mark any running stages as cancelled
+        if training_run.stage_details:
+            for stage in training_run.stage_details:
+                if stage['status'] == 'running':
+                    stage['status'] = 'cancelled'
+
+        training_run.save(update_fields=['status', 'completed_at', 'updated_at', 'stage_details'])
 
         logger.info(
             f"Cancelled training run {training_run.display_name} (id={training_run.id}) - "

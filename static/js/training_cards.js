@@ -797,7 +797,7 @@ const TrainingCards = (function() {
         const badgesHtml = renderBadgesRow(run);
 
         // Stage bar (always shown at bottom)
-        const stagesHtml = renderStageBar(run.stage_details || getDefaultStages());
+        const stagesHtml = renderStageBar(run.stage_details || getDefaultStages(), run.status);
 
         return `
             <div class="ml-card" data-run-id="${run.id}" onclick="TrainingCards.viewRun(${run.id})">
@@ -1178,7 +1178,7 @@ const TrainingCards = (function() {
         // Render stage progress bar if we have stage details
         let stageBarHtml = '';
         if (run.stage_details && run.stage_details.length > 0) {
-            stageBarHtml = renderStageBar(run.stage_details);
+            stageBarHtml = renderStageBar(run.stage_details, run.status);
         }
 
         return `
@@ -1197,12 +1197,18 @@ const TrainingCards = (function() {
         `;
     }
 
-    function renderStageBar(stageDetails) {
+    function renderStageBar(stageDetails, runStatus) {
         // Gradient green colors for 9 stages (green-600 to green-200, all visible)
         const completedColors = ['#059669', '#10b981', '#22c55e', '#34d399', '#4ade80', '#5ee8a0', '#6ee7b7', '#86efac', '#a7f3d0'];
 
         const segments = stageDetails.map((stage, idx) => {
-            const statusClass = stage.status || 'pending';
+            let statusClass = stage.status || 'pending';
+            // If run is in a terminal state, override any stale 'running' stages
+            if (statusClass === 'running' && runStatus === 'cancelled') {
+                statusClass = 'cancelled';
+            } else if (statusClass === 'running' && runStatus === 'failed') {
+                statusClass = 'failed';
+            }
             // Apply gradient color for completed stages
             const style = statusClass === 'completed'
                 ? `style="background: ${completedColors[idx % completedColors.length]}"`

@@ -288,3 +288,76 @@ Any new experiment run automatically gets the fix.
 | `ml_platform/configs/services.py` | Added `_generate_helpers()` method, inserted into `generate()` assembly, wrapped 7 `inputs[col]` accesses with `_densify()` |
 | `scripts/test_services_transform.py` | Fixed module import (standard import instead of `importlib.util`) |
 | `docs/transform_nulls.md` | This document |
+
+---
+
+## 9. Follow-Up: Trainer Serve Function Shape Mismatch (qt-126)
+
+**Date**: 2026-02-12
+
+### 9.1. The Problem
+
+After the `_densify` fix resolved the Transform step crash, experiment `qt-126` failed later in the pipeline at `tf.saved_model.save()` during the Trainer step. The root cause is the same nullable column (`segment`), but the failure point is different.
+
+SchemaGen marks `segment` as `NULLABLE` → `VarLenFeature` (SparseTensor). The Trainer's generated serve function provides all inputs as dense tensors via `tf.expand_dims()`. TFT v2's `_apply_v2_transform_model` cannot convert a dense tensor into the SparseTensor that the transform graph expects, producing a shape mismatch: `(None, 2) vs (None, 1)`.
+
+### 9.2. Why `_densify` Alone Is Insufficient
+
+The `_densify` fix handles the Transform component correctly — it converts SparseTensors to dense inside `preprocessing_fn`. However, the saved transform graph still has SparseTensor *input signatures* for nullable columns. At serving time, the Trainer's serve function feeds dense tensors into this graph, and TFT v2 cannot reconcile the mismatch.
+
+The real fix is to prevent NULLs from ever reaching SchemaGen, so all columns are marked `REQUIRED` (FixedLenFeature/dense) from the start. This makes the entire pipeline — SchemaGen, Transform, Trainer, and serving — work with consistent dense tensors.
+
+### 9.3. Fix Applied — COALESCE in Generated SQL
+
+Modified `BigQueryService.generate_query()` in `ml_platform/datasets/services.py` to wrap columns from LEFT-JOINed tables with `COALESCE()` when `for_tfx=True`.
+
+**Changes:**
+
+1. **`left_join_tables` set**: After the `column_types` dict is built, identifies which table aliases come from LEFT JOINs by inspecting `dataset.join_config`. The default join type is `LEFT`, matching existing behavior.
+
+2. **`_coalesce_expr()` helper**: Wraps a column reference with `COALESCE(col, default)` if the column's table is in `left_join_tables`. Type-appropriate defaults:
+
+   | BigQuery type | Default | Rationale |
+   |---|---|---|
+   | `STRING`, `BYTES` | `''` | Empty string — hashes to a deterministic "unknown" bucket |
+   | `INT64`, `INTEGER` | `0` | Zero integer |
+   | `FLOAT64`, `FLOAT`, `NUMERIC`, `BIGNUMERIC` | `0.0` | Zero float |
+   | `BOOLEAN`, `BOOL` | `FALSE` | Boolean false |
+   | `TIMESTAMP`, `DATE`, `DATETIME` | `COALESCE(UNIX_SECONDS(...), 0)` | Wrapped at the UNIX_SECONDS level |
+
+3. **Applied in both SELECT loops**: The main SELECT loop and the `filtered_data` CTE SELECT loop both use `_coalesce_expr()` / COALESCE-wrapped UNIX_SECONDS to build column expressions.
+
+**Example generated SQL (before):**
+```sql
+SELECT
+  transactions.`customer_id` AS `customer_id`,
+  customers.`segment` AS `segment`
+FROM `project.dataset.transactions` AS transactions
+LEFT JOIN `project.dataset.customers` AS customers ON transactions.customer_id = customers.customer_id
+```
+
+**Example generated SQL (after, with `for_tfx=True`):**
+```sql
+SELECT
+  transactions.`customer_id` AS `customer_id`,
+  COALESCE(customers.`segment`, '') AS `segment`
+FROM `project.dataset.transactions` AS transactions
+LEFT JOIN `project.dataset.customers` AS customers ON transactions.customer_id = customers.customer_id
+```
+
+### 9.4. Interaction with `_densify`
+
+The `_densify` helper in the generated `preprocessing_fn` remains as defense-in-depth. With COALESCE in place, SchemaGen marks all columns as `REQUIRED`, so `_densify`'s `isinstance(tensor, tf.SparseTensor)` check is always `False` — the function becomes a no-op with zero overhead. If a future query path somehow produces NULLs (e.g., a non-LEFT-JOIN source of nullability), `_densify` still provides a safety net.
+
+### 9.5. Downstream Inheritance
+
+- `generate_training_query()` calls `generate_query(for_tfx=True)` — inherits the fix
+- `generate_split_queries()` wraps the base query — inherits the fix
+- Non-TFX paths (`for_tfx=False`) are unaffected — no COALESCE wrapping
+
+### 9.6. Files Changed
+
+| File | Change |
+|---|---|
+| `ml_platform/datasets/services.py` | Added `left_join_tables` set, `_coalesce_expr()` helper, COALESCE wrapping in both SELECT loops of `generate_query()` |
+| `docs/transform_nulls.md` | Added Section 9 (this section) |

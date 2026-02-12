@@ -1119,6 +1119,31 @@ class BigQueryService:
                 for col_key, stats in column_stats.items():
                     column_types[col_key] = stats.get('type', 'STRING')
 
+            # Build set of LEFT-JOINed table aliases (columns may be NULL from unmatched rows)
+            left_join_tables = set()
+            if for_tfx:
+                for sec_table in (dataset.secondary_tables or []):
+                    jc = dataset.join_config.get(sec_table, {})
+                    if 'LEFT' in jc.get('join_type', 'LEFT').upper():
+                        left_join_tables.add(sec_table.split('.')[-1])
+
+            def _coalesce_expr(table_alias, col, col_type):
+                """Wrap a column reference with COALESCE if it comes from a LEFT-JOINed table."""
+                raw = f"{table_alias}.`{col}`"
+                if table_alias not in left_join_tables:
+                    return raw
+                bq_type = col_type.upper()
+                if bq_type in ('STRING', 'BYTES'):
+                    return f"COALESCE({raw}, '')"
+                elif bq_type in ('INT64', 'INTEGER'):
+                    return f"COALESCE({raw}, 0)"
+                elif bq_type in ('FLOAT64', 'FLOAT', 'NUMERIC', 'BIGNUMERIC'):
+                    return f"COALESCE({raw}, 0.0)"
+                elif bq_type in ('BOOLEAN', 'BOOL'):
+                    return f"COALESCE({raw}, FALSE)"
+                # TIMESTAMP/DATE/DATETIME – handled at UNIX_SECONDS level
+                return raw
+
             # Build SELECT clause with full table.column references
             # IMPORTANT: Handle duplicate column names the same way as the filtered_data CTE
             # to ensure FeatureConfig column names match BigQuery output.
@@ -1134,12 +1159,19 @@ class BigQueryService:
                     col_type = column_types.get(col_key, 'STRING')
                     needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
+                    # Build column expression, wrapping with COALESCE for LEFT-JOINed tables
+                    if needs_conversion:
+                        raw = f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP))"
+                        if table_alias in left_join_tables:
+                            col_expr = f"COALESCE({raw}, 0)"
+                        else:
+                            col_expr = raw
+                    else:
+                        col_expr = _coalesce_expr(table_alias, col, col_type)
+
                     if for_analysis and col in reverse_mapping:
                         mapped_name = reverse_mapping[col]
-                        if needs_conversion:
-                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP)) AS `{mapped_name}`")
-                        else:
-                            select_cols.append(f"{table_alias}.`{col}` AS `{mapped_name}`")
+                        select_cols.append(f"{col_expr} AS `{mapped_name}`")
                     else:
                         # Handle duplicate column names across tables
                         # First occurrence uses raw name, subsequent use table_alias_col
@@ -1157,11 +1189,7 @@ class BigQueryService:
                         alias_key_dot = f"{table_alias}.{col}"
                         final_name = column_aliases.get(alias_key) or column_aliases.get(alias_key_dot) or output_name
 
-                        if needs_conversion:
-                            # Convert TIMESTAMP to Unix epoch seconds (INT64)
-                            select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP)) AS `{final_name}`")
-                        else:
-                            select_cols.append(f"{table_alias}.`{col}` AS `{final_name}`")
+                        select_cols.append(f"{col_expr} AS `{final_name}`")
 
             if not select_cols:
                 select_cols = ['*']
@@ -1197,6 +1225,16 @@ class BigQueryService:
                         col_type = column_types.get(col_key, 'STRING')
                         needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
+                        # Build column expression with COALESCE for LEFT-JOINed tables
+                        if needs_conversion:
+                            raw = f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP))"
+                            if table_alias in left_join_tables:
+                                col_expr = f"COALESCE({raw}, 0)"
+                            else:
+                                col_expr = raw
+                        else:
+                            col_expr = _coalesce_expr(table_alias, col, col_type)
+
                         # Handle duplicate column names across tables
                         if col in seen_cols:
                             output_name = f"{table_alias}_{col}"
@@ -1209,10 +1247,7 @@ class BigQueryService:
                         alias_key_dot = f"{table_alias}.{col}"
                         final_name = column_aliases.get(alias_key) or column_aliases.get(alias_key_dot) or output_name
 
-                        if needs_conversion:
-                            filtered_select_cols.append(f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP)) AS `{final_name}`")
-                        else:
-                            filtered_select_cols.append(f"{table_alias}.`{col}` AS `{final_name}`")
+                        filtered_select_cols.append(f"{col_expr} AS `{final_name}`")
 
                 if not filtered_select_cols:
                     filtered_select_cols = [f"{primary_alias}.*"]

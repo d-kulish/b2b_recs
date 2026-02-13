@@ -4069,6 +4069,190 @@
         border-top-left-radius: 24px;
         border-bottom-left-radius: 24px;
     }
+
+    /* =========================================================================
+       DATASET DETAIL MODAL — chapter-style KPI card sections (matches ETL Run View)
+       ========================================================================= */
+    .ds-detail-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-radius: 12px 12px 0 0;
+        border-bottom: 1px solid #e5e7eb;
+        background: linear-gradient(to right,
+            rgba(255,255,255,1) 0%,
+            rgba(219,234,254,0.3) 30%,
+            rgba(219,234,254,0.7) 60%,
+            rgba(191,219,254,1) 100%);
+        min-height: 80px;
+    }
+    .ds-detail-header-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #111827;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+    .ds-detail-header-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        flex-shrink: 0;
+        color: white;
+        background: #2563eb;
+    }
+
+    .ds-detail-section {
+        border: 1px solid #000000;
+        border-radius: 12px;
+        padding: 16px 20px;
+        background: white;
+    }
+    .ds-detail-section-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 10px;
+    }
+    .ds-detail-section-body {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .ds-detail-section-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .ds-detail-section-icon i { color: white; font-size: 18px; }
+    .ds-detail-section-icon.info    { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+    .ds-detail-section-icon.tables  { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+    .ds-detail-section-icon.filters { background: linear-gradient(135deg, #10b981, #34d399); }
+    .ds-detail-section-icon.stats   { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+
+    .ds-detail-stats {
+        display: flex;
+        gap: 10px;
+        flex: 1;
+    }
+    .ds-detail-stat {
+        flex: 1;
+        text-align: center;
+        padding: 10px 8px;
+        background: #f9fafb;
+        border-radius: 8px;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .ds-detail-stat-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .ds-detail-stat-label {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    /* Info stat variant — label on top, value below (for text metadata) */
+    .ds-detail-stat-info {
+        flex: 1;
+        padding: 10px 12px;
+        background: #f9fafb;
+        border-radius: 8px;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .ds-detail-stat-info .stat-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 4px;
+    }
+    .ds-detail-stat-info .stat-value {
+        font-size: 13px;
+        font-weight: 400;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Filter detail breakdowns inside section */
+    .ds-detail-filter-details {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid #f3f4f6;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Column Statistics — collapsible section */
+    .ds-detail-stats-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+    }
+    .ds-detail-stats-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .ds-detail-stats-toggle {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 16px;
+        transition: transform 0.3s ease;
+    }
+    .ds-detail-section.stats-open .ds-detail-stats-toggle {
+        transform: rotate(90deg);
+    }
+    .ds-detail-stats-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+    .ds-detail-section.stats-open .ds-detail-stats-content {
+        max-height: 2000px;
+        transition: max-height 0.5s ease-in;
+    }
+    .ds-detail-stats-divider {
+        height: 1px;
+        margin: 12px 0;
+        background: linear-gradient(to right, transparent 0%, #e5e7eb 10%, #e5e7eb 90%, transparent 100%);
+    }
+
+    /* No-snapshot warning inside section style */
+    .ds-detail-warning {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 12px 14px;
+    }
+    .ds-detail-warning p {
+        font-size: 13px;
+        color: #92400e;
+        margin: 0;
+    }
 </style>
 {% endblock %}
 
@@ -4961,14 +5145,16 @@
 
 <!-- Dataset Detail Modal -->
 <div id="dsDetailModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 880px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+    <div class="modal-container" style="max-width: 880px; max-height: 85vh; display: flex; flex-direction: column;">
+        <!-- Header — gradient background with title + icon -->
+        <div class="ds-detail-header flex-shrink-0">
+            <h3 class="ds-detail-header-title" id="dsDetailTitle">Dataset Details</h3>
+            <div class="ds-detail-header-icon">
                 <i class="fas fa-database"></i>
             </div>
-            <h3 class="modal-header-title" id="dsDetailTitle">Dataset Details</h3>
         </div>
-        <div class="modal-body" id="dsDetailContent" style="max-height: 70vh; overflow-y: auto;">
+        <!-- Body -->
+        <div id="dsDetailContent" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
             <!-- Content will be loaded dynamically -->
         </div>
         <div class="modal-footer-wizard-neu">
@@ -13581,6 +13767,12 @@ function ds_renderDatasetDetail(summary) {
         `);
     }
 
+    // Count filters for stat tablets
+    const dateFilterCount = filtersApplied.dates?.type ? 1 : 0;
+    const customerFilterCount = filtersApplied.customers?.count || 0;
+    const productFilterCount = filtersApplied.products?.count || 0;
+    const totalFilterCount = dateFilterCount + customerFilterCount + productFilterCount;
+
     // Build column stats table rows
     const columnStatsRows = Object.entries(columnStats).map(([colName, stats]) => {
         return `
@@ -13591,93 +13783,161 @@ function ds_renderDatasetDetail(summary) {
             </tr>
         `;
     }).join('');
+    const columnCount = Object.keys(columnStats).length;
+
+    // Tables info
+    const primaryTable = summary.tables?.primary?.replace('raw_data.', '') || summary.primary_table?.replace('raw_data.', '') || 'Not set';
+    const secondaryTables = summary.tables?.secondary || summary.secondary_tables || [];
+    const tableCount = 1 + secondaryTables.length;
 
     const html = `
-        <div class="space-y-4">
-            <!-- Info -->
-            <div class="flex items-center gap-3">
-                <span class="text-sm text-gray-500">Created ${summary.timestamps?.created_at ? new Date(summary.timestamps.created_at).toLocaleDateString() : 'Unknown'}</span>
-                ${snapshot.has_snapshot ? `<span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-700">${ds_formatNumber(snapshot.total_rows)} rows</span>` : ''}
-            </div>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
 
-            ${summary.description ? `<p class="text-gray-600">${ds_escapeHtml(summary.description)}</p>` : ''}
-
-            <!-- Tables & Joins -->
-            <div class="bg-white rounded-lg p-4 border border-gray-300">
-                <h4 class="font-semibold text-gray-900 mb-2"><i class="fas fa-database mr-2 text-gray-500"></i>Tables & Joins</h4>
-                <div class="space-y-2">
-                    <div class="flex items-center">
-                        <span class="text-sm font-medium text-gray-700 w-24">Primary:</span>
-                        <span class="text-sm text-gray-900 font-medium">${summary.tables?.primary?.replace('raw_data.', '') || summary.primary_table?.replace('raw_data.', '') || 'Not set'}</span>
+            <!-- 1. Dataset Information -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Dataset Information</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Created</div>
+                            <div class="stat-value">${summary.timestamps?.created_at ? new Date(summary.timestamps.created_at).toLocaleDateString() : 'Unknown'}</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${snapshot.has_snapshot ? ds_formatNumber(snapshot.total_rows) : '—'}</div>
+                            <div class="ds-detail-stat-label">Rows</div>
+                        </div>
+                        <div class="ds-detail-stat-info" style="flex: 2;">
+                            <div class="stat-label">Description</div>
+                            <div class="stat-value">${summary.description ? ds_escapeHtml(summary.description) : '—'}</div>
+                        </div>
                     </div>
-                    ${(summary.tables?.secondary?.length > 0 || summary.secondary_tables?.length > 0) ? `
-                    <div class="flex items-start">
-                        <span class="text-sm font-medium text-gray-700 w-24">Secondary:</span>
-                        <span class="text-sm text-gray-900">${(summary.tables?.secondary || summary.secondary_tables || []).map(t => t.replace('raw_data.', '')).join(', ')}</span>
-                    </div>
-                    ` : ''}
-                    ${Object.keys(joinConfig).length > 0 ? `
-                    <div class="mt-3 pt-3 border-t border-gray-200">
-                        <div class="text-sm font-medium text-gray-700 mb-2">Join Keys:</div>
-                        ${joinRows}
-                    </div>
-                    ` : ''}
                 </div>
             </div>
 
-            <!-- Filters Applied (Detailed) -->
-            ${filterDetails.length > 0 ? `
-            <div class="bg-white rounded-lg p-4 border border-gray-300">
-                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-filter mr-2 text-gray-500"></i>Filters Applied</h4>
-                <div class="space-y-3">
-                    ${filterDetails.join('')}
+            <!-- 2. Tables & Joins -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Tables & Joins</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon tables"><i class="fas fa-table"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${tableCount}</div>
+                            <div class="ds-detail-stat-label">${tableCount === 1 ? 'Table' : 'Tables'}</div>
+                        </div>
+                        <div class="ds-detail-stat-info" style="flex: 2;">
+                            <div class="stat-label">Primary Table</div>
+                            <div class="stat-value">${primaryTable}</div>
+                        </div>
+                        ${secondaryTables.length > 0 ? `
+                        <div class="ds-detail-stat-info" style="flex: 2;">
+                            <div class="stat-label">Secondary</div>
+                            <div class="stat-value">${secondaryTables.map(t => t.replace('raw_data.', '')).join(', ')}</div>
+                        </div>
+                        ` : ''}
+                    </div>
                 </div>
-            </div>
-            ` : `
-            <div class="bg-white rounded-lg p-4 border border-gray-300">
-                <h4 class="font-semibold text-gray-900 mb-2"><i class="fas fa-filter mr-2 text-gray-500"></i>Filters Applied</h4>
-                <p class="text-sm text-gray-500">No filters applied - using all data</p>
-            </div>
-            `}
-
-            <!-- Column Statistics -->
-            ${snapshot.has_snapshot && Object.keys(columnStats).length > 0 ? `
-            <div class="bg-white rounded-lg p-4 border border-gray-300">
-                <h4 class="font-semibold text-gray-900 mb-3"><i class="fas fa-chart-bar mr-2 text-gray-500"></i>Column Statistics</h4>
-                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <table class="w-full text-left">
-                        <thead class="bg-gray-100">
-                            <tr>
-                                <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Column</th>
-                                <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Type</th>
-                                <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Statistics</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            ${columnStatsRows}
-                        </tbody>
-                    </table>
-                </div>
-                ${snapshot.snapshot_at ? `
-                <div class="mt-3 text-xs text-gray-500">
-                    <i class="fas fa-clock mr-1"></i>Snapshot from ${new Date(snapshot.snapshot_at).toLocaleString()}
+                ${Object.keys(joinConfig).length > 0 ? `
+                <div class="ds-detail-filter-details">
+                    <div style="font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 4px;">Join Keys</div>
+                    ${joinRows}
                 </div>
                 ` : ''}
+            </div>
+
+            <!-- 3. Filters Applied -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Filters Applied</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon filters"><i class="fas fa-filter"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${totalFilterCount}</div>
+                            <div class="ds-detail-stat-label">Total Filters</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${dateFilterCount}</div>
+                            <div class="ds-detail-stat-label">Date</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${customerFilterCount}</div>
+                            <div class="ds-detail-stat-label">Customer</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${productFilterCount}</div>
+                            <div class="ds-detail-stat-label">Product</div>
+                        </div>
+                    </div>
+                </div>
+                ${filterDetails.length > 0 ? `
+                <div class="ds-detail-filter-details">
+                    ${filterDetails.join('')}
+                </div>
+                ` : `
+                <div style="margin-top: 10px; font-size: 13px; color: #6b7280;">No filters applied — using all data</div>
+                `}
+            </div>
+
+            <!-- 4. Column Statistics (collapsible) -->
+            ${snapshot.has_snapshot && columnCount > 0 ? `
+            <div class="ds-detail-section" id="dsDetailStatsCard">
+                <div class="ds-detail-stats-header" onclick="ds_toggleColumnStats()">
+                    <div class="ds-detail-stats-header-left">
+                        <div class="ds-detail-section-icon stats"><i class="fas fa-chart-bar"></i></div>
+                        <div class="ds-detail-section-title" style="margin-bottom: 0;">Column Statistics</div>
+                        <span style="font-size: 12px; color: #6b7280; margin-left: 4px;">(${columnCount} columns)</span>
+                    </div>
+                    <div class="ds-detail-stats-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
+                </div>
+                <div class="ds-detail-stats-content">
+                    <div class="ds-detail-stats-divider"></div>
+                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                        <table class="w-full text-left">
+                            <thead style="background: #f9fafb;">
+                                <tr>
+                                    <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Column</th>
+                                    <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Type</th>
+                                    <th class="px-3 py-2 text-xs font-semibold text-gray-700 uppercase">Statistics</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${columnStatsRows}
+                            </tbody>
+                        </table>
+                    </div>
+                    ${snapshot.snapshot_at ? `
+                    <div style="margin-top: 10px; font-size: 11px; color: #6b7280;">
+                        <i class="fas fa-clock" style="margin-right: 4px;"></i>Snapshot from ${new Date(snapshot.snapshot_at).toLocaleString()}
+                    </div>
+                    ` : ''}
+                </div>
             </div>
             ` : ''}
 
             ${!snapshot.has_snapshot ? `
-            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p class="text-sm text-yellow-800">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    No summary snapshot available. Edit the dataset to generate statistics.
-                </p>
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon stats"><i class="fas fa-chart-bar"></i></div>
+                    <div class="ds-detail-warning" style="flex: 1;">
+                        <p>
+                            <i class="fas fa-info-circle" style="margin-right: 4px;"></i>
+                            No summary snapshot available. Edit the dataset to generate statistics.
+                        </p>
+                    </div>
+                </div>
             </div>
             ` : ''}
         </div>
     `;
 
     content.innerHTML = html;
+}
+
+function ds_toggleColumnStats() {
+    const card = document.getElementById('dsDetailStatsCard');
+    if (card) card.classList.toggle('stats-open');
 }
 
 function ds_formatDetailColumnStats(stats) {

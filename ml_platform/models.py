@@ -1057,7 +1057,8 @@ class Dataset(models.Model):
     # queries use the correct location.
     bq_location = models.CharField(
         max_length=50,
-        default='US',
+        default='',
+        blank=True,
         help_text="BigQuery region where the dataset exists (e.g., 'US', 'EU', 'europe-central2')"
     )
 

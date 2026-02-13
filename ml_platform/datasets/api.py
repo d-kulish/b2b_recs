@@ -12,6 +12,9 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 import json
 import logging
+import os
+
+from django.conf import settings
 
 from ml_platform.models import ModelEndpoint, Dataset, DatasetVersion
 from .services import BigQueryService, ProductRevenueAnalysisService, DatasetStatsService, ColumnAnalysisService
@@ -290,8 +293,8 @@ def create_dataset(request, model_id):
             bq_service = BigQueryService(model)
             bq_location = bq_service.get_dataset_location()
         except Exception as e:
-            logger.warning(f"Could not detect BQ location, defaulting to US: {e}")
-            bq_location = 'US'
+            logger.warning(f"Could not detect BQ location, using GCP_LOCATION setting: {e}")
+            bq_location = getattr(settings, 'GCP_LOCATION', os.getenv('GCP_LOCATION', ''))
 
         # Create dataset (split_config removed - handled by Training domain)
         dataset = Dataset.objects.create(
@@ -618,6 +621,7 @@ def clone_dataset(request, dataset_id):
             column_mapping=original.column_mapping,
             column_aliases=original.column_aliases,
             filters=original.filters,
+            bq_location=original.bq_location,
             created_by=request.user,
         )
 

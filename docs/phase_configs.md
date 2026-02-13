@@ -1362,7 +1362,46 @@ let configState = {
 
 ---
 
-## Recent Updates (December 2025 - January 2026)
+## Recent Updates (December 2025 - February 2026)
+
+### Fix: Remove Hardcoded 'US' BigQuery Location Defaults (2026-02-13)
+
+**Bug:** The Feature Config wizard failed with `500 Internal Server Error` when loading column schema for datasets stored in `europe-central2`. The BigQuery query was executing in region `US` while the actual data resided in `europe-central2`.
+
+**Root Cause:** The string `'US'` was hardcoded as a fallback location default in 4 places across the codebase. Since this is a SaaS system deployed to different clients, no region should be hardcoded — `settings.GCP_LOCATION` (configured per deployment via environment variable) must be the single source of truth.
+
+**Hardcoded locations found:**
+
+| File | Line | Hardcoded Value | Purpose |
+|------|------|----------------|---------|
+| `ml_platform/utils/bigquery_manager.py` | 16 | `location='US'` in constructor default | BigQueryTableManager used for table/dataset creation |
+| `ml_platform/models.py` | 1058 | `default='US'` on `Dataset.bq_location` field | Model field default for all new datasets |
+| `ml_platform/datasets/services.py` | 123 | `os.getenv('GCP_LOCATION', 'US')` innermost fallback | BigQueryService location resolution |
+| `ml_platform/datasets/api.py` | 294 | `bq_location = 'US'` in exception handler | Dataset creation fallback when BQ location detection fails |
+
+**Additional issue found:** The `clone_dataset` API endpoint did not copy `bq_location` from the original dataset, so cloned datasets silently lost their region and fell back to the (hardcoded) default.
+
+**Fix Applied:**
+
+1. **`bigquery_manager.py`** — Constructor default changed to `location=None`, resolved at runtime via `settings.GCP_LOCATION`.
+2. **`models.py`** — `Dataset.bq_location` default changed from `'US'` to `''` (empty string) with `blank=True`. Empty means "not explicitly set" — service layer falls back to `settings.GCP_LOCATION`.
+3. **`datasets/services.py`** — Removed `'US'` from innermost `os.getenv()` fallback; now returns `None` which lets BigQuery client use its own project-level default or raises a clear error.
+4. **`datasets/api.py`** — Exception fallback uses `settings.GCP_LOCATION` instead of `'US'`; clone function now copies `bq_location` from the original.
+5. **Migration `0062_fix_bq_location_default.py`** — Alters the model field and backfills existing datasets that have `bq_location='US'` to the deployment's `settings.GCP_LOCATION`.
+
+**Files Modified:**
+
+| File | Changes |
+|------|---------|
+| `ml_platform/utils/bigquery_manager.py` | Constructor default `location='US'` → `location=None`, resolves from settings |
+| `ml_platform/models.py` | `Dataset.bq_location` default `'US'` → `''`, added `blank=True` |
+| `ml_platform/datasets/services.py` | Removed `'US'` from `os.getenv()` fallback |
+| `ml_platform/datasets/api.py` | Exception fallback uses `settings.GCP_LOCATION`; clone copies `bq_location` |
+| `ml_platform/migrations/0062_fix_bq_location_default.py` | New migration: alter field + backfill |
+
+**Lesson:** When a value varies per deployment, never hardcode it — even as a "safe default". Use the central settings/env-var chain exclusively. Grep for literal region strings (`'US'`, `'EU'`, `'europe-'`) after any BQ-related change.
+
+---
 
 ### Dataset Manager Migration Complete (2026-01-12 - 2026-01-14)
 

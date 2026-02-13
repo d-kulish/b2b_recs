@@ -120,7 +120,7 @@ class BigQueryService:
             self.location = dataset.bq_location
         else:
             self.location = getattr(
-                settings, 'GCP_LOCATION', os.getenv('GCP_LOCATION', 'US')
+                settings, 'GCP_LOCATION', os.getenv('GCP_LOCATION')
             )
         self.dataset_name = 'raw_data'  # Only allow raw_data.* tables
         self._client = None

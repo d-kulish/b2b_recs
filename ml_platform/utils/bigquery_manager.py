@@ -3,6 +3,8 @@ BigQuery Table Manager
 Handles BigQuery dataset and table creation with schema validation.
 """
 
+import os
+
 from google.cloud import bigquery
 from .schema_mapper import SchemaMapper
 import logging
@@ -13,11 +15,12 @@ logger = logging.getLogger(__name__)
 class BigQueryTableManager:
     """Manages BigQuery table creation and schema operations"""
 
-    def __init__(self, project_id, dataset_id='raw_data', location='US'):
+    def __init__(self, project_id, dataset_id='raw_data', location=None):
+        from django.conf import settings
         self.client = bigquery.Client(project=project_id)
         self.project_id = project_id
         self.dataset_id = dataset_id
-        self.location = location
+        self.location = location or getattr(settings, 'GCP_LOCATION', os.environ.get('GCP_LOCATION'))
 
     def ensure_dataset_exists(self):
         """

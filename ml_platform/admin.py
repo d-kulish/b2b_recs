@@ -371,7 +371,7 @@ class BillingConfigAdmin(admin.ModelAdmin):
 
 @admin.register(BillingSnapshot)
 class BillingSnapshotAdmin(admin.ModelAdmin):
-    list_display = ('date', 'service_name', 'gcp_cost', 'margin_pct', 'platform_fee', 'total_cost')
-    list_filter = ('date', 'service_name')
+    list_display = ('date', 'category', 'service_name', 'gcp_cost', 'margin_pct', 'platform_fee', 'total_cost')
+    list_filter = ('category', 'date', 'service_name')
     readonly_fields = ('created_at',)
-    ordering = ('-date', 'service_name')
+    ordering = ('-date', 'category', 'service_name')

@@ -2944,6 +2944,14 @@ class BillingConfig(models.Model):
         return self.default_margin_pct
 
 
+BILLING_CATEGORIES = [
+    ('Data', 'Data'),
+    ('Training', 'Training'),
+    ('Inference', 'Inference'),
+    ('System', 'System'),
+]
+
+
 class BillingSnapshot(models.Model):
     """
     Daily materialized cost records per GCP service.
@@ -2951,9 +2959,16 @@ class BillingSnapshot(models.Model):
     Costs and margins are frozen at snapshot time for immutable history.
     """
     date = models.DateField(db_index=True, help_text="Cost date (from billing export usage_start_time)")
+    category = models.CharField(
+        max_length=20,
+        choices=BILLING_CATEGORIES,
+        default='System',
+        db_index=True,
+        help_text="Cost category (Data, Training, Inference, System)"
+    )
     service_name = models.CharField(
         max_length=255,
-        help_text="GCP service (e.g., 'BigQuery', 'Vertex AI', 'Cloud Run')"
+        help_text="GCP service (e.g., 'BigQuery', 'Vertex AI — GPU', 'Cloud Run')"
     )
     gcp_cost = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
@@ -2976,7 +2991,7 @@ class BillingSnapshot(models.Model):
 
     class Meta:
         ordering = ['-date']
-        unique_together = ['date', 'service_name']
+        unique_together = ['date', 'category', 'service_name']
         verbose_name = 'Billing Snapshot'
         verbose_name_plural = 'Billing Snapshots'
 

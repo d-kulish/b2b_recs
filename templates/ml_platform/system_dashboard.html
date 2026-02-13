@@ -620,6 +620,36 @@
             color: #374151;
         }
 
+        .billing-category-row {
+            cursor: pointer;
+            user-select: none;
+        }
+        .billing-category-row td {
+            font-weight: 600;
+            color: #1f2937;
+        }
+        .billing-category-row:hover td {
+            background: #f9fafb;
+        }
+        .billing-category-row .chevron {
+            display: inline-block;
+            transition: transform 0.2s;
+            font-size: 10px;
+            margin-right: 6px;
+            color: #9ca3af;
+        }
+        .billing-category-row.expanded .chevron {
+            transform: rotate(90deg);
+        }
+        .billing-service-row td:first-child {
+            padding-left: 32px;
+            color: #6b7280;
+            font-weight: 400;
+        }
+        .billing-service-row.collapsed {
+            display: none;
+        }
+
         /* Billing license badge */
         .billing-license-badge {
             display: inline-flex;
@@ -1145,7 +1175,7 @@
                                     </div>
                                     <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Monthly Cost Trend</h4>
                                 </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Stacked by service (6 months)</h5>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Stacked by category (6 months)</h5>
                                 <div style="height: 200px; position: relative;">
                                     <canvas id="chartMonthlyTrend"></canvas>
                                 </div>
@@ -1159,7 +1189,7 @@
                                     </div>
                                     <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost Breakdown</h4>
                                 </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Current month by service</h5>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Current month by category</h5>
                                 <div style="height: 200px; position: relative;">
                                     <canvas id="chartCostBreakdown"></canvas>
                                 </div>
@@ -1204,7 +1234,7 @@
                                     <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #5c6bc0, #7986cb); display: flex; align-items: center; justify-content: center;">
                                         <i class="fas fa-layer-group" style="color: white; font-size: 13px;"></i>
                                     </div>
-                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost by Service Over Time</h4>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost by Category Over Time</h4>
                                 </div>
                                 <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Daily stacked area (30d)</h5>
                                 <div style="height: 200px; position: relative;">
@@ -1703,19 +1733,16 @@
         const BillingDashboard = (function() {
             let charts = {};
 
-            const SERVICE_COLORS = {
-                'BigQuery': '#4285f4',
-                'Cloud Storage': '#00bcd4',
-                'Cloud SQL': '#5c6bc0',
-                'Vertex AI': '#f59e0b',
-                'Cloud Run': '#34a853',
-                'Dataflow': '#9c27b0',
-                'Artifact Registry': '#e91e63',
+            const CATEGORY_COLORS = {
+                'Data': '#4285f4',
+                'Training': '#f59e0b',
+                'Inference': '#34a853',
+                'System': '#6b7280',
             };
             const FALLBACK_COLORS = ['#78909c', '#8d6e63', '#26a69a', '#7e57c2', '#ef5350'];
 
-            function getServiceColor(service, idx) {
-                return SERVICE_COLORS[service] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+            function getCategoryColor(category, idx) {
+                return CATEGORY_COLORS[category] || FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
             }
 
             function setText(id, value) {
@@ -1820,7 +1847,7 @@
                         renderCostBreakdown(result.data.cost_breakdown);
                         renderDailySpend(result.data.daily_spend);
                         renderCostPerTraining(result.data.cost_per_training);
-                        renderServiceOverTime(result.data.service_over_time);
+                        renderCategoryOverTime(result.data.category_over_time);
                     }
                 } catch (error) {
                     console.error('Failed to load billing charts:', error);
@@ -1853,11 +1880,11 @@
                     return;
                 }
 
-                const services = Object.keys(data.services);
-                const datasets = services.map((svc, i) => ({
-                    label: svc,
-                    data: data.services[svc],
-                    backgroundColor: getServiceColor(svc, i),
+                const categories = Object.keys(data.categories);
+                const datasets = categories.map((cat, i) => ({
+                    label: cat,
+                    data: data.categories[cat],
+                    backgroundColor: getCategoryColor(cat, i),
                 }));
 
                 charts.monthlyTrend = new Chart(ctx, {
@@ -1890,7 +1917,7 @@
                     return;
                 }
 
-                const colors = data.labels.map((svc, i) => getServiceColor(svc, i));
+                const colors = data.labels.map((cat, i) => getCategoryColor(cat, i));
                 const grandTotal = data.total.reduce((a, b) => a + b, 0);
 
                 const centerTextPlugin = {
@@ -2040,28 +2067,28 @@
                 });
             }
 
-            function renderServiceOverTime(data) {
+            function renderCategoryOverTime(data) {
                 const ctx = document.getElementById('chartServiceOverTime');
                 if (!ctx) return;
-                if (charts.serviceOverTime) charts.serviceOverTime.destroy();
+                if (charts.categoryOverTime) charts.categoryOverTime.destroy();
 
                 if (!data.labels || data.labels.length === 0) {
                     showNoData(ctx);
                     return;
                 }
 
-                const services = Object.keys(data.services);
-                const datasets = services.map((svc, i) => ({
-                    label: svc,
-                    data: data.services[svc],
-                    borderColor: getServiceColor(svc, i),
-                    backgroundColor: getServiceColor(svc, i) + '33',
+                const categories = Object.keys(data.categories);
+                const datasets = categories.map((cat, i) => ({
+                    label: cat,
+                    data: data.categories[cat],
+                    borderColor: getCategoryColor(cat, i),
+                    backgroundColor: getCategoryColor(cat, i) + '33',
                     tension: 0.3,
                     fill: true,
                     pointRadius: 0,
                 }));
 
-                charts.serviceOverTime = new Chart(ctx, {
+                charts.categoryOverTime = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.labels.map(formatDate),
@@ -2085,14 +2112,30 @@
 
                 let html = '';
 
-                // Service rows
-                (data.items || []).forEach(item => {
-                    html += '<tr>';
-                    html += '<td>' + item.service + '</td>';
-                    html += '<td>' + formatUSD(item.gcp_cost) + '</td>';
-                    html += '<td>' + formatUSD(item.platform_fee) + ' <span style="color:#9ca3af;font-size:11px;">(' + item.margin_pct + '%)</span></td>';
-                    html += '<td>' + formatUSD(item.total) + '</td>';
+                // Category rows with collapsible service sub-rows
+                (data.items || []).forEach((cat, catIdx) => {
+                    const catId = 'billing-cat-' + catIdx;
+                    const color = CATEGORY_COLORS[cat.category] || '#6b7280';
+
+                    // Category header row
+                    html += '<tr class="billing-category-row" data-cat="' + catId + '">';
+                    html += '<td><span class="chevron">&#9654;</span>';
+                    html += '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:8px;"></span>';
+                    html += cat.category + '</td>';
+                    html += '<td>' + formatUSD(cat.gcp_cost) + '</td>';
+                    html += '<td>' + formatUSD(cat.platform_fee) + '</td>';
+                    html += '<td>' + formatUSD(cat.total) + '</td>';
                     html += '</tr>';
+
+                    // Service sub-rows (hidden by default)
+                    (cat.services || []).forEach(svc => {
+                        html += '<tr class="billing-service-row collapsed" data-cat-parent="' + catId + '">';
+                        html += '<td>' + svc.service + '</td>';
+                        html += '<td>' + formatUSD(svc.gcp_cost) + '</td>';
+                        html += '<td>' + formatUSD(svc.platform_fee) + ' <span style="color:#9ca3af;font-size:11px;">(' + svc.margin_pct + '%)</span></td>';
+                        html += '<td>' + formatUSD(svc.total) + '</td>';
+                        html += '</tr>';
+                    });
                 });
 
                 // Separator
@@ -2129,6 +2172,17 @@
                 html += '</tr>';
 
                 tbody.innerHTML = html;
+
+                // Attach toggle handlers to category rows
+                tbody.querySelectorAll('.billing-category-row').forEach(row => {
+                    row.addEventListener('click', function() {
+                        const catId = this.dataset.cat;
+                        const expanded = this.classList.toggle('expanded');
+                        tbody.querySelectorAll('[data-cat-parent="' + catId + '"]').forEach(sub => {
+                            sub.classList.toggle('collapsed', !expanded);
+                        });
+                    });
+                });
             }
 
             // ---- Init ----

@@ -11,7 +11,7 @@ ETL-related views and APIs have been migrated to ml_platform.etl
 Connection-related APIs have been migrated to ml_platform.connections
 """
 import calendar
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from datetime import date, timedelta
 from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
@@ -1352,38 +1352,41 @@ def api_system_billing_charts(request):
         period_end = today.replace(day=days_in_month)
 
         # ------------------------------------------------------------------
-        # 1. Monthly Trend — last 6 months, grouped by month + service
+        # 1. Monthly Trend — last 6 months, grouped by month + category
         # ------------------------------------------------------------------
         six_months_ago = (period_start - timedelta(days=180)).replace(day=1)
         trend_qs = (
             BillingSnapshot.objects
             .filter(date__gte=six_months_ago)
-            .values('date', 'service_name', 'total_cost')
+            .values('date', 'category', 'total_cost')
             .order_by('date')
         )
-        month_service = defaultdict(lambda: defaultdict(Decimal))
-        all_services = set()
+        month_category = defaultdict(lambda: defaultdict(Decimal))
+        all_categories = set()
         for row in trend_qs:
             month_key = row['date'].strftime('%Y-%m')
-            month_service[month_key][row['service_name']] += row['total_cost']
-            all_services.add(row['service_name'])
+            month_category[month_key][row['category']] += row['total_cost']
+            all_categories.add(row['category'])
 
-        month_labels = sorted(month_service.keys())
+        month_labels = sorted(month_category.keys())
+        # Fixed category order
+        category_order = ['Data', 'Training', 'Inference', 'System']
+        sorted_categories = [c for c in category_order if c in all_categories]
         monthly_trend = {
             'labels': month_labels,
-            'services': {
-                svc: [float(month_service[m].get(svc, 0)) for m in month_labels]
-                for svc in sorted(all_services)
+            'categories': {
+                cat: [float(month_category[m].get(cat, 0)) for m in month_labels]
+                for cat in sorted_categories
             },
         }
 
         # ------------------------------------------------------------------
-        # 2. Cost Breakdown — current month per-service totals (donut)
+        # 2. Cost Breakdown — current month per-category totals (donut)
         # ------------------------------------------------------------------
         breakdown_qs = (
             BillingSnapshot.objects
             .filter(date__gte=period_start, date__lte=period_end)
-            .values('service_name')
+            .values('category')
             .annotate(
                 gcp=Sum('gcp_cost'),
                 fee=Sum('platform_fee'),
@@ -1392,7 +1395,7 @@ def api_system_billing_charts(request):
             .order_by('-total')
         )
         cost_breakdown = {
-            'labels': [r['service_name'] for r in breakdown_qs],
+            'labels': [r['category'] for r in breakdown_qs],
             'gcp_cost': [float(r['gcp']) for r in breakdown_qs],
             'platform_fee': [float(r['fee']) for r in breakdown_qs],
             'total': [float(r['total']) for r in breakdown_qs],
@@ -1478,30 +1481,31 @@ def api_system_billing_charts(request):
                 )
 
         # ------------------------------------------------------------------
-        # 5. Service Over Time — last 30 days, daily per-service (stacked area)
+        # 5. Category Over Time — last 30 days, daily per-category (stacked area)
         # ------------------------------------------------------------------
         cutoff_30d = today - timedelta(days=30)
-        sot_qs = (
+        cot_qs = (
             BillingSnapshot.objects
             .filter(date__gte=cutoff_30d)
-            .values('date', 'service_name', 'total_cost')
+            .values('date', 'category', 'total_cost')
             .order_by('date')
         )
-        sot_dates = set()
-        sot_data = defaultdict(lambda: defaultdict(Decimal))
-        sot_services = set()
-        for row in sot_qs:
+        cot_dates = set()
+        cot_data = defaultdict(lambda: defaultdict(Decimal))
+        cot_categories = set()
+        for row in cot_qs:
             d = row['date']
-            sot_dates.add(d)
-            sot_data[d][row['service_name']] += row['total_cost']
-            sot_services.add(row['service_name'])
+            cot_dates.add(d)
+            cot_data[d][row['category']] += row['total_cost']
+            cot_categories.add(row['category'])
 
-        sot_labels = sorted(sot_dates)
-        service_over_time = {
-            'labels': [d.isoformat() for d in sot_labels],
-            'services': {
-                svc: [float(sot_data[d].get(svc, 0)) for d in sot_labels]
-                for svc in sorted(sot_services)
+        cot_labels = sorted(cot_dates)
+        sorted_cot_categories = [c for c in category_order if c in cot_categories]
+        category_over_time = {
+            'labels': [d.isoformat() for d in cot_labels],
+            'categories': {
+                cat: [float(cot_data[d].get(cat, 0)) for d in cot_labels]
+                for cat in sorted_cot_categories
             },
         }
 
@@ -1512,7 +1516,7 @@ def api_system_billing_charts(request):
                 'cost_breakdown': cost_breakdown,
                 'daily_spend': daily_spend,
                 'cost_per_training': cost_per_training,
-                'service_over_time': service_over_time,
+                'category_over_time': category_over_time,
             }
         })
     except Exception as e:
@@ -1536,34 +1540,54 @@ def api_system_billing_invoice(request):
         items_qs = (
             BillingSnapshot.objects
             .filter(date__gte=period_start, date__lte=period_end)
-            .values('service_name')
+            .values('category', 'service_name')
             .annotate(
                 gcp_cost=Sum('gcp_cost'),
                 platform_fee=Sum('platform_fee'),
                 total=Sum('total_cost'),
             )
-            .order_by('-total')
+            .order_by('category', '-total')
         )
 
-        items = []
+        # Group services by category
+        category_order = ['Data', 'Training', 'Inference', 'System']
+        cat_map = OrderedDict((c, {'services': [], 'gcp_cost': Decimal('0'), 'platform_fee': Decimal('0'), 'total': Decimal('0')}) for c in category_order)
         subtotal_gcp = Decimal('0')
         subtotal_fee = Decimal('0')
         subtotal = Decimal('0')
+
         for row in items_qs:
-            # Derive the margin_pct from the aggregated values
             gcp = row['gcp_cost']
             fee = row['platform_fee']
+            total = row['total']
             margin_pct = round(float(fee) / float(gcp) * 100) if gcp else 0
-            items.append({
+            cat = row['category']
+            if cat not in cat_map:
+                cat_map[cat] = {'services': [], 'gcp_cost': Decimal('0'), 'platform_fee': Decimal('0'), 'total': Decimal('0')}
+            cat_map[cat]['services'].append({
                 'service': row['service_name'],
                 'gcp_cost': float(gcp),
                 'margin_pct': margin_pct,
                 'platform_fee': float(fee),
-                'total': float(row['total']),
+                'total': float(total),
             })
+            cat_map[cat]['gcp_cost'] += gcp
+            cat_map[cat]['platform_fee'] += fee
+            cat_map[cat]['total'] += total
             subtotal_gcp += gcp
             subtotal_fee += fee
-            subtotal += row['total']
+            subtotal += total
+
+        items = []
+        for cat, data in cat_map.items():
+            if data['services']:
+                items.append({
+                    'category': cat,
+                    'gcp_cost': float(data['gcp_cost']),
+                    'platform_fee': float(data['platform_fee']),
+                    'total': float(data['total']),
+                    'services': sorted(data['services'], key=lambda s: -s['total']),
+                })
 
         config = BillingConfig.get_solo()
         license_fee = float(config.license_fee)

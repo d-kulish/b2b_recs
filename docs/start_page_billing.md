@@ -19,9 +19,9 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 | BigQuery Data Transfer Service API | Done | Enabled on `b2b-recs` project |
 | Cloud Billing API | Done | Enabled on `b2b-recs` project |
 | `BillingConfig` model (singleton) | Done | Migration `0059_billing_models`, seeded with defaults via `get_solo()` |
-| `BillingSnapshot` model | Done | Daily per-service records, unique on `(date, service_name)` |
+| `BillingSnapshot` model | Done | Daily per-service records with category, unique on `(date, category, service_name)` |
 | Django Admin registration | Done | Singleton enforcement for BillingConfig, list/filter for BillingSnapshot |
-| `collect_billing_snapshots` command | Done | Queries billing export, applies margins, upserts snapshots. Supports `--date`, `--dry-run`, `--backfill --days N` |
+| `collect_billing_snapshots` command | Done | Queries resource-level billing export, classifies into categories (Data/Training/Inference/System), applies margins, stores snapshots. Supports `--date`, `--dry-run`, `--backfill --days N` |
 | `setup_billing_scheduler` command | Done | Creates Cloud Scheduler job `collect-billing-snapshots` at 05:00 UTC |
 | Webhook endpoint | Done | `POST /api/system/collect-billing-webhook/` — collects yesterday's data |
 | Option B chosen | Done | Separate command/scheduler, isolated from `collect_resource_metrics` |
@@ -36,8 +36,8 @@ The Billing chapter is the third collapsible section on the Starting Page (`syst
 | Historical backfill | Done | 55 service-day records (Feb 3–11), $15.14 GCP / $28.53 total with margin |
 | ETL dataset isolation | Done | `billing_export` blocked in `list_bq_tables()` via `EXCLUDED_DATASETS` set — returns 403 |
 | API: `/api/system/billing/summary/` | Done | Current month summary bar data with license info from `BillingConfig` |
-| API: `/api/system/billing/charts/` | Done | 5 chart datasets: monthly_trend, cost_breakdown, daily_spend, cost_per_training, service_over_time |
-| API: `/api/system/billing/invoice/` | Done | Invoice preview rows grouped by service with margin calculation |
+| API: `/api/system/billing/charts/` | Done | 5 chart datasets: monthly_trend, cost_breakdown, daily_spend, cost_per_training, category_over_time (charts 1/2/5 use categories) |
+| API: `/api/system/billing/invoice/` | Done | Invoice preview rows grouped by category with collapsible service drill-down |
 | Frontend (Phase 5) | Done | Summary bar, 3 KPI cards, 5 Chart.js charts, invoice preview table — all powered by billing API |
 | Deploy to Cloud Run | Done | Revision `django-app-00112-fbm`, URL `https://django-app-555035914949.europe-central2.run.app` |
 | Cloud Scheduler job | Done | `collect-billing-snapshots` at 05:00 UTC, OIDC via `etl-runner@b2b-recs.iam.gserviceaccount.com`, verified with manual trigger |
@@ -68,14 +68,18 @@ Clients see the GCP cost and platform fee separately per service line. No resour
 
 ### Invoice Line Example
 
+Costs are grouped into 4 categories. Each category row is clickable to expand/collapse its service sub-rows.
+
 | Service | GCP Cost | Platform Fee | Total |
 |---------|----------|-------------|-------|
-| BigQuery | $12.50 | $12.50 (100%) | $25.00 |
-| Cloud Storage | $3.20 | $3.20 (100%) | $6.40 |
-| Cloud SQL | $45.00 | $45.00 (100%) | $90.00 |
-| Vertex AI (GPU) | $28.00 | $14.00 (50%) | $42.00 |
-| Cloud Run | $5.10 | $5.10 (100%) | $10.20 |
-| Dataflow | $2.30 | $2.30 (100%) | $4.60 |
+| **▼ Data** | **$63.00** | **$63.00** | **$126.00** |
+| &nbsp;&nbsp;&nbsp;BigQuery | $12.50 | $12.50 (100%) | $25.00 |
+| &nbsp;&nbsp;&nbsp;Cloud SQL | $45.00 | $45.00 (100%) | $90.00 |
+| &nbsp;&nbsp;&nbsp;Cloud Dataflow | $2.30 | $2.30 (100%) | $4.60 |
+| &nbsp;&nbsp;&nbsp;Cloud Storage | $3.20 | $3.20 (100%) | $6.40 |
+| **▶ Training** | **$28.00** | **$14.00** | **$42.00** |
+| **▶ Inference** | **$3.50** | **$3.50** | **$7.00** |
+| **▶ System** | **$1.60** | **$1.60** | **$3.20** |
 | | | | |
 | **License** | | $1,900.00 | ~~$1,900.00~~ |
 | **Discount** | | -100% | -$1,900.00 |
@@ -114,7 +118,7 @@ Clients see the GCP cost and platform fee separately per service line. No resour
 |  +---------------------+  +--------------------+  +-------------+|
 |                                                                  |
 |  +- Chart 4 ----------+  +- Chart 5 ----------+                 |
-|  | Cost per Training   |  | Cost by Service    |                 |
+|  | Cost per Training   |  | Cost by Category   |                 |
 |  | (bar, last 10)      |  | (stacked area 30d) |                 |
 |  +---------------------+  +--------------------+                 |
 |                                                                  |
@@ -150,9 +154,9 @@ Slim horizontal bar at the top of the chapter content.
 |----------|-------|
 | **Type** | Stacked bar chart |
 | **Period** | Last 6 months |
-| **Segments** | GCP services: BigQuery, Cloud Storage, Cloud SQL, Vertex AI, Cloud Run, Dataflow |
+| **Segments** | 4 cost categories: Data (blue), Training (orange), Inference (green), System (gray) |
 | **Y-axis** | USD amount |
-| **Data source** | `BillingSnapshot` aggregated monthly |
+| **Data source** | `BillingSnapshot` aggregated monthly by `category` |
 | **Purpose** | "Am I spending more or less over time?" |
 
 ### Chart 2: Current Month Cost Breakdown
@@ -161,9 +165,9 @@ Slim horizontal bar at the top of the chapter content.
 |----------|-------|
 | **Type** | Donut chart with center total |
 | **Period** | Current billing month |
-| **Segments** | Same GCP services (colors match Chart 1) |
+| **Segments** | 4 cost categories (colors match Chart 1) |
 | **Center text** | Total estimated cost (large) + "estimated" label (small) |
-| **Data source** | `BillingSnapshot` summed for current month |
+| **Data source** | `BillingSnapshot` summed for current month by `category` |
 | **Purpose** | "Where does my money go?" |
 
 ### Chart 3: Daily Spend
@@ -188,26 +192,24 @@ Slim horizontal bar at the top of the chapter content.
 | **Data source** | `BillingSnapshot` filtered to Vertex AI costs, correlated with `TrainingRun` dates |
 | **Purpose** | "Which runs are expensive? Can I optimize?" |
 
-### Chart 5: Cost by Service Over Time
+### Chart 5: Cost by Category Over Time
 
 | Property | Value |
 |----------|-------|
 | **Type** | Stacked area chart |
 | **Period** | 30 days |
-| **Areas** | GCP services (BigQuery, Cloud Storage, Cloud SQL, Vertex AI, Cloud Run, Dataflow) |
-| **Data source** | Daily `BillingSnapshot` by service |
-| **Purpose** | "Is storage growing? Is compute spiking?" |
+| **Areas** | 4 cost categories: Data, Training, Inference, System |
+| **Data source** | Daily `BillingSnapshot` by `category` |
+| **Purpose** | "Is data spending growing? Is training spiking?" |
 
-### Service Color Palette
+### Category Color Palette
 
-| Service | Color | Hex |
-|---------|-------|-----|
-| BigQuery | Blue | #4285f4 |
-| Cloud Storage | Teal | #00bcd4 |
-| Cloud SQL | Indigo | #5c6bc0 |
-| Vertex AI | Orange | #f59e0b |
-| Cloud Run | Green | #34a853 |
-| Dataflow | Purple | #9c27b0 |
+| Category | Color | Hex |
+|----------|-------|-----|
+| Data | Blue | #4285f4 |
+| Training | Orange | #f59e0b |
+| Inference | Green | #34a853 |
+| System | Gray | #6b7280 |
 
 ---
 
@@ -226,7 +228,8 @@ Full-width table below the charts. Shows line items for the current billing peri
 
 ### Rows
 
-- One row per GCP service with non-zero cost in the current period
+- **Category rows** (bold, clickable): One row per category (Data, Training, Inference, System) with aggregated totals. Click to expand/collapse service sub-rows.
+- **Service sub-rows** (indented, initially hidden): Individual GCP service costs within each category
 - Separator row (thin line)
 - License row: `License — $1,900.00` with discount shown (e.g., `Discount: -100%`)
 - **Estimated Total** row: bold, summing all lines
@@ -243,13 +246,20 @@ Full-width table below the charts. Shows line items for the current billing peri
 ### Cost Flow
 
 ```
-GCP Billing Export (BigQuery)
-b2b-recs.billing_export.gcp_billing_export_v1_XXXXXX
+GCP Billing Export (BigQuery) — resource-level table
+b2b-recs.billing_export.gcp_billing_export_resource_v1_XXXXXX
 │
-│  Query: SELECT service.description, SUM(cost)
+│  Query: SELECT service.description, resource.name, sku.description, SUM(cost)
 │         WHERE project.id = '<client-project>'
 │         AND DATE(usage_start_time) = '<date>'
-│         GROUP BY service.description
+│         GROUP BY service_name, cloud_run_service, is_gpu
+│
+▼
+Category Classification (CATEGORY_MAP + Cloud Run inference detection)
+├── Data:      BigQuery, Cloud SQL, Cloud Dataflow, Cloud Storage
+├── Training:  Vertex AI (split into GPU / CPU via sku.description)
+├── Inference: Cloud Run services matching Deployment.cloud_run_service
+└── System:    Cloud Run (other), Cloud Scheduler, Secret Manager, Cloud Build, Artifact Registry, Cloud Logging
 │
 ▼
 BillingConfig (Django model, singleton)
@@ -260,9 +270,10 @@ BillingConfig (Django model, singleton)
 │
 ▼  gcp_cost x (1 + margin_pct/100)
 │
-BillingSnapshot (Django model, daily per service)
+BillingSnapshot (Django model, daily per category + service)
 ├── date
-├── service_name        (e.g., "BigQuery", "Vertex AI")
+├── category            ("Data", "Training", "Inference", "System")
+├── service_name        (e.g., "BigQuery", "Vertex AI — GPU", "Cloud Run — my-endpoint")
 ├── gcp_cost            (actual GCP charge)
 ├── margin_pct          (100 or 50, frozen at snapshot time)
 ├── platform_fee        (gcp_cost x margin_pct / 100)
@@ -311,20 +322,21 @@ GCP Billing Export is enabled at the billing account level and writes cost data 
 
 Helper methods: `get_solo()` (singleton access), `get_margin_pct(service_name)` (returns 50% for Vertex AI, 100% otherwise).
 
-**BillingSnapshot** — Daily materialized cost records per GCP service. File: `ml_platform/models.py`.
+**BillingSnapshot** — Daily materialized cost records per GCP service, classified by category. File: `ml_platform/models.py`.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `date` | DateField | Cost date (from billing export `usage_start_time`) |
-| `service_name` | CharField | GCP service (e.g., `BigQuery`, `Vertex AI`, `Cloud Run`) |
+| `category` | CharField | Cost category: `Data`, `Training`, `Inference`, `System` (indexed) |
+| `service_name` | CharField | GCP service (e.g., `BigQuery`, `Vertex AI — GPU`, `Cloud Run — my-endpoint`) |
 | `gcp_cost` | DecimalField | Actual GCP charge for this service on this date (USD) |
 | `margin_pct` | IntegerField | Margin percentage applied (frozen at snapshot time) |
 | `platform_fee` | DecimalField | `gcp_cost * margin_pct / 100` |
 | `total_cost` | DecimalField | `gcp_cost + platform_fee` |
 
-**Unique constraint:** `(date, service_name)` — one record per service per day.
+**Unique constraint:** `(date, category, service_name)` — one record per category+service per day.
 
-**Migration:** `ml_platform/migrations/0059_billing_models.py` (applied).
+**Migrations:** `0059_billing_models.py` (initial), `0060_billingsnapshot_category.py` (adds category + backfill).
 
 ### API Endpoints (implemented)
 
@@ -363,13 +375,17 @@ python manage.py collect_billing_snapshots --dry-run
 
 ### Flow
 
-1. Query `b2b-recs.billing_export.gcp_billing_export_v1_*` for target date's costs, filtered by `project.id`
+1. Query `b2b-recs.billing_export.gcp_billing_export_resource_v1_*` (resource-level table) for target date's costs, filtered by `project.id`
 2. Include GCP credits in cost calculation (`SUM(cost) + SUM(credits.amount)` for net cost)
-3. For each GCP service with non-zero net cost:
-   - Look up margin: 50% for `Vertex AI`, 100% for everything else (from `BillingConfig`)
-   - Calculate `platform_fee = gcp_cost * margin_pct / 100`
-   - Upsert `BillingSnapshot` record
-4. Uses parameterized queries (`@client_project_id`, `@target_date`) for safety
+3. Group by `service.description`, Cloud Run service name (`resource.name`), and GPU flag (`sku.description`)
+4. Classify each row into a category:
+   - **Data:** BigQuery, Cloud SQL, Cloud Dataflow, Cloud Storage
+   - **Training:** Vertex AI (split into "GPU" and "CPU" sub-rows via `sku.description`)
+   - **Inference:** Cloud Run services matching `Deployment.cloud_run_service`
+   - **System:** Everything else (Cloud Run system services, Cloud Scheduler, Secret Manager, etc.)
+5. Apply margin: 50% for Vertex AI, 100% for everything else (from `BillingConfig`)
+6. Delete existing snapshots for the target date, then bulk-create new categorized records
+7. Uses parameterized queries (`@client_project_id`, `@target_date`) for safety
 
 ### Webhook
 
@@ -455,7 +471,7 @@ python manage.py setup_billing_scheduler --delete
 - Charts use **Chart.js 4.4.0** (already loaded on the page)
 - Layout follows the same grid pattern as System Details resource charts
 - Currency: **USD** throughout ($ symbol) — billing account currency is immutable
-- Service color palette consistent across all charts and the invoice table
+- Category color palette (Data=blue, Training=orange, Inference=green, System=gray) consistent across all charts and the invoice table
 - Summary bar sits between chapter header and chart grid
 - Invoice table uses existing `.info-card` styling with a custom table inside
 - `BillingSnapshot` populated daily; API responses can be cached aggressively (billing data for past days is immutable)

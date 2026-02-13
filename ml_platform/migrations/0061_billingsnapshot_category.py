@@ -22,7 +22,7 @@ def backfill_categories(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ml_platform', '0059_billing_models'),
+        ('ml_platform', '0060_update_machine_type_choices'),
     ]
 
     operations = [

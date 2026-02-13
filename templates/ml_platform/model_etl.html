@@ -541,36 +541,166 @@
 </div>
 
 <!-- ETL Run Details Modal -->
+<style>
+    /* ETL Run Details Modal — compact KPI card sections (matches starting page) */
+    .run-detail-section {
+        border: 1px solid #000000;
+        border-radius: 12px;
+        padding: 16px 20px;
+        background: white;
+    }
+    .run-detail-section-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 10px;
+    }
+    .run-detail-section-body {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .run-detail-section-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .run-detail-section-icon i { color: white; font-size: 18px; }
+    .run-detail-section-icon.info     { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+    .run-detail-section-icon.timeline { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+    .run-detail-section-icon.results  { background: linear-gradient(135deg, #10b981, #34d399); }
+    .run-detail-section-icon.error    { background: linear-gradient(135deg, #ef4444, #f87171); }
+    .run-detail-section-icon.logs     { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .run-detail-stats {
+        display: flex;
+        gap: 10px;
+        flex: 1;
+    }
+    .run-detail-stat {
+        flex: 1;
+        text-align: center;
+        padding: 10px 8px;
+        background: #f9fafb;
+        border-radius: 8px;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .run-detail-stat-value {
+        font-size: 22px;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .run-detail-stat-label {
+        font-size: 11px;
+        color: #6b7280;
+        margin-top: 2px;
+    }
+    /* Info stat variant — label on top, value below (for text metadata) */
+    .run-detail-stat-info {
+        flex: 1;
+        padding: 10px 12px;
+        background: #f9fafb;
+        border-radius: 8px;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .run-detail-stat-info .stat-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 4px;
+    }
+    .run-detail-stat-info .stat-value {
+        font-size: 13px;
+        font-weight: 400;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* Error section inside its own run-detail-section */
+    .run-detail-error-content {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 12px 14px;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+    .run-detail-error-content p {
+        font-size: 13px;
+        color: #991b1b;
+        font-family: ui-monospace, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+    }
+    /* Logs section — collapsible */
+    .run-detail-logs-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+    }
+    .run-detail-logs-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .run-detail-logs-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .run-detail-logs-toggle {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-size: 16px;
+        transition: transform 0.3s ease;
+    }
+    .run-detail-section.logs-open .run-detail-logs-toggle {
+        transform: rotate(90deg);
+    }
+    .run-detail-logs-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+    }
+    .run-detail-section.logs-open .run-detail-logs-content {
+        max-height: 2000px;
+        transition: max-height 0.5s ease-in;
+    }
+    .run-detail-logs-divider {
+        height: 1px;
+        margin: 12px 0;
+        background: linear-gradient(to right, transparent 0%, #e5e7eb 10%, #e5e7eb 90%, transparent 100%);
+    }
+</style>
+
 <div id="runDetailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl border border-gray-300 h-[600px] overflow-hidden flex flex-col">
-        <!-- Header - 3 Column Layout (matching training page style) -->
-        <div class="modal-header exp-view-header flex-shrink-0" id="runDetailsHeader">
-            <!-- Column 1: Run Number (20%, centered) -->
-            <div class="exp-view-header-number">
-                <h3 class="exp-view-title" id="runDetailsTitle">ETL Run #—</h3>
-            </div>
-            <!-- Column 2: Job Info, Times (60%, left-aligned) -->
-            <div class="exp-view-header-info">
-                <div class="exp-view-exp-name" id="runDetailsJobNameHeader"></div>
-                <div class="exp-view-description" id="runDetailsConnectionHeader"></div>
-                <div class="exp-view-times">
-                    <div>Start: <span id="runDetailsStartTimeHeader">-</span></div>
-                    <div>End: <span id="runDetailsEndTimeHeader">-</span></div>
-                </div>
-                <div class="exp-view-header-type-row">
-                    <span class="exp-view-header-type-badge" id="runDetailsLoadTypeBadge"></span>
-                </div>
-            </div>
-            <!-- Column 3: Status Panel (20%, centered) -->
-            <div class="exp-view-status-panel">
-                <div class="exp-view-status-icon" id="runDetailsStatusIcon">
-                    <i class="fas fa-spinner fa-spin"></i>
-                </div>
+    <div class="bg-white rounded-xl shadow-2xl w-full border border-gray-300 h-[600px] overflow-hidden flex flex-col" style="max-width: 880px;">
+        <!-- Header — gradient background with title + status icon -->
+        <div class="modal-header exp-view-header flex-shrink-0" id="runDetailsHeader" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px;">
+            <h3 id="runDetailsTitle" style="font-size: 24px; font-weight: 700; color: #111827; margin: 0;">ETL Run #—</h3>
+            <div class="exp-view-status-icon" id="runDetailsStatusIcon">
+                <i class="fas fa-spinner fa-spin"></i>
             </div>
         </div>
 
         <!-- Body -->
-        <div class="px-5 py-4 overflow-y-auto flex-1">
+        <div style="padding: 20px 24px; overflow-y: auto; flex: 1;">
             <!-- Loading State -->
             <div id="runDetailsLoading" class="text-center py-8">
                 <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
@@ -578,125 +708,133 @@
             </div>
 
             <!-- Content (hidden until loaded) -->
-            <div id="runDetailsContent" class="hidden space-y-5">
-                <!-- Job Info Section -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Job Information</h4>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <p class="text-xs text-gray-500">ETL Job Name</p>
-                            <p id="runDetailsJobName" class="text-sm font-medium text-gray-900">—</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Connection</p>
-                            <p id="runDetailsConnection" class="text-sm font-medium text-gray-900">—</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Destination Table</p>
-                            <p id="runDetailsDestTable" class="text-sm font-medium text-gray-900">—</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Load Type</p>
-                            <p id="runDetailsLoadType" class="text-sm font-medium text-gray-900">—</p>
+            <div id="runDetailsContent" class="hidden" style="display: none; flex-direction: column; gap: 16px;">
+
+                <!-- 1. Job Information -->
+                <div class="run-detail-section">
+                    <div class="run-detail-section-title">Job Information</div>
+                    <div class="run-detail-section-body">
+                        <div class="run-detail-section-icon info"><i class="fas fa-briefcase"></i></div>
+                        <div class="run-detail-stats">
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">ETL Job Name</div>
+                                <div class="stat-value" id="runDetailsJobName">—</div>
+                            </div>
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">Connection</div>
+                                <div class="stat-value" id="runDetailsConnection">—</div>
+                            </div>
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">Dest. Table</div>
+                                <div class="stat-value" id="runDetailsDestTable">—</div>
+                            </div>
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">Load Type</div>
+                                <div class="stat-value" id="runDetailsLoadType">—</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Timing Section -->
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Timeline</h4>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-600"><i class="fas fa-play text-blue-500 mr-2 w-4"></i>Started</span>
-                            <span id="runDetailsStarted" class="text-sm font-medium text-gray-900">—</span>
-                        </div>
-                        <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-600"><i class="fas fa-flag-checkered text-gray-500 mr-2 w-4"></i>Completed</span>
-                            <span id="runDetailsCompleted" class="text-sm font-medium text-gray-900">—</span>
+                <!-- 2. Timeline -->
+                <div class="run-detail-section">
+                    <div class="run-detail-section-title">Timeline</div>
+                    <div class="run-detail-section-body">
+                        <div class="run-detail-section-icon timeline"><i class="fas fa-clock"></i></div>
+                        <div class="run-detail-stats">
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">Start</div>
+                                <div class="stat-value" id="runDetailsStarted">—</div>
+                            </div>
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">End</div>
+                                <div class="stat-value" id="runDetailsCompleted">—</div>
+                            </div>
+                            <div class="run-detail-stat-info">
+                                <div class="stat-label">Duration</div>
+                                <div class="stat-value" id="runDetailsTimelineDuration">—</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Results Section -->
-                <div>
-                    <h4 class="text-xs font-semibold text-gray-500 uppercase mb-3">Results</h4>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div class="bg-blue-50 rounded-lg p-3 text-center">
-                            <p class="text-xs text-blue-600 font-medium">Tables</p>
-                            <p id="runDetailsTables" class="text-lg font-bold text-blue-700">—</p>
-                        </div>
-                        <div class="bg-green-50 rounded-lg p-3 text-center">
-                            <p class="text-xs text-green-600 font-medium">Rows Extracted</p>
-                            <p id="runDetailsRowsExtracted" class="text-lg font-bold text-green-700">—</p>
-                        </div>
-                        <div class="bg-purple-50 rounded-lg p-3 text-center">
-                            <p class="text-xs text-purple-600 font-medium">Rows Loaded</p>
-                            <p id="runDetailsRowsLoaded" class="text-lg font-bold text-purple-700">—</p>
-                        </div>
-                        <div class="bg-gray-50 rounded-lg p-3 text-center">
-                            <p class="text-xs text-gray-600 font-medium">Duration</p>
-                            <p id="runDetailsDuration" class="text-lg font-bold text-gray-700">—</p>
+                <!-- 3. Results -->
+                <div class="run-detail-section">
+                    <div class="run-detail-section-title">Results</div>
+                    <div class="run-detail-section-body">
+                        <div class="run-detail-section-icon results"><i class="fas fa-chart-bar"></i></div>
+                        <div class="run-detail-stats">
+                            <div class="run-detail-stat">
+                                <div class="run-detail-stat-value" id="runDetailsTables">—</div>
+                                <div class="run-detail-stat-label">Tables</div>
+                            </div>
+                            <div class="run-detail-stat">
+                                <div class="run-detail-stat-value" id="runDetailsRowsExtracted">—</div>
+                                <div class="run-detail-stat-label">Rows Extracted</div>
+                            </div>
+                            <div class="run-detail-stat">
+                                <div class="run-detail-stat-value" id="runDetailsRowsLoaded">—</div>
+                                <div class="run-detail-stat-label">Rows Loaded</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Error Section (hidden by default) -->
-                <div id="runDetailsErrorSection" class="hidden">
-                    <h4 class="text-xs font-semibold text-red-600 uppercase mb-3">Error Details</h4>
-                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 max-h-32 overflow-y-auto">
-                        <p id="runDetailsErrorMessage" class="text-sm text-red-700 font-mono whitespace-pre-wrap break-words"></p>
+                <div id="runDetailsErrorSection" class="run-detail-section hidden">
+                    <div class="run-detail-section-title" style="color: #991b1b;">Error Details</div>
+                    <div class="run-detail-section-body">
+                        <div class="run-detail-section-icon error"><i class="fas fa-exclamation-triangle"></i></div>
+                        <div class="run-detail-error-content" style="flex: 1;">
+                            <p id="runDetailsErrorMessage"></p>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Logs Section -->
-                <div id="runDetailsLogsSection" class="logs-tab-content">
-                    <!-- Logs Header Section -->
-                    <div class="logs-header-section">
-                        <div class="logs-header-left">
-                            <div class="logs-header-icon">
-                                <i class="fas fa-stream"></i>
-                            </div>
-                            <div class="logs-header-info">
-                                <h4>ETL Run Logs</h4>
-                                <span class="logs-service-name">Cloud Run Job</span>
-                            </div>
+                <!-- 4. Logs (collapsible) -->
+                <div class="run-detail-section" id="runDetailsLogsCard">
+                    <div class="run-detail-logs-header" onclick="toggleRunDetailsLogs()">
+                        <div class="run-detail-logs-header-left">
+                            <div class="run-detail-section-icon logs"><i class="fas fa-stream"></i></div>
+                            <div class="run-detail-section-title" style="margin-bottom: 0;">Logs</div>
                         </div>
-                        <div class="logs-header-actions">
-                            <button class="logs-load-btn" id="runDetailsLoadLogsBtn" onclick="loadRunLogs()">
-                                <i class="fas fa-sync-alt"></i>
-                                <span>Load Logs</span>
+                        <div class="run-detail-logs-actions">
+                            <button class="btn btn-primary" id="runDetailsLoadLogsBtn" onclick="event.stopPropagation(); loadRunLogs();" style="white-space: nowrap; min-width: auto; padding: 8px 18px; font-size: 13px;">
+                                <i class="fas fa-sync-alt"></i> Load Logs
                             </button>
-                        </div>
-                    </div>
-
-                    <!-- Info Banner -->
-                    <div class="logs-info-banner">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Displays the last 100 log entries from Cloud Run Job. Includes ETL execution phases, errors, and timing.</span>
-                    </div>
-
-                    <!-- Logs Container -->
-                    <div class="logs-content-wrapper">
-                        <div class="exp-view-logs-container" id="runDetailsLogsContainer">
-                            <div class="logs-empty-state">
-                                <div class="logs-empty-icon">
-                                    <i class="fas fa-terminal"></i>
-                                </div>
-                                <p class="logs-empty-title">No logs loaded</p>
-                                <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
+                            <div class="run-detail-logs-toggle">
+                                <i class="fas fa-chevron-right"></i>
                             </div>
                         </div>
                     </div>
+                    <div class="run-detail-logs-content">
+                        <div class="run-detail-logs-divider"></div>
+                        <div id="runDetailsLogsSection" class="logs-tab-content" style="margin: 0; padding: 0;">
+                            <!-- Logs Container -->
+                            <div class="logs-content-wrapper">
+                                <div class="exp-view-logs-container" id="runDetailsLogsContainer">
+                                    <div class="logs-empty-state">
+                                        <div class="logs-empty-icon">
+                                            <i class="fas fa-terminal"></i>
+                                        </div>
+                                        <p class="logs-empty-title">No logs loaded</p>
+                                        <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <!-- Logs Footer with Legend -->
-                    <div class="logs-footer">
-                        <div class="logs-legend">
-                            <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
-                            <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
-                            <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
+                            <!-- Logs Footer with Legend -->
+                            <div class="logs-footer">
+                                <div class="logs-legend">
+                                    <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
+                                    <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
+                                    <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
 
@@ -4462,14 +4600,9 @@ function viewRunDetails(runId) {
 
     // Reset modal state
     loadingDiv.classList.remove('hidden');
+    contentDiv.style.display = 'none';
     contentDiv.classList.add('hidden');
     document.getElementById('runDetailsTitle').textContent = `ETL Run #${runId}`;
-    document.getElementById('runDetailsJobNameHeader').textContent = '';
-    document.getElementById('runDetailsConnectionHeader').textContent = 'Loading...';
-    document.getElementById('runDetailsStartTimeHeader').textContent = '-';
-    document.getElementById('runDetailsEndTimeHeader').textContent = '-';
-    document.getElementById('runDetailsLoadTypeBadge').textContent = '';
-    document.getElementById('runDetailsLoadTypeBadge').className = 'exp-view-header-type-badge';
     document.getElementById('runDetailsHeader').className = 'modal-header exp-view-header flex-shrink-0';
     document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     document.getElementById('runDetailsStatusIcon').className = 'exp-view-status-icon';
@@ -4512,35 +4645,18 @@ function populateRunDetailsModal(data) {
     const loadingDiv = document.getElementById('runDetailsLoading');
     const contentDiv = document.getElementById('runDetailsContent');
 
-    // Update header
+    // Update header title
     document.getElementById('runDetailsTitle').textContent = `ETL Run #${data.run_id}`;
-    document.getElementById('runDetailsJobNameHeader').textContent = data.job_name || '';
-    document.getElementById('runDetailsConnectionHeader').textContent = data.connection_name ? `Connection: ${data.connection_name}` : '';
-    document.getElementById('runDetailsStartTimeHeader').textContent = formatDateTime(data.started_at);
-    document.getElementById('runDetailsEndTimeHeader').textContent = formatDateTime(data.completed_at);
-
-    // Load type badge
-    const loadTypeBadge = document.getElementById('runDetailsLoadTypeBadge');
-    if (data.load_type === 'transactional') {
-        loadTypeBadge.innerHTML = '<i class="fas fa-exchange-alt"></i> TRANSACTIONAL';
-        loadTypeBadge.className = 'exp-view-header-type-badge retrieval';
-    } else if (data.load_type === 'catalog') {
-        loadTypeBadge.innerHTML = '<i class="fas fa-database"></i> CATALOG';
-        loadTypeBadge.className = 'exp-view-header-type-badge ranking';
-    } else {
-        loadTypeBadge.textContent = '';
-        loadTypeBadge.className = 'exp-view-header-type-badge';
-    }
 
     // Set status icon and header gradient
     const header = document.getElementById('runDetailsHeader');
     const statusIcon = document.getElementById('runDetailsStatusIcon');
     const statusMap = {
-        completed:  { icon: 'fa-check',        cls: 'completed' },
-        failed:     { icon: 'fa-times',         cls: 'failed' },
+        completed:  { icon: 'fa-check',          cls: 'completed' },
+        failed:     { icon: 'fa-times',           cls: 'failed' },
         running:    { icon: 'fa-spinner fa-spin', cls: 'running' },
-        cancelled:  { icon: 'fa-ban',           cls: 'cancelled' },
-        partial:    { icon: 'fa-exclamation',   cls: 'running' },
+        cancelled:  { icon: 'fa-ban',             cls: 'cancelled' },
+        partial:    { icon: 'fa-exclamation',     cls: 'running' },
     };
     const s = statusMap[data.status] || { icon: 'fa-circle', cls: 'pending' };
     header.className = `modal-header exp-view-header flex-shrink-0 ${s.cls}`;
@@ -4555,9 +4671,9 @@ function populateRunDetailsModal(data) {
     // Format load type
     const loadType = data.load_type;
     if (loadType === 'transactional') {
-        document.getElementById('runDetailsLoadType').innerHTML = '<span class="text-blue-600">Transactional</span> (Incremental)';
+        document.getElementById('runDetailsLoadType').textContent = 'Transactional';
     } else if (loadType === 'catalog') {
-        document.getElementById('runDetailsLoadType').innerHTML = '<span class="text-purple-600">Catalog</span> (Full Refresh)';
+        document.getElementById('runDetailsLoadType').textContent = 'Catalog';
     } else {
         document.getElementById('runDetailsLoadType').textContent = loadType || '—';
     }
@@ -4565,18 +4681,13 @@ function populateRunDetailsModal(data) {
     // Timeline
     document.getElementById('runDetailsStarted').textContent = formatDateTime(data.started_at);
     document.getElementById('runDetailsCompleted').textContent = formatDateTime(data.completed_at);
+    document.getElementById('runDetailsTimelineDuration').textContent = data.duration_seconds ? formatDuration(data.duration_seconds) : '—';
 
     // Results
     document.getElementById('runDetailsTables').textContent = `${data.successful_tables}/${data.total_tables}`;
     document.getElementById('runDetailsRowsExtracted').textContent = formatNumber(data.total_rows_extracted);
     document.getElementById('runDetailsRowsLoaded').textContent = formatNumber(data.rows_loaded || 0);
 
-    // Duration
-    if (data.duration_seconds) {
-        document.getElementById('runDetailsDuration').textContent = formatDuration(data.duration_seconds);
-    } else {
-        document.getElementById('runDetailsDuration').textContent = '—';
-    }
 
     // Error section
     const errorSection = document.getElementById('runDetailsErrorSection');
@@ -4590,11 +4701,17 @@ function populateRunDetailsModal(data) {
     // Show content, hide loading
     loadingDiv.classList.add('hidden');
     contentDiv.classList.remove('hidden');
+    contentDiv.style.display = 'flex';
 }
 
 function closeRunDetailsModal() {
     document.getElementById('runDetailsModal').classList.add('hidden');
     currentRunDetailsId = null;
+}
+
+function toggleRunDetailsLogs() {
+    const card = document.getElementById('runDetailsLogsCard');
+    card.classList.toggle('logs-open');
 }
 
 function loadRunLogs() {

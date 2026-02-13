@@ -1122,16 +1122,16 @@
 
     /* Hardware Selection Section */
     .hardware-section {
-        background: linear-gradient(135deg, #fdf4ff 0%, #faf5ff 100%);
-        border: 1px solid #e9d5ff;
+        background: #f0fdfa;
+        border: 1px solid #99f6e4;
         border-radius: 10px;
         padding: 16px 20px;
         margin-bottom: 16px;
     }
     .hardware-section h4 {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 600;
-        color: #7c3aed;
+        color: #0f766e;
         margin: 0 0 4px 0;
         display: flex;
         align-items: center;
@@ -1139,36 +1139,34 @@
     }
     .hardware-recommendation {
         font-size: 11px;
-        color: #9333ea;
+        color: #0f766e;
         margin-bottom: 12px;
     }
     .hardware-recommendation strong {
-        color: #7c3aed;
+        color: #0f766e;
     }
     .hardware-options {
-        display: flex;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
         gap: 10px;
-        flex-wrap: wrap;
     }
     .hardware-card {
-        flex: 1;
-        min-width: 120px;
-        max-width: 160px;
         background: white;
-        border: 2px solid #e9d5ff;
+        border: 1px solid #e5e7eb;
         border-radius: 8px;
-        padding: 10px;
+        padding: 12px;
         cursor: pointer;
         transition: all 0.15s ease;
         position: relative;
     }
     .hardware-card:hover:not(.disabled) {
-        border-color: #c084fc;
-        box-shadow: 0 2px 8px rgba(147, 51, 234, 0.15);
+        background: #f9fafb;
+        border-color: #d1d5db;
     }
     .hardware-card.selected {
-        border-color: #9333ea;
-        background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+        background: #eff6ff;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 1px #2563eb;
     }
     .hardware-card.selected::after {
         content: '\f00c';
@@ -1177,7 +1175,7 @@
         position: absolute;
         top: 8px;
         right: 8px;
-        color: #9333ea;
+        color: #2563eb;
         font-size: 12px;
     }
     .hardware-card.recommended::before {
@@ -1193,12 +1191,12 @@
     .hardware-card.disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        background: #f9fafb;
+        background: #f3f4f6;
     }
     .hardware-card-title {
         font-size: 13px;
         font-weight: 600;
-        color: #1f2937;
+        color: #111827;
         margin-bottom: 2px;
     }
     .hardware-card-type {
@@ -1222,15 +1220,15 @@
 
     /* Summary Section - Modern Card Layout */
     .exp-summary-section {
-        background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
-        border: 1px solid #a7f3d0;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
         border-radius: 10px;
         padding: 16px 20px;
     }
     .exp-summary-title {
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 600;
-        color: #64748b;
+        color: #3730a3;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 12px;
@@ -1239,12 +1237,12 @@
         gap: 6px;
     }
     .exp-summary-title i {
-        color: #6366f1;
+        color: #3730a3;
     }
     .exp-summary-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 16px 24px;
+        gap: 12px 24px;
     }
     .exp-summary-item {
         display: flex;
@@ -1255,7 +1253,7 @@
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.3px;
-        color: #94a3b8;
+        color: #4338ca;
     }
     .exp-summary-value {
         font-size: 13px;
@@ -1263,32 +1261,7 @@
         color: #1e293b;
     }
     .exp-summary-value.accent {
-        color: #6366f1;
-    }
-    .exp-summary-params {
-        grid-column: span 4;
-        display: flex;
-        gap: 20px;
-        padding-top: 12px;
-        border-top: 1px solid #f1f5f9;
-        margin-top: 4px;
-    }
-    .exp-summary-param {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        background: #f8fafc;
-        border-radius: 6px;
-    }
-    .exp-summary-param-label {
-        font-size: 11px;
-        color: #64748b;
-    }
-    .exp-summary-param-value {
-        font-size: 12px;
-        font-weight: 600;
-        color: #334155;
+        color: #3730a3;
     }
 
     /* =========================================================================
@@ -2975,23 +2948,17 @@
                             <span class="exp-summary-label">Split Strategy</span>
                             <span class="exp-summary-value" id="wizardSummarySplit">Random</span>
                         </div>
-                        <div class="exp-summary-params">
-                            <div class="exp-summary-param">
-                                <span class="exp-summary-param-label">Epochs</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryEpochs">25</span>
-                            </div>
-                            <div class="exp-summary-param">
-                                <span class="exp-summary-param-label">Batch Size</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryBatch">1024</span>
-                            </div>
-                            <div class="exp-summary-param">
-                                <span class="exp-summary-param-label">Learning Rate</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryLR">0.01</span>
-                            </div>
-                            <div class="exp-summary-param" style="background: #faf5ff; border: 1px solid #e9d5ff;">
-                                <span class="exp-summary-param-label" style="color: #7c3aed;">Hardware</span>
-                                <span class="exp-summary-param-value" id="wizardSummaryHardware" style="color: #7c3aed;">Small</span>
-                            </div>
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Epochs</span>
+                            <span class="exp-summary-value" id="wizardSummaryEpochs">25</span>
+                        </div>
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Batch Size</span>
+                            <span class="exp-summary-value" id="wizardSummaryBatch">1024</span>
+                        </div>
+                        <div class="exp-summary-item">
+                            <span class="exp-summary-label">Learning Rate</span>
+                            <span class="exp-summary-value" id="wizardSummaryLR">0.01</span>
                         </div>
                     </div>
                 </div>
@@ -5036,15 +5003,7 @@ function updateWizardSummary() {
     document.getElementById('wizardSummaryLR').textContent =
         document.getElementById('wizardLearningRate').value || '0.01';
 
-    // Hardware - check if GPU is selected
-    const gpuConfigVal = document.getElementById('wizardGpuConfig').value;
-    if (gpuConfigVal) {
-        document.getElementById('wizardSummaryHardware').textContent = 'GPU T4';
-    } else {
-        const machineType = document.getElementById('wizardMachineType').value || 'e2-standard-4';
-        const tier = hardwareTiers[machineType];
-        document.getElementById('wizardSummaryHardware').textContent = tier ? tier.name : 'Small';
-    }
+    // Hardware summary is shown via the hardware cards selection above
 }
 
 function wizardNext() {

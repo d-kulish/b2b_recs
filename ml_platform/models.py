@@ -1839,6 +1839,12 @@ class QuickTest(models.Model):
         default=MACHINE_TYPE_SMALL,
         help_text="Compute machine type for Dataflow workers (BigQueryExampleGen, StatisticsGen, Transform)"
     )
+    gpu_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="GPU config for Trainer. Empty = CPU-only. "
+                  "Example: {'gpu_type': 'NVIDIA_TESLA_T4', 'gpu_count': 1, 'machine_type': 'n1-standard-4'}"
+    )
 
     # Rating column for ranking models
     rating_column = models.CharField(

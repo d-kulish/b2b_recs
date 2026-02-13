@@ -48,6 +48,10 @@ def create_tfx_pipeline(
     learning_rate: float = 0.001,
     split_strategy: str = 'random',
     machine_type: str = 'e2-standard-4',
+    gpu_type: str = '',
+    gpu_count: int = 0,
+    gpu_machine_type: str = '',
+    gpu_training_region: str = 'europe-west4',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -116,15 +120,62 @@ def create_tfx_pipeline(
         'learning_rate': learning_rate,
     }
 
-    trainer = Trainer(
-        module_file=trainer_module_path,
-        examples=transform.outputs['transformed_examples'],
-        transform_graph=transform.outputs['transform_graph'],
-        schema=schema_gen.outputs['schema'],
-        train_args=train_args,
-        eval_args=eval_args,
-        custom_config=custom_config,
-    )
+    if gpu_type:
+        # GPU path: Use GenericExecutor to spawn a Vertex AI Custom Job with GPU
+        from tfx.dsl.components.base import executor_spec
+        from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
+        from tfx.v1.extensions.google_cloud_ai_platform import (
+            ENABLE_VERTEX_KEY,
+            VERTEX_REGION_KEY,
+            TRAINING_ARGS_KEY,
+        )
+
+        gpu_trainer_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer-gpu:latest'
+        logger.info(f"GPU training: {gpu_count}x {gpu_type} on {gpu_machine_type} in {gpu_training_region}")
+        logger.info(f"Using GPU trainer image: {gpu_trainer_image}")
+
+        custom_config['gpu_enabled'] = True
+        custom_config['gpu_count'] = gpu_count
+        custom_config[ENABLE_VERTEX_KEY] = True
+        custom_config[VERTEX_REGION_KEY] = gpu_training_region
+        custom_config[TRAINING_ARGS_KEY] = {
+            'project': project_id,
+            'worker_pool_specs': [{
+                'machine_spec': {
+                    'machine_type': gpu_machine_type,
+                    'accelerator_type': gpu_type,
+                    'accelerator_count': gpu_count,
+                },
+                'replica_count': 1,
+                'container_spec': {
+                    'image_uri': gpu_trainer_image,
+                },
+            }],
+        }
+
+        trainer = Trainer(
+            module_file=trainer_module_path,
+            examples=transform.outputs['transformed_examples'],
+            transform_graph=transform.outputs['transform_graph'],
+            schema=schema_gen.outputs['schema'],
+            train_args=train_args,
+            eval_args=eval_args,
+            custom_executor_spec=executor_spec.ExecutorClassSpec(
+                ai_platform_trainer_executor.GenericExecutor
+            ),
+            custom_config=custom_config,
+        )
+    else:
+        # CPU path: Standard Trainer
+        trainer = Trainer(
+            module_file=trainer_module_path,
+            examples=transform.outputs['transformed_examples'],
+            transform_graph=transform.outputs['transform_graph'],
+            schema=schema_gen.outputs['schema'],
+            train_args=train_args,
+            eval_args=eval_args,
+            custom_config=custom_config,
+        )
 
     # Build pipeline
     components = [
@@ -240,6 +291,10 @@ def main():
     parser.add_argument('--learning-rate', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--split-strategy', default='random', help='Split strategy: random, time_holdout, strict_time')
     parser.add_argument('--machine-type', default='e2-standard-4', help='Machine type for Dataflow workers (BigQueryExampleGen, StatisticsGen, Transform)')
+    parser.add_argument('--gpu-type', default='', help='GPU accelerator type (e.g. NVIDIA_TESLA_T4)')
+    parser.add_argument('--gpu-count', type=int, default=0, help='Number of GPUs')
+    parser.add_argument('--gpu-machine-type', default='', help='Machine type for GPU Trainer')
+    parser.add_argument('--gpu-training-region', default='europe-west4', help='Region for GPU training')
     parser.add_argument('--project-id', required=True, help='GCP project ID')
     parser.add_argument('--region', default='europe-central2', help='GCP region')
 
@@ -265,6 +320,10 @@ def main():
                 learning_rate=args.learning_rate,
                 split_strategy=args.split_strategy,
                 machine_type=args.machine_type,
+                gpu_type=args.gpu_type,
+                gpu_count=args.gpu_count,
+                gpu_machine_type=args.gpu_machine_type,
+                gpu_training_region=args.gpu_training_region,
             )
 
             # Compile to JSON

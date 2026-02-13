@@ -313,6 +313,7 @@ def start_quick_test(request, feature_config_id):
             'test_days': data.get('test_days', 7),
             # Hardware configuration
             'machine_type': data.get('machine_type', QuickTest.MACHINE_TYPE_SMALL),
+            'gpu_config': data.get('gpu_config', {}),
             # Experiment metadata (optional)
             'experiment_name': data.get('experiment_name', ''),
             'experiment_description': data.get('experiment_description', ''),
@@ -1089,6 +1090,7 @@ def _serialize_quick_test(quick_test, include_details=False):
         'batch_size': quick_test.batch_size,
         'learning_rate': quick_test.learning_rate,
         'machine_type': quick_test.machine_type,
+        'gpu_config': quick_test.gpu_config,
         'optimizer': quick_test.optimizer,
         'top_k': quick_test.top_k,
         'retrieval_algorithm': quick_test.retrieval_algorithm,
@@ -1987,6 +1989,7 @@ def compare_experiments(request):
                     'batch_size': qt.batch_size,
                     'learning_rate': float(qt.learning_rate) if qt.learning_rate else None,
                     'machine_type': qt.machine_type,
+                    'gpu_config': qt.gpu_config,
                 },
 
                 # Results

@@ -2917,6 +2917,7 @@
                         Recommended: <strong>Small</strong> based on dataset size
                     </div>
                     <input type="hidden" id="wizardMachineType" value="e2-standard-4">
+                    <input type="hidden" id="wizardGpuConfig" value="">
                     <div class="hardware-options">
                         <div class="hardware-card selected recommended" data-machine="e2-standard-4" onclick="selectHardware('e2-standard-4')">
                             <div class="hardware-card-title">Small</div>
@@ -2933,17 +2934,16 @@
                             <div class="hardware-card-type">e2-standard-16</div>
                             <div class="hardware-card-specs">16 vCPU<br>64 GB RAM</div>
                         </div>
-                        <div class="hardware-card disabled" title="GPU acceleration coming soon">
-                            <div class="hardware-card-lock"><i class="fas fa-lock"></i></div>
+                        <div class="hardware-card" data-machine="gpu-t4" onclick="selectHardware('gpu-t4')">
                             <div class="hardware-card-title">GPU T4</div>
-                            <div class="hardware-card-type">e2-standard-4 + T4</div>
-                            <div class="hardware-card-specs">4 vCPU, 16 GB RAM<br>16 GB GPU</div>
+                            <div class="hardware-card-type">n1-standard-4 + T4</div>
+                            <div class="hardware-card-specs">4 vCPU, 15 GB RAM<br>T4 16 GB GPU</div>
                         </div>
                         <div class="hardware-card disabled" title="GPU acceleration coming soon">
                             <div class="hardware-card-lock"><i class="fas fa-lock"></i></div>
                             <div class="hardware-card-title">GPU V100</div>
-                            <div class="hardware-card-type">e2-standard-8 + V100</div>
-                            <div class="hardware-card-specs">8 vCPU, 32 GB RAM<br>16 GB GPU</div>
+                            <div class="hardware-card-type">n1-standard-8 + V100</div>
+                            <div class="hardware-card-specs">8 vCPU, 30 GB RAM<br>V100 16 GB GPU</div>
                         </div>
                     </div>
                 </div>
@@ -4607,11 +4607,23 @@ const hardwareTiers = {
     'e2-standard-4': { name: 'Small', vcpu: 4, ram: 16 },
     'e2-standard-8': { name: 'Medium', vcpu: 8, ram: 32 },
     'e2-standard-16': { name: 'Large', vcpu: 16, ram: 64 },
+    'gpu-t4': { name: 'GPU T4', vcpu: 4, ram: 15, gpu: 'T4 16GB' },
 };
 
 function selectHardware(machineType) {
-    // Update hidden input
-    document.getElementById('wizardMachineType').value = machineType;
+    if (machineType === 'gpu-t4') {
+        // GPU T4: Dataflow workers use e2-standard-4, Trainer uses n1-standard-4 + T4
+        document.getElementById('wizardMachineType').value = 'e2-standard-4';
+        document.getElementById('wizardGpuConfig').value = JSON.stringify({
+            gpu_type: 'NVIDIA_TESLA_T4',
+            gpu_count: 1,
+            machine_type: 'n1-standard-4'
+        });
+    } else {
+        // CPU cards: use selected machine type, clear GPU config
+        document.getElementById('wizardMachineType').value = machineType;
+        document.getElementById('wizardGpuConfig').value = '';
+    }
 
     // Update card selection states
     document.querySelectorAll('.hardware-card').forEach(card => {
@@ -5024,10 +5036,15 @@ function updateWizardSummary() {
     document.getElementById('wizardSummaryLR').textContent =
         document.getElementById('wizardLearningRate').value || '0.01';
 
-    // Hardware
-    const machineType = document.getElementById('wizardMachineType').value || 'n1-standard-4';
-    const tier = hardwareTiers[machineType];
-    document.getElementById('wizardSummaryHardware').textContent = tier ? tier.name : 'Small';
+    // Hardware - check if GPU is selected
+    const gpuConfigVal = document.getElementById('wizardGpuConfig').value;
+    if (gpuConfigVal) {
+        document.getElementById('wizardSummaryHardware').textContent = 'GPU T4';
+    } else {
+        const machineType = document.getElementById('wizardMachineType').value || 'e2-standard-4';
+        const tier = hardwareTiers[machineType];
+        document.getElementById('wizardSummaryHardware').textContent = tier ? tier.name : 'Small';
+    }
 }
 
 function wizardNext() {
@@ -5085,6 +5102,8 @@ async function submitExperiment() {
         test_days: parseInt(document.getElementById('wizardTestDays').value) || 7,
         // Hardware configuration
         machine_type: document.getElementById('wizardMachineType').value || 'e2-standard-4',
+        gpu_config: document.getElementById('wizardGpuConfig').value
+            ? JSON.parse(document.getElementById('wizardGpuConfig').value) : {},
         // Experiment metadata (optional)
         experiment_name: document.getElementById('wizardExpName').value.trim(),
         experiment_description: document.getElementById('wizardExpDescription').value.trim()
@@ -5768,6 +5787,10 @@ function exp_renderTrainingCell(exp) {
     if (t.machine_type) {
         rows.push(exp_createCompareRow('Machine Type', t.machine_type));
     }
+    if (t.gpu_config && t.gpu_config.gpu_type) {
+        const gpuLabel = t.gpu_config.gpu_type.replace('NVIDIA_TESLA_', '') + ' x' + (t.gpu_config.gpu_count || 1);
+        rows.push(exp_createCompareRow('GPU', gpuLabel));
+    }
 
     return html + (rows.length > 0 ? rows.join('') : '<div class="ds-compare-meta">No training details</div>');
 }
@@ -5874,6 +5897,7 @@ function exp_updateCompareStatuses() {
         if (lt.batch_size !== rt.batch_size) diffs++;
         if (lt.learning_rate !== rt.learning_rate) diffs++;
         if (lt.machine_type !== rt.machine_type) diffs++;
+        if (JSON.stringify(lt.gpu_config || {}) !== JSON.stringify(rt.gpu_config || {})) diffs++;
         trainingStatus.textContent = diffs > 0 ? `${diffs} diff${diffs > 1 ? 's' : ''}` : '';
     } else {
         trainingStatus.textContent = '';

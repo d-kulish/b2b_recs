@@ -117,6 +117,7 @@ class ExperimentService:
 
     # Vertex AI configuration
     REGION = 'europe-central2'
+    GPU_TRAINING_REGION = 'europe-west4'
     PIPELINE_DISPLAY_NAME_PREFIX = 'quicktest'
 
     def __init__(self, model_endpoint):
@@ -178,6 +179,7 @@ class ExperimentService:
         val_days: int = 7,
         test_days: int = 7,
         machine_type: str = 'e2-standard-4',
+        gpu_config: dict = None,
         experiment_name: str = '',
         experiment_description: str = '',
     ):
@@ -198,7 +200,8 @@ class ExperimentService:
             train_days: Number of days for training data (strict_time)
             val_days: Number of days for validation data (strict_time)
             test_days: Number of days for test data - held out (strict_time)
-            machine_type: Compute machine type for Trainer and Dataflow workers
+            machine_type: Compute machine type for Dataflow workers
+            gpu_config: GPU configuration for Trainer (empty dict = CPU-only)
 
         Returns:
             QuickTest instance
@@ -225,6 +228,7 @@ class ExperimentService:
             val_days=val_days,
             test_days=test_days,
             machine_type=machine_type,
+            gpu_config=gpu_config or {},
             experiment_name=experiment_name,
             experiment_description=experiment_description,
             status=QuickTest.STATUS_SUBMITTING,
@@ -308,6 +312,7 @@ class ExperimentService:
             val_days=quick_test.val_days,
             test_days=quick_test.test_days,
             machine_type=quick_test.machine_type,
+            gpu_config=quick_test.gpu_config,
             experiment_name=quick_test.experiment_name,
             experiment_description=f"Re-run of {quick_test.display_name}",
         )
@@ -733,6 +738,7 @@ class ExperimentService:
             gcs_output_path=gcs_base_path,
             run_id=run_id,
             machine_type=quick_test.machine_type,
+            gpu_config=quick_test.gpu_config,
         )
 
         # Save Cloud Build info for async tracking
@@ -884,6 +890,7 @@ class ExperimentService:
         gcs_output_path: str,
         run_id: str,
         machine_type: str = 'e2-standard-4',
+        gpu_config: dict = None,
     ):
         """
         Submit the TFX pipeline to Vertex AI via Cloud Build (async).
@@ -900,7 +907,8 @@ class ExperimentService:
             trainer_module_path: GCS path to trainer_module.py
             gcs_output_path: GCS path for output artifacts
             run_id: Unique identifier for this run
-            machine_type: Compute machine type for Trainer and Dataflow workers
+            machine_type: Compute machine type for Dataflow workers
+            gpu_config: GPU configuration for Trainer (empty dict = CPU-only)
 
         Returns:
             build_id: Cloud Build ID for tracking
@@ -920,6 +928,7 @@ class ExperimentService:
             learning_rate=quick_test.learning_rate,
             split_strategy=quick_test.split_strategy,
             machine_type=machine_type,
+            gpu_config=gpu_config,
         )
 
         logger.info(f"Cloud Build triggered: {build_id} - returning immediately (async)")
@@ -941,6 +950,7 @@ class ExperimentService:
         learning_rate: float,
         split_strategy: str = 'random',
         machine_type: str = 'e2-standard-4',
+        gpu_config: dict = None,
     ) -> str:
         """
         Trigger Cloud Build to compile and submit TFX pipeline.
@@ -956,7 +966,8 @@ class ExperimentService:
             batch_size: Batch size
             learning_rate: Learning rate
             split_strategy: Split strategy ('random', 'time_holdout', 'strict_time')
-            machine_type: Compute machine type for Trainer and Dataflow workers
+            machine_type: Compute machine type for Dataflow workers
+            gpu_config: GPU configuration for Trainer (empty dict = CPU-only)
 
         Returns:
             Cloud Build build ID
@@ -1006,6 +1017,16 @@ class ExperimentService:
         if split_queries_blob_path:
             split_args = f'    --split-queries-gcs-path="{split_queries_blob_path}" \\\n'
 
+        # Build optional GPU CLI args
+        gpu_args = ""
+        if gpu_config:
+            gpu_args = (
+                f'    --gpu-type="{gpu_config.get("gpu_type", "NVIDIA_TESLA_T4")}" \\\n'
+                f'    --gpu-count="{gpu_config.get("gpu_count", 1)}" \\\n'
+                f'    --gpu-machine-type="{gpu_config.get("machine_type", "n1-standard-4")}" \\\n'
+                f'    --gpu-training-region="{self.GPU_TRAINING_REGION}" \\\n'
+            )
+
         build = cloudbuild_v1.Build(
             steps=[
                 cloudbuild_v1.BuildStep(
@@ -1030,7 +1051,7 @@ python /tmp/compile_and_submit.py \\
     --learning-rate="{learning_rate}" \\
     --split-strategy="{split_strategy}" \\
     --machine-type="{machine_type}" \\
-    --project-id="{self.project_id}" \\
+{gpu_args}    --project-id="{self.project_id}" \\
     --region="{self.REGION}"
 '''
                     ],
@@ -1081,6 +1102,10 @@ def create_tfx_pipeline(
     learning_rate: float = 0.001,
     split_strategy: str = 'random',
     machine_type: str = 'e2-standard-4',
+    gpu_type: str = '',
+    gpu_count: int = 0,
+    gpu_machine_type: str = '',
+    gpu_training_region: str = 'europe-west4',
     train_steps: Optional[int] = None,
     eval_steps: Optional[int] = None,
 ):
@@ -1160,15 +1185,62 @@ def create_tfx_pipeline(
         "gcs_output_path": output_path,  # For MetricsCollector to save training_metrics.json
     }
 
-    trainer = Trainer(
-        module_file=trainer_module_path,
-        examples=transform.outputs["transformed_examples"],
-        transform_graph=transform.outputs["transform_graph"],
-        schema=schema_gen.outputs["schema"],
-        train_args=train_args,
-        eval_args=eval_args,
-        custom_config=custom_config,
-    )
+    if gpu_type:
+        # GPU path: Use GenericExecutor to spawn a Vertex AI Custom Job with GPU
+        from tfx.dsl.components.base import executor_spec
+        from tfx.extensions.google_cloud_ai_platform.trainer import executor as ai_platform_trainer_executor
+        from tfx.v1.extensions.google_cloud_ai_platform import (
+            ENABLE_VERTEX_KEY,
+            VERTEX_REGION_KEY,
+            TRAINING_ARGS_KEY,
+        )
+
+        gpu_trainer_image = f'europe-central2-docker.pkg.dev/{project_id}/tfx-builder/tfx-trainer-gpu:latest'
+        logger.info(f"GPU training: {gpu_count}x {gpu_type} on {gpu_machine_type} in {gpu_training_region}")
+        logger.info(f"Using GPU trainer image: {gpu_trainer_image}")
+
+        custom_config["gpu_enabled"] = True
+        custom_config["gpu_count"] = gpu_count
+        custom_config[ENABLE_VERTEX_KEY] = True
+        custom_config[VERTEX_REGION_KEY] = gpu_training_region
+        custom_config[TRAINING_ARGS_KEY] = {
+            "project": project_id,
+            "worker_pool_specs": [{
+                "machine_spec": {
+                    "machine_type": gpu_machine_type,
+                    "accelerator_type": gpu_type,
+                    "accelerator_count": gpu_count,
+                },
+                "replica_count": 1,
+                "container_spec": {
+                    "image_uri": gpu_trainer_image,
+                },
+            }],
+        }
+
+        trainer = Trainer(
+            module_file=trainer_module_path,
+            examples=transform.outputs["transformed_examples"],
+            transform_graph=transform.outputs["transform_graph"],
+            schema=schema_gen.outputs["schema"],
+            train_args=train_args,
+            eval_args=eval_args,
+            custom_executor_spec=executor_spec.ExecutorClassSpec(
+                ai_platform_trainer_executor.GenericExecutor
+            ),
+            custom_config=custom_config,
+        )
+    else:
+        # CPU path: Standard Trainer (no GenericExecutor)
+        trainer = Trainer(
+            module_file=trainer_module_path,
+            examples=transform.outputs["transformed_examples"],
+            transform_graph=transform.outputs["transform_graph"],
+            schema=schema_gen.outputs["schema"],
+            train_args=train_args,
+            eval_args=eval_args,
+            custom_config=custom_config,
+        )
 
     components = [example_gen, statistics_gen, schema_gen, transform, trainer]
 
@@ -1267,6 +1339,10 @@ def main():
     parser.add_argument("--learning-rate", type=float, default=0.001)
     parser.add_argument("--split-strategy", default="random", help="Split strategy: random, time_holdout, strict_time")
     parser.add_argument("--machine-type", default="e2-standard-4", help="Machine type for pipeline workers")
+    parser.add_argument("--gpu-type", default="", help="GPU accelerator type (e.g. NVIDIA_TESLA_T4)")
+    parser.add_argument("--gpu-count", type=int, default=0, help="Number of GPUs")
+    parser.add_argument("--gpu-machine-type", default="", help="Machine type for GPU Trainer")
+    parser.add_argument("--gpu-training-region", default="europe-west4", help="Region for GPU training")
     parser.add_argument("--project-id", required=True)
     parser.add_argument("--region", default="europe-central2")
     args = parser.parse_args()
@@ -1305,6 +1381,10 @@ def main():
                 learning_rate=args.learning_rate,
                 split_strategy=args.split_strategy,
                 machine_type=args.machine_type,
+                gpu_type=args.gpu_type,
+                gpu_count=args.gpu_count,
+                gpu_machine_type=args.gpu_machine_type,
+                gpu_training_region=args.gpu_training_region,
             )
             compile_pipeline(pipeline, pipeline_file, project_id=args.project_id)
             display_name = f"quicktest-{args.run_id}"

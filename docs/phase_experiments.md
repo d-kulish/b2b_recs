@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-12 (Fix: Wizard machine_type now controls Dataflow workers end-to-end)
+**Last Updated**: 2026-02-13 (GPU T4 support enabled for experiments)
 
 ---
 
@@ -145,7 +145,7 @@ Clicking a KPI filters all dashboard content by that model type.
 | **Epochs** | 1-50 | 3 |
 | **Batch Size** | 256, 512, 1024, 2048, 4096, 8192 | 4096 |
 | **Learning Rate** | 0.001 - 1.0 | From ModelConfig |
-| **Hardware** | Small (e2-standard-4) / Medium (e2-standard-8) / Large (e2-standard-16) | Auto-recommended |
+| **Hardware** | Small (e2-standard-4) / Medium (e2-standard-8) / Large (e2-standard-16) / GPU T4 (n1-standard-4 + T4) | Auto-recommended (CPU only) |
 
 ---
 
@@ -306,6 +306,10 @@ class QuickTest(models.Model):
     batch_size = IntegerField(default=4096)
     learning_rate = FloatField(default=0.1)
 
+    # Hardware
+    machine_type = CharField(default='e2-standard-4')  # Dataflow workers
+    gpu_config = JSONField(default=dict)  # GPU for Trainer (empty = CPU-only)
+
     # Status tracking
     status = CharField(choices=['submitting', 'running', 'completed', 'failed', 'cancelled'])
     current_stage = CharField()  # ExampleGen, Transform, Trainer, etc.
@@ -381,7 +385,8 @@ class QuickTest(models.Model):
 | Dataflow Region | `europe-west1` (Belgium) | Hardcoded. Largest EU region with best worker capacity. `europe-central2` (Warsaw) is prone to `ZONE_RESOURCE_POOL_EXHAUSTED` |
 | Dataflow Machine Type | User-selected via wizard | Flows from wizard → DB → Cloud Build CLI arg → compile script → `beam_pipeline_args`. Defaults to `e2-standard-4` |
 | Pipeline Orchestration Region | `europe-central2` (Warsaw) | Co-located with BigQuery data and GCS buckets |
-| Hardware Tiers (Wizard) | `e2-standard-4/8/16` | e2-series for better availability; auto-recommended based on dataset size and model complexity |
+| Hardware Tiers (Wizard) | `e2-standard-4/8/16` (CPU) + `n1-standard-4 + T4` (GPU) | e2-series for CPU (better availability); n1 required for GPU (GCP constraint — GPUs cannot attach to e2 VMs) |
+| GPU Training Region | `europe-west4` (Netherlands) | GPU capacity; `europe-central2` doesn't support GPU training. Pipeline orchestrates from `europe-central2`, Trainer Custom Job runs in `europe-west4` |
 | Metrics Storage | GCS JSON files | Simple, no extra infrastructure |
 | Training Cache | Django JSONField | Instant UI loading (<1s) |
 | Histogram Data | On-demand fetch | Large data, rarely needed |
@@ -545,6 +550,89 @@ The Dataflow **region** stays hardcoded to `europe-west1` (Belgium) — this is 
 
 ---
 
+## GPU T4 Support (2026-02-13)
+
+### Overview
+
+The experiment wizard now supports GPU-accelerated training with a single NVIDIA T4 GPU. The T4 card in the hardware selection is unlocked; V100 remains locked for future use.
+
+### Hardware Options
+
+| Wizard Card | Dataflow Workers | Trainer Execution | Region |
+|-------------|-----------------|-------------------|--------|
+| Small | `e2-standard-4` (4 vCPU, 16 GB) | Standard Trainer (CPU) | `europe-central2` |
+| Medium | `e2-standard-8` (8 vCPU, 32 GB) | Standard Trainer (CPU) | `europe-central2` |
+| Large | `e2-standard-16` (16 vCPU, 64 GB) | Standard Trainer (CPU) | `europe-central2` |
+| **GPU T4** | `e2-standard-4` (4 vCPU, 16 GB) | **GenericExecutor Custom Job** (1x T4) | **`europe-west4`** |
+
+### Architecture
+
+When GPU T4 is selected, the pipeline uses two separate compute configurations:
+
+1. **Dataflow workers** (BigQueryExampleGen, StatisticsGen, Transform) — `e2-standard-4` in `europe-west1`, same as CPU path
+2. **Trainer** — Vertex AI Custom Job via `GenericExecutor` with `n1-standard-4` + 1x T4 GPU in `europe-west4`
+
+This mirrors the Training pipeline's GPU pattern (`ml_platform/training/services.py` lines 2966-3091).
+
+**Why n1-standard-4 for GPU?** GCP requires N1 (or N2D) VMs for GPU attachment — e2-series VMs do not support accelerators. The `n1-standard-4` (4 vCPU, 15 GB RAM) is the smallest N1 VM, sufficient for a single T4.
+
+**Why europe-west4?** `europe-central2` (Warsaw) does not support GPU training. `europe-west4` (Netherlands) has good GPU capacity. The pipeline still orchestrates from `europe-central2` — only the Trainer's Custom Job runs in `europe-west4`.
+
+### Data Model
+
+The `gpu_config` JSONField on `QuickTest` stores GPU configuration:
+
+```python
+# CPU experiment (default)
+gpu_config = {}
+
+# GPU T4 experiment
+gpu_config = {
+    "gpu_type": "NVIDIA_TESLA_T4",
+    "gpu_count": 1,
+    "machine_type": "n1-standard-4"
+}
+```
+
+### Data Flow
+
+```
+Wizard (GPU T4 card)
+  → machine_type = "e2-standard-4"  (for Dataflow)
+  → gpu_config = {gpu_type: "NVIDIA_TESLA_T4", gpu_count: 1, machine_type: "n1-standard-4"}
+    → POST /api/.../quick-test/
+      → ExperimentService.submit_quick_test(gpu_config=...)
+        → QuickTest.gpu_config = {...}
+        → _submit_pipeline() → _submit_vertex_pipeline(gpu_config=...)
+          → _trigger_cloud_build(gpu_config=...)
+            → Cloud Build CLI: --gpu-type --gpu-count --gpu-machine-type --gpu-training-region
+              → compile_and_submit.py create_tfx_pipeline(gpu_type=..., ...)
+                → GenericExecutor + worker_pool_specs with T4 GPU
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/models.py` | Added `gpu_config` JSONField to QuickTest |
+| `ml_platform/migrations/0063_quicktest_gpu_config.py` | Migration for new field |
+| `ml_platform/experiments/api.py` | Accept/serialize `gpu_config` in API layer |
+| `ml_platform/experiments/services.py` | Thread `gpu_config` through 5 methods + update inline compile script with conditional GPU/CPU Trainer |
+| `templates/ml_platform/model_experiments.html` | Unlock T4 card, GPU JS logic, payload + display |
+| `cloudbuild/compile_and_submit.py` | GPU args and conditional Trainer (consistency) |
+
+### Expected Behaviour
+
+**CPU path** (Small/Medium/Large): Unchanged. Standard Trainer runs on the pipeline worker VM.
+
+**GPU path** (GPU T4):
+- Cloud Build logs show `--gpu-type=NVIDIA_TESLA_T4 --gpu-count=1 --gpu-machine-type=n1-standard-4 --gpu-training-region=europe-west4`
+- Vertex AI pipeline's Trainer spawns a Custom Job in `europe-west4` with 1x T4 GPU using `tfx-trainer-gpu:latest` image
+- Rerun preserves `gpu_config` from the original experiment
+- Compare view shows GPU info (e.g., "T4 x1") in the Training section
+
+---
+
 ## Implementation Status
 
 ### Completed Features
@@ -564,9 +652,11 @@ The Dataflow **region** stays hardcoded to `europe-west1` (Belgium) — this is 
 - [x] Suggested experiments
 - [x] ScaNN support for retrieval models
 - [x] Multitask model support
+- [x] **GPU T4 support** (1x T4 via GenericExecutor in europe-west4) (2026-02-13)
 
 ### Future Enhancements
 
+- [ ] GPU V100 support (locked in wizard)
 - [ ] Full Training Pipeline (extended epochs, checkpointing)
 - [ ] Model Deployment (candidate index, serving endpoints)
 - [ ] A/B Testing support

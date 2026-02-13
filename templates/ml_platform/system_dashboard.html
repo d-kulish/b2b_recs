@@ -633,9 +633,9 @@
         }
         .billing-category-row .chevron {
             display: inline-block;
-            transition: transform 0.2s;
-            font-size: 10px;
-            margin-right: 6px;
+            transition: transform 0.3s ease;
+            font-size: 14px;
+            margin-right: 8px;
             color: #9ca3af;
         }
         .billing-category-row.expanded .chevron {
@@ -1103,9 +1103,9 @@
                         </div>
                     </div>
                     <div class="chapter-divider"></div>
-                    <div class="chapter-kpi-row">
+                    <div class="chapter-kpi-row" style="flex-wrap: wrap;">
                         <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon orange">
+                            <div class="chapter-kpi-icon blue">
                                 <i class="fas fa-calendar-alt"></i>
                             </div>
                             <div class="chapter-kpi-content">
@@ -1119,16 +1119,27 @@
                             </div>
                             <div class="chapter-kpi-content">
                                 <span class="chapter-kpi-value" id="billingTotal">--</span>
-                                <span class="chapter-kpi-label">Estimated Total</span>
+                                <span class="chapter-kpi-label">Current Total</span>
                             </div>
                         </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon blue">
-                                <i class="fas fa-certificate"></i>
+                        <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: center; gap: 6px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-bottom: 3px;">
+                                    <span>Period Progress</span>
+                                    <span id="billingProgressLabel">--</span>
+                                </div>
+                                <div class="billing-progress-bar">
+                                    <div class="billing-progress-fill" id="billingProgress" style="width: 0%;"></div>
+                                </div>
                             </div>
-                            <div class="chapter-kpi-content">
-                                <span class="chapter-kpi-value" id="billingLicense">--</span>
-                                <span class="chapter-kpi-label">License</span>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-bottom: 3px;">
+                                    <span>Budget</span>
+                                    <span id="billingBudgetLabel">--</span>
+                                </div>
+                                <div class="billing-progress-bar">
+                                    <div class="billing-progress-fill" id="billingBudget" style="width: 0%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1137,51 +1148,24 @@
                     <div class="chapter-content-inner">
                         <div class="chapter-divider" style="margin-top: 0;"></div>
 
-                        <!-- Summary Bar -->
-                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;">
-                            <div style="display: flex; align-items: center; gap: 32px; flex-wrap: wrap;">
-                                <div style="flex-shrink: 0;">
-                                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 2px;">Period</div>
-                                    <div style="font-size: 15px; font-weight: 600; color: #1f2937;" id="billingSummaryPeriod">--</div>
-                                </div>
-                                <div style="flex-shrink: 0;">
-                                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 2px;">Estimated Total</div>
-                                    <div style="font-size: 28px; font-weight: 700; color: #111827; line-height: 1.1;" id="billingSummaryTotal">--</div>
-                                </div>
-                                <div style="flex: 1; min-width: 200px;">
-                                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; margin-bottom: 4px;">
-                                        <span>Period Progress</span>
-                                        <span id="billingSummaryProgressLabel">--</span>
-                                    </div>
-                                    <div class="billing-progress-bar">
-                                        <div class="billing-progress-fill" id="billingSummaryProgress" style="width: 0%;"></div>
-                                    </div>
-                                </div>
-                                <div style="flex-shrink: 0;">
-                                    <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">License</div>
-                                    <span class="billing-license-badge neutral" id="billingSummaryLicense">--</span>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- Chart + Invoice Grid: 3 columns, 2 rows -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 20px; margin-bottom: 8px;">
 
-                        <!-- Chart Grid Row 1: 3 columns -->
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px;">
-
-                            <!-- Monthly Cost Trend -->
+                            <!-- Daily Spend (col 1, row 1) -->
                             <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b, #fbbf24); display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-chart-bar" style="color: white; font-size: 13px;"></i>
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #10b981, #34d399); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-chart-line" style="color: white; font-size: 13px;"></i>
                                     </div>
-                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Monthly Cost Trend</h4>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Daily Spend</h4>
                                 </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Stacked by category (6 months)</h5>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">By category</h5>
                                 <div style="height: 200px; position: relative;">
-                                    <canvas id="chartMonthlyTrend"></canvas>
+                                    <canvas id="chartDailySpend"></canvas>
                                 </div>
                             </div>
 
-                            <!-- Cost Breakdown -->
+                            <!-- Cost Breakdown (col 2, row 1) -->
                             <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                                     <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #00bcd4, #4dd0e1); display: flex; align-items: center; justify-content: center;">
@@ -1195,26 +1179,51 @@
                                 </div>
                             </div>
 
-                            <!-- Daily Spend -->
-                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #10b981, #34d399); display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-chart-line" style="color: white; font-size: 13px;"></i>
+                            <!-- Invoice Preview Table (col 3, row 1+2 spanning) -->
+                            <div style="grid-row: 1 / 3; position: relative;">
+                                <div style="position: absolute; inset: 0; background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; overflow: hidden;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-shrink: 0;">
+                                        <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa); display: flex; align-items: center; justify-content: center;">
+                                            <i class="fas fa-file-invoice-dollar" style="color: white; font-size: 13px;"></i>
+                                        </div>
+                                        <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Invoice Preview</h4>
                                     </div>
-                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Daily Spend</h4>
-                                </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Actual + forecast</h5>
-                                <div style="height: 200px; position: relative;">
-                                    <canvas id="chartDailySpend"></canvas>
+                                    <div style="flex: 1; overflow-y: auto; min-height: 0;">
+                                        <table class="billing-invoice-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Service</th>
+                                                    <th>GCP Cost</th>
+                                                    <th>Platform Fee</th>
+                                                    <th>Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="billingInvoiceBody">
+                                                <tr><td colspan="4" style="text-align: center; color: #9ca3af; padding: 24px;">Loading...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div style="font-size: 11px; color: #9ca3af; margin-top: 12px; text-align: right; flex-shrink: 0;">
+                                        <i class="fas fa-info-circle"></i> Costs reflect data up to 24 hours ago. Final invoice may differ.
+                                    </div>
                                 </div>
                             </div>
 
-                        </div>
+                            <!-- Monthly Cost Trend (col 1, row 2) -->
+                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #f59e0b, #fbbf24); display: flex; align-items: center; justify-content: center;">
+                                        <i class="fas fa-chart-bar" style="color: white; font-size: 13px;"></i>
+                                    </div>
+                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Monthly Cost Trend</h4>
+                                </div>
+                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Stacked by category (6 months)</h5>
+                                <div style="height: 200px; position: relative;">
+                                    <canvas id="chartMonthlyTrend"></canvas>
+                                </div>
+                            </div>
 
-                        <!-- Chart Grid Row 2: 2 columns, centered -->
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 67%; margin-bottom: 24px;">
-
-                            <!-- Cost per Training -->
+                            <!-- Cost per Training (col 2, row 2) -->
                             <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                                     <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6, #a78bfa); display: flex; align-items: center; justify-content: center;">
@@ -1228,46 +1237,6 @@
                                 </div>
                             </div>
 
-                            <!-- Cost by Service Over Time -->
-                            <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px;">
-                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                    <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #5c6bc0, #7986cb); display: flex; align-items: center; justify-content: center;">
-                                        <i class="fas fa-layer-group" style="color: white; font-size: 13px;"></i>
-                                    </div>
-                                    <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Cost by Category Over Time</h4>
-                                </div>
-                                <h5 style="font-size: 12px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">Daily stacked area (30d)</h5>
-                                <div style="height: 200px; position: relative;">
-                                    <canvas id="chartServiceOverTime"></canvas>
-                                </div>
-                            </div>
-
-                        </div>
-
-                        <!-- Invoice Preview Table -->
-                        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 8px;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                                <div style="width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #374151, #6b7280); display: flex; align-items: center; justify-content: center;">
-                                    <i class="fas fa-file-invoice-dollar" style="color: white; font-size: 13px;"></i>
-                                </div>
-                                <h4 style="font-size: 15px; font-weight: 700; color: #1f2937; margin: 0;">Invoice Preview</h4>
-                            </div>
-                            <table class="billing-invoice-table">
-                                <thead>
-                                    <tr>
-                                        <th>Service</th>
-                                        <th>GCP Cost</th>
-                                        <th>Platform Fee</th>
-                                        <th>Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="billingInvoiceBody">
-                                    <tr><td colspan="4" style="text-align: center; color: #9ca3af; padding: 24px;">Loading...</td></tr>
-                                </tbody>
-                            </table>
-                            <div style="font-size: 11px; color: #9ca3af; margin-top: 12px; text-align: right;">
-                                <i class="fas fa-info-circle"></i> Costs reflect data up to 24 hours ago. Final invoice may differ.
-                            </div>
                         </div>
 
                     </div>
@@ -1803,33 +1772,28 @@
                         // KPI header cards
                         setText('billingPeriod', d.period_label);
                         setText('billingTotal', formatUSD(d.grand_total));
-                        const licenseEl = document.getElementById('billingLicense');
-                        if (licenseEl) {
-                            if (d.license_discount_pct > 0) {
-                                licenseEl.textContent = '-' + d.license_discount_pct + '%';
-                            } else {
-                                licenseEl.textContent = formatUSD(d.license_fee);
-                            }
-                        }
 
-                        // Summary bar
-                        setText('billingSummaryPeriod', d.period_label);
-                        setText('billingSummaryTotal', formatUSD(d.grand_total));
-
-                        const progressFill = document.getElementById('billingSummaryProgress');
+                        // Progress bar in KPI row
+                        const progressFill = document.getElementById('billingProgress');
                         if (progressFill) progressFill.style.width = d.pct_elapsed + '%';
-                        setText('billingSummaryProgressLabel', d.days_elapsed + ' / ' + d.days_total + ' days (' + Math.round(d.pct_elapsed) + '%)');
+                        setText('billingProgressLabel', d.days_elapsed + ' / ' + d.days_total + ' days (' + Math.round(d.pct_elapsed) + '%)');
 
-                        const badgeEl = document.getElementById('billingSummaryLicense');
-                        if (badgeEl) {
-                            if (d.license_discount_pct > 0) {
-                                badgeEl.className = 'billing-license-badge';
-                                badgeEl.innerHTML = '<i class="fas fa-check-circle"></i> ' + d.license_discount_pct + '% discount';
-                            } else {
-                                badgeEl.className = 'billing-license-badge neutral';
-                                badgeEl.textContent = formatUSD(d.license_fee);
+                        // Budget bar
+                        const budget = 1000;
+                        const spent = parseFloat(d.grand_total) || 0;
+                        const budgetPct = Math.min((spent / budget) * 100, 100);
+                        const budgetFill = document.getElementById('billingBudget');
+                        if (budgetFill) {
+                            budgetFill.style.width = budgetPct + '%';
+                            // Green if under pace, orange if close, red if over budget
+                            if (budgetPct > 100) {
+                                budgetFill.style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
+                            } else if (budgetPct > d.pct_elapsed) {
+                                budgetFill.style.background = 'linear-gradient(90deg, #f59e0b, #fbbf24)';
                             }
                         }
+                        setText('billingBudgetLabel', formatUSD(spent) + ' / ' + formatUSD(budget) + ' (' + Math.round(budgetPct) + '%)');
+
                     }
                 } catch (error) {
                     console.error('Failed to load billing summary:', error);
@@ -1847,7 +1811,6 @@
                         renderCostBreakdown(result.data.cost_breakdown);
                         renderDailySpend(result.data.daily_spend);
                         renderCostPerTraining(result.data.cost_per_training);
-                        renderCategoryOverTime(result.data.category_over_time);
                     }
                 } catch (error) {
                     console.error('Failed to load billing charts:', error);
@@ -1979,50 +1942,35 @@
                     return;
                 }
 
-                const datasets = [
-                    {
-                        label: 'Actual',
-                        data: data.actual,
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.3,
-                        fill: true,
-                        pointRadius: 2,
-                        spanGaps: false,
-                    },
-                    {
-                        label: 'Forecast',
-                        data: data.forecast,
-                        borderColor: '#9ca3af',
-                        borderDash: [5, 5],
-                        backgroundColor: 'rgba(156, 163, 175, 0.05)',
-                        tension: 0.3,
-                        fill: false,
-                        pointRadius: 0,
-                        spanGaps: true,
-                    }
-                ];
-
-                if (data.prev_month_total > 0) {
-                    const dailyAvg = data.prev_month_total / data.labels.length;
+                // Stacked bar datasets per category
+                const datasets = [];
+                const categories = data.categories || {};
+                const catOrder = ['Data', 'Training', 'Inference', 'System'];
+                catOrder.forEach((cat, i) => {
+                    if (!categories[cat]) return;
                     datasets.push({
-                        label: 'Prev Month Avg',
-                        data: data.labels.map(() => dailyAvg),
-                        borderColor: '#f59e0b',
-                        borderDash: [3, 3],
-                        backgroundColor: 'transparent',
-                        pointRadius: 0,
-                        fill: false,
+                        label: cat,
+                        data: categories[cat],
+                        backgroundColor: getCategoryColor(cat, i) + 'cc',
+                        borderRadius: 2,
+                        barPercentage: 0.85,
+                        categoryPercentage: 0.8,
                     });
-                }
+                });
 
                 charts.dailySpend = new Chart(ctx, {
-                    type: 'line',
+                    type: 'bar',
                     data: {
                         labels: data.labels.map(formatDate),
                         datasets: datasets
                     },
-                    options: getChartOptions('USD')
+                    options: {
+                        ...getChartOptions('USD'),
+                        scales: {
+                            x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'USD' } }
+                        }
+                    }
                 });
             }
 
@@ -2067,42 +2015,6 @@
                 });
             }
 
-            function renderCategoryOverTime(data) {
-                const ctx = document.getElementById('chartServiceOverTime');
-                if (!ctx) return;
-                if (charts.categoryOverTime) charts.categoryOverTime.destroy();
-
-                if (!data.labels || data.labels.length === 0) {
-                    showNoData(ctx);
-                    return;
-                }
-
-                const categories = Object.keys(data.categories);
-                const datasets = categories.map((cat, i) => ({
-                    label: cat,
-                    data: data.categories[cat],
-                    borderColor: getCategoryColor(cat, i),
-                    backgroundColor: getCategoryColor(cat, i) + '33',
-                    tension: 0.3,
-                    fill: true,
-                    pointRadius: 0,
-                }));
-
-                charts.categoryOverTime = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.labels.map(formatDate),
-                        datasets: datasets
-                    },
-                    options: {
-                        ...getChartOptions('USD'),
-                        scales: {
-                            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } },
-                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'USD' } }
-                        }
-                    }
-                });
-            }
 
             // ---- Invoice Renderer ----
 
@@ -2112,18 +2024,28 @@
 
                 let html = '';
 
+                // License row (styled as a category row, first in table)
+                html += '<tr class="billing-category-row" style="cursor: default;">';
+                html += '<td style="padding-left: 30px;">License</td>';
+                html += '<td>' + formatUSD(data.license_fee) + '</td>';
+                if (data.license_discount_pct > 0) {
+                    html += '<td>-' + data.license_discount_pct + '%</td>';
+                } else {
+                    html += '<td></td>';
+                }
+                html += '<td>' + formatUSD(data.license_net) + '</td>';
+                html += '</tr>';
+
                 // Category rows with collapsible service sub-rows
                 (data.items || []).forEach((cat, catIdx) => {
                     const catId = 'billing-cat-' + catIdx;
-                    const color = CATEGORY_COLORS[cat.category] || '#6b7280';
-
                     // Category header row
                     html += '<tr class="billing-category-row" data-cat="' + catId + '">';
-                    html += '<td><span class="chevron">&#9654;</span>';
-                    html += '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:8px;"></span>';
+                    html += '<td><span class="chevron"><i class="fas fa-chevron-right"></i></span>';
                     html += cat.category + '</td>';
                     html += '<td>' + formatUSD(cat.gcp_cost) + '</td>';
-                    html += '<td>' + formatUSD(cat.platform_fee) + '</td>';
+                    const catMargin = cat.gcp_cost ? Math.round(cat.platform_fee / cat.gcp_cost * 100) : 0;
+                    html += '<td>+ ' + catMargin + '%</td>';
                     html += '<td>' + formatUSD(cat.total) + '</td>';
                     html += '</tr>';
 
@@ -2132,7 +2054,7 @@
                         html += '<tr class="billing-service-row collapsed" data-cat-parent="' + catId + '">';
                         html += '<td>' + svc.service + '</td>';
                         html += '<td>' + formatUSD(svc.gcp_cost) + '</td>';
-                        html += '<td>' + formatUSD(svc.platform_fee) + ' <span style="color:#9ca3af;font-size:11px;">(' + svc.margin_pct + '%)</span></td>';
+                        html += '<td>' + formatUSD(svc.platform_fee) + '</td>';
                         html += '<td>' + formatUSD(svc.total) + '</td>';
                         html += '</tr>';
                     });
@@ -2149,26 +2071,28 @@
                 html += '<td>' + formatUSD(data.subtotal) + '</td>';
                 html += '</tr>';
 
-                // License row
-                html += '<tr>';
-                html += '<td>License Fee</td>';
-                html += '<td colspan="2" style="text-align:right;color:#6b7280;">';
-                if (data.license_discount_pct > 0) {
-                    html += '<span style="text-decoration:line-through;color:#9ca3af;">' + formatUSD(data.license_fee) + '</span> ';
-                    html += '<span class="billing-license-badge" style="font-size:11px;">-' + data.license_discount_pct + '%</span>';
-                } else {
-                    html += formatUSD(data.license_fee);
-                }
-                html += '</td>';
-                html += '<td>' + formatUSD(data.license_net) + '</td>';
-                html += '</tr>';
-
                 // Grand total
                 html += '<tr class="total-row">';
                 html += '<td>Grand Total</td>';
                 html += '<td></td>';
                 html += '<td></td>';
                 html += '<td>' + formatUSD(data.grand_total) + '</td>';
+                html += '</tr>';
+
+                // VAT
+                html += '<tr style="color: #6b7280; font-size: 13px;">';
+                html += '<td>VAT</td>';
+                html += '<td></td>';
+                html += '<td>' + data.vat_pct + '%</td>';
+                html += '<td>' + formatUSD(data.vat_amount) + '</td>';
+                html += '</tr>';
+
+                // Total Due
+                html += '<tr class="total-row">';
+                html += '<td>Total Due</td>';
+                html += '<td></td>';
+                html += '<td></td>';
+                html += '<td>' + formatUSD(data.grand_total_with_vat) + '</td>';
                 html += '</tr>';
 
                 tbody.innerHTML = html;

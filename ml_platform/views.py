@@ -1403,6 +1403,7 @@ def api_system_billing_charts(request):
 
         # ------------------------------------------------------------------
         # 3. Daily Spend — current month daily totals + linear forecast
+        #    Also includes per-category daily breakdown.
         # ------------------------------------------------------------------
         daily_qs = (
             BillingSnapshot.objects
@@ -1413,6 +1414,20 @@ def api_system_billing_charts(request):
         )
         daily_map = {r['date']: float(r['day_total']) for r in daily_qs}
 
+        # Per-category daily breakdown
+        daily_cat_qs = (
+            BillingSnapshot.objects
+            .filter(date__gte=period_start, date__lte=period_end)
+            .values('date', 'category')
+            .annotate(cat_total=Sum('total_cost'))
+            .order_by('date')
+        )
+        daily_cat_map = defaultdict(lambda: defaultdict(float))
+        daily_cats_seen = set()
+        for row in daily_cat_qs:
+            daily_cat_map[row['date']][row['category']] = float(row['cat_total'])
+            daily_cats_seen.add(row['category'])
+
         # All days in current month
         all_days = [
             period_start + timedelta(days=i) for i in range(days_in_month)
@@ -1421,34 +1436,19 @@ def api_system_billing_charts(request):
         for d in all_days:
             actual.append(daily_map.get(d))
 
-        # Linear forecast: average of days that have data, extend to month end
-        recorded_values = [v for v in actual if v is not None]
-        avg_daily = (
-            sum(recorded_values) / len(recorded_values)
-            if len(recorded_values) >= 5 else None
-        )
-        forecast = []
-        for i, d in enumerate(all_days):
-            if actual[i] is not None:
-                forecast.append(None)
-            elif avg_daily is not None:
-                forecast.append(round(avg_daily, 2))
-            else:
-                forecast.append(None)
+        # Build per-category arrays aligned to all_days
+        sorted_daily_cats = [c for c in category_order if c in daily_cats_seen]
+        categories_daily = {}
+        for cat in sorted_daily_cats:
+            categories_daily[cat] = [
+                round(daily_cat_map[d].get(cat, 0), 2) if daily_map.get(d) is not None else None
+                for d in all_days
+            ]
 
-        # Previous month total as reference
-        prev_month_end = period_start - timedelta(days=1)
-        prev_month_start = prev_month_end.replace(day=1)
-        prev_total = (
-            BillingSnapshot.objects
-            .filter(date__gte=prev_month_start, date__lte=prev_month_end)
-            .aggregate(t=Sum('total_cost'))['t']
-        )
         daily_spend = {
             'labels': [d.isoformat() for d in all_days],
             'actual': [round(v, 2) if v is not None else None for v in actual],
-            'forecast': forecast,
-            'prev_month_total': float(prev_total or 0),
+            'categories': categories_daily,
         }
 
         # ------------------------------------------------------------------
@@ -1594,6 +1594,9 @@ def api_system_billing_invoice(request):
         license_discount_pct = config.license_discount_pct
         license_net = round(license_fee * (1 - license_discount_pct / 100), 2)
         grand_total = round(float(subtotal) + license_net, 2)
+        vat_pct = 20
+        vat_amount = round(grand_total * vat_pct / 100, 2)
+        grand_total_with_vat = round(grand_total + vat_amount, 2)
 
         period_label = today.strftime('%B %Y')
 
@@ -1609,6 +1612,9 @@ def api_system_billing_invoice(request):
                 'license_discount_pct': license_discount_pct,
                 'license_net': license_net,
                 'grand_total': grand_total,
+                'vat_pct': vat_pct,
+                'vat_amount': vat_amount,
+                'grand_total_with_vat': grand_total_with_vat,
             }
         })
     except Exception as e:

@@ -2900,8 +2900,8 @@ class BillingConfig(models.Model):
         help_text="Margin applied to most GCP services (100%)"
     )
     gpu_margin_pct = models.IntegerField(
-        default=50,
-        help_text="Margin applied to Vertex AI / GPU costs (50%)"
+        default=100,
+        help_text="Margin applied to Vertex AI / GPU costs (100%)"
     )
     billing_export_project = models.CharField(
         max_length=255, default='b2b-recs',

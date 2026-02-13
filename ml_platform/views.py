@@ -944,16 +944,15 @@ def scheduler_collect_billing_webhook(request):
 
     try:
         output = StringIO()
-        # Collect for yesterday — billing export has ~24h delay,
-        # so at 04:00 UTC the previous day's data is available.
-        yesterday = (timezone.now() - timedelta(days=1)).date()
-        call_command('collect_billing_snapshots', '--date', yesterday.isoformat(), stdout=output)
+        # Collect last 3 days — GCP billing export takes 48-72h to fully populate,
+        # so re-collecting older dates picks up late-arriving cost data.
+        call_command('collect_billing_snapshots', '--backfill', '--days', '3', stdout=output)
 
-        logger.info(f'Scheduled billing snapshot collection completed for {yesterday}')
+        logger.info('Scheduled billing snapshot collection completed (last 3 days)')
 
         return JsonResponse({
             'status': 'success',
-            'message': f'Billing snapshots collected for {yesterday}',
+            'message': 'Billing snapshots collected (last 3 days)',
             'output': output.getvalue(),
         })
 

@@ -3045,6 +3045,20 @@
         border-color: #8b5cf6;
     }
 
+    /* Rating Head two-column layout (view modal) */
+    .rating-head-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+    .rating-head-layers-col {
+        min-width: 0;
+    }
+    .rating-head-params-col {
+        min-width: 0;
+    }
+
     /* Retrieval Algorithm Section */
     .retrieval-algorithm-section {
         margin-top: 24px;
@@ -21745,8 +21759,19 @@ function renderMcViewBody(mc) {
                     </div>
                 </div>
                 <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6;">
-                    <div class="tower-stack ranking" style="max-width: 50%;">
-                        ${ratingLayersHtml}
+                    <div class="rating-head-content">
+                        <div class="rating-head-layers-col">
+                            <div class="tower-stack ranking">
+                                ${ratingLayersHtml}
+                            </div>
+                        </div>
+                        <div class="rating-head-params-col">
+                            <div class="tower-params-summary view-modal" style="margin: 0; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border-color: #8b5cf6;">
+                                <div class="params-row"><span>Total params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Trainable params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -21849,6 +21874,8 @@ function renderMcViewBody(mc) {
                 </div>
             </div>
 
+            ${ratingHeadHtml}
+
             <!-- Chapter 3: Training Parameters -->
             <div class="ds-detail-section">
                 <div class="ds-detail-section-title">Training Parameters</div>
@@ -21872,7 +21899,6 @@ function renderMcViewBody(mc) {
             </div>
 
             ${retrievalHtml}
-            ${ratingHeadHtml}
             ${multitaskHtml}
         </div>
     `;

@@ -159,6 +159,16 @@
     background: linear-gradient(135deg, #0f172a 0%, #3b1f6e 50%, #8b5cf6 100%);
 }
 
+/* Gradient variant: Slate-to-Emerald (Connection wizard) */
+.modal-header-gradient.gradient-connection {
+    background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #059669 100%);
+}
+
+/* Gradient variant: Slate-to-Orange (ETL Job wizard) */
+.modal-header-gradient.gradient-etl-job {
+    background: linear-gradient(135deg, #0f172a 0%, #7c2d12 50%, #ea580c 100%);
+}
+
 /* Gradient variant: ETL Run — status-dependent */
 .modal-header-gradient.gradient-etl-completed { background: linear-gradient(135deg, #0f172a 0%, #14532d 50%, #16a34a 100%); }
 .modal-header-gradient.gradient-etl-failed    { background: linear-gradient(135deg, #0f172a 0%, #7f1d1d 50%, #dc2626 100%); }

@@ -890,25 +890,25 @@
 <!-- Add Data Source Wizard Modal -->
 <div id="addSourceModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-etl-wizard">
-        <!-- Modal Header -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon info">
-                    <i class="fas fa-database text-lg"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title">Add ETL Job</h3>
-                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 5</p>
-                </div>
+        <!-- Modal Header — gradient (matches configs-page wizard style) -->
+        <div class="modal-header modal-header-gradient gradient-etl-job" id="etlJobModalHeader">
+            <div class="modal-header-icon-badge" id="etlJobModalIcon">
+                <i class="fas fa-database"></i>
             </div>
+            <div>
+                <h3 class="modal-header-title" id="etlJobModalTitle">Add ETL Job</h3>
+                <div class="modal-header-subtitle">Step <span id="currentStep">1</span> of 5</div>
+            </div>
+        </div>
 
-            <!-- Progress Bar -->
-            <div class="progress-bar-pills">
-                <div id="progress1" class="progress-step-pill current">Connection</div>
-                <div id="progress2" class="progress-step-pill future">Tables</div>
-                <div id="progress3" class="progress-step-pill future">Strategy</div>
-                <div id="progress4" class="progress-step-pill future">Preview</div>
-                <div id="progress5" class="progress-step-pill future">Schedule</div>
+        <!-- Step Navigation — overlapping nav bar -->
+        <div class="wizard-nav-bar">
+            <div class="wizard-nav-pills">
+                <div id="progress1" class="wizard-step-pill current">Connection</div>
+                <div id="progress2" class="wizard-step-pill future">Tables</div>
+                <div id="progress3" class="wizard-step-pill future">Strategy</div>
+                <div id="progress4" class="wizard-step-pill future">Preview</div>
+                <div id="progress5" class="wizard-step-pill future">Schedule</div>
             </div>
         </div>
 
@@ -1685,22 +1685,22 @@
 <!-- Standalone Connection Creation Modal (2-Step Wizard) -->
 <div id="createConnectionModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-connection-wizard">
-        <!-- Modal Header -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon info">
-                    <i class="fas fa-plug text-lg"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title">Create Connection</h3>
-                    <p class="modal-step-counter">Step <span id="connModalStep">1</span> of 2</p>
-                </div>
+        <!-- Modal Header — gradient (matches configs-page wizard style) -->
+        <div class="modal-header modal-header-gradient gradient-connection" id="connModalHeader">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-plug"></i>
             </div>
+            <div>
+                <h3 class="modal-header-title" id="connModalTitle">Create Connection</h3>
+                <div class="modal-header-subtitle">Step <span id="connModalStep">1</span> of 2</div>
+            </div>
+        </div>
 
-            <!-- Progress Bar -->
-            <div class="progress-bar-pills">
-                <div id="connProgress1" class="progress-step-pill current">Type</div>
-                <div id="connProgress2" class="progress-step-pill future">Configure</div>
+        <!-- Step Navigation — overlapping nav bar -->
+        <div class="wizard-nav-bar">
+            <div class="wizard-nav-pills">
+                <div id="connProgress1" class="wizard-step-pill current">Type</div>
+                <div id="connProgress2" class="wizard-step-pill future">Configure</div>
             </div>
         </div>
 
@@ -5733,6 +5733,10 @@ function openCreateConnectionModal() {
     connTestedSuccessfully = false;
     wizardEditConnectionId = null; // Clear edit mode when creating new
 
+    // Reset header title
+    const connTitle = document.getElementById('connModalTitle');
+    if (connTitle) connTitle.textContent = 'Create Connection';
+
     // Reset form fields
     document.querySelectorAll('input[name="connSourceType"]').forEach(radio => radio.checked = false);
     if (document.getElementById('connName')) document.getElementById('connName').value = '';
@@ -6504,6 +6508,10 @@ function openEditConnectionModal(connectionId) {
                     sourceTypeRadio.checked = true;
                 }
 
+                // Update header title for edit mode
+                const connTitle = document.getElementById('connModalTitle');
+                if (connTitle) connTitle.textContent = 'Edit Connection';
+
                 // Show the modal
                 document.getElementById('createConnectionModal').classList.remove('hidden');
 
@@ -6823,12 +6831,18 @@ function showAddSourceModal(resumeStep = 1) {
     console.log('Modal element:', document.getElementById('addSourceModal'));
     document.getElementById('addSourceModal').classList.remove('hidden');
 
-    // Set modal title based on mode
-    const modalTitle = document.querySelector('#addSourceModal h3');
+    // Set modal title and header gradient based on mode
+    const modalTitle = document.getElementById('etlJobModalTitle');
+    const modalHeader = document.getElementById('etlJobModalHeader');
+    const modalIcon = document.getElementById('etlJobModalIcon');
     if (wizardStandaloneMode) {
         modalTitle.textContent = wizardEditConnectionId ? 'Edit Connection' : 'Create Connection';
-    } else if (!wizardEditMode) {
-        modalTitle.textContent = 'Add ETL Job';
+        modalHeader.className = 'modal-header modal-header-gradient gradient-connection';
+        modalIcon.innerHTML = '<i class="fas fa-plug"></i>';
+    } else {
+        if (!wizardEditMode) modalTitle.textContent = 'Add ETL Job';
+        modalHeader.className = 'modal-header modal-header-gradient gradient-etl-job';
+        modalIcon.innerHTML = '<i class="fas fa-database"></i>';
     }
 
     // In edit mode, use the provided resumeStep; otherwise start at step 1

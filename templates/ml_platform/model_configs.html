@@ -7850,64 +7850,21 @@
 
 <!-- Transform Code Viewer Modal -->
 <div id="transformCodeViewerModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 900px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
-                <i class="fas fa-random"></i>
+    <div class="modal-container modal-container-xl">
+        <div class="modal-header modal-header-gradient gradient-code">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-code"></i>
             </div>
-            <h3 class="modal-header-title">Transform Code</h3>
-            <button type="button" class="modal-close-btn" onclick="closeTransformCodeViewer()">
-                <i class="fas fa-times"></i>
-            </button>
+            <div>
+                <h3 class="modal-header-title">Transform Code</h3>
+                <div class="modal-header-subtitle">Auto-generated preprocessing function for this feature config</div>
+            </div>
         </div>
-        <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
-            <!-- Meta info -->
-            <div class="code-meta">
-                <div class="code-meta-item">
-                    <i class="fas fa-clock"></i>
-                    <span id="transformCodeGeneratedAt">-</span>
-                </div>
-                <div class="code-meta-item">
-                    <i class="fas fa-sync-alt"></i>
-                    <button onclick="regenerateTransformCode()" class="text-blue-600 hover:text-blue-800 font-medium">
-                        Regenerate
-                    </button>
-                </div>
-            </div>
-
-            <!-- Transform Code Content -->
-            <div id="transformValidationError" class="validation-error-banner" style="display: none;">
-                <i class="fas fa-exclamation-triangle"></i>
-                <div class="error-text">
-                    <span id="transformErrorMsg"></span>
-                    <span id="transformErrorLine" class="error-line"></span>
-                </div>
-            </div>
-            <div class="code-container">
-                <div class="code-header">
-                    <span class="code-filename">preprocessing_fn.py</span>
-                    <span id="transformValidationBadge" class="validation-badge checking">
-                        <i class="fas fa-spinner fa-spin"></i> Checking
-                    </span>
-                    <span class="tab-badge" id="transformLineCount">-</span>
-                    <div class="code-actions">
-                        <button class="code-action-btn" onclick="copyCode('transform')" id="copyTransformBtn">
-                            <i class="fas fa-copy"></i> Copy
-                        </button>
-                        <button class="code-action-btn" onclick="downloadCode('transform')">
-                            <i class="fas fa-download"></i> Download
-                        </button>
-                    </div>
-                </div>
-                <div class="code-block">
-                    <pre id="transformCode"></pre>
-                </div>
-            </div>
+        <div class="modal-body">
+            <pre id="transformCode" class="python-code-light"></pre>
         </div>
         <div class="modal-footer-wizard-neu">
-            <div class="footer-left">
-                <span class="text-sm text-gray-500" id="transformCodeConfigName"></span>
-            </div>
+            <div class="footer-left"></div>
             <div class="footer-right">
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="closeTransformCodeViewer()">
                     <span class="btn-neu-inner">Close</span>
@@ -18853,15 +18810,9 @@ let currentCodeData = { transform: '', trainer: '' };
 // Transform Code Viewer
 function viewTransformCode(configId, configName) {
     currentCodeViewerConfigId = configId;
-    document.getElementById('transformCodeConfigName').textContent = configName;
 
     // Clear previous content
     document.getElementById('transformCode').textContent = 'Loading...';
-    document.getElementById('transformLineCount').textContent = '-';
-    document.getElementById('transformCodeGeneratedAt').textContent = 'Loading...';
-
-    // Reset validation badge
-    updateValidationBadge('transform', 'checking');
 
     // Show modal
     document.getElementById('transformCodeViewerModal').classList.remove('hidden');
@@ -18872,29 +18823,16 @@ function viewTransformCode(configId, configName) {
         .then(data => {
             if (data.success && data.data.code) {
                 currentCodeData.transform = data.data.code;
-                const highlighted = highlightPython(data.data.code);
+                const highlighted = highlightPython(data.data.code, 'py-');
                 document.getElementById('transformCode').innerHTML = highlighted;
-                const lineCount = data.data.code.split('\n').length;
-                document.getElementById('transformLineCount').textContent = `${lineCount} lines`;
-                updateValidationBadge('transform', data.data.is_valid ? 'valid' : 'invalid',
-                                      data.data.validation_error, data.data.error_line);
             } else {
                 currentCodeData.transform = '';
-                document.getElementById('transformCode').innerHTML = '<span class="comment"># No transform code generated yet</span>';
-                document.getElementById('transformLineCount').textContent = '0';
-                updateValidationBadge('transform', 'valid');
-            }
-
-            if (data.data?.generated_at) {
-                document.getElementById('transformCodeGeneratedAt').textContent = `Generated ${formatTimeAgo(data.data.generated_at)}`;
-            } else {
-                document.getElementById('transformCodeGeneratedAt').textContent = 'Not generated';
+                document.getElementById('transformCode').innerHTML = '<span class="py-cmt"># No transform code generated yet</span>';
             }
         })
         .catch(err => {
             console.error('Error fetching transform code:', err);
-            document.getElementById('transformCode').innerHTML = '<span class="comment"># Error loading code</span>';
-            updateValidationBadge('transform', 'invalid', 'Failed to load code');
+            document.getElementById('transformCode').innerHTML = '<span class="py-cmt"># Error loading code</span>';
         });
 }
 
@@ -18905,11 +18843,8 @@ function closeTransformCodeViewer() {
 function regenerateTransformCode() {
     if (!currentCodeViewerConfigId) return;
 
-    const configName = document.getElementById('transformCodeConfigName').textContent;
-
     // Show loading state
     document.getElementById('transformCode').textContent = 'Regenerating...';
-    updateValidationBadge('transform', 'checking');
 
     fetch(`/api/feature-configs/${currentCodeViewerConfigId}/regenerate-code/`, {
         method: 'POST',
@@ -18922,7 +18857,7 @@ function regenerateTransformCode() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            viewTransformCode(currentCodeViewerConfigId, configName);
+            viewTransformCode(currentCodeViewerConfigId);
             showSuccess('Transform code regenerated');
         } else {
             showError(data.error || 'Failed to regenerate code');
@@ -19074,9 +19009,10 @@ function updateValidationBadge(codeType, status, errorMsg = null, errorLine = nu
     }
 }
 
-function highlightPython(code) {
+function highlightPython(code, classPrefix) {
     // Tokenization-based syntax highlighting to avoid regex conflicts
-    // First, find all tokens and their positions, then build result
+    // classPrefix: optional prefix for CSS classes (e.g. 'py-' → 'py-keyword')
+    classPrefix = classPrefix || '';
 
     const tokens = [];
 
@@ -19137,7 +19073,10 @@ function highlightPython(code) {
             result += escapeHtml(code.slice(pos, token.start));
         }
         // Add highlighted token
-        result += `<span class="${token.type}">${escapeHtml(token.text)}</span>`;
+        const cls = classPrefix
+            ? classPrefix + {keyword:'kw',string:'str',comment:'cmt',decorator:'dec',builtin:'bi',function:'fn',number:'num'}[token.type]
+            : token.type;
+        result += `<span class="${cls}">${escapeHtml(token.text)}</span>`;
         pos = token.end;
     }
 

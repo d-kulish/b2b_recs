@@ -144,6 +144,38 @@
     background: linear-gradient(135deg, #0f172a 0%, #713f12 50%, #d97706 100%);
 }
 
+/* Gradient variant: Slate-to-Purple (Code viewer modals) */
+.modal-header-gradient.gradient-code {
+    background: linear-gradient(135deg, #0f172a 0%, #3b1f6e 50%, #7c3aed 100%);
+}
+
+/* Python Code Modal — light code area (mirrors sql-code-light) */
+.python-code-light {
+    background: #ffffff;
+    color: #1e293b;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+/* Python syntax highlighting tokens */
+.python-code-light .py-kw  { color: #7c3aed; font-weight: 600; }
+.python-code-light .py-fn  { color: #2563eb; }
+.python-code-light .py-str { color: #059669; }
+.python-code-light .py-num { color: #b45309; }
+.python-code-light .py-cmt { color: #6b7280; font-style: italic; }
+.python-code-light .py-dec { color: #b45309; font-weight: 500; }
+.python-code-light .py-cls { color: #0d9488; font-weight: 500; }
+.python-code-light .py-bi  { color: #2563eb; }
+
 /* SQL Query Modal — light code area */
 .sql-code-light {
     background: #ffffff;

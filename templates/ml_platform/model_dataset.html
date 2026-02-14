@@ -1464,29 +1464,32 @@
 
 <!-- Query Preview Modal -->
 <div id="queryModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-lg">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
-                <i class="fas fa-code"></i>
+    <div class="modal-container modal-container-xl">
+        <div class="modal-header modal-header-gradient gradient-sql">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-terminal"></i>
             </div>
-            <h3 class="modal-header-title">Generated SQL Query</h3>
+            <div>
+                <h3 class="modal-header-title">Generated SQL Query</h3>
+                <div class="modal-header-subtitle">BigQuery extraction query for this dataset</div>
+            </div>
         </div>
         <div class="modal-body">
             <p class="text-sm text-gray-500 mb-3">
                 This is the base query that will be used to extract data from BigQuery.
                 Train/eval split is configured in the Training domain.
             </p>
-            <pre id="queryContent" class="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto" style="max-height: 400px;"></pre>
+            <pre id="queryContent" class="sql-code-light"></pre>
             <div id="queryValidation" class="mt-3 text-sm"></div>
         </div>
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
-                <button onclick="copyQuery()" class="btn-neu btn-neu-action btn-neu-save" style="width: 130px;">
+                <button onclick="copyQuery()" class="btn-neu btn-neu-action btn-neu-save">
                     <span class="btn-neu-inner">Copy SQL</span>
                 </button>
-                <button onclick="closeQueryModal()" class="btn-neu btn-neu-action btn-neu-cancel" style="width: 130px;">
-                    <span class="btn-neu-inner">Cancel</span>
+                <button onclick="closeQueryModal()" class="btn-neu btn-neu-action btn-neu-cancel">
+                    <span class="btn-neu-inner">Close</span>
                 </button>
             </div>
         </div>
@@ -9720,6 +9723,43 @@ function confirmDelete() {
 // ============================================================================
 // QUERY PREVIEW
 // ============================================================================
+function highlightSQL(sql) {
+    // Escape HTML first
+    let html = sql.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Highlight backtick-quoted identifiers (table/column refs) — must come before keywords
+    html = html.replace(/`([^`]+)`/g, '<span class="sql-tbl">`$1`</span>');
+
+    // Highlight SQL keywords
+    const keywords = [
+        'WITH', 'AS', 'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'ON',
+        'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'UNION', 'ALL',
+        'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'TABLE', 'INDEX',
+        'GROUP BY', 'ORDER BY', 'HAVING', 'LIMIT', 'OFFSET', 'DISTINCT',
+        'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'IS', 'NULL', 'BETWEEN',
+        'EXISTS', 'LIKE', 'INTERVAL', 'DAY', 'HOUR', 'MINUTE', 'TRUE', 'FALSE',
+        'ASC', 'DESC', 'IF', 'OVER', 'PARTITION BY', 'ROWS', 'RANGE', 'UNNEST',
+        'STRUCT', 'ARRAY', 'EXCEPT', 'INTERSECT', 'CAST', 'SAFE_CAST'
+    ];
+    const kwPattern = new RegExp('\\b(' + keywords.join('|') + ')\\b', 'g');
+    html = html.replace(kwPattern, '<span class="sql-kw">$1</span>');
+
+    // Highlight SQL functions (word followed by open paren)
+    html = html.replace(/\b([A-Z_][A-Z_0-9]*)\s*(?=\()/g, (match, fn) => {
+        // Don't re-highlight if already wrapped as keyword
+        if (keywords.includes(fn)) return match;
+        return `<span class="sql-fn">${fn}</span>`;
+    });
+
+    // Highlight numbers
+    html = html.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="sql-num">$1</span>');
+
+    // Highlight single-quoted strings
+    html = html.replace(/'([^']*)'/g, '<span class="sql-str">\'$1\'</span>');
+
+    return html;
+}
+
 function viewGeneratedQuery() {
     if (!currentDatasetId) return;
 
@@ -9732,7 +9772,9 @@ function viewGeneratedQuery() {
     .then(data => {
         if (data.status === 'success') {
             currentQueries = { full: data.query };
-            document.getElementById('queryContent').textContent = data.query;
+            const el = document.getElementById('queryContent');
+            el.innerHTML = highlightSQL(data.query);
+            el.dataset.rawQuery = data.query;
 
             if (data.validation) {
                 const validation = data.validation;
@@ -9754,7 +9796,8 @@ function viewGeneratedQuery() {
 }
 
 function copyQuery() {
-    const query = document.getElementById('queryContent').textContent;
+    const el = document.getElementById('queryContent');
+    const query = el.dataset.rawQuery || el.innerText;
     navigator.clipboard.writeText(query).then(() => {
         showNotification('Query copied to clipboard', 'success');
     }).catch(() => {

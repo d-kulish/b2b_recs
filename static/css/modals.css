@@ -29,6 +29,7 @@
 .modal-container {
     background-color: #ffffff;
     border-radius: 12px;
+    overflow: hidden;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     max-width: 500px;
     width: 100%;
@@ -93,6 +94,75 @@
     color: #111827;
     flex: 1;
 }
+
+/* Gradient Modal Header — shared base */
+.modal-header-gradient {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 24px;
+    border-bottom: none;
+    min-height: 80px;
+}
+.modal-header-gradient .modal-header-title {
+    color: #ffffff;
+    font-size: 22px;
+}
+.modal-header-gradient .modal-header-subtitle {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 2px;
+}
+.modal-header-gradient .modal-header-icon-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.modal-header-gradient .modal-header-icon-badge i {
+    font-size: 20px;
+    color: #ffffff;
+}
+
+/* Gradient variant: Slate-to-Blue (SQL modal) */
+.modal-header-gradient.gradient-sql {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1e40af 100%);
+}
+
+/* Gradient variant: Teal-to-Cyan (Dataset view) */
+.modal-header-gradient.gradient-dataset {
+    background: linear-gradient(135deg, #0f172a 0%, #134e4a 45%, #0d9488 100%);
+}
+
+/* SQL Query Modal — light code area */
+.sql-code-light {
+    background: #ffffff;
+    color: #1e293b;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+/* SQL syntax highlighting tokens */
+.sql-code-light .sql-kw  { color: #7c3aed; font-weight: 600; }
+.sql-code-light .sql-fn  { color: #2563eb; }
+.sql-code-light .sql-str { color: #059669; }
+.sql-code-light .sql-num { color: #b45309; }
+.sql-code-light .sql-tbl { color: #b45309; font-weight: 500; }
+.sql-code-light .sql-op  { color: #6b7280; }
 
 /* Modal Body */
 .modal-body {

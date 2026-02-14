@@ -691,12 +691,18 @@
 
 <div id="runDetailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full border border-gray-300 h-[600px] overflow-hidden flex flex-col" style="max-width: 880px;">
-        <!-- Header — gradient background with title + status icon -->
-        <div class="modal-header exp-view-header flex-shrink-0" id="runDetailsHeader" style="display: flex; align-items: center; justify-content: space-between; padding: 0 24px;">
-            <h3 id="runDetailsTitle" style="font-size: 24px; font-weight: 700; color: #111827; margin: 0;">ETL Run #—</h3>
-            <div class="exp-view-status-icon" id="runDetailsStatusIcon">
-                <i class="fas fa-spinner fa-spin"></i>
+        <!-- Header — gradient background with title + status badge -->
+        <div class="modal-header modal-header-gradient gradient-etl-pending flex-shrink-0" id="runDetailsHeader">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-database"></i>
             </div>
+            <div style="flex: 1;">
+                <h3 class="modal-header-title" id="runDetailsTitle">ETL Run #—</h3>
+                <div class="modal-header-subtitle">ETL run details and execution log</div>
+            </div>
+            <span class="etl-header-status-badge" id="runDetailsStatusBadge">
+                <i class="fas fa-spinner fa-spin"></i> Loading…
+            </span>
         </div>
 
         <!-- Body -->
@@ -4603,9 +4609,8 @@ function viewRunDetails(runId) {
     contentDiv.style.display = 'none';
     contentDiv.classList.add('hidden');
     document.getElementById('runDetailsTitle').textContent = `ETL Run #${runId}`;
-    document.getElementById('runDetailsHeader').className = 'modal-header exp-view-header flex-shrink-0';
-    document.getElementById('runDetailsStatusIcon').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    document.getElementById('runDetailsStatusIcon').className = 'exp-view-status-icon';
+    document.getElementById('runDetailsHeader').className = 'modal-header modal-header-gradient gradient-etl-pending flex-shrink-0';
+    document.getElementById('runDetailsStatusBadge').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…';
 
     // Reset logs section to initial empty state
     const logsContainer = document.getElementById('runDetailsLogsContainer');
@@ -4650,18 +4655,17 @@ function populateRunDetailsModal(data) {
 
     // Set status icon and header gradient
     const header = document.getElementById('runDetailsHeader');
-    const statusIcon = document.getElementById('runDetailsStatusIcon');
+    const statusBadge = document.getElementById('runDetailsStatusBadge');
     const statusMap = {
-        completed:  { icon: 'fa-check',          cls: 'completed' },
-        failed:     { icon: 'fa-times',           cls: 'failed' },
-        running:    { icon: 'fa-spinner fa-spin', cls: 'running' },
-        cancelled:  { icon: 'fa-ban',             cls: 'cancelled' },
-        partial:    { icon: 'fa-exclamation',     cls: 'running' },
+        completed:  { icon: 'fa-check',          cls: 'completed', label: 'Completed' },
+        failed:     { icon: 'fa-times',           cls: 'failed',    label: 'Failed' },
+        running:    { icon: 'fa-spinner fa-spin', cls: 'running',   label: 'Running' },
+        cancelled:  { icon: 'fa-ban',             cls: 'cancelled', label: 'Cancelled' },
+        partial:    { icon: 'fa-exclamation',     cls: 'running',   label: 'Partial' },
     };
-    const s = statusMap[data.status] || { icon: 'fa-circle', cls: 'pending' };
-    header.className = `modal-header exp-view-header flex-shrink-0 ${s.cls}`;
-    statusIcon.innerHTML = `<i class="fas ${s.icon}"></i>`;
-    statusIcon.className = `exp-view-status-icon ${s.cls}`;
+    const s = statusMap[data.status] || { icon: 'fa-circle', cls: 'pending', label: 'Pending' };
+    header.className = `modal-header modal-header-gradient gradient-etl-${s.cls} flex-shrink-0`;
+    statusBadge.innerHTML = `<i class="fas ${s.icon}"></i> ${s.label}`;
 
     // Job Information
     document.getElementById('runDetailsJobName').textContent = data.job_name || '—';

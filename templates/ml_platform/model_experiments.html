@@ -2991,17 +2991,20 @@
      EXPERIMENT COMPARE MODAL (Accordion-style dropdown comparison)
      ============================================================================ -->
 <div id="expCompareModal" class="modal-overlay hidden" onclick="exp_closeCompareModal(event)">
-    <div class="modal-container" style="max-width: 1000px;" onclick="event.stopPropagation()">
+    <div class="modal-container" style="max-width: 1000px; height: 85vh; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
         <!-- Header -->
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+        <div class="modal-header modal-header-gradient gradient-experiment">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
-            <h3 class="modal-header-title">Compare Experiments</h3>
+            <div>
+                <h3 class="modal-header-title">Compare Experiments</h3>
+                <div class="modal-header-subtitle">Side-by-side comparison of experiment configurations</div>
+            </div>
         </div>
 
         <!-- Body -->
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <div class="modal-body" style="flex: 1; overflow-y: auto;">
             <!-- Dropdown Row -->
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>

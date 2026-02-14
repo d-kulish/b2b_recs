@@ -159,6 +159,11 @@
     background: linear-gradient(135deg, #0f172a 0%, #3b1f6e 50%, #8b5cf6 100%);
 }
 
+/* Gradient variant: Slate-to-Cyan (Experiment compare) */
+.modal-header-gradient.gradient-experiment {
+    background: linear-gradient(135deg, #0f172a 0%, #164e63 50%, #06b6d4 100%);
+}
+
 /* Gradient variant: Slate-to-Emerald (Connection wizard) */
 .modal-header-gradient.gradient-connection {
     background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #059669 100%);

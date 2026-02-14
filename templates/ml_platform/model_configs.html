@@ -835,78 +835,21 @@
         color: #a16207;
     }
 
-    /* Target Column Card (View Modal - matching experiments page style) */
-    .target-column-view-card {
-        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-        border: 1.5px solid #fbbf24;
-        border-radius: 10px;
-        padding: 12px 14px;
-        margin-bottom: 16px;
-    }
-    .target-column-view-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        font-size: 13px;
-        font-weight: 600;
-        color: #b45309;
-    }
-    .target-column-view-header i {
-        color: #f59e0b;
-    }
-    .target-column-view-badge {
-        background: #fbbf24;
-        color: white;
-        font-size: 10px;
-        font-weight: 600;
-        padding: 2px 8px;
-        border-radius: 10px;
-        margin-left: auto;
-    }
-    .target-column-view-content {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        background: white;
-        border: 1px solid #fcd34d;
-        border-radius: 8px;
-        padding: 8px 12px;
-    }
-    .target-column-view-name {
-        font-weight: 600;
-        color: #92400e;
-        font-size: 14px;
-    }
-    .target-column-view-type {
-        background: #fef3c7;
-        color: #b45309;
-        font-size: 11px;
-        font-weight: 500;
-        padding: 2px 8px;
-        border-radius: 4px;
-        text-transform: uppercase;
-    }
-    .target-column-view-transforms {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 10px;
-    }
+    /* Target Column transform tags (View Modal) */
     .target-transform-tag {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        background: white;
-        border: 1px solid #fcd34d;
-        color: #92400e;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        color: #374151;
         font-size: 11px;
         padding: 3px 8px;
         border-radius: 6px;
     }
     .target-transform-tag i {
         font-size: 10px;
-        color: #f59e0b;
+        color: #6b7280;
     }
 
     /* Clip Options Container */
@@ -4118,6 +4061,7 @@
     .ds-detail-section-icon.tables  { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
     .ds-detail-section-icon.filters { background: linear-gradient(135deg, #10b981, #34d399); }
     .ds-detail-section-icon.stats   { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .ds-detail-section-icon.target  { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
     .ds-detail-section-icon.tensors { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
     .ds-detail-section-icon.tower   { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
     .ds-detail-section-icon.params  { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
@@ -18241,17 +18185,28 @@ function renderViewModal(config) {
         }
 
         targetColumnHtml = `
-            <div class="target-column-view-card">
-                <div class="target-column-view-header">
-                    <i class="fas fa-bullseye"></i>
-                    <span>Target Column</span>
-                    <span class="target-column-view-badge">For Ranking</span>
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Target Column</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon target"><i class="fas fa-bullseye"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Column</div>
+                            <div class="stat-value">${tcName}</div>
+                        </div>
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Type</div>
+                            <div class="stat-value">${tcType}</div>
+                        </div>
+                    </div>
                 </div>
-                <div class="target-column-view-content">
-                    <span class="target-column-view-name">${tcName}</span>
-                    <span class="target-column-view-type">${tcType}</span>
-                </div>
-                ${transformsHtml ? `<div class="target-column-view-transforms">${transformsHtml}</div>` : ''}
+                ${transformsHtml ? `
+                <div class="ds-detail-filter-details">
+                    <div class="ds-filter-row" style="grid-template-columns: 100px 1fr;">
+                        <div style="font-size: 13px; color: #6b7280; font-weight: 500;">Transforms:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">${transformsHtml}</div>
+                    </div>
+                </div>` : ''}
             </div>
         `;
     }

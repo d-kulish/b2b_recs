@@ -545,7 +545,7 @@ const TrainingWizard = (function() {
         }
 
         // Update progress pills (scoped to wizard modal only)
-        const pills = document.querySelectorAll('#trainingWizardModal .progress-step-pill');
+        const pills = document.querySelectorAll('#trainingWizardModal .wizard-step-pill');
         pills.forEach((pill, index) => {
             pill.classList.remove('current', 'completed', 'future', 'hidden');
             if (state.editMode && index === 0) {
@@ -565,7 +565,7 @@ const TrainingWizard = (function() {
         });
 
         // Update step counter
-        const counter = document.querySelector('.modal-step-counter');
+        const counter = document.querySelector('#trainingWizardModal .modal-header-subtitle');
         if (counter) {
             counter.textContent = `Step ${displayStepNum} of ${totalSteps}`;
         }

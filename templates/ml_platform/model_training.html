@@ -1315,21 +1315,23 @@
 <!-- Training Wizard Modal -->
 <div id="trainingWizardModal" class="modal-overlay hidden" onclick="if(event.target === this) TrainingWizard.close()">
     <div class="modal-container modal-container-wizard" style="max-width: 1000px;">
-        <!-- Header with progress pills -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon info">
-                    <i class="fas fa-rocket"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title">New Training Run</h3>
-                    <div class="modal-step-counter">Step 1 of 3</div>
-                </div>
+        <!-- Modal Header — gradient -->
+        <div class="modal-header modal-header-gradient gradient-training">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-rocket"></i>
             </div>
-            <div class="progress-bar-pills">
-                <span class="progress-step-pill current">Select Experiment</span>
-                <span class="progress-step-pill future">Configuration</span>
-                <span class="progress-step-pill future">GPU & Deploy</span>
+            <div>
+                <h3 class="modal-header-title">New Training Run</h3>
+                <div class="modal-header-subtitle">Step 1 of 3</div>
+            </div>
+        </div>
+
+        <!-- Step Navigation — overlapping nav bar -->
+        <div class="wizard-nav-bar">
+            <div class="wizard-nav-pills">
+                <span class="wizard-step-pill current">Select Experiment</span>
+                <span class="wizard-step-pill future">Configuration</span>
+                <span class="wizard-step-pill future">GPU & Deploy</span>
             </div>
         </div>
 

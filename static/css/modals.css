@@ -164,6 +164,11 @@
     background: linear-gradient(135deg, #0f172a 0%, #164e63 50%, #06b6d4 100%);
 }
 
+/* Gradient variant: Slate-to-Indigo (Training wizard) */
+.modal-header-gradient.gradient-training {
+    background: linear-gradient(135deg, #0f172a 0%, #312e81 50%, #6366f1 100%);
+}
+
 /* Gradient variant: Slate-to-Emerald (Connection wizard) */
 .modal-header-gradient.gradient-connection {
     background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #059669 100%);

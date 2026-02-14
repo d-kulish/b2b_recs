@@ -4626,20 +4626,20 @@
 <!-- =========================================================================== -->
 <div id="dsWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-dataset-wizard">
-        <!-- Modal Header -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon info">
-                    <i class="fas fa-table text-lg"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title" id="dsWizardTitle">Create Dataset</h3>
-                    <p class="modal-step-counter">Step <span id="dsCurrentStep">1</span> of 4</p>
-                </div>
+        <!-- Modal Header — gradient (matches dataset view modal) -->
+        <div class="modal-header modal-header-gradient gradient-dataset">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-table"></i>
             </div>
+            <div>
+                <h3 class="modal-header-title" id="dsWizardTitle">Create Dataset</h3>
+                <div class="modal-header-subtitle">Step <span id="dsCurrentStep">1</span> of 4</div>
+            </div>
+        </div>
 
-            <!-- Progress Bar -->
-            <div class="progress-bar-pills">
+        <!-- Step Navigation — overlapping nav bar (matches base page style) -->
+        <div class="wizard-nav-bar">
+            <div class="wizard-nav-pills">
                 <div id="dsProgress1" class="progress-step-pill current">Info</div>
                 <div id="dsProgress2" class="progress-step-pill future">Tables</div>
                 <div id="dsProgress3" class="progress-step-pill future">Schema</div>
@@ -5123,11 +5123,14 @@
 <!-- Dataset Compare Modal -->
 <div id="dsCompareModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 1000px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+        <div class="modal-header modal-header-gradient gradient-compare">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
-            <h3 class="modal-header-title">Compare Datasets</h3>
+            <div>
+                <h3 class="modal-header-title">Compare Datasets</h3>
+                <div class="modal-header-subtitle">Side-by-side comparison of dataset configurations</div>
+            </div>
         </div>
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
             <!-- Dropdowns row -->
@@ -7049,11 +7052,14 @@
 <!-- Compare Model Configs Modal -->
 <div id="compareModelConfigsModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 1000px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+        <div class="modal-header modal-header-gradient gradient-compare">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
-            <h3 class="modal-header-title">Compare Model Configs</h3>
+            <div>
+                <h3 class="modal-header-title">Compare Model Configs</h3>
+                <div class="modal-header-subtitle">Side-by-side comparison of model configurations</div>
+            </div>
         </div>
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
             <!-- Dropdowns row -->
@@ -7724,11 +7730,14 @@
 <!-- Compare Feature Sets Modal -->
 <div id="compareModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 1000px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+        <div class="modal-header modal-header-gradient gradient-compare">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
-            <h3 class="modal-header-title">Compare Feature Sets</h3>
+            <div>
+                <h3 class="modal-header-title">Compare Feature Sets</h3>
+                <div class="modal-header-subtitle">Side-by-side comparison of feature configurations</div>
+            </div>
         </div>
         <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
             <!-- Dropdowns row -->

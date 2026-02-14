@@ -149,6 +149,16 @@
     background: linear-gradient(135deg, #0f172a 0%, #3b1f6e 50%, #7c3aed 100%);
 }
 
+/* Gradient variant: Slate-to-Blue (Feature config view) */
+.modal-header-gradient.gradient-feature {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #3b82f6 100%);
+}
+
+/* Gradient variant: Slate-to-Purple (Model config view) */
+.modal-header-gradient.gradient-model {
+    background: linear-gradient(135deg, #0f172a 0%, #3b1f6e 50%, #8b5cf6 100%);
+}
+
 /* Python Code Modal — light code area (mirrors sql-code-light) */
 .python-code-light {
     background: #ffffff;

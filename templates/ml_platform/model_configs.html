@@ -4104,6 +4104,10 @@
     .ds-detail-section-icon.tables  { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
     .ds-detail-section-icon.filters { background: linear-gradient(135deg, #10b981, #34d399); }
     .ds-detail-section-icon.stats   { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .ds-detail-section-icon.tensors { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .ds-detail-section-icon.tower   { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+    .ds-detail-section-icon.params  { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+    .ds-detail-section-icon.algo    { background: linear-gradient(135deg, #10b981, #34d399); }
 
     .ds-detail-stats {
         display: flex;
@@ -6887,123 +6891,18 @@
 
 <!-- Model Config View Modal -->
 <div id="modelConfigViewModal" class="modal-overlay hidden" onclick="closeModelConfigViewModal(event)">
-    <div class="modal-container" style="max-width: 750px; max-height: 80vh; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
-        <div class="modal-header">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
-                    <i class="fas fa-layer-group text-white"></i>
-                </div>
-                <div>
-                    <h3 class="modal-title" id="viewMcName">Model Config Name</h3>
-                    <p class="text-sm text-gray-500" id="viewMcDesc">Description</p>
-                </div>
+    <div class="modal-container" style="max-width: 880px; max-height: 85vh; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
+        <div class="modal-header modal-header-gradient gradient-model flex-shrink-0">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div>
+                <h3 class="modal-header-title" id="viewMcName">Model Config</h3>
+                <div class="modal-header-subtitle">Model configuration overview</div>
             </div>
         </div>
-        <div class="modal-body" style="overflow-y: auto; flex: 1;">
-            <!-- Model Type + Metadata Row -->
-            <div class="flex items-center justify-between mb-4">
-                <span id="viewMcTypeBadge" class="model-type-badge retrieval">Retrieval</span>
-                <div class="text-sm text-gray-500">
-                    Updated <span id="viewMcUpdatedAt"></span>
-                    <span id="viewMcCreatedByWrapper"> by <span id="viewMcCreatedBy"></span></span>
-                </div>
-            </div>
-
-            <!-- Tower Architecture -->
-            <div class="mb-6">
-                <h4 class="text-sm font-medium text-gray-700 mb-3">Tower Architecture</h4>
-                <div class="tower-visual tower-visual-aligned">
-                    <div class="tower-column">
-                        <div class="tower-header">
-                            <span class="tower-label">Buyer Tower</span>
-                        </div>
-                        <div id="viewMcBuyerStack" class="tower-stack buyer">
-                            <!-- Layers will be inserted here -->
-                        </div>
-                        <div class="tower-params-summary view-modal" id="viewMcBuyerParamsSummary">
-                            <div class="params-row"><span>Total params:</span><span id="viewMcBuyerTotalParams">0</span></div>
-                            <div class="params-row"><span>Trainable params:</span><span id="viewMcBuyerTrainableParams">0</span></div>
-                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
-                        </div>
-                    </div>
-                    <div class="tower-column">
-                        <div class="tower-header">
-                            <span class="tower-label">Product Tower</span>
-                        </div>
-                        <div id="viewMcProductStack" class="tower-stack product">
-                            <!-- Layers will be inserted here -->
-                        </div>
-                        <div class="tower-params-summary view-modal" id="viewMcProductParamsSummary">
-                            <div class="params-row"><span>Total params:</span><span id="viewMcProductTotalParams">0</span></div>
-                            <div class="params-row"><span>Trainable params:</span><span id="viewMcProductTrainableParams">0</span></div>
-                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Model Summary (hidden - now shown per-tower above) -->
-            <div class="model-summary-row mb-6 hidden" id="viewMcSummaryRow">
-                <div class="model-summary-item">
-                    <span class="model-summary-label">Total params:</span>
-                    <span class="model-summary-value" id="viewMcTotalParams">~25K</span>
-                </div>
-                <div class="model-summary-item">
-                    <span class="model-summary-label">Trainable:</span>
-                    <span class="model-summary-value" id="viewMcTrainableParams">~25K</span>
-                </div>
-                <div class="model-summary-item">
-                    <span class="model-summary-label">Non-trainable:</span>
-                    <span class="model-summary-value" id="viewMcNonTrainableParams">0</span>
-                </div>
-            </div>
-
-            <!-- Training Parameters -->
-            <div class="mb-4">
-                <h4 class="text-sm font-medium text-gray-700 mb-3">Training Parameters</h4>
-                <div class="training-params-preview" id="viewMcParams">
-                    <!-- Will be populated dynamically -->
-                </div>
-            </div>
-
-            <!-- Retrieval Algorithm (for retrieval models) -->
-            <div id="viewMcRetrievalSection" class="mb-4 hidden">
-                <h4 class="text-sm font-medium text-gray-700 mb-3">Retrieval Algorithm</h4>
-                <div class="training-params-preview" id="viewMcRetrievalParams">
-                    <!-- Will be populated dynamically -->
-                </div>
-            </div>
-
-            <!-- Rating Head (for ranking and multitask models) -->
-            <div id="viewMcRatingHeadSection" class="mb-6 hidden">
-                <h4 class="text-sm font-medium text-gray-700 mb-3">Rating Head</h4>
-                <div class="tower-visual">
-                    <div class="tower-column ranking">
-                        <div class="tower-header ranking">
-                            <span class="tower-label">Ranking Tower</span>
-                        </div>
-                        <div id="viewMcRatingHeadStack" class="tower-stack ranking">
-                            <!-- Layers will be inserted here -->
-                        </div>
-                        <div class="tower-params-summary view-modal" id="viewMcRatingHeadParamsSummary">
-                            <div class="params-row"><span>Total params:</span><span id="viewMcRatingHeadTotalParams">0</span></div>
-                            <div class="params-row"><span>Trainable params:</span><span id="viewMcRatingHeadTrainableParams">0</span></div>
-                            <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="training-params-preview mt-3" id="viewMcLossParams">
-                    <!-- Will be populated dynamically -->
-                </div>
-            </div>
-
-            <!-- Multitask Weights (for multitask models) -->
-            <div id="viewMcMultitaskSection" class="mb-4 hidden">
-                <h4 class="text-sm font-medium text-gray-700 mb-3">Multitask Weights</h4>
-                <div class="training-params-preview" id="viewMcMultitaskParams">
-                    <!-- Will be populated dynamically -->
-                </div>
-            </div>
+        <div id="viewMcBody" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
+            <!-- Content will be dynamically generated -->
         </div>
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
@@ -7673,14 +7572,17 @@
 
 <!-- View Config Modal -->
 <div id="viewConfigModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 880px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+    <div class="modal-container" style="max-width: 880px; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header modal-header-gradient gradient-feature flex-shrink-0">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-eye"></i>
             </div>
-            <h3 class="modal-header-title" id="viewConfigTitle">Feature Config Details</h3>
+            <div>
+                <h3 class="modal-header-title" id="viewConfigTitle">Feature Config Details</h3>
+                <div class="modal-header-subtitle">Feature configuration overview</div>
+            </div>
         </div>
-        <div class="modal-body" id="viewConfigBody" style="max-height: 70vh; overflow-y: auto;">
+        <div id="viewConfigBody" style="padding: 20px 24px; overflow-y: auto; flex: 1;">
             <!-- Content will be dynamically generated -->
         </div>
         <div class="modal-footer-wizard-neu">
@@ -18270,8 +18172,34 @@ function renderViewModal(config) {
         config.product_model_crosses || []
     );
 
-    // Build dataset info section
-    const datasetInfoHtml = buildDatasetInfoHtml(config.dataset_info, config.dataset_name);
+    const totalFeatures = buyerResult.breakdown.length + productResult.breakdown.length;
+    const totalDim = (buyerResult.total || 0) + (productResult.total || 0);
+
+    // Dataset source info
+    const info = config.dataset_info || {};
+    const tableCount = info.primary_table ? 1 + (info.secondary_tables || []).length : 0;
+    const tables = [];
+    if (info.primary_table) {
+        tables.push(info.primary_table + ' (primary)');
+        (info.secondary_tables || []).forEach(t => { if (t) tables.push(t); });
+    }
+    const tablesLine = tables.join(' &bull; ');
+
+    const filterBadges = [];
+    if (info.filters?.dates) filterBadges.push(info.filters.dates);
+    if (info.filters?.customers) filterBadges.push(info.filters.customers);
+    if (info.filters?.products) filterBadges.push(info.filters.products);
+    const filtersLine = filterBadges.length > 0
+        ? filterBadges.join(' &bull; ')
+        : '<span style="color: #9ca3af; font-style: italic;">No filters</span>';
+
+    const rowsDisplay = info.estimated_rows
+        ? (info.estimated_rows >= 1000000
+            ? (info.estimated_rows / 1000000).toFixed(1) + 'M'
+            : info.estimated_rows >= 1000
+                ? Math.round(info.estimated_rows / 1000) + 'K'
+                : info.estimated_rows.toLocaleString())
+        : '—';
 
     // Build target column section (for ranking configs)
     let targetColumnHtml = '';
@@ -18281,7 +18209,6 @@ function renderViewModal(config) {
         const tcType = tc.bq_type || 'FLOAT';
         const transforms = tc.transforms || {};
 
-        // Build transforms tags
         let transformsHtml = '';
         if (transforms.normalize && transforms.normalize.enabled) {
             transformsHtml += '<span class="target-transform-tag"><i class="fas fa-compress-arrows-alt"></i> Normalize 0-1</span>';
@@ -18293,13 +18220,9 @@ function renderViewModal(config) {
             const lower = transforms.clip_outliers.lower?.enabled ? transforms.clip_outliers.lower.percentile : null;
             const upper = transforms.clip_outliers.upper?.enabled ? transforms.clip_outliers.upper.percentile : null;
             let clipText = 'Clip';
-            if (lower && upper) {
-                clipText = `Clip ${lower}%-${upper}%`;
-            } else if (lower) {
-                clipText = `Clip lower ${lower}%`;
-            } else if (upper) {
-                clipText = `Clip upper ${upper}%`;
-            }
+            if (lower && upper) clipText = `Clip ${lower}%-${upper}%`;
+            else if (lower) clipText = `Clip lower ${lower}%`;
+            else if (upper) clipText = `Clip upper ${upper}%`;
             transformsHtml += `<span class="target-transform-tag"><i class="fas fa-cut"></i> ${clipText}</span>`;
         }
 
@@ -18321,43 +18244,125 @@ function renderViewModal(config) {
 
     const body = document.getElementById('viewConfigBody');
     body.innerHTML = `
-        <div class="mb-3">
-            <div class="text-sm text-gray-500">Dataset: <span class="font-medium text-gray-700">${config.dataset_name}</span></div>
-        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
 
-        ${datasetInfoHtml}
-
-        ${targetColumnHtml}
-
-        <div class="grid grid-cols-2 gap-4">
-            <div class="p-4 bg-blue-50 rounded-lg">
-                <div class="flex items-center justify-between mb-3">
-                    <h4 class="font-semibold text-blue-800">Buyer Tensor</h4>
-                    <span class="font-semibold text-blue-600">${buyerResult.total}D</span>
-                </div>
-                <div id="viewModal-buyer-bar" class="tensor-breakdown-bar mb-3"></div>
-                <div class="space-y-1">
-                    ${buyerResult.breakdown.map(item => `
-                        <div class="flex items-center justify-between text-sm">
-                            <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
-                            <span class="text-blue-500 font-medium">${item.dim}D</span>
+            <!-- Chapter 1: Config Information -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Config Information</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Type</div>
+                            <div class="stat-value">${config.config_type_display || config.config_type || '—'}</div>
                         </div>
-                    `).join('')}
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Dataset</div>
+                            <div class="stat-value">${config.dataset_name || '—'}</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">v${config.version || 1}</div>
+                            <div class="ds-detail-stat-label">Version</div>
+                        </div>
+                        <div class="ds-detail-stat-info" style="flex: 2;">
+                            <div class="stat-label">Description</div>
+                            <div class="stat-value">${config.description || '—'}</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="p-4 bg-green-50 rounded-lg">
-                <div class="flex items-center justify-between mb-3">
-                    <h4 class="font-semibold text-green-800">Product Tensor</h4>
-                    <span class="font-semibold text-green-600">${productResult.total}D</span>
-                </div>
-                <div id="viewModal-product-bar" class="tensor-breakdown-bar mb-3"></div>
-                <div class="space-y-1">
-                    ${productResult.breakdown.map(item => `
-                        <div class="flex items-center justify-between text-sm">
-                            <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
-                            <span class="text-green-500 font-medium">${item.dim}D</span>
+
+            ${targetColumnHtml}
+
+            <!-- Chapter 2: Dataset Source -->
+            ${info.primary_table ? `
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Dataset Source</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon tables"><i class="fas fa-database"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${rowsDisplay}</div>
+                            <div class="ds-detail-stat-label">Rows</div>
                         </div>
-                    `).join('')}
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${tableCount}</div>
+                            <div class="ds-detail-stat-label">${tableCount === 1 ? 'Table' : 'Tables'}</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${filterBadges.length}</div>
+                            <div class="ds-detail-stat-label">Filters</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ds-detail-filter-details">
+                    <div class="ds-filter-row" style="grid-template-columns: 80px 1fr;">
+                        <div style="font-size: 13px; color: #6b7280; font-weight: 500;">Tables:</div>
+                        <div style="font-size: 13px; color: #111827;">${tablesLine}</div>
+                    </div>
+                    <div class="ds-filter-row" style="grid-template-columns: 80px 1fr;">
+                        <div style="font-size: 13px; color: #6b7280; font-weight: 500;">Filters:</div>
+                        <div style="font-size: 13px; color: #111827;">${filtersLine}</div>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- Chapter 3: Model Tensors -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Model Tensors</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon tensors"><i class="fas fa-cubes"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${buyerResult.total || 0}D</div>
+                            <div class="ds-detail-stat-label">Buyer</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${productResult.total || 0}D</div>
+                            <div class="ds-detail-stat-label">Product</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${totalFeatures}</div>
+                            <div class="ds-detail-stat-label">Features</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${totalDim}D</div>
+                            <div class="ds-detail-stat-label">Total</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-blue-800">Buyer Tensor</h4>
+                            <span class="font-semibold text-blue-600">${buyerResult.total}D</span>
+                        </div>
+                        <div id="viewModal-buyer-bar" class="tensor-breakdown-bar mb-3"></div>
+                        <div class="space-y-1">
+                            ${buyerResult.breakdown.map(item => `
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
+                                    <span class="text-blue-500 font-medium">${item.dim}D</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="p-4 bg-green-50 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-green-800">Product Tensor</h4>
+                            <span class="font-semibold text-green-600">${productResult.total}D</span>
+                        </div>
+                        <div id="viewModal-product-bar" class="tensor-breakdown-bar mb-3"></div>
+                        <div class="space-y-1">
+                            ${productResult.breakdown.map(item => `
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
+                                    <span class="text-green-500 font-medium">${item.dim}D</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -18376,72 +18381,6 @@ function renderViewModal(config) {
             renderTensorPreview('product', productResult.total, productResult.breakdown, productBar, null, maxTotal);
         }
     }, 0);
-}
-
-/**
- * Build HTML for dataset information section in View modal.
- * @param {Object} info - Dataset info from API (dataset_info field)
- * @param {string} datasetName - Name of the dataset
- * @returns {string} HTML string for dataset info section
- */
-function buildDatasetInfoHtml(info, datasetName) {
-    if (!info || !info.primary_table) {
-        return ''; // No dataset info available
-    }
-
-    // Build tables line
-    const tables = [info.primary_table + ' (primary)'];
-    (info.secondary_tables || []).forEach(t => {
-        if (t) tables.push(t);
-    });
-    const tablesLine = tables.join(' &bull; ');
-
-    // Build joins lines
-    const joins = info.joins || [];
-    const joinsHtml = joins.length > 0
-        ? joins.map(j => `<div class="text-gray-700">${j}</div>`).join('')
-        : '<span class="text-gray-400 italic">No joins</span>';
-
-    // Build filters badges
-    const filterBadges = [];
-    if (info.filters?.dates) filterBadges.push(info.filters.dates);
-    if (info.filters?.customers) filterBadges.push(info.filters.customers);
-    if (info.filters?.products) filterBadges.push(info.filters.products);
-    const filtersLine = filterBadges.length > 0
-        ? filterBadges.join(' &bull; ')
-        : '<span class="text-gray-400 italic">No filters</span>';
-
-    // Row count badge
-    const rowsBadge = info.estimated_rows
-        ? `${info.estimated_rows.toLocaleString()} rows`
-        : '';
-
-    return `
-        <div class="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div class="flex items-center justify-between mb-3">
-                <h4 class="font-semibold text-gray-700">
-                    <i class="fas fa-database mr-2 text-gray-400"></i>Dataset Source
-                </h4>
-                ${rowsBadge ? `<span class="text-sm font-medium text-gray-500 bg-white px-2 py-1 rounded border border-gray-200">${rowsBadge}</span>` : ''}
-            </div>
-            <div class="space-y-2 text-sm">
-                <div class="flex">
-                    <span class="text-gray-500 w-16 flex-shrink-0">Tables:</span>
-                    <span class="text-gray-700">${tablesLine}</span>
-                </div>
-                ${joins.length > 0 ? `
-                <div class="flex">
-                    <span class="text-gray-500 w-16 flex-shrink-0">Joins:</span>
-                    <div class="text-gray-700">${joinsHtml}</div>
-                </div>
-                ` : ''}
-                <div class="flex">
-                    <span class="text-gray-500 w-16 flex-shrink-0">Filters:</span>
-                    <span class="text-gray-700">${filtersLine}</span>
-                </div>
-            </div>
-        </div>
-    `;
 }
 
 function closeViewModal() {
@@ -21693,168 +21632,250 @@ function createModelConfig() {
 
 // View Model Config
 function viewModelConfig(id) {
-    // First try to find in cached list, then fetch full details
     const mcBasic = allModelConfigs.find(c => c.id === id);
     if (!mcBasic) return;
 
-    // Show modal immediately with basic info, then fetch full details
     viewingModelConfig = mcBasic;
+    document.getElementById('viewMcName').textContent = mcBasic.name;
     document.getElementById('modelConfigViewModal').classList.remove('hidden');
 
-    // Populate basic info
-    document.getElementById('viewMcName').textContent = mcBasic.name;
-    document.getElementById('viewMcDesc').textContent = mcBasic.description || 'No description';
+    // Show loading state, then fetch full details
+    document.getElementById('viewMcBody').innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">Loading...</div>';
 
-    // Update badge with unified style (icon + text)
-    const badgeContainer = document.getElementById('viewMcTypeBadge');
-    badgeContainer.outerHTML = generateMcTypeBadge(mcBasic.model_type).replace('class="model-type-badge', 'id="viewMcTypeBadge" class="model-type-badge');
-
-    document.getElementById('viewMcUpdatedAt').textContent = formatMcTimeAgo(mcBasic.updated_at);
-    if (mcBasic.created_by) {
-        document.getElementById('viewMcCreatedBy').textContent = mcBasic.created_by;
-        document.getElementById('viewMcCreatedByWrapper').style.display = '';
-    } else {
-        document.getElementById('viewMcCreatedByWrapper').style.display = 'none';
-    }
-
-    // Fetch full details for tower visualization
     fetch(`/api/model-configs/${id}/`)
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                const mc = data.data;
-                viewingModelConfig = mc;
-                populateViewModal(mc);
+                viewingModelConfig = data.data;
+                renderMcViewBody(data.data);
             } else {
-                // Fallback to basic info
-                populateViewModalBasic(mcBasic);
+                renderMcViewBody(mcBasic);
             }
         })
         .catch(err => {
             console.error('Error fetching model config details:', err);
-            populateViewModalBasic(mcBasic);
+            renderMcViewBody(mcBasic);
         });
 }
 
-// Populate View Modal with full details
-function populateViewModal(mc) {
-    // Tower stacks - use detailed visualization with aligned layers
-    const buyerLayers = mc.buyer_tower_layers || [];
-    const productLayers = mc.product_tower_layers || [];
+/**
+ * Render the full model config view modal body with chapter-style sections.
+ * Works with both full detail objects and basic list objects.
+ */
+function renderMcViewBody(mc) {
+    const body = document.getElementById('viewMcBody');
+
+    // Tower layers — full detail or parsed from summary
+    const buyerLayers = mc.buyer_tower_layers || parseTowerSummary(mc.buyer_tower_summary);
+    const productLayers = mc.product_tower_layers || parseTowerSummary(mc.product_tower_summary);
     const towerHtml = renderCardTowerLayers(buyerLayers, productLayers);
 
-    document.getElementById('viewMcBuyerStack').innerHTML = towerHtml.buyer;
-    document.getElementById('viewMcProductStack').innerHTML = towerHtml.product;
-
-    // Per-tower parameter summaries
+    // Per-tower params
     const buyerParams = calculateSingleTowerParams(buyerLayers);
     const productParams = calculateSingleTowerParams(productLayers);
-    document.getElementById('viewMcBuyerTotalParams').textContent = buyerParams.toLocaleString();
-    document.getElementById('viewMcBuyerTrainableParams').textContent = buyerParams.toLocaleString();
-    document.getElementById('viewMcProductTotalParams').textContent = productParams.toLocaleString();
-    document.getElementById('viewMcProductTrainableParams').textContent = productParams.toLocaleString();
+    const totalParams = buyerParams + productParams;
+    const totalParamsDisplay = totalParams >= 1000
+        ? Math.round(totalParams / 1000) + 'K'
+        : totalParams.toLocaleString();
 
-    // Combined model summary
-    const summary = calculateModelSummary(mc);
-    document.getElementById('viewMcTotalParams').textContent = `~${summary.total}`;
-    document.getElementById('viewMcTrainableParams').textContent = `~${summary.trainable}`;
-    document.getElementById('viewMcNonTrainableParams').textContent = summary.nonTrainable;
+    // Updated info
+    const updatedText = mc.updated_at ? formatMcTimeAgo(mc.updated_at) : '';
+    const updatedByText = mc.created_by ? `${updatedText} by ${mc.created_by}` : updatedText;
 
-    // Training parameters
-    document.getElementById('viewMcParams').innerHTML = `
-        <div class="param-chip">
-            <span class="param-chip-label">Optimizer:</span>
-            <span class="param-chip-value">${mc.optimizer_display}</span>
-        </div>
-        <div class="param-chip">
-            <span class="param-chip-label">Learning Rate:</span>
-            <span class="param-chip-value">${mc.learning_rate}</span>
-        </div>
-        <div class="param-chip">
-            <span class="param-chip-label">Batch Size:</span>
-            <span class="param-chip-value">${mc.batch_size}</span>
-        </div>
-        <div class="param-chip">
-            <span class="param-chip-label">Output Dim:</span>
-            <span class="param-chip-value">${mc.output_embedding_dim}D</span>
-        </div>
-    `;
-
-    // Retrieval algorithm section (for retrieval and multitask models)
-    const retrievalSection = document.getElementById('viewMcRetrievalSection');
+    // Retrieval algorithm section (for retrieval and multitask)
+    let retrievalHtml = '';
     if (['retrieval', 'multitask'].includes(mc.model_type)) {
-        retrievalSection.classList.remove('hidden');
-        document.getElementById('viewMcRetrievalParams').innerHTML = `
-            <div class="param-chip retrieval-algo">
-                <span class="param-chip-label">Algorithm:</span>
-                <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
+        let retrievalStats = `
+            <div class="ds-detail-stat-info">
+                <div class="stat-label">Algorithm</div>
+                <div class="stat-value">${mc.retrieval_algorithm_display || 'Brute Force'}</div>
             </div>
-            <div class="param-chip">
-                <span class="param-chip-label">Top-K:</span>
-                <span class="param-chip-value">${mc.top_k || 100}</span>
+            <div class="ds-detail-stat">
+                <div class="ds-detail-stat-value">${mc.top_k || 100}</div>
+                <div class="ds-detail-stat-label">Top-K</div>
             </div>
-            ${mc.retrieval_algorithm === 'scann' ? `
-            <div class="param-chip">
-                <span class="param-chip-label">Num Leaves:</span>
-                <span class="param-chip-value">${mc.scann_num_leaves || 100}</span>
-            </div>
-            <div class="param-chip">
-                <span class="param-chip-label">Leaves to Search:</span>
-                <span class="param-chip-value">${mc.scann_leaves_to_search || 10}</span>
-            </div>
-            ` : ''}
         `;
-    } else {
-        retrievalSection.classList.add('hidden');
-    }
-
-    // Rating Head section (for ranking and multitask models)
-    const ratingHeadSection = document.getElementById('viewMcRatingHeadSection');
-    if (ratingHeadSection) {
-        if (['ranking', 'multitask'].includes(mc.model_type)) {
-            ratingHeadSection.classList.remove('hidden');
-            const ratingHeadLayers = mc.rating_head_layers || [];
-            const ratingHeadSummary = getRatingHeadSummaryFromLayers(ratingHeadLayers);
-            const ratingHeadParams = calculateSingleTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
-
-            document.getElementById('viewMcRatingHeadStack').innerHTML = renderRatingHeadLayersForView(ratingHeadLayers);
-            document.getElementById('viewMcRatingHeadTotalParams').textContent = ratingHeadParams.toLocaleString();
-            document.getElementById('viewMcRatingHeadTrainableParams').textContent = ratingHeadParams.toLocaleString();
-
-            // Update loss function display
-            const lossParams = document.getElementById('viewMcLossParams');
-            if (lossParams) {
-                lossParams.innerHTML = `
-                    <div class="param-chip">
-                        <span class="param-chip-label">Loss Function:</span>
-                        <span class="param-chip-value">${mc.loss_function_display || 'MSE'}</span>
-                    </div>
-                `;
-            }
-        } else {
-            ratingHeadSection.classList.add('hidden');
-        }
-    }
-
-    // Multitask weights section (for multitask models only)
-    const multitaskSection = document.getElementById('viewMcMultitaskSection');
-    if (multitaskSection) {
-        if (mc.model_type === 'multitask') {
-            multitaskSection.classList.remove('hidden');
-            document.getElementById('viewMcMultitaskParams').innerHTML = `
-                <div class="param-chip">
-                    <span class="param-chip-label">Retrieval Weight:</span>
-                    <span class="param-chip-value">${Math.round((mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1) * 100)}%</span>
+        if (mc.retrieval_algorithm === 'scann') {
+            retrievalStats += `
+                <div class="ds-detail-stat">
+                    <div class="ds-detail-stat-value">${mc.scann_num_leaves || 100}</div>
+                    <div class="ds-detail-stat-label">Num Leaves</div>
                 </div>
-                <div class="param-chip">
-                    <span class="param-chip-label">Ranking Weight:</span>
-                    <span class="param-chip-value">${Math.round((mc.ranking_weight !== undefined ? mc.ranking_weight : 1) * 100)}%</span>
+                <div class="ds-detail-stat">
+                    <div class="ds-detail-stat-value">${mc.scann_leaves_to_search || 10}</div>
+                    <div class="ds-detail-stat-label">Leaves to Search</div>
                 </div>
             `;
-        } else {
-            multitaskSection.classList.add('hidden');
         }
+        retrievalHtml = `
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Retrieval Algorithm</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon algo"><i class="fas fa-search"></i></div>
+                    <div class="ds-detail-stats">${retrievalStats}</div>
+                </div>
+            </div>
+        `;
     }
+
+    // Rating Head section (for ranking and multitask — only with full details)
+    let ratingHeadHtml = '';
+    if (['ranking', 'multitask'].includes(mc.model_type) && mc.rating_head_layers) {
+        const ratingHeadLayers = mc.rating_head_layers || [];
+        const ratingHeadParams = calculateSingleTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
+        const ratingLayersHtml = renderRatingHeadLayersForView(ratingHeadLayers);
+        ratingHeadHtml = `
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Rating Head</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon" style="background: linear-gradient(135deg, #ec4899, #f472b6);"><i class="fas fa-bullseye"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Loss Function</div>
+                            <div class="stat-value">${mc.loss_function_display || 'MSE'}</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${ratingHeadLayers.length}</div>
+                            <div class="ds-detail-stat-label">Layers</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${ratingHeadParams.toLocaleString()}</div>
+                            <div class="ds-detail-stat-label">Params</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6;">
+                    <div class="tower-stack ranking" style="max-width: 50%;">
+                        ${ratingLayersHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Multitask weights section (for multitask only)
+    let multitaskHtml = '';
+    if (mc.model_type === 'multitask') {
+        multitaskHtml = `
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Multitask Weights</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon" style="background: linear-gradient(135deg, #ec4899, #f472b6);"><i class="fas fa-balance-scale"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${Math.round((mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1) * 100)}%</div>
+                            <div class="ds-detail-stat-label">Retrieval</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${Math.round((mc.ranking_weight !== undefined ? mc.ranking_weight : 1) * 100)}%</div>
+                            <div class="ds-detail-stat-label">Ranking</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    body.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+
+            <!-- Chapter 1: Config Information -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Config Information</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Type</div>
+                            <div class="stat-value">${mc.model_type_display || mc.model_type || '—'}</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${mc.output_embedding_dim || 32}D</div>
+                            <div class="ds-detail-stat-label">Output Dim</div>
+                        </div>
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Updated</div>
+                            <div class="stat-value">${updatedByText || '—'}</div>
+                        </div>
+                        <div class="ds-detail-stat-info" style="flex: 2;">
+                            <div class="stat-label">Description</div>
+                            <div class="stat-value">${mc.description || '—'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chapter 2: Tower Architecture -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Tower Architecture</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon tower"><i class="fas fa-server"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${buyerLayers.length}</div>
+                            <div class="ds-detail-stat-label">Buyer Layers</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${productLayers.length}</div>
+                            <div class="ds-detail-stat-label">Product Layers</div>
+                        </div>
+                        <div class="ds-detail-stat">
+                            <div class="ds-detail-stat-value">${totalParamsDisplay}</div>
+                            <div class="ds-detail-stat-label">Total Params</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6;">
+                    <div class="tower-visual tower-visual-aligned">
+                        <div class="tower-column">
+                            <div class="tower-header"><span class="tower-label">Buyer Tower</span></div>
+                            <div class="tower-stack buyer">${towerHtml.buyer}</div>
+                            <div class="tower-params-summary view-modal">
+                                <div class="params-row"><span>Total params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Trainable params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                            </div>
+                        </div>
+                        <div class="tower-column">
+                            <div class="tower-header"><span class="tower-label">Product Tower</span></div>
+                            <div class="tower-stack product">${towerHtml.product}</div>
+                            <div class="tower-params-summary view-modal">
+                                <div class="params-row"><span>Total params:</span><span>${productParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Trainable params:</span><span>${productParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chapter 3: Training Parameters -->
+            <div class="ds-detail-section">
+                <div class="ds-detail-section-title">Training Parameters</div>
+                <div class="ds-detail-section-body">
+                    <div class="ds-detail-section-icon params"><i class="fas fa-sliders-h"></i></div>
+                    <div class="ds-detail-stats">
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Optimizer</div>
+                            <div class="stat-value">${mc.optimizer_display || mc.optimizer || '—'}</div>
+                        </div>
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Learning Rate</div>
+                            <div class="stat-value">${mc.learning_rate || '—'}</div>
+                        </div>
+                        <div class="ds-detail-stat-info">
+                            <div class="stat-label">Batch Size</div>
+                            <div class="stat-value">${mc.batch_size ? mc.batch_size.toLocaleString() : '—'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            ${retrievalHtml}
+            ${ratingHeadHtml}
+            ${multitaskHtml}
+        </div>
+    `;
 }
 
 // Helper to render rating head layers for view modal (same style as Buyer/Product towers)
@@ -21892,99 +21913,6 @@ function renderRatingHeadLayersForView(layers) {
             </div>
         `;
     }).join('');
-}
-
-// Populate View Modal with basic info only (fallback)
-function populateViewModalBasic(mc) {
-    // Tower stacks - parse from summary string, use detailed visualization
-    const buyerLayers = parseTowerSummary(mc.buyer_tower_summary);
-    const productLayers = parseTowerSummary(mc.product_tower_summary);
-    const towerHtml = renderCardTowerLayers(buyerLayers, productLayers);
-
-    document.getElementById('viewMcBuyerStack').innerHTML = towerHtml.buyer;
-    document.getElementById('viewMcProductStack').innerHTML = towerHtml.product;
-
-    // Per-tower parameter summaries
-    const buyerParams = calculateSingleTowerParams(buyerLayers);
-    const productParams = calculateSingleTowerParams(productLayers);
-    document.getElementById('viewMcBuyerTotalParams').textContent = buyerParams.toLocaleString();
-    document.getElementById('viewMcBuyerTrainableParams').textContent = buyerParams.toLocaleString();
-    document.getElementById('viewMcProductTotalParams').textContent = productParams.toLocaleString();
-    document.getElementById('viewMcProductTrainableParams').textContent = productParams.toLocaleString();
-
-    // Combined model summary
-    const summary = calculateModelSummary(mc);
-    document.getElementById('viewMcTotalParams').textContent = `~${summary.total}`;
-    document.getElementById('viewMcTrainableParams').textContent = `~${summary.trainable}`;
-    document.getElementById('viewMcNonTrainableParams').textContent = summary.nonTrainable;
-
-    // Training parameters
-    document.getElementById('viewMcParams').innerHTML = `
-        <div class="param-chip">
-            <span class="param-chip-label">Optimizer:</span>
-            <span class="param-chip-value">${mc.optimizer_display}</span>
-        </div>
-        <div class="param-chip">
-            <span class="param-chip-label">Learning Rate:</span>
-            <span class="param-chip-value">${mc.learning_rate}</span>
-        </div>
-        <div class="param-chip">
-            <span class="param-chip-label">Batch Size:</span>
-            <span class="param-chip-value">${mc.batch_size}</span>
-        </div>
-        <div class="param-chip">
-            <span class="param-chip-label">Output Dim:</span>
-            <span class="param-chip-value">${mc.output_embedding_dim || 32}D</span>
-        </div>
-    `;
-
-    // Retrieval section (for retrieval and multitask models)
-    const retrievalSection = document.getElementById('viewMcRetrievalSection');
-    if (['retrieval', 'multitask'].includes(mc.model_type)) {
-        retrievalSection.classList.remove('hidden');
-        document.getElementById('viewMcRetrievalParams').innerHTML = `
-            <div class="param-chip retrieval-algo">
-                <span class="param-chip-label">Algorithm:</span>
-                <span class="param-chip-value">${mc.retrieval_algorithm_display || 'Brute Force'}</span>
-            </div>
-            <div class="param-chip">
-                <span class="param-chip-label">Top-K:</span>
-                <span class="param-chip-value">${mc.top_k || 100}</span>
-            </div>
-        `;
-    } else {
-        retrievalSection.classList.add('hidden');
-    }
-
-    // Rating Head section (for ranking and multitask models) - hide in basic mode
-    const ratingHeadSection = document.getElementById('viewMcRatingHeadSection');
-    if (ratingHeadSection) {
-        // In basic mode, we don't have detailed layer info, so hide Rating Head
-        // The full populateViewModal will handle this when details are loaded
-        if (!['ranking', 'multitask'].includes(mc.model_type)) {
-            ratingHeadSection.classList.add('hidden');
-        }
-    }
-
-    // Multitask weights section (for multitask models)
-    const multitaskSection = document.getElementById('viewMcMultitaskSection');
-    if (multitaskSection) {
-        if (mc.model_type === 'multitask') {
-            multitaskSection.classList.remove('hidden');
-            document.getElementById('viewMcMultitaskParams').innerHTML = `
-                <div class="param-chip">
-                    <span class="param-chip-label">Retrieval Weight:</span>
-                    <span class="param-chip-value">${Math.round((mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1) * 100)}%</span>
-                </div>
-                <div class="param-chip">
-                    <span class="param-chip-label">Ranking Weight:</span>
-                    <span class="param-chip-value">${Math.round((mc.ranking_weight !== undefined ? mc.ranking_weight : 1) * 100)}%</span>
-                </div>
-            `;
-        } else {
-            multitaskSection.classList.add('hidden');
-        }
-    }
 }
 
 function closeModelConfigViewModal(event) {

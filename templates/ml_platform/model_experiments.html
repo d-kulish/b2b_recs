@@ -2518,20 +2518,22 @@
      ============================================================================ -->
 <div id="newExpWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard" style="max-width: 1000px;">
-        <!-- Modal Header -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
-                    <i class="fas fa-flask text-lg text-white"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title">New Experiment</h3>
-                    <p class="modal-step-counter">Step <span id="wizardCurrentStep">1</span> of 2</p>
-                </div>
+        <!-- Modal Header — gradient (matches experiment compare modal) -->
+        <div class="modal-header modal-header-gradient gradient-experiment">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-flask"></i>
             </div>
-            <div class="progress-bar-pills">
-                <div id="wizardProgress1" class="progress-step-pill current">Select Configs</div>
-                <div id="wizardProgress2" class="progress-step-pill future">Training Params</div>
+            <div>
+                <h3 class="modal-header-title">New Experiment</h3>
+                <div class="modal-header-subtitle">Step <span id="wizardCurrentStep">1</span> of 2</div>
+            </div>
+        </div>
+
+        <!-- Step Navigation — overlapping nav bar (matches base page style) -->
+        <div class="wizard-nav-bar">
+            <div class="wizard-nav-pills">
+                <div id="wizardProgress1" class="wizard-step-pill current">Select Configs</div>
+                <div id="wizardProgress2" class="wizard-step-pill future">Training Params</div>
             </div>
         </div>
 
@@ -4946,9 +4948,9 @@ function updateWizardUI() {
     document.getElementById('wizardCurrentStep').textContent = wizardStep;
 
     // Update progress pills - matches model_configs.html pattern
-    document.getElementById('wizardProgress1').className = 'progress-step-pill ' +
+    document.getElementById('wizardProgress1').className = 'wizard-step-pill ' +
         (wizardStep === 1 ? 'current' : 'completed');
-    document.getElementById('wizardProgress2').className = 'progress-step-pill ' +
+    document.getElementById('wizardProgress2').className = 'wizard-step-pill ' +
         (wizardStep === 2 ? 'current' : 'future');
 
     // Show/hide steps

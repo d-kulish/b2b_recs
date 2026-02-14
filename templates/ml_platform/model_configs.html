@@ -4602,10 +4602,10 @@
         <!-- Step Navigation — overlapping nav bar (matches base page style) -->
         <div class="wizard-nav-bar">
             <div class="wizard-nav-pills">
-                <div id="dsProgress1" class="progress-step-pill current">Info</div>
-                <div id="dsProgress2" class="progress-step-pill future">Tables</div>
-                <div id="dsProgress3" class="progress-step-pill future">Schema</div>
-                <div id="dsProgress4" class="progress-step-pill future">Filters</div>
+                <div id="dsProgress1" class="wizard-step-pill current">Info</div>
+                <div id="dsProgress2" class="wizard-step-pill future">Tables</div>
+                <div id="dsProgress3" class="wizard-step-pill future">Schema</div>
+                <div id="dsProgress4" class="wizard-step-pill future">Filters</div>
             </div>
         </div>
 
@@ -8269,7 +8269,7 @@ function ds_showStep(step) {
 
         const pill = document.getElementById(`dsProgress${i}`);
         if (pill) {
-            pill.classList.remove('current', 'completed');
+            pill.classList.remove('current', 'completed', 'future');
             if (i < step) pill.classList.add('completed');
             else if (i === step) pill.classList.add('current');
             else pill.classList.add('future');

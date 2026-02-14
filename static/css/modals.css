@@ -402,7 +402,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.wizard-nav-bar .progress-step-pill {
+.wizard-nav-bar .wizard-step-pill {
     flex: 1;
     text-align: center;
     padding: 6px 24px;
@@ -416,7 +416,7 @@
     transition: background 0.2s;
 }
 
-.wizard-nav-bar .progress-step-pill.current {
+.wizard-nav-bar .wizard-step-pill.current {
     background-color: #16a34a;
     color: #ffffff;
     padding-top: 10px;
@@ -429,13 +429,13 @@
     box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
 }
 
-.wizard-nav-bar .progress-step-pill.future {
+.wizard-nav-bar .wizard-step-pill.future {
     background-color: #ffffff;
     color: #374151;
     border-radius: 10px;
 }
 
-.wizard-nav-bar .progress-step-pill.completed {
+.wizard-nav-bar .wizard-step-pill.completed {
     background-color: #ffffff;
     color: #16a34a;
     font-weight: 600;

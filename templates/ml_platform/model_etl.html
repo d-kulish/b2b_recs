@@ -2686,17 +2686,15 @@
 
 <!-- Edit ETL Job Modal -->
 <div id="editJobModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-wizard">
-        <!-- Modal Header -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon info">
-                    <i class="fas fa-edit text-lg"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title">Edit ETL Job</h3>
-                    <p class="modal-step-counter">Modify job settings</p>
-                </div>
+    <div class="modal-container modal-container-wizard modal-etl-wizard" style="height: 580px;">
+        <!-- Modal Header — gradient (matches Add ETL Job wizard style) -->
+        <div class="modal-header modal-header-gradient gradient-etl-job">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-edit"></i>
+            </div>
+            <div>
+                <h3 class="modal-header-title">Edit ETL Job</h3>
+                <div class="modal-header-subtitle">Modify job settings</div>
             </div>
         </div>
 
@@ -6001,8 +5999,10 @@ function connPreviousStep() {
 }
 
 function connShowStep(step) {
-    // Hide all steps - use wizard-step class
-    document.querySelectorAll('#createConnectionModal .wizard-step').forEach(s => s.classList.remove('active'));
+    // Hide all steps and clean up any stale hidden class
+    document.querySelectorAll('#createConnectionModal .wizard-step').forEach(s => {
+        s.classList.remove('active', 'hidden');
+    });
 
     // Show current step
     const stepEl = document.getElementById('connStep' + step);
@@ -6891,8 +6891,8 @@ function resetWizard() {
     selectedConnectionId = null;
     window.selectedConnection = null;
 
-    document.querySelectorAll('.wizard-step').forEach(step => step.classList.add('hidden'));
-    document.getElementById('step1').classList.remove('hidden');
+    document.querySelectorAll('#addSourceModal .wizard-step').forEach(step => step.classList.remove('active'));
+    document.getElementById('step1').classList.add('active');
 
     // Reset form fields (with null checks)
     const setFieldValue = (id, value) => {
@@ -7002,8 +7002,10 @@ function showConnectionForm() {
 }
 
 function showStep(step) {
-    // Hide all steps - use wizard-step class with active state
-    document.querySelectorAll('#addSourceModal .wizard-step').forEach(s => s.classList.remove('active'));
+    // Hide all steps and clean up any stale hidden class
+    document.querySelectorAll('#addSourceModal .wizard-step').forEach(s => {
+        s.classList.remove('active', 'hidden');
+    });
 
     // Show current step
     const currentStepEl = document.getElementById(`step${step}`);

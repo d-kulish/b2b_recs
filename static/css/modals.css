@@ -320,10 +320,10 @@
     max-height: 80vh;
 }
 
-/* Connection wizard - wider to avoid internal scroll */
+/* Connection wizard - wider, fixed height to prevent jumping between steps */
 .modal-container-wizard.modal-connection-wizard {
     max-width: 1000px;
-    height: auto;
+    height: 580px;
     max-height: 85vh;
 }
 

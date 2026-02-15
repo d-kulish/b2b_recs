@@ -399,21 +399,20 @@ def model_etl(request, model_id):
 
     all_runs_json = json.dumps(runs_json_list)
 
-    # Prepare bubble chart data for ETL Job Runs visualization
-    # Shows individual runs as bubbles with size based on duration
-    bubble_cutoff_date = timezone.now() - timedelta(days=5)
-    all_runs_5_days = model.etl_runs.filter(
-        started_at__gte=bubble_cutoff_date,
+    # Prepare diverging chart data for ETL Job Runs visualization
+    # Shows individual runs as stacked bars: succeeded above zero, failed below
+    diverging_cutoff_date = timezone.now() - timedelta(days=30)
+    all_runs_30_days = model.etl_runs.filter(
+        started_at__gte=diverging_cutoff_date,
         status__in=['completed', 'partial', 'failed']
     ).select_related('data_source').order_by('started_at')
 
-    # Build data structure for bubble chart
-    # Each run is an individual bubble with position, size, color, and fill
-    bubble_runs = []
+    # Build data structure for diverging chart
+    diverging_runs = []
     all_job_names = set()
     durations = []
 
-    for run in all_runs_5_days:
+    for run in all_runs_30_days:
         # Skip runs without a data source (Unknown jobs)
         if not run.data_source or not run.started_at:
             continue
@@ -434,27 +433,30 @@ def model_etl(request, model_id):
         if duration > 0:
             durations.append(duration)
 
-        bubble_runs.append({
+        diverging_runs.append({
             'job_name': job_name,
+            'data_source_id': run.data_source.id,
+            'data_source_created_at': run.data_source.created_at.isoformat(),
             'started_at': run.started_at.isoformat(),
             'duration': duration,
             'status': status,
             'rows_loaded': rows_loaded,
+            'error_message': run.error_message or '',
         })
 
     # Calculate duration statistics for frontend scaling
     min_duration = min(durations) if durations else 1
     max_duration = max(durations) if durations else 1
 
-    # Generate date range for X-axis
+    # Generate date range for X-axis (30 days)
     now = timezone.now()
-    start_date = (now - timedelta(days=4)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
     end_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
     sorted_job_names = sorted(list(all_job_names))
 
-    bubble_chart_json = json.dumps({
-        'runs': bubble_runs,
+    diverging_chart_json = json.dumps({
+        'runs': diverging_runs,
         'job_names': sorted_job_names,
         'date_range': {
             'start': start_date.isoformat(),
@@ -618,7 +620,7 @@ def model_etl(request, model_id):
         'has_any_runs': has_any_runs,
         'has_active_filters': has_active_filters,
         'showing_last_30_days': True,
-        'bubble_chart_data': bubble_chart_json,
+        'diverging_chart_data': diverging_chart_json,
         'kpi_data': kpi_data,
         'scheduled_jobs': scheduled_jobs_page,
         'has_scheduled_jobs': len(scheduled_jobs_list) > 0,

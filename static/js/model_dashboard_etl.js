@@ -1,7 +1,7 @@
 /**
  * Model Dashboard - ETL Chapter
  *
- * Displays ETL Dashboard data: KPIs, Scheduled Jobs table, and Bubble Chart.
+ * Displays ETL Dashboard data: KPIs, Scheduled Jobs table, and Diverging Chart.
  * Uses the same data source as the ETL page for automatic synchronization.
  *
  * @module ModelDashboardEtl
@@ -21,8 +21,6 @@ const ModelDashboardEtl = (function() {
         row2Id: '#etlChapterRow2',
         scheduledSectionId: '#etlScheduledSection',
         chartSectionId: '#etlChartSection',
-        bubbleChartId: '#etlBubbleChart',
-        tooltipId: '#etlBubbleTooltip'
     };
 
     // =========================================================================
@@ -37,12 +35,35 @@ const ModelDashboardEtl = (function() {
         scheduledJobsPerPage: 5
     };
 
-    // Bubble chart color palette (from model_etl.html)
-    const statusColors = {
-        completed: { light: '#86EFAC', dark: '#166534' },  // green-300 -> green-800
-        partial:   { light: '#FED7AA', dark: '#9A3412' },  // orange-200 -> orange-800
-        failed:    { light: '#FCA5A5', dark: '#991B1B' },  // red-300 -> red-800
-    };
+    // =========================================================================
+    // DIVERGING CHART COLOR PALETTES
+    // =========================================================================
+    const FAILED_PALETTE = [
+        '#FDD835',  // job_index 0 (closest to 0) - yellow
+        '#FB8C00',  // job_index 1 - orange
+        '#E65100',  // job_index 2 - deep orange
+        '#BF360C',  // job_index 3 - dark red
+        '#B71C1C',  // job_index 4
+        '#D84315',  // job_index 5
+        '#F57C00',  // job_index 6
+        '#FBC02D',  // job_index 7
+    ];
+    const SUCCEEDED_PALETTE = [
+        '#A5D6A7',  // job_index 0 (closest to 0) - light green
+        '#4CAF50',  // job_index 1 - green
+        '#2E7D32',  // job_index 2 - dark green
+        '#1565C0',  // job_index 3 - blue
+        '#00796B',  // job_index 4
+        '#00897B',  // job_index 5
+        '#1B5E20',  // job_index 6
+        '#43A047',  // job_index 7
+    ];
+
+    const RUN_GAP = 0.4;
+
+    function getJobColor(palette, jobIndex) {
+        return palette[Math.min(jobIndex, palette.length - 1)];
+    }
 
     // =========================================================================
     // PRIVATE METHODS
@@ -115,7 +136,7 @@ const ModelDashboardEtl = (function() {
                         renderKpiRow(data.data.kpi);
                         renderScheduledJobs(data.data.scheduled_jobs, 1);
                         showContent();  // Show content first so chart container has dimensions
-                        renderBubbleChart(data.data.bubble_chart);
+                        renderDivergingChart(data.data.diverging_chart);
                     }
                 } else {
                     console.error('ModelDashboardEtl: API error:', data.error);
@@ -306,282 +327,385 @@ const ModelDashboardEtl = (function() {
     }
 
     /**
-     * Render bubble chart using D3.js.
-     *
-     * @param {Object} chartData - Bubble chart data from API
+     * Build JOB_ORDER map from runs' data_source_created_at (oldest first = index 0).
      */
-    function renderBubbleChart(chartData) {
+    function buildJobOrder(runs) {
+        const jobCreatedMap = {};
+        runs.forEach(run => {
+            if (!jobCreatedMap[run.job_name] || run.data_source_created_at < jobCreatedMap[run.job_name]) {
+                jobCreatedMap[run.job_name] = run.data_source_created_at;
+            }
+        });
+        const sorted = Object.entries(jobCreatedMap).sort((a, b) => a[1].localeCompare(b[1]));
+        const order = {};
+        sorted.forEach(([name], i) => { order[name] = i; });
+        return order;
+    }
+
+    /**
+     * Process runs into daily stacked bar data.
+     */
+    function processChartData(chartData) {
+        const runs = chartData.runs;
+        const JOB_ORDER = buildJobOrder(runs);
+
+        const processed = runs.map(run => ({
+            ...run,
+            status_mapped: (run.status === 'completed' || run.status === 'partial') ? 'succeeded' : 'failed',
+            job_index: JOB_ORDER[run.job_name] ?? 99,
+            date: run.started_at.split('T')[0],
+            duration_minutes: Math.max(1, Math.ceil(run.duration / 60)),
+        }));
+
+        // Generate full 30-day date range from API
+        const startDate = new Date(chartData.date_range.start);
+        const endDate = new Date(chartData.date_range.end);
+        const dates = [];
+        const d = new Date(startDate);
+        while (d <= endDate) {
+            dates.push(d.toISOString().split('T')[0]);
+            d.setDate(d.getDate() + 1);
+        }
+
+        // Group runs by date
+        const byDate = {};
+        dates.forEach(dt => { byDate[dt] = []; });
+        processed.forEach(run => {
+            if (byDate[run.date]) byDate[run.date].push(run);
+        });
+
+        // Build stacked bars per day
+        const dailyStacks = {};
+        let maxPositive = 0;
+        let maxNegative = 0;
+
+        dates.forEach(date => {
+            const dayRuns = byDate[date];
+            const succeeded = dayRuns.filter(r => r.status_mapped === 'succeeded');
+            const failed = dayRuns.filter(r => r.status_mapped === 'failed');
+
+            succeeded.sort((a, b) => a.job_index - b.job_index || new Date(a.started_at) - new Date(b.started_at));
+            failed.sort((a, b) => a.job_index - b.job_index || new Date(a.started_at) - new Date(b.started_at));
+
+            const positiveBars = [];
+            let posY = 0;
+            succeeded.forEach((run, i) => {
+                if (i > 0) posY += RUN_GAP;
+                positiveBars.push({ y_start: posY, y_end: posY + run.duration_minutes, height: run.duration_minutes, ...run });
+                posY += run.duration_minutes;
+            });
+
+            const negativeBars = [];
+            let negY = 0;
+            failed.forEach((run, i) => {
+                if (i > 0) negY += RUN_GAP;
+                negativeBars.push({ y_start: negY, y_end: negY + run.duration_minutes, height: run.duration_minutes, ...run });
+                negY += run.duration_minutes;
+            });
+
+            maxPositive = Math.max(maxPositive, posY);
+            maxNegative = Math.max(maxNegative, negY);
+
+            dailyStacks[date] = { positiveBars, negativeBars, totalPositive: posY, totalNegative: negY };
+        });
+
+        return { dailyStacks, maxPositive, maxNegative, dates, JOB_ORDER };
+    }
+
+    /**
+     * Render diverging stacked bar chart using D3.js.
+     *
+     * @param {Object} chartData - Diverging chart data from API
+     */
+    function renderDivergingChart(chartData) {
         const container = document.querySelector(config.chartSectionId);
         if (!container) return;
 
-        // Chart dimensions
-        const margin = { top: 15, right: 30, bottom: 40, left: 130 };
-        const height = 260;
-
-        // Bubble size constraints
-        const minRadius = 3;
-        const maxRadius = 16;
-
-        const jobNames = chartData.job_names;
         const runs = chartData.runs;
-        const durationStats = chartData.duration_stats;
 
-        // Chart header HTML (shared between empty and data states)
+        // Chart header
         const chartHeaderHtml = `
             <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-gray-700">ETL Job Runs (Last 5 Days)</h3>
-                <div class="flex items-center gap-4">
-                    <!-- Status Legend -->
-                    <div class="flex items-center gap-3 text-xs">
-                        <div class="flex items-center gap-1">
-                            <div class="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-                            <span class="text-gray-500">Success</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <div class="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
-                            <span class="text-gray-500">Partial</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <div class="w-2.5 h-2.5 rounded-full bg-red-500"></div>
-                            <span class="text-gray-500">Failed</span>
-                        </div>
-                    </div>
-                    <!-- Fill Legend -->
-                    <div class="flex items-center gap-3 text-xs border-l border-gray-200 pl-4">
-                        <div class="flex items-center gap-1">
-                            <div class="w-2.5 h-2.5 rounded-full bg-gray-400"></div>
-                            <span class="text-gray-500">Data loaded</span>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <div class="w-2.5 h-2.5 rounded-full border-2 border-gray-400 bg-white"></div>
-                            <span class="text-gray-500">No data</span>
-                        </div>
-                    </div>
-                </div>
+                <h3 class="text-sm font-semibold text-gray-700">ETL Job Runs (Last 30 Days)</h3>
             </div>
         `;
 
-        // Check if we have data
-        if (jobNames.length === 0 || runs.length === 0) {
-            // Show empty state
+        // Empty state
+        if (!runs || runs.length === 0) {
             container.innerHTML = `
                 ${chartHeaderHtml}
-                <div id="etlBubbleChartContainer" class="relative">
+                <div id="etlDivergingChartContainer" class="relative">
                     <div class="text-center py-12 bg-gray-50 rounded-lg">
-                        <i class="fas fa-chart-scatter text-gray-400 text-2xl mb-2"></i>
+                        <i class="fas fa-chart-bar text-gray-400 text-2xl mb-2"></i>
                         <p class="text-gray-600 text-sm font-medium">No job runs</p>
                         <p class="text-gray-400 text-xs mt-1">Run ETL jobs to see visualization</p>
                     </div>
-                    <div id="etlBubbleTooltip" class="etl-bubble-tooltip hidden"></div>
                 </div>
             `;
             return;
         }
 
-        // Render header and chart container first
+        // Process data
+        const { dailyStacks, maxPositive, maxNegative, dates, JOB_ORDER } = processChartData(chartData);
+
+        // Render chart container
         container.innerHTML = `
             ${chartHeaderHtml}
-            <div id="etlBubbleChartContainer" class="relative flex-1">
-                <svg id="etlBubbleChart" class="w-full"></svg>
-                <div id="etlBubbleTooltip" class="etl-bubble-tooltip hidden"></div>
+            <div id="etlDivergingChartContainer" class="relative flex-1">
+                <svg id="etlDivergingChart" class="w-full"></svg>
+                <div id="etlDivergingTooltip" class="etl-bubble-tooltip hidden"></div>
             </div>
+            <div id="etlJobLegend" style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6;"></div>
         `;
 
-        // Now get container width after it's in the DOM
-        const chartContainer = document.querySelector('#etlBubbleChartContainer');
+        // Get container dimensions
+        const chartContainer = document.querySelector('#etlDivergingChartContainer');
         const containerWidth = chartContainer.clientWidth;
 
-        // Guard: don't render if container is too narrow (hidden or very small)
         if (containerWidth < 50) {
             console.warn('ModelDashboardEtl: Chart container too narrow, skipping render');
             return;
         }
 
+        // Chart dimensions — auto-scale unitSize to fit within the 370px container
+        // Container: 370px total, minus 32px padding, ~30px header, ~35px legend = ~273px for SVG
+        const margin = { top: 20, right: 10, bottom: 45, left: 40 };
+        const svgAvailableHeight = 260;
+        const totalUnits = maxPositive + maxNegative + 2;
+        const innerHeight = svgAvailableHeight - margin.top - margin.bottom;
+        const unitSize = Math.min(16, Math.max(2, innerHeight / Math.max(totalUnits, 1)));
+        const height = Math.max(totalUnits * unitSize + 20, 100);
         const width = containerWidth - margin.left - margin.right;
 
-        // Select SVG and set dimensions
-        const svg = d3.select('#etlBubbleChart');
-        svg
-            .attr('width', containerWidth)
-            .attr('height', height + margin.top + margin.bottom);
+        const svgEl = d3.select('#etlDivergingChart');
+        svgEl.attr('width', containerWidth).attr('height', height + margin.top + margin.bottom);
 
-        const g = svg.append('g')
+        const svg = svgEl.append('g')
             .attr('transform', `translate(${margin.left},${margin.top})`);
 
-        // Add clip path
-        const clipId = 'etl-bubble-chart-clip';
-        svg.append('defs')
-            .append('clipPath')
-            .attr('id', clipId)
-            .append('rect')
-            .attr('x', 0)
-            .attr('y', -maxRadius)
-            .attr('width', width)
-            .attr('height', height + maxRadius * 2);
+        const xScale = d3.scaleBand()
+            .domain(dates)
+            .range([0, width])
+            .padding(0.12);
 
-        // Parse date range
-        const startDate = new Date(chartData.date_range.start);
-        const endDate = new Date(chartData.date_range.end);
+        const zeroY = (maxPositive + 1) * unitSize;
 
-        // X scale - time (5 days)
-        const xScale = d3.scaleTime()
-            .domain([startDate, endDate])
-            .range([0, width]);
+        const dateParse = d3.timeParse('%Y-%m-%d');
+        const dateFormat = d3.timeFormat('%b %d');
+        const parsedDates = dates.map(d => dateParse(d));
 
-        // Y scale - job names (categorical with padding)
-        const yScale = d3.scaleBand()
-            .domain(jobNames)
-            .range([0, height])
-            .padding(0.3);
-
-        // Size scale - log scale for duration to radius
-        const maxDuration = Math.max(durationStats.max, 1);
-        const sizeScale = d3.scaleLog()
-            .domain([1, maxDuration + 1])
-            .range([minRadius, maxRadius])
-            .clamp(true);
-
-        const getRadius = (duration) => sizeScale(Math.max(1, duration + 1));
-
-        // Normalized size for color gradient (0-1)
-        const getNormalizedSize = (duration) => {
-            if (maxDuration <= 1) return 0.5;
-            const logMin = Math.log(1);
-            const logMax = Math.log(maxDuration + 1);
-            const logVal = Math.log(Math.max(1, duration + 1));
-            return (logVal - logMin) / (logMax - logMin);
-        };
-
-        // Get bubble color based on status and normalized size
-        const getBubbleColor = (status, normalizedSize) => {
-            const palette = statusColors[status] || statusColors.completed;
-            return d3.interpolateRgb(palette.light, palette.dark)(normalizedSize);
-        };
-
-        // Draw horizontal baselines for each job
-        jobNames.forEach((jobName) => {
-            const y = yScale(jobName) + yScale.bandwidth() / 2;
-            g.append('line')
-                .attr('x1', 0)
-                .attr('x2', width)
-                .attr('y1', y)
-                .attr('y2', y)
-                .attr('stroke', '#E5E7EB')
-                .attr('stroke-width', 1);
+        // Weekend backgrounds
+        dates.forEach((date, i) => {
+            const dow = parsedDates[i].getDay();
+            if (dow === 0 || dow === 6) {
+                svg.append('rect')
+                    .attr('x', xScale(date) - xScale.step() * xScale.padding() / 2)
+                    .attr('y', 0)
+                    .attr('width', xScale.step())
+                    .attr('height', height)
+                    .attr('fill', '#f7fef9');
+            }
         });
 
-        // Draw job name labels on the left
-        jobNames.forEach((jobName) => {
-            const y = yScale(jobName) + yScale.bandwidth() / 2;
-            g.append('text')
-                .attr('x', -10)
-                .attr('y', y)
-                .attr('text-anchor', 'end')
-                .attr('dominant-baseline', 'middle')
-                .attr('fill', '#4B5563')
-                .attr('font-size', '11px')
-                .text(jobName.length > 18 ? jobName.substring(0, 16) + '...' : jobName);
+        // Month separator lines
+        dates.forEach((date, i) => {
+            if (i > 0 && parsedDates[i].getMonth() !== parsedDates[i - 1].getMonth()) {
+                const lineX = xScale(date) - xScale.step() * xScale.padding() / 2;
+                svg.append('line')
+                    .attr('x1', lineX).attr('x2', lineX)
+                    .attr('y1', 0).attr('y2', height)
+                    .attr('stroke', '#111827')
+                    .attr('stroke-width', 1.5);
+            }
         });
 
-        // Create clipped group for bubbles
-        const bubblesGroup = g.append('g')
-            .attr('clip-path', `url(#${clipId})`);
+        // Zero line
+        svg.append('line')
+            .attr('x1', 0).attr('x2', width)
+            .attr('y1', zeroY).attr('y2', zeroY)
+            .attr('stroke', '#9ca3af').attr('stroke-width', 1.5);
 
-        // Draw bubbles for each run
-        runs.forEach((run) => {
-            const runDate = new Date(run.started_at);
-            const x = xScale(runDate);
-            const y = yScale(run.job_name) + yScale.bandwidth() / 2;
-            const radius = getRadius(run.duration);
-            const normalizedSize = getNormalizedSize(run.duration);
-            const color = getBubbleColor(run.status, normalizedSize);
-            const hasData = run.rows_loaded > 0;
+        svg.append('text')
+            .attr('x', -6).attr('y', zeroY)
+            .attr('text-anchor', 'end')
+            .attr('dominant-baseline', 'middle')
+            .attr('font-size', '10px')
+            .attr('fill', '#6b7280')
+            .attr('font-weight', '600')
+            .text('0');
 
-            const bubble = bubblesGroup.append('circle')
-                .attr('cx', x)
-                .attr('cy', y)
-                .attr('r', radius)
-                .attr('fill', hasData ? color : 'white')
-                .attr('stroke', color)
-                .attr('stroke-width', hasData ? 1 : 2)
-                .attr('opacity', 0.9)
-                .style('cursor', 'pointer');
+        // Y-axis ticks
+        for (let i = 5; i <= maxPositive; i += 5) {
+            const y = zeroY - i * unitSize;
+            if (y > 5) {
+                svg.append('text').attr('x', -6).attr('y', y).attr('text-anchor', 'end')
+                    .attr('dominant-baseline', 'middle').attr('font-size', '9px').attr('fill', '#6b7280').text(i);
+                svg.append('line').attr('x1', 0).attr('x2', width).attr('y1', y).attr('y2', y)
+                    .attr('stroke', '#e5e7eb').attr('stroke-width', 0.5).attr('stroke-dasharray', '2,3');
+            }
+        }
+        for (let i = -5; i >= -maxNegative; i -= 5) {
+            const y = zeroY - i * unitSize;
+            if (y < height - 5) {
+                svg.append('text').attr('x', -6).attr('y', y).attr('text-anchor', 'end')
+                    .attr('dominant-baseline', 'middle').attr('font-size', '9px').attr('fill', '#6b7280').text(i);
+                svg.append('line').attr('x1', 0).attr('x2', width).attr('y1', y).attr('y2', y)
+                    .attr('stroke', '#e5e7eb').attr('stroke-width', 0.5).attr('stroke-dasharray', '2,3');
+            }
+        }
 
-            // Add hover events
-            bubble.on('mouseenter', function(event) {
-                d3.select(this)
-                    .attr('opacity', 1)
-                    .attr('stroke-width', hasData ? 2 : 3);
-
-                const formattedTime = runDate.toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit'
-                });
-
-                const statusLabel = run.status.charAt(0).toUpperCase() + run.status.slice(1);
-                const statusColorClass = run.status === 'completed' ? 'text-green-400' :
-                                        run.status === 'partial' ? 'text-orange-400' : 'text-red-400';
-
-                showBubbleTooltip(event, `
-                    <div class="font-semibold">${run.job_name}</div>
-                    <div class="text-gray-300">${formattedTime}</div>
-                    <div class="mt-1">Duration: ${formatDuration(run.duration)}</div>
-                    <div>Rows: ${run.rows_loaded.toLocaleString()}</div>
-                    <div class="${statusColorClass}">Status: ${statusLabel}</div>
-                `);
-            })
-            .on('mouseleave', function() {
-                d3.select(this)
-                    .attr('opacity', 0.9)
-                    .attr('stroke-width', hasData ? 1 : 2);
-                hideBubbleTooltip();
-            });
-        });
-
-        // X axis at the bottom
-        const xAxis = d3.axisBottom(xScale)
-            .ticks(d3.timeDay.every(1))
-            .tickFormat(d3.timeFormat('%b %d'));
-
-        g.append('g')
-            .attr('transform', `translate(0,${height})`)
-            .call(xAxis)
-            .selectAll('text')
-            .style('text-anchor', 'middle')
-            .style('font-size', '10px')
-            .attr('fill', '#6B7280');
-
-        // Add hour markers (every 6 hours) as minor ticks
-        const hourTicks = d3.timeHour.range(startDate, endDate, 6);
-
-        g.append('g')
-            .attr('transform', `translate(0,${height})`)
-            .selectAll('.hour-tick')
-            .data(hourTicks.filter(d => d.getHours() !== 0))
-            .enter()
-            .append('text')
-            .attr('x', d => xScale(d))
-            .attr('y', 28)
+        // Y axis label
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -(height / 2))
+            .attr('y', -30)
             .attr('text-anchor', 'middle')
-            .attr('fill', '#9CA3AF')
-            .attr('font-size', '8px')
-            .text(d => d3.timeFormat('%H:00')(d));
+            .attr('font-size', '10px')
+            .attr('fill', '#6b7280')
+            .text('Duration');
+
+        // X-axis labels (every 3rd day + last)
+        dates.forEach((date, i) => {
+            const x = xScale(date) + xScale.bandwidth() / 2;
+            const parsed = parsedDates[i];
+            const hasData = dailyStacks[date].positiveBars.length > 0 || dailyStacks[date].negativeBars.length > 0;
+
+            if (i % 3 === 0 || i === dates.length - 1) {
+                svg.append('text')
+                    .attr('x', x).attr('y', height + 12)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '8px')
+                    .attr('fill', hasData ? '#374151' : '#d1d5db')
+                    .text(dateFormat(parsed));
+
+                const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parsed.getDay()];
+                svg.append('text')
+                    .attr('x', x).attr('y', height + 23)
+                    .attr('text-anchor', 'middle')
+                    .attr('font-size', '7px')
+                    .attr('fill', hasData ? '#9ca3af' : '#e5e7eb')
+                    .text(dow);
+            }
+        });
+
+        const tooltip = d3.select('#etlDivergingTooltip');
+
+        function barStroke(color) {
+            return d3.color(color).darker(0.4);
+        }
+
+        // Draw bars
+        dates.forEach(date => {
+            const stack = dailyStacks[date];
+            const colX = xScale(date);
+            const bw = xScale.bandwidth();
+
+            // Succeeded bars (upward)
+            stack.positiveBars.forEach(bar => {
+                const color = getJobColor(SUCCEEDED_PALETTE, bar.job_index);
+                const barTopY = zeroY - bar.y_end * unitSize;
+                const barH = bar.height * unitSize;
+
+                svg.append('rect')
+                    .attr('x', colX).attr('y', barTopY)
+                    .attr('width', bw).attr('height', Math.max(barH - 1, 2))
+                    .attr('rx', 2)
+                    .attr('fill', color)
+                    .attr('stroke', barStroke(color))
+                    .attr('stroke-width', 0.5)
+                    .style('cursor', 'pointer')
+                    .on('mouseover', function(event) {
+                        d3.select(this).attr('stroke-width', 2.5).attr('stroke', '#111827');
+                        showDivergingTooltip(event, bar, 'Succeeded', date);
+                    })
+                    .on('mousemove', function(event) {
+                        positionTooltip(event);
+                    })
+                    .on('mouseout', function() {
+                        d3.select(this).attr('stroke-width', 0.5).attr('stroke', barStroke(color));
+                        hideDivergingTooltip();
+                    });
+            });
+
+            // Failed bars (downward)
+            stack.negativeBars.forEach(bar => {
+                const color = getJobColor(FAILED_PALETTE, bar.job_index);
+                const barTopY = zeroY + bar.y_start * unitSize + 1;
+                const barH = bar.height * unitSize;
+
+                svg.append('rect')
+                    .attr('x', colX).attr('y', barTopY)
+                    .attr('width', bw).attr('height', Math.max(barH - 1, 2))
+                    .attr('rx', 2)
+                    .attr('fill', color)
+                    .attr('stroke', barStroke(color))
+                    .attr('stroke-width', 0.5)
+                    .style('cursor', 'pointer')
+                    .on('mouseover', function(event) {
+                        d3.select(this).attr('stroke-width', 2.5).attr('stroke', '#111827');
+                        showDivergingTooltip(event, bar, 'Failed', date);
+                    })
+                    .on('mousemove', function(event) {
+                        positionTooltip(event);
+                    })
+                    .on('mouseout', function() {
+                        d3.select(this).attr('stroke-width', 0.5).attr('stroke', barStroke(color));
+                        hideDivergingTooltip();
+                    });
+            });
+
+            // Empty day indicator
+            if (stack.positiveBars.length === 0 && stack.negativeBars.length === 0) {
+                const x = colX + bw / 2;
+                svg.append('line')
+                    .attr('x1', x).attr('x2', x)
+                    .attr('y1', zeroY - 3).attr('y2', zeroY + 3)
+                    .attr('stroke', '#e5e7eb').attr('stroke-width', 1);
+            }
+        });
+
+        // Render job legend below chart
+        renderJobLegend(JOB_ORDER);
     }
 
     /**
-     * Show bubble chart tooltip.
+     * Show diverging chart tooltip.
      */
-    function showBubbleTooltip(event, html) {
-        const tooltip = document.getElementById('etlBubbleTooltip');
+    function showDivergingTooltip(event, bar, statusLabel, date) {
+        const tooltip = document.getElementById('etlDivergingTooltip');
         if (!tooltip) return;
 
-        tooltip.innerHTML = html;
-        tooltip.classList.remove('hidden');
+        const durationStr = bar.duration < 60
+            ? `${bar.duration.toFixed(1)}s`
+            : `${Math.floor(bar.duration / 60)}m ${Math.round(bar.duration % 60)}s`;
 
-        const container = document.getElementById('etlBubbleChartContainer');
-        if (!container) return;
+        const statusClass = statusLabel === 'Succeeded' ? 'text-green-400' : 'text-red-400';
+        let errorHtml = '';
+        if (bar.error_message) {
+            const shortError = bar.error_message.length > 120 ? bar.error_message.substring(0, 118) + '...' : bar.error_message;
+            errorHtml = `<div class="text-red-300 mt-1 text-xs" style="border-top:1px solid rgba(255,255,255,0.15);padding-top:4px;">Error: ${shortError}</div>`;
+        }
+
+        tooltip.innerHTML = `
+            <div class="font-semibold">${bar.job_name}</div>
+            <div class="${statusClass}" style="font-size:10px;font-weight:600;text-transform:uppercase;">${statusLabel}</div>
+            <div class="text-gray-300 mt-1">Duration: ${durationStr} (${bar.duration_minutes} min bar)</div>
+            <div class="text-gray-300">Rows: ${(bar.rows_loaded || 0).toLocaleString()}</div>
+            <div class="text-gray-300">Started: ${new Date(bar.started_at).toLocaleTimeString()}</div>
+            <div class="text-gray-300">Date: ${date}</div>
+            ${errorHtml}
+        `;
+        tooltip.classList.remove('hidden');
+        positionTooltip(event);
+    }
+
+    /**
+     * Position tooltip near mouse.
+     */
+    function positionTooltip(event) {
+        const tooltip = document.getElementById('etlDivergingTooltip');
+        const container = document.getElementById('etlDivergingChartContainer');
+        if (!tooltip || !container) return;
 
         const containerRect = container.getBoundingClientRect();
         const tooltipRect = tooltip.getBoundingClientRect();
@@ -589,7 +713,6 @@ const ModelDashboardEtl = (function() {
         let x = event.clientX - containerRect.left + 15;
         let y = event.clientY - containerRect.top - 10;
 
-        // Keep tooltip within container bounds
         if (x + tooltipRect.width > containerRect.width) {
             x = event.clientX - containerRect.left - tooltipRect.width - 15;
         }
@@ -602,13 +725,39 @@ const ModelDashboardEtl = (function() {
     }
 
     /**
-     * Hide bubble chart tooltip.
+     * Hide diverging chart tooltip.
      */
-    function hideBubbleTooltip() {
-        const tooltip = document.getElementById('etlBubbleTooltip');
+    function hideDivergingTooltip() {
+        const tooltip = document.getElementById('etlDivergingTooltip');
         if (tooltip) {
             tooltip.classList.add('hidden');
         }
+    }
+
+    /**
+     * Render job legend below the chart.
+     */
+    function renderJobLegend(JOB_ORDER) {
+        const container = document.getElementById('etlJobLegend');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const jobs = Object.entries(JOB_ORDER).sort((a, b) => a[1] - b[1]);
+        jobs.forEach(([name, idx]) => {
+            const succColor = getJobColor(SUCCEEDED_PALETTE, idx);
+            const failColor = getJobColor(FAILED_PALETTE, idx);
+            const shortName = name.length > 20 ? name.substring(0, 18) + '...' : name;
+            const item = document.createElement('div');
+            item.style.cssText = 'display:flex;align-items:center;gap:4px;';
+            item.innerHTML = `
+                <div style="display:flex;gap:2px;">
+                    <div style="width:8px;height:12px;background:${succColor};border-radius:2px;" title="Succeeded"></div>
+                    <div style="width:8px;height:12px;background:${failColor};border-radius:2px;" title="Failed"></div>
+                </div>
+                <span style="font-size:10px;color:#4b5563;" title="${name}">${shortName}</span>
+            `;
+            container.appendChild(item);
+        });
     }
 
     /**
@@ -680,8 +829,8 @@ const ModelDashboardEtl = (function() {
             window.addEventListener('resize', function() {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(function() {
-                    if (state.data && state.data.bubble_chart) {
-                        renderBubbleChart(state.data.bubble_chart);
+                    if (state.data && state.data.diverging_chart) {
+                        renderDivergingChart(state.data.diverging_chart);
                     }
                 }, 250);
             });

@@ -2623,7 +2623,7 @@ def etl_dashboard_stats(request, model_id):
                 },
                 'scheduled_jobs': [],
                 'scheduled_jobs_total': 0,
-                'bubble_chart': {
+                'diverging_chart': {
                     'runs': [],
                     'job_names': [],
                     'date_range': {
@@ -2760,19 +2760,19 @@ def etl_dashboard_stats(request, model_id):
                 pass
 
     # =========================================================================
-    # Bubble Chart Data (Last 5 Days)
+    # Diverging Chart Data (Last 30 Days)
     # =========================================================================
-    bubble_cutoff_date = timezone.now() - timedelta(days=5)
-    all_runs_5_days = model.etl_runs.filter(
-        started_at__gte=bubble_cutoff_date,
+    diverging_cutoff_date = timezone.now() - timedelta(days=30)
+    all_runs_30_days = model.etl_runs.filter(
+        started_at__gte=diverging_cutoff_date,
         status__in=['completed', 'partial', 'failed']
     ).select_related('data_source').order_by('started_at')
 
-    bubble_runs = []
+    diverging_runs = []
     all_job_names = set()
     durations = []
 
-    for run in all_runs_5_days:
+    for run in all_runs_30_days:
         if not run.data_source or not run.started_at:
             continue
 
@@ -2791,25 +2791,28 @@ def etl_dashboard_stats(request, model_id):
         if duration > 0:
             durations.append(duration)
 
-        bubble_runs.append({
+        diverging_runs.append({
             'job_name': job_name,
+            'data_source_id': run.data_source.id,
+            'data_source_created_at': run.data_source.created_at.isoformat(),
             'started_at': run.started_at.isoformat(),
             'duration': duration,
             'status': status,
             'rows_loaded': rows_loaded,
+            'error_message': run.error_message or '',
         })
 
     min_duration = min(durations) if durations else 1
     max_duration = max(durations) if durations else 1
 
     now = timezone.now()
-    start_date = (now - timedelta(days=4)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
     end_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
     sorted_job_names = sorted(list(all_job_names))
 
-    bubble_chart_data = {
-        'runs': bubble_runs,
+    diverging_chart_data = {
+        'runs': diverging_runs,
         'job_names': sorted_job_names,
         'date_range': {
             'start': start_date.isoformat(),
@@ -2827,7 +2830,7 @@ def etl_dashboard_stats(request, model_id):
             'kpi': kpi_data,
             'scheduled_jobs': scheduled_jobs_list,
             'scheduled_jobs_total': len(scheduled_jobs_list),
-            'bubble_chart': bubble_chart_data,
+            'diverging_chart': diverging_chart_data,
         }
     })
 

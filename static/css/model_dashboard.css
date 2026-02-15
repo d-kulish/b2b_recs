@@ -1783,6 +1783,10 @@
     color: #f87171;
 }
 
+.etl-bubble-tooltip .text-red-300 {
+    color: #fca5a5;
+}
+
 .etl-bubble-tooltip .mt-1 {
     margin-top: 4px;
 }

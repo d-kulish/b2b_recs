@@ -1227,6 +1227,7 @@
     border-radius: 8px;
     padding: 16px;
     border: 1px solid #e5e7eb;
+    overflow: hidden;
 }
 
 /* Runs Table Section */

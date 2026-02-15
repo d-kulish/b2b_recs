@@ -240,21 +240,21 @@
     color: #ffffff;
 }
 
-/* --- Connection (emerald) --- */
+/* --- Connection (amber) --- */
 .modal-header-soft.soft-connection {
-    background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 50%, #059669 100%);
+    background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #f59e0b 100%);
 }
-.modal-header-soft.soft-connection .modal-header-icon-badge { background: #059669; }
-.modal-header-soft.soft-connection .modal-header-title { color: #064e3b; }
-.modal-header-soft.soft-connection .modal-header-subtitle { color: #065f46; }
+.modal-header-soft.soft-connection .modal-header-icon-badge { background: #f59e0b; }
+.modal-header-soft.soft-connection .modal-header-title { color: #713f12; }
+.modal-header-soft.soft-connection .modal-header-subtitle { color: #92400e; }
 
-/* --- ETL Job (orange) --- */
+/* --- ETL Job (emerald) --- */
 .modal-header-soft.soft-etl-job {
-    background: linear-gradient(135deg, #ffedd5 0%, #fdba74 50%, #ea580c 100%);
+    background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 50%, #10b981 100%);
 }
-.modal-header-soft.soft-etl-job .modal-header-icon-badge { background: #ea580c; }
-.modal-header-soft.soft-etl-job .modal-header-title { color: #7c2d12; }
-.modal-header-soft.soft-etl-job .modal-header-subtitle { color: #9a3412; }
+.modal-header-soft.soft-etl-job .modal-header-icon-badge { background: #10b981; }
+.modal-header-soft.soft-etl-job .modal-header-title { color: #064e3b; }
+.modal-header-soft.soft-etl-job .modal-header-subtitle { color: #065f46; }
 
 /* --- Training (indigo) --- */
 .modal-header-soft.soft-training {
@@ -384,19 +384,23 @@
    Place after the base wizard-nav-bar rules so these take precedence.
    ============================================================================ */
 
-/* Connection (emerald) */
+/* Connection (amber) */
+.wizard-nav-bar.pill-connection .wizard-nav-pills {
+    width: 50%;
+    margin: 0 auto;
+}
 .wizard-nav-bar.pill-connection .wizard-step-pill.current {
-    background-color: #059669;
-    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+    background-color: #f59e0b;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
 }
-.wizard-nav-bar.pill-connection .wizard-step-pill.completed { color: #059669; }
+.wizard-nav-bar.pill-connection .wizard-step-pill.completed { color: #f59e0b; }
 
-/* ETL Job (orange) */
+/* ETL Job (emerald) */
 .wizard-nav-bar.pill-etl-job .wizard-step-pill.current {
-    background-color: #ea580c;
-    box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);
+    background-color: #10b981;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
 }
-.wizard-nav-bar.pill-etl-job .wizard-step-pill.completed { color: #ea580c; }
+.wizard-nav-bar.pill-etl-job .wizard-step-pill.completed { color: #10b981; }
 
 /* Training (indigo) */
 .wizard-nav-bar.pill-training .wizard-step-pill.current {
@@ -558,7 +562,7 @@
     max-height: 85vh;
 }
 
-.modal-connection-wizard .wizard-selection-grid {
+.modal-connection-wizard .wizard-list-container .list-content {
     max-height: none;
     overflow-y: visible;
 }

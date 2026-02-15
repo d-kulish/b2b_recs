@@ -692,7 +692,7 @@
 <div id="runDetailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[100] flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-2xl w-full border border-gray-300 h-[600px] overflow-hidden flex flex-col" style="max-width: 880px;">
         <!-- Header — gradient background with title + status badge -->
-        <div class="modal-header modal-header-gradient gradient-etl-pending flex-shrink-0" id="runDetailsHeader">
+        <div class="modal-header-soft soft-etl-pending flex-shrink-0" id="runDetailsHeader">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-database"></i>
             </div>
@@ -700,9 +700,9 @@
                 <h3 class="modal-header-title" id="runDetailsTitle">ETL Run #—</h3>
                 <div class="modal-header-subtitle">ETL run details and execution log</div>
             </div>
-            <span class="etl-header-status-badge" id="runDetailsStatusBadge">
-                <i class="fas fa-spinner fa-spin"></i> Loading…
-            </span>
+            <div class="modal-header-status-circle pending" id="runDetailsStatusBadge">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
         </div>
 
         <!-- Body -->
@@ -891,7 +891,7 @@
 <div id="addSourceModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-etl-wizard">
         <!-- Modal Header — gradient (matches configs-page wizard style) -->
-        <div class="modal-header modal-header-gradient gradient-etl-job" id="etlJobModalHeader">
+        <div class="modal-header-soft soft-etl-job" id="etlJobModalHeader">
             <div class="modal-header-icon-badge" id="etlJobModalIcon">
                 <i class="fas fa-database"></i>
             </div>
@@ -902,7 +902,7 @@
         </div>
 
         <!-- Step Navigation — overlapping nav bar -->
-        <div class="wizard-nav-bar">
+        <div class="wizard-nav-bar pill-etl-job" id="etlJobNavBar">
             <div class="wizard-nav-pills">
                 <div id="progress1" class="wizard-step-pill current">Connection</div>
                 <div id="progress2" class="wizard-step-pill future">Tables</div>
@@ -1686,7 +1686,7 @@
 <div id="createConnectionModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-connection-wizard">
         <!-- Modal Header — gradient (matches configs-page wizard style) -->
-        <div class="modal-header modal-header-gradient gradient-connection" id="connModalHeader">
+        <div class="modal-header-soft soft-connection" id="connModalHeader">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-plug"></i>
             </div>
@@ -1697,7 +1697,7 @@
         </div>
 
         <!-- Step Navigation — overlapping nav bar -->
-        <div class="wizard-nav-bar">
+        <div class="wizard-nav-bar pill-connection">
             <div class="wizard-nav-pills">
                 <div id="connProgress1" class="wizard-step-pill current">Type</div>
                 <div id="connProgress2" class="wizard-step-pill future">Configure</div>
@@ -2688,7 +2688,7 @@
 <div id="editJobModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-etl-wizard" style="height: 580px;">
         <!-- Modal Header — gradient (matches Add ETL Job wizard style) -->
-        <div class="modal-header modal-header-gradient gradient-etl-job">
+        <div class="modal-header-soft soft-etl-job">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-edit"></i>
             </div>
@@ -4607,8 +4607,9 @@ function viewRunDetails(runId) {
     contentDiv.style.display = 'none';
     contentDiv.classList.add('hidden');
     document.getElementById('runDetailsTitle').textContent = `ETL Run #${runId}`;
-    document.getElementById('runDetailsHeader').className = 'modal-header modal-header-gradient gradient-etl-pending flex-shrink-0';
-    document.getElementById('runDetailsStatusBadge').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading…';
+    document.getElementById('runDetailsHeader').className = 'modal-header-soft soft-etl-pending flex-shrink-0';
+    document.getElementById('runDetailsStatusBadge').className = 'modal-header-status-circle pending';
+    document.getElementById('runDetailsStatusBadge').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
     // Reset logs section to initial empty state
     const logsContainer = document.getElementById('runDetailsLogsContainer');
@@ -4662,8 +4663,9 @@ function populateRunDetailsModal(data) {
         partial:    { icon: 'fa-exclamation',     cls: 'running',   label: 'Partial' },
     };
     const s = statusMap[data.status] || { icon: 'fa-circle', cls: 'pending', label: 'Pending' };
-    header.className = `modal-header modal-header-gradient gradient-etl-${s.cls} flex-shrink-0`;
-    statusBadge.innerHTML = `<i class="fas ${s.icon}"></i> ${s.label}`;
+    header.className = `modal-header-soft soft-etl-${s.cls} flex-shrink-0`;
+    statusBadge.className = `modal-header-status-circle ${s.cls}`;
+    statusBadge.innerHTML = `<i class="fas ${s.icon}"></i>`;
 
     // Job Information
     document.getElementById('runDetailsJobName').textContent = data.job_name || '—';
@@ -6835,14 +6837,17 @@ function showAddSourceModal(resumeStep = 1) {
     const modalTitle = document.getElementById('etlJobModalTitle');
     const modalHeader = document.getElementById('etlJobModalHeader');
     const modalIcon = document.getElementById('etlJobModalIcon');
+    const navBar = document.getElementById('etlJobNavBar');
     if (wizardStandaloneMode) {
         modalTitle.textContent = wizardEditConnectionId ? 'Edit Connection' : 'Create Connection';
-        modalHeader.className = 'modal-header modal-header-gradient gradient-connection';
+        modalHeader.className = 'modal-header-soft soft-connection';
         modalIcon.innerHTML = '<i class="fas fa-plug"></i>';
+        if (navBar) { navBar.classList.remove('pill-etl-job'); navBar.classList.add('pill-connection'); }
     } else {
         if (!wizardEditMode) modalTitle.textContent = 'Add ETL Job';
-        modalHeader.className = 'modal-header modal-header-gradient gradient-etl-job';
+        modalHeader.className = 'modal-header-soft soft-etl-job';
         modalIcon.innerHTML = '<i class="fas fa-database"></i>';
+        if (navBar) { navBar.classList.remove('pill-connection'); navBar.classList.add('pill-etl-job'); }
     }
 
     // In edit mode, use the provided resumeStep; otherwise start at step 1

@@ -202,6 +202,237 @@
 }
 .etl-header-status-badge i { font-size: 9px; }
 
+/* ============================================================================
+   SOFT TINTED GRADIENT HEADERS
+   ============================================================================
+   Pastel-to-medium gradients with dark text for a light, modern look.
+   Each variant defines its own icon-badge bg, title color, subtitle color.
+   ============================================================================ */
+
+/* Shared base — layout identical to modal-header-gradient */
+.modal-header-soft {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 24px;
+    border-bottom: none;
+    min-height: 80px;
+}
+.modal-header-soft .modal-header-title {
+    font-size: 22px;
+    font-weight: 700;
+}
+.modal-header-soft .modal-header-subtitle {
+    font-size: 12px;
+    margin-top: 2px;
+}
+.modal-header-soft .modal-header-icon-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.modal-header-soft .modal-header-icon-badge i {
+    font-size: 20px;
+    color: #ffffff;
+}
+
+/* --- Connection (emerald) --- */
+.modal-header-soft.soft-connection {
+    background: linear-gradient(135deg, #d1fae5 0%, #6ee7b7 50%, #059669 100%);
+}
+.modal-header-soft.soft-connection .modal-header-icon-badge { background: #059669; }
+.modal-header-soft.soft-connection .modal-header-title { color: #064e3b; }
+.modal-header-soft.soft-connection .modal-header-subtitle { color: #065f46; }
+
+/* --- ETL Job (orange) --- */
+.modal-header-soft.soft-etl-job {
+    background: linear-gradient(135deg, #ffedd5 0%, #fdba74 50%, #ea580c 100%);
+}
+.modal-header-soft.soft-etl-job .modal-header-icon-badge { background: #ea580c; }
+.modal-header-soft.soft-etl-job .modal-header-title { color: #7c2d12; }
+.modal-header-soft.soft-etl-job .modal-header-subtitle { color: #9a3412; }
+
+/* --- Training (indigo) --- */
+.modal-header-soft.soft-training {
+    background: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 50%, #4f46e5 100%);
+}
+.modal-header-soft.soft-training .modal-header-icon-badge { background: #4f46e5; }
+.modal-header-soft.soft-training .modal-header-title { color: #312e81; }
+.modal-header-soft.soft-training .modal-header-subtitle { color: #3730a3; }
+
+/* --- Experiment (cyan) --- */
+.modal-header-soft.soft-experiment {
+    background: linear-gradient(135deg, #cffafe 0%, #67e8f9 50%, #0891b2 100%);
+}
+.modal-header-soft.soft-experiment .modal-header-icon-badge { background: #0891b2; }
+.modal-header-soft.soft-experiment .modal-header-title { color: #164e63; }
+.modal-header-soft.soft-experiment .modal-header-subtitle { color: #155e75; }
+
+/* --- Dataset (teal) --- */
+.modal-header-soft.soft-dataset {
+    background: linear-gradient(135deg, #ccfbf1 0%, #5eead4 50%, #0d9488 100%);
+}
+.modal-header-soft.soft-dataset .modal-header-icon-badge { background: #0d9488; }
+.modal-header-soft.soft-dataset .modal-header-title { color: #134e4a; }
+.modal-header-soft.soft-dataset .modal-header-subtitle { color: #115e59; }
+
+/* --- Feature (blue) --- */
+.modal-header-soft.soft-feature {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-feature .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-feature .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-feature .modal-header-subtitle { color: #1e40af; }
+
+/* --- Model (purple) --- */
+.modal-header-soft.soft-model {
+    background: linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #7c3aed 100%);
+}
+.modal-header-soft.soft-model .modal-header-icon-badge { background: #7c3aed; }
+.modal-header-soft.soft-model .modal-header-title { color: #3b1f6e; }
+.modal-header-soft.soft-model .modal-header-subtitle { color: #5b21b6; }
+
+/* --- SQL (blue) --- */
+.modal-header-soft.soft-sql {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #1e40af 100%);
+}
+.modal-header-soft.soft-sql .modal-header-icon-badge { background: #1e40af; }
+.modal-header-soft.soft-sql .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-sql .modal-header-subtitle { color: #1e40af; }
+
+/* --- Code (purple) --- */
+.modal-header-soft.soft-code {
+    background: linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #7c3aed 100%);
+}
+.modal-header-soft.soft-code .modal-header-icon-badge { background: #7c3aed; }
+.modal-header-soft.soft-code .modal-header-title { color: #3b1f6e; }
+.modal-header-soft.soft-code .modal-header-subtitle { color: #5b21b6; }
+
+/* --- Compare (amber) --- */
+.modal-header-soft.soft-compare {
+    background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #d97706 100%);
+}
+.modal-header-soft.soft-compare .modal-header-icon-badge { background: #d97706; }
+.modal-header-soft.soft-compare .modal-header-title { color: #713f12; }
+.modal-header-soft.soft-compare .modal-header-subtitle { color: #92400e; }
+
+/* --- ETL Run status variants --- */
+.modal-header-soft.soft-etl-completed {
+    background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);
+}
+.modal-header-soft.soft-etl-completed .modal-header-icon-badge { background: #16a34a; }
+.modal-header-soft.soft-etl-completed .modal-header-title { color: #14532d; }
+.modal-header-soft.soft-etl-completed .modal-header-subtitle { color: #166534; }
+
+.modal-header-soft.soft-etl-failed {
+    background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 50%, #dc2626 100%);
+}
+.modal-header-soft.soft-etl-failed .modal-header-icon-badge { background: #dc2626; }
+.modal-header-soft.soft-etl-failed .modal-header-title { color: #7f1d1d; }
+.modal-header-soft.soft-etl-failed .modal-header-subtitle { color: #991b1b; }
+
+.modal-header-soft.soft-etl-running {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-etl-running .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-etl-running .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-etl-running .modal-header-subtitle { color: #1e40af; }
+
+.modal-header-soft.soft-etl-cancelled {
+    background: linear-gradient(135deg, #f3f4f6 0%, #d1d5db 50%, #6b7280 100%);
+}
+.modal-header-soft.soft-etl-cancelled .modal-header-icon-badge { background: #6b7280; }
+.modal-header-soft.soft-etl-cancelled .modal-header-title { color: #1f2937; }
+.modal-header-soft.soft-etl-cancelled .modal-header-subtitle { color: #374151; }
+
+.modal-header-soft.soft-etl-pending {
+    background: linear-gradient(135deg, #f9fafb 0%, #e5e7eb 50%, #9ca3af 100%);
+}
+.modal-header-soft.soft-etl-pending .modal-header-icon-badge { background: #9ca3af; }
+.modal-header-soft.soft-etl-pending .modal-header-title { color: #374151; }
+.modal-header-soft.soft-etl-pending .modal-header-subtitle { color: #4b5563; }
+
+/* --- Status Circle (big circular icon for ETL run details) --- */
+.modal-header-status-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+.modal-header-status-circle i {
+    font-size: 20px;
+    color: #ffffff;
+}
+.modal-header-status-circle.completed { background: #16a34a; }
+.modal-header-status-circle.failed    { background: #dc2626; }
+.modal-header-status-circle.running   { background: #2563eb; }
+.modal-header-status-circle.cancelled { background: #6b7280; }
+.modal-header-status-circle.pending   { background: #9ca3af; }
+
+/* ============================================================================
+   WIZARD NAV PILL COLOR OVERRIDES
+   ============================================================================
+   Per-domain color variants for .wizard-nav-bar pill active/completed states.
+   Place after the base wizard-nav-bar rules so these take precedence.
+   ============================================================================ */
+
+/* Connection (emerald) */
+.wizard-nav-bar.pill-connection .wizard-step-pill.current {
+    background-color: #059669;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+}
+.wizard-nav-bar.pill-connection .wizard-step-pill.completed { color: #059669; }
+
+/* ETL Job (orange) */
+.wizard-nav-bar.pill-etl-job .wizard-step-pill.current {
+    background-color: #ea580c;
+    box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);
+}
+.wizard-nav-bar.pill-etl-job .wizard-step-pill.completed { color: #ea580c; }
+
+/* Training (indigo) */
+.wizard-nav-bar.pill-training .wizard-step-pill.current {
+    background-color: #4f46e5;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+}
+.wizard-nav-bar.pill-training .wizard-step-pill.completed { color: #4f46e5; }
+
+/* Experiment (cyan) */
+.wizard-nav-bar.pill-experiment .wizard-step-pill.current {
+    background-color: #0891b2;
+    box-shadow: 0 2px 6px rgba(8, 145, 178, 0.3);
+}
+.wizard-nav-bar.pill-experiment .wizard-step-pill.completed { color: #0891b2; }
+
+/* Dataset (teal) */
+.wizard-nav-bar.pill-dataset .wizard-step-pill.current {
+    background-color: #0d9488;
+    box-shadow: 0 2px 6px rgba(13, 148, 136, 0.3);
+}
+.wizard-nav-bar.pill-dataset .wizard-step-pill.completed { color: #0d9488; }
+
+/* Feature (blue) */
+.wizard-nav-bar.pill-feature .wizard-step-pill.current {
+    background-color: #2563eb;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+.wizard-nav-bar.pill-feature .wizard-step-pill.completed { color: #2563eb; }
+
+/* Model (purple) */
+.wizard-nav-bar.pill-model .wizard-step-pill.current {
+    background-color: #7c3aed;
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.3);
+}
+.wizard-nav-bar.pill-model .wizard-step-pill.completed { color: #7c3aed; }
+
 /* Python Code Modal — light code area (mirrors sql-code-light) */
 .python-code-light {
     background: #ffffff;

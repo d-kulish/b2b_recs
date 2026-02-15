@@ -88,23 +88,23 @@
 <div id="datasetWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-dataset-wizard">
         <!-- Modal Header -->
-        <div class="modal-header-wizard">
-            <div class="modal-header-content">
-                <div class="modal-header-icon info">
-                    <i class="fas fa-table text-lg"></i>
-                </div>
-                <div class="modal-header-info">
-                    <h3 class="modal-header-title" id="wizardTitle">Create Dataset</h3>
-                    <p class="modal-step-counter">Step <span id="currentStep">1</span> of 4</p>
-                </div>
+        <div class="modal-header-soft soft-dataset">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-table"></i>
             </div>
+            <div>
+                <h3 class="modal-header-title" id="wizardTitle">Create Dataset</h3>
+                <div class="modal-header-subtitle">Step <span id="currentStep">1</span> of 4</div>
+            </div>
+        </div>
 
-            <!-- Progress Bar -->
-            <div class="progress-bar-pills">
-                <div id="progress1" class="progress-step-pill current">Info</div>
-                <div id="progress2" class="progress-step-pill future">Tables</div>
-                <div id="progress3" class="progress-step-pill future">Schema</div>
-                <div id="progress4" class="progress-step-pill future">Filters</div>
+        <!-- Step Navigation — overlapping nav bar -->
+        <div class="wizard-nav-bar pill-dataset">
+            <div class="wizard-nav-pills">
+                <div id="progress1" class="wizard-step-pill current">Info</div>
+                <div id="progress2" class="wizard-step-pill future">Tables</div>
+                <div id="progress3" class="wizard-step-pill future">Schema</div>
+                <div id="progress4" class="wizard-step-pill future">Filters</div>
             </div>
         </div>
 
@@ -1465,7 +1465,7 @@
 <!-- Query Preview Modal -->
 <div id="queryModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-xl">
-        <div class="modal-header modal-header-gradient gradient-sql">
+        <div class="modal-header-soft soft-sql">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-terminal"></i>
             </div>

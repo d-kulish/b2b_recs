@@ -4589,7 +4589,7 @@
 <div id="dsWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard modal-dataset-wizard">
         <!-- Modal Header — gradient (matches dataset view modal) -->
-        <div class="modal-header modal-header-gradient gradient-dataset">
+        <div class="modal-header-soft soft-dataset">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-table"></i>
             </div>
@@ -4600,7 +4600,7 @@
         </div>
 
         <!-- Step Navigation — overlapping nav bar (matches base page style) -->
-        <div class="wizard-nav-bar">
+        <div class="wizard-nav-bar pill-dataset">
             <div class="wizard-nav-pills">
                 <div id="dsProgress1" class="wizard-step-pill current">Info</div>
                 <div id="dsProgress2" class="wizard-step-pill future">Tables</div>
@@ -5085,7 +5085,7 @@
 <!-- Dataset Compare Modal -->
 <div id="dsCompareModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 1000px;">
-        <div class="modal-header modal-header-gradient gradient-compare">
+        <div class="modal-header-soft soft-compare">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
@@ -5210,7 +5210,7 @@
 <div id="dsDetailModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 880px; max-height: 85vh; display: flex; flex-direction: column;">
         <!-- Header — gradient background with title + icon -->
-        <div class="modal-header modal-header-gradient gradient-dataset flex-shrink-0">
+        <div class="modal-header-soft soft-dataset flex-shrink-0">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-database"></i>
             </div>
@@ -5237,7 +5237,7 @@
 <!-- Dataset Query Preview Modal -->
 <div id="dsQueryModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-xl">
-        <div class="modal-header modal-header-gradient gradient-sql">
+        <div class="modal-header-soft soft-sql">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-terminal"></i>
             </div>
@@ -6007,7 +6007,7 @@
 <div id="modelConfigWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard" style="max-width: 1000px;">
         <!-- Modal Header — gradient (matches dataset wizard) -->
-        <div class="modal-header modal-header-gradient gradient-model">
+        <div class="modal-header-soft soft-model">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-layer-group"></i>
             </div>
@@ -6018,7 +6018,7 @@
         </div>
 
         <!-- Step Navigation — overlapping nav bar -->
-        <div class="wizard-nav-bar">
+        <div class="wizard-nav-bar pill-model">
             <div class="wizard-nav-pills">
                 <div id="mcProgress1" class="wizard-step-pill current">Basic Info</div>
                 <div id="mcProgress2" class="wizard-step-pill future">Architecture</div>
@@ -6850,7 +6850,7 @@
 <!-- Model Config View Modal -->
 <div id="modelConfigViewModal" class="modal-overlay hidden" onclick="closeModelConfigViewModal(event)">
     <div class="modal-container" style="max-width: 880px; max-height: 85vh; display: flex; flex-direction: column;" onclick="event.stopPropagation()">
-        <div class="modal-header modal-header-gradient gradient-model flex-shrink-0">
+        <div class="modal-header-soft soft-model flex-shrink-0">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-layer-group"></i>
             </div>
@@ -6909,7 +6909,7 @@
 <!-- Compare Model Configs Modal -->
 <div id="compareModelConfigsModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 1000px;">
-        <div class="modal-header modal-header-gradient gradient-compare">
+        <div class="modal-header-soft soft-compare">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
@@ -7077,7 +7077,7 @@
 <div id="featureConfigWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard" style="max-width: 1000px;">
         <!-- Modal Header — gradient (matches dataset wizard) -->
-        <div class="modal-header modal-header-gradient gradient-feature">
+        <div class="modal-header-soft soft-feature">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-cogs"></i>
             </div>
@@ -7088,7 +7088,7 @@
         </div>
 
         <!-- Step Navigation — overlapping nav bar -->
-        <div class="wizard-nav-bar">
+        <div class="wizard-nav-bar pill-feature">
             <div class="wizard-nav-pills">
                 <div id="progress1" class="wizard-step-pill current">Basic Info</div>
                 <div id="progress2" class="wizard-step-pill future">Features</div>
@@ -7531,7 +7531,7 @@
 <!-- View Config Modal -->
 <div id="viewConfigModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 880px; max-height: 85vh; display: flex; flex-direction: column;">
-        <div class="modal-header modal-header-gradient gradient-feature flex-shrink-0">
+        <div class="modal-header-soft soft-feature flex-shrink-0">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-eye"></i>
             </div>
@@ -7590,7 +7590,7 @@
 <!-- Compare Feature Sets Modal -->
 <div id="compareModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 1000px;">
-        <div class="modal-header modal-header-gradient gradient-compare">
+        <div class="modal-header-soft soft-compare">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-columns"></i>
             </div>
@@ -7711,7 +7711,7 @@
 <!-- Transform Code Viewer Modal -->
 <div id="transformCodeViewerModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-xl">
-        <div class="modal-header modal-header-gradient gradient-code">
+        <div class="modal-header-soft soft-code">
             <div class="modal-header-icon-badge">
                 <i class="fas fa-code"></i>
             </div>
@@ -7737,14 +7737,14 @@
 <!-- Trainer Code Viewer Modal -->
 <div id="trainerCodeViewerModal" class="modal-overlay hidden">
     <div class="modal-container" style="max-width: 900px;">
-        <div class="modal-header">
-            <div class="modal-header-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
+        <div class="modal-header-soft soft-code">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-brain"></i>
             </div>
-            <h3 class="modal-header-title">Trainer Code</h3>
-            <button type="button" class="modal-close-btn" onclick="closeTrainerCodeViewer()">
-                <i class="fas fa-times"></i>
-            </button>
+            <div>
+                <h3 class="modal-header-title">Trainer Code</h3>
+                <div class="modal-header-subtitle">Auto-generated training code for this model config</div>
+            </div>
         </div>
         <div class="modal-body" style="max-height: 75vh; overflow-y: auto;">
             <!-- Meta info -->

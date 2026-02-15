@@ -221,267 +221,303 @@
     <!-- End of ETL Dashboard -->
 
     <!-- ETL Runs Chapter -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center gap-3 mb-6">
-            <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
-                <i class="fas fa-history text-white text-lg"></i>
-            </div>
-            <div>
-                <h2 class="text-2xl font-bold text-gray-900">ETL Runs</h2>
-                <p class="chapter-subtitle">Track extraction history and logs</p>
+    <div class="chapter-container" data-chapter="etl-runs">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon" style="background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);">
+                        <i class="fas fa-history text-white text-lg"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">ETL Runs</span>
+                        <span class="chapter-subtitle">Track extraction history and logs</span>
+                    </div>
+                </div>
+                <div class="chapter-toggle">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
             </div>
         </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <div class="chapter-divider" style="margin-top: 0;"></div>
 
-        <!-- Filter Bar -->
-        <div class="runs-filter-bar">
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Status</label>
-                <select id="runsStatusFilter" class="runs-filter-select" onchange="filterRuns()">
-                    <option value="">All</option>
-                    <option value="completed">Completed</option>
-                    <option value="failed">Failed</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Connection</label>
-                <select id="runsConnectionFilter" class="runs-filter-select" onchange="filterRuns()">
-                    <option value="">All</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">ETL Job</label>
-                <select id="runsJobFilter" class="runs-filter-select" onchange="filterRuns()">
-                    <option value="">All</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Destination Table</label>
-                <select id="runsDestTableFilter" class="runs-filter-select" onchange="filterRuns()">
-                    <option value="">All</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Load Type</label>
-                <select id="runsLoadTypeFilter" class="runs-filter-select" onchange="filterRuns()">
-                    <option value="">All</option>
-                    <option value="transactional">Transactional</option>
-                    <option value="catalog">Catalog</option>
-                </select>
-            </div>
-            <input type="text" id="runsSearchInput" class="runs-search-input"
-                   placeholder="Search by job name..." onkeyup="debounceRunsSearch()">
-        </div>
+                <!-- Filter Bar -->
+                <div class="runs-filter-bar">
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Status</label>
+                        <select id="runsStatusFilter" class="runs-filter-select" onchange="filterRuns()">
+                            <option value="">All</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Connection</label>
+                        <select id="runsConnectionFilter" class="runs-filter-select" onchange="filterRuns()">
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">ETL Job</label>
+                        <select id="runsJobFilter" class="runs-filter-select" onchange="filterRuns()">
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Destination Table</label>
+                        <select id="runsDestTableFilter" class="runs-filter-select" onchange="filterRuns()">
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Load Type</label>
+                        <select id="runsLoadTypeFilter" class="runs-filter-select" onchange="filterRuns()">
+                            <option value="">All</option>
+                            <option value="transactional">Transactional</option>
+                            <option value="catalog">Catalog</option>
+                        </select>
+                    </div>
+                    <input type="text" id="runsSearchInput" class="runs-search-input"
+                           placeholder="Search by job name..." onkeyup="debounceRunsSearch()">
+                </div>
 
-        <!-- Embedded JSON data for client-side filtering -->
-        <script id="allRunsData" type="application/json">{{ all_runs_json|safe }}</script>
+                <!-- Embedded JSON data for client-side filtering -->
+                <script id="allRunsData" type="application/json">{{ all_runs_json|safe }}</script>
 
-        <!-- Runs Table Container (rendered by JavaScript) -->
-        <div id="runsTableContainer">
-            <!-- Table will be rendered here by JavaScript -->
-        </div>
+                <!-- Runs Table Container (rendered by JavaScript) -->
+                <div id="runsTableContainer">
+                    <!-- Table will be rendered here by JavaScript -->
+                </div>
 
-        <!-- Pagination Container (rendered by JavaScript) -->
-        <div id="runsPaginationContainer">
-            <!-- Pagination will be rendered here by JavaScript -->
-        </div>
+                <!-- Pagination Container (rendered by JavaScript) -->
+                <div id="runsPaginationContainer">
+                    <!-- Pagination will be rendered here by JavaScript -->
+                </div>
 
-        <!-- Empty State Container (shown/hidden by JavaScript) -->
-        <div id="runsEmptyState" class="hidden text-center py-8 bg-gray-50 rounded-lg">
-            <i id="runsEmptyIcon" class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
-            <p id="runsEmptyTitle" class="text-gray-700 font-semibold">No ETL runs yet</p>
-            <p id="runsEmptySubtitle" class="text-gray-500 text-sm mt-1"></p>
-            <button id="runsEmptyClearBtn" onclick="clearRunsFilters()" class="hidden mt-3 px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all">
-                <i class="fas fa-times mr-1"></i>Clear All Filters
-            </button>
+                <!-- Empty State Container (shown/hidden by JavaScript) -->
+                <div id="runsEmptyState" class="hidden text-center py-8 bg-gray-50 rounded-lg">
+                    <i id="runsEmptyIcon" class="fas fa-inbox text-gray-400 text-3xl mb-3"></i>
+                    <p id="runsEmptyTitle" class="text-gray-700 font-semibold">No ETL runs yet</p>
+                    <p id="runsEmptySubtitle" class="text-gray-500 text-sm mt-1"></p>
+                    <button id="runsEmptyClearBtn" onclick="clearRunsFilters()" class="hidden mt-3 px-4 py-2 text-sm font-semibold text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-all">
+                        <i class="fas fa-times mr-1"></i>Clear All Filters
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     <!-- End of ETL Runs -->
 
     <!-- Connections Chapter -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
-                    <i class="fas fa-plug text-white text-lg"></i>
+    <div class="chapter-container" data-chapter="connections">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);">
+                        <i class="fas fa-plug text-white text-lg"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">Connections</span>
+                        <span class="chapter-subtitle">Manage database and storage credentials</span>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">Connections</h2>
-                    <p class="chapter-subtitle">Manage database and storage credentials</p>
+                <div class="chapter-header-actions">
+                    <div class="btn-group">
+                        <button onclick="refreshConnections(); event.stopPropagation();" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;" title="Refresh and test all connections">
+                            <i class="fas fa-sync-alt"></i>Test Connections
+                        </button>
+                        <button onclick="openCreateConnectionModal(); event.stopPropagation();" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
+                            <i class="fas fa-plus"></i>Connection
+                        </button>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
             </div>
-            <div class="btn-group">
-                <button onclick="refreshConnections()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;" title="Refresh and test all connections">
-                    <i class="fas fa-sync-alt"></i>Test Connections
-                </button>
-                <button onclick="openCreateConnectionModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
-                    <i class="fas fa-plus"></i>Connection
-                </button>
-            </div>
         </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <div class="chapter-divider" style="margin-top: 0;"></div>
 
-        <!-- Filter Bar for Connections -->
-        <div class="runs-filter-bar">
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Status</label>
-                <select id="connectionsStatusFilter" class="runs-filter-select" onchange="handleConnectionsFilters()">
-                    <option value="">All</option>
-                    <option value="success">Working</option>
-                    <option value="failed">Failed</option>
-                    <option value="unknown">Not Tested</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Type</label>
-                <select id="connectionsTypeFilter" class="runs-filter-select" onchange="handleConnectionsFilters()">
-                    <option value="">All</option>
-                    <option value="relational">Relational</option>
-                    <option value="cloud_storage">Cloud Storage</option>
-                    <option value="nosql">NoSQL</option>
-                </select>
-            </div>
-            <input type="text" id="connectionsSearch" class="runs-search-input"
-                   placeholder="Search connections..."
-                   autocomplete="off"
-                   data-lpignore="true"
-                   data-form-type="other"
-                   oninput="handleConnectionsSearch()">
-        </div>
+                <!-- Filter Bar for Connections -->
+                <div class="runs-filter-bar">
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Status</label>
+                        <select id="connectionsStatusFilter" class="runs-filter-select" onchange="handleConnectionsFilters()">
+                            <option value="">All</option>
+                            <option value="success">Working</option>
+                            <option value="failed">Failed</option>
+                            <option value="unknown">Not Tested</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Type</label>
+                        <select id="connectionsTypeFilter" class="runs-filter-select" onchange="handleConnectionsFilters()">
+                            <option value="">All</option>
+                            <option value="relational">Relational</option>
+                            <option value="cloud_storage">Cloud Storage</option>
+                            <option value="nosql">NoSQL</option>
+                        </select>
+                    </div>
+                    <input type="text" id="connectionsSearch" class="runs-search-input"
+                           placeholder="Search connections..."
+                           autocomplete="off"
+                           data-lpignore="true"
+                           data-form-type="other"
+                           oninput="handleConnectionsSearch()">
+                </div>
 
-        <!-- Connections List Container -->
-        <div id="connectionsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" style="min-height: 120px;">
-            <!-- Connection cards will be inserted here by JavaScript -->
-            <div class="card-empty-state col-span-full">
-                <p class="card-empty-state-title">No database connections configured</p>
-                <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
-            </div>
-        </div>
+                <!-- Connections List Container -->
+                <div id="connectionsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-start" style="min-height: 120px;">
+                    <!-- Connection cards will be inserted here by JavaScript -->
+                    <div class="card-empty-state col-span-full">
+                        <p class="card-empty-state-title">No database connections configured</p>
+                        <p class="card-empty-state-text">Create your first connection to get started with data ingestion</p>
+                    </div>
+                </div>
 
-        <!-- Connections Pagination -->
-        <div id="connectionsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
-            <div id="connectionsShowingText" class="text-sm text-gray-600"></div>
-            <div id="connectionsPaginationControls" class="flex items-center gap-1"></div>
+                <!-- Connections Pagination -->
+                <div id="connectionsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                    <div id="connectionsShowingText" class="text-sm text-gray-600"></div>
+                    <div id="connectionsPaginationControls" class="flex items-center gap-1"></div>
+                </div>
+            </div>
         </div>
     </div>
     <!-- End of Connections Chapter -->
 
     <!-- ETL Jobs Chapter -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
-                    <i class="fas fa-database text-white text-lg"></i>
+    <div class="chapter-container" data-chapter="etl-jobs">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+                        <i class="fas fa-database text-white text-lg"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">ETL Jobs</span>
+                        <span class="chapter-subtitle">Configure data extraction pipelines</span>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">ETL Jobs</h2>
-                    <p class="chapter-subtitle">Configure data extraction pipelines</p>
+                <div class="chapter-header-actions">
+                    <div class="btn-group">
+                        <button onclick="showAddSourceModal(); event.stopPropagation();" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
+                            <i class="fas fa-plus"></i>ETL Job
+                        </button>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
             </div>
-            <div class="btn-group">
-                <button onclick="showAddSourceModal()" class="btn btn-secondary btn-sm" style="width: 150px; min-width: 150px; max-width: 150px;">
-                    <i class="fas fa-plus"></i>ETL Job
-                </button>
-            </div>
         </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <div class="chapter-divider" style="margin-top: 0;"></div>
 
-        <!-- Filter Bar for ETL Jobs -->
-        <div class="runs-filter-bar">
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Status</label>
-                <select id="jobsStatusFilter" class="runs-filter-select" onchange="handleJobsFilters()">
-                    <option value="">All</option>
-                    <option value="active">Active</option>
-                    <option value="paused">Paused</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Connection</label>
-                <select id="jobsConnectionFilter" class="runs-filter-select" onchange="handleJobsFilters()">
-                    <option value="">All</option>
-                    <!-- Populated dynamically by JavaScript -->
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Schedule</label>
-                <select id="jobsScheduleFilter" class="runs-filter-select" onchange="handleJobsFilters()">
-                    <option value="">All</option>
-                    <option value="manual">Manual</option>
-                    <option value="hourly">Hourly</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Destination Table</label>
-                <select id="jobsDestTableFilter" class="runs-filter-select" onchange="handleJobsFilters()">
-                    <option value="">All</option>
-                    <!-- Populated dynamically by JavaScript -->
-                </select>
-            </div>
-            <div class="runs-filter-group">
-                <label class="runs-filter-label">Load Type</label>
-                <select id="jobsLoadTypeFilter" class="runs-filter-select" onchange="handleJobsFilters()">
-                    <option value="">All</option>
-                    <option value="relational">Relational</option>
-                    <option value="nosql">NoSQL</option>
-                    <option value="cloud_storage">Cloud Storage</option>
-                </select>
-            </div>
-            <input type="text" id="jobsSearch" class="runs-search-input"
-                   placeholder="Search ETL jobs..."
-                   autocomplete="off"
-                   data-lpignore="true"
-                   data-form-type="other"
-                   oninput="handleJobsSearch()">
-        </div>
+                <!-- Filter Bar for ETL Jobs -->
+                <div class="runs-filter-bar">
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Status</label>
+                        <select id="jobsStatusFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                            <option value="">All</option>
+                            <option value="active">Active</option>
+                            <option value="paused">Paused</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Connection</label>
+                        <select id="jobsConnectionFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                            <option value="">All</option>
+                            <!-- Populated dynamically by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Schedule</label>
+                        <select id="jobsScheduleFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                            <option value="">All</option>
+                            <option value="manual">Manual</option>
+                            <option value="hourly">Hourly</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Destination Table</label>
+                        <select id="jobsDestTableFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                            <option value="">All</option>
+                            <!-- Populated dynamically by JavaScript -->
+                        </select>
+                    </div>
+                    <div class="runs-filter-group">
+                        <label class="runs-filter-label">Load Type</label>
+                        <select id="jobsLoadTypeFilter" class="runs-filter-select" onchange="handleJobsFilters()">
+                            <option value="">All</option>
+                            <option value="relational">Relational</option>
+                            <option value="nosql">NoSQL</option>
+                            <option value="cloud_storage">Cloud Storage</option>
+                        </select>
+                    </div>
+                    <input type="text" id="jobsSearch" class="runs-search-input"
+                           placeholder="Search ETL jobs..."
+                           autocomplete="off"
+                           data-lpignore="true"
+                           data-form-type="other"
+                           oninput="handleJobsSearch()">
+                </div>
 
-        <!-- ETL Jobs List Container -->
-        <div id="etlJobsList" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start" style="min-height: 120px;">
-            <!-- Job cards will be inserted here by JavaScript -->
-            <div class="card-empty-state col-span-full">
-                <p class="card-empty-state-title">No ETL jobs configured</p>
-                <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
-            </div>
-        </div>
+                <!-- ETL Jobs List Container -->
+                <div id="etlJobsList" class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start" style="min-height: 120px;">
+                    <!-- Job cards will be inserted here by JavaScript -->
+                    <div class="card-empty-state col-span-full">
+                        <p class="card-empty-state-title">No ETL jobs configured</p>
+                        <p class="card-empty-state-text">Set up your first data pipeline to begin importing data</p>
+                    </div>
+                </div>
 
-        <!-- ETL Jobs Pagination -->
-        <div id="jobsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
-            <div id="jobsShowingText" class="text-sm text-gray-600"></div>
-            <div id="jobsPaginationControls" class="flex items-center gap-1"></div>
-        </div>
+                <!-- ETL Jobs Pagination -->
+                <div id="jobsPagination" class="hidden flex flex-col sm:flex-row items-center justify-between mt-4 pt-4 border-t border-gray-200 gap-2">
+                    <div id="jobsShowingText" class="text-sm text-gray-600"></div>
+                    <div id="jobsPaginationControls" class="flex items-center gap-1"></div>
+                </div>
 
-        <!-- ETL Jobs Data (JSON for JavaScript) -->
-        <script type="application/json" id="etlJobsData">
-        [
-            {% for source in data_sources %}
-            {
-                "id": {{ source.id }},
-                "name": "{{ source.name|escapejs }}",
-                "is_enabled": {{ source.is_enabled|yesno:"true,false" }},
-                "schedule_type": "{{ source.schedule_type|default:'manual'|escapejs }}",
-                "connection_name": "{{ source.connection.name|default:''|escapejs }}",
-                "source_type": "{{ source.connection.source_type|default:''|escapejs }}",
-                "cloud_scheduler_job_name": "{{ source.cloud_scheduler_job_name|default:''|escapejs }}",
-                "tables": [
-                    {% for table in source.tables.all %}
+                <!-- ETL Jobs Data (JSON for JavaScript) -->
+                <script type="application/json" id="etlJobsData">
+                [
+                    {% for source in data_sources %}
                     {
-                        "source_table_name": "{{ table.source_table_name|escapejs }}",
-                        "dest_table_name": "{{ table.dest_table_name|escapejs }}",
-                        "schedule_minute": {{ table.schedule_minute|default:"0" }},
-                        "schedule_time": "{{ table.schedule_time|default:'09:00'|time:'H:i' }}",
-                        "schedule_day_of_week": {{ table.schedule_day_of_week|default:"0" }}
+                        "id": {{ source.id }},
+                        "name": "{{ source.name|escapejs }}",
+                        "is_enabled": {{ source.is_enabled|yesno:"true,false" }},
+                        "schedule_type": "{{ source.schedule_type|default:'manual'|escapejs }}",
+                        "connection_name": "{{ source.connection.name|default:''|escapejs }}",
+                        "source_type": "{{ source.connection.source_type|default:''|escapejs }}",
+                        "cloud_scheduler_job_name": "{{ source.cloud_scheduler_job_name|default:''|escapejs }}",
+                        "tables": [
+                            {% for table in source.tables.all %}
+                            {
+                                "source_table_name": "{{ table.source_table_name|escapejs }}",
+                                "dest_table_name": "{{ table.dest_table_name|escapejs }}",
+                                "schedule_minute": {{ table.schedule_minute|default:"0" }},
+                                "schedule_time": "{{ table.schedule_time|default:'09:00'|time:'H:i' }}",
+                                "schedule_day_of_week": {{ table.schedule_day_of_week|default:"0" }}
+                            }{% if not forloop.last %},{% endif %}
+                            {% endfor %}
+                        ],
+                        "last_run": {% with last_run=source.runs.first %}{% if last_run %}{
+                            "started_at": "{% timezone "Europe/Kiev" %}{{ last_run.started_at|date:'M d, H:i' }}{% endtimezone %}",
+                            "status": "{{ last_run.status }}"
+                        }{% else %}null{% endif %}{% endwith %}
                     }{% if not forloop.last %},{% endif %}
                     {% endfor %}
-                ],
-                "last_run": {% with last_run=source.runs.first %}{% if last_run %}{
-                    "started_at": "{% timezone "Europe/Kiev" %}{{ last_run.started_at|date:'M d, H:i' }}{% endtimezone %}",
-                    "status": "{{ last_run.status }}"
-                }{% else %}null{% endif %}{% endwith %}
-            }{% if not forloop.last %},{% endif %}
-            {% endfor %}
-        ]
-        </script>
+                ]
+                </script>
+            </div>
+        </div>
     </div>
     <!-- End of ETL Jobs Chapter -->
 

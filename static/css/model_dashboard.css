@@ -102,6 +102,17 @@
     margin-top: 2px;
 }
 
+.chapter-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.chapter-header-actions .btn-group {
+    display: flex;
+    gap: 8px;
+}
+
 .chapter-toggle {
     width: 32px;
     height: 32px;
@@ -133,7 +144,7 @@
 }
 
 .chapter-container.open .chapter-content {
-    max-height: 3000px;
+    max-height: 5000px;
     transition: max-height 0.5s ease-in;
 }
 

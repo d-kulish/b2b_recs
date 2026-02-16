@@ -142,6 +142,18 @@
 
             <!-- Code Examples Tab -->
             <div id="integrateTabCode" class="integrate-tab-content">
+                <!-- Mode Toggle (Single/Batch) -->
+                <div class="integrate-mode-toggle" id="integrateCodeModeToggle">
+                    <button class="integrate-mode-btn active" data-mode="single"
+                            onclick="IntegrateModal.switchTestMode('single')">
+                        <i class="fas fa-user"></i> Single
+                    </button>
+                    <button class="integrate-mode-btn" data-mode="batch"
+                            onclick="IntegrateModal.switchTestMode('batch')">
+                        <i class="fas fa-layer-group"></i> Batch
+                    </button>
+                </div>
+
                 <!-- Language Tabs -->
                 <div class="integrate-code-tabs">
                     <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">

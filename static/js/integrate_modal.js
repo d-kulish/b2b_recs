@@ -329,12 +329,11 @@ const IntegrateModal = (function() {
                 btn.classList.toggle('active', btn.dataset.mode === 'single');
             });
 
-            // Hide toggle for multitask models (batch not supported)
-            const modeToggle = document.getElementById('integrateModeToggle');
-            if (modeToggle) {
-                const modelType = state.endpoint ? state.endpoint.model_type : '';
-                modeToggle.style.display = modelType === 'multitask' ? 'none' : '';
-            }
+            // Hide toggles for multitask models (batch not supported)
+            const modelType = state.endpoint ? state.endpoint.model_type : '';
+            document.querySelectorAll('.integrate-mode-toggle').forEach(toggle => {
+                toggle.style.display = modelType === 'multitask' ? 'none' : '';
+            });
 
             // Hide prediction result row
             document.getElementById('integratePredictResultRow').style.display = 'none';

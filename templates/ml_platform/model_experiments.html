@@ -2396,9 +2396,9 @@
         </div>
     </div>
 
-    <!-- Quick Test Chapter (non-collapsible) -->
+    <!-- Quick Test Chapter -->
     <div class="chapter-container" data-chapter="quick-test">
-        <div class="chapter-header" style="cursor: default;">
+        <div class="chapter-header" onclick="toggleChapter(this)">
             <div class="chapter-header-top">
                 <div class="chapter-title-wrapper">
                     <div class="chapter-icon quick-test">
@@ -2409,17 +2409,22 @@
                         <span class="chapter-subtitle">Run and manage configuration experiments</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="exp_openCompareModal()" class="btn btn-secondary btn-sm" id="compareBtn" style="width: 150px;">
-                        <i class="fas fa-columns mr-1"></i>Compare
-                    </button>
-                    <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
-                        <i class="fas fa-plus mr-1"></i>New Exp
-                    </button>
+                <div class="chapter-header-actions">
+                    <div class="btn-group">
+                        <button onclick="exp_openCompareModal(); event.stopPropagation();" class="btn btn-secondary btn-sm" id="compareBtn" style="width: 160px;">
+                            <i class="fas fa-columns"></i>Compare
+                        </button>
+                        <button onclick="openNewExpWizard(); event.stopPropagation();" class="btn btn-primary btn-sm" style="width: 160px;">
+                            <i class="fas fa-plus"></i>New Exp
+                        </button>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
             </div>
-            <div class="chapter-divider" style="margin-bottom: 0;"></div>
         </div>
+        <div class="chapter-content">
         <div class="chapter-content-inner">
 
             <!-- Filter Bar -->
@@ -2475,7 +2480,7 @@
 
                 <!-- Empty state (no experiments) -->
                 <div id="expEmpty" class="chapter-empty-state hidden">
-                    <i class="fas fa-flask chapter-empty-icon"></i>
+                    <i class="fas fa-bolt chapter-empty-icon"></i>
                     <p class="chapter-empty-text">No experiments yet</p>
                     <p class="text-sm text-gray-400 mt-2">Run your first experiment to test feature and model configurations</p>
                     <button onclick="openNewExpWizard()" class="btn btn-primary btn-sm mt-4">
@@ -2509,6 +2514,7 @@
                 </div>
             </div>
         </div>
+        </div>
     </div>
 
 </div>
@@ -2518,10 +2524,10 @@
      ============================================================================ -->
 <div id="newExpWizardModal" class="modal-overlay hidden">
     <div class="modal-container modal-container-wizard" style="max-width: 1000px;">
-        <!-- Modal Header — gradient (matches experiment compare modal) -->
+        <!-- Modal Header — gradient (matches Quick Test chapter) -->
         <div class="modal-header-soft soft-experiment">
             <div class="modal-header-icon-badge">
-                <i class="fas fa-flask"></i>
+                <i class="fas fa-bolt"></i>
             </div>
             <div>
                 <h3 class="modal-header-title">New Experiment</h3>

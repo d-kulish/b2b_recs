@@ -1115,7 +1115,7 @@
                         </div>
                         <div class="chapter-kpi-card">
                             <div class="chapter-kpi-icon green">
-                                <i class="fas fa-dollar-sign"></i>
+                                <i class="fas fa-euro-sign"></i>
                             </div>
                             <div class="chapter-kpi-content">
                                 <span class="chapter-kpi-value" id="billingTotal">--</span>
@@ -1193,8 +1193,8 @@
                                             <thead>
                                                 <tr>
                                                     <th>Service</th>
-                                                    <th>GCP Cost</th>
-                                                    <th>Platform Fee</th>
+                                                    <th>Costs</th>
+                                                    <th>Discount</th>
                                                     <th>Total</th>
                                                 </tr>
                                             </thead>
@@ -1729,8 +1729,8 @@
                 return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
             }
 
-            function formatUSD(val) {
-                return '$' + Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            function formatEUR(val) {
+                return '€' + Number(val).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
 
             function showNoData(ctx) {
@@ -1771,7 +1771,7 @@
 
                         // KPI header cards
                         setText('billingPeriod', d.period_label);
-                        setText('billingTotal', formatUSD(d.grand_total));
+                        setText('billingTotal', formatEUR(d.grand_total));
 
                         // Progress bar in KPI row
                         const progressFill = document.getElementById('billingProgress');
@@ -1779,7 +1779,7 @@
                         setText('billingProgressLabel', d.days_elapsed + ' / ' + d.days_total + ' days (' + Math.round(d.pct_elapsed) + '%)');
 
                         // Budget bar
-                        const budget = 1000;
+                        const budget = 920;
                         const spent = parseFloat(d.grand_total) || 0;
                         const budgetPct = Math.min((spent / budget) * 100, 100);
                         const budgetFill = document.getElementById('billingBudget');
@@ -1792,7 +1792,7 @@
                                 budgetFill.style.background = 'linear-gradient(90deg, #f59e0b, #fbbf24)';
                             }
                         }
-                        setText('billingBudgetLabel', formatUSD(spent) + ' / ' + formatUSD(budget) + ' (' + Math.round(budgetPct) + '%)');
+                        setText('billingBudgetLabel', formatEUR(spent) + ' / ' + formatEUR(budget) + ' (' + Math.round(budgetPct) + '%)');
 
                     }
                 } catch (error) {
@@ -1857,14 +1857,14 @@
                         datasets: datasets
                     },
                     options: {
-                        ...getChartOptions('USD'),
+                        ...getChartOptions('EUR'),
                         scales: {
                             x: {
                                 stacked: true,
                                 grid: { display: false },
                                 ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }
                             },
-                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'USD' } }
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'EUR' } }
                         }
                     }
                 });
@@ -1894,7 +1894,7 @@
                         drawCtx.fillStyle = '#111827';
                         drawCtx.textAlign = 'center';
                         drawCtx.textBaseline = 'middle';
-                        drawCtx.fillText(formatUSD(grandTotal), cx, cy);
+                        drawCtx.fillText(formatEUR(grandTotal), cx, cy);
                         drawCtx.restore();
                     }
                 };
@@ -1922,7 +1922,7 @@
                             tooltip: {
                                 callbacks: {
                                     label: function(context) {
-                                        return context.label + ': ' + formatUSD(context.parsed);
+                                        return context.label + ': ' + formatEUR(context.parsed);
                                     }
                                 }
                             }
@@ -1965,10 +1965,10 @@
                         datasets: datasets
                     },
                     options: {
-                        ...getChartOptions('USD'),
+                        ...getChartOptions('EUR'),
                         scales: {
                             x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
-                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'USD' } }
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'EUR' } }
                         }
                     }
                 });
@@ -1999,17 +1999,17 @@
                     data: {
                         labels: data.labels,
                         datasets: [{
-                            label: 'Cost (USD)',
+                            label: 'Cost (EUR)',
                             data: data.costs,
                             backgroundColor: barColors,
                             borderRadius: 3,
                         }]
                     },
                     options: {
-                        ...getChartOptions('USD'),
+                        ...getChartOptions('EUR'),
                         scales: {
                             x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 10 } },
-                            y: { beginAtZero: true, title: { display: true, text: 'USD' } }
+                            y: { beginAtZero: true, title: { display: true, text: 'EUR' } }
                         }
                     }
                 });
@@ -2024,16 +2024,16 @@
 
                 let html = '';
 
-                // License row (styled as a category row, first in table)
+                // License row
                 html += '<tr class="billing-category-row" style="cursor: default;">';
                 html += '<td style="padding-left: 30px;">License</td>';
-                html += '<td>' + formatUSD(data.license_fee) + '</td>';
+                html += '<td>' + formatEUR(data.license_fee) + '</td>';
                 if (data.license_discount_pct > 0) {
                     html += '<td>-' + data.license_discount_pct + '%</td>';
                 } else {
                     html += '<td></td>';
                 }
-                html += '<td>' + formatUSD(data.license_net) + '</td>';
+                html += '<td>' + formatEUR(data.license_net) + '</td>';
                 html += '</tr>';
 
                 // Category rows with collapsible service sub-rows
@@ -2043,19 +2043,18 @@
                     html += '<tr class="billing-category-row" data-cat="' + catId + '">';
                     html += '<td><span class="chevron"><i class="fas fa-chevron-right"></i></span>';
                     html += cat.category + '</td>';
-                    html += '<td>' + formatUSD(cat.gcp_cost) + '</td>';
-                    const catMargin = cat.gcp_cost ? Math.round(cat.platform_fee / cat.gcp_cost * 100) : 0;
-                    html += '<td>+ ' + catMargin + '%</td>';
-                    html += '<td>' + formatUSD(cat.total) + '</td>';
+                    html += '<td>' + formatEUR(cat.total) + '</td>';
+                    html += '<td></td>';
+                    html += '<td>' + formatEUR(cat.total) + '</td>';
                     html += '</tr>';
 
                     // Service sub-rows (hidden by default)
                     (cat.services || []).forEach(svc => {
                         html += '<tr class="billing-service-row collapsed" data-cat-parent="' + catId + '">';
                         html += '<td>' + svc.service + '</td>';
-                        html += '<td>' + formatUSD(svc.gcp_cost) + '</td>';
-                        html += '<td>' + formatUSD(svc.platform_fee) + '</td>';
-                        html += '<td>' + formatUSD(svc.total) + '</td>';
+                        html += '<td>' + formatEUR(svc.total) + '</td>';
+                        html += '<td></td>';
+                        html += '<td>' + formatEUR(svc.total) + '</td>';
                         html += '</tr>';
                     });
                 });
@@ -2066,17 +2065,15 @@
                 // Subtotal
                 html += '<tr class="subtotal-row">';
                 html += '<td>Subtotal</td>';
-                html += '<td>' + formatUSD(data.subtotal_gcp) + '</td>';
-                html += '<td>' + formatUSD(data.subtotal_platform_fee) + '</td>';
-                html += '<td>' + formatUSD(data.subtotal) + '</td>';
+                html += '<td></td><td></td>';
+                html += '<td>' + formatEUR(data.subtotal) + '</td>';
                 html += '</tr>';
 
                 // Grand total
                 html += '<tr class="total-row">';
                 html += '<td>Grand Total</td>';
-                html += '<td></td>';
-                html += '<td></td>';
-                html += '<td>' + formatUSD(data.grand_total) + '</td>';
+                html += '<td></td><td></td>';
+                html += '<td>' + formatEUR(data.grand_total) + '</td>';
                 html += '</tr>';
 
                 // VAT
@@ -2084,15 +2081,14 @@
                 html += '<td>VAT</td>';
                 html += '<td></td>';
                 html += '<td>' + data.vat_pct + '%</td>';
-                html += '<td>' + formatUSD(data.vat_amount) + '</td>';
+                html += '<td>' + formatEUR(data.vat_amount) + '</td>';
                 html += '</tr>';
 
                 // Total Due
                 html += '<tr class="total-row">';
                 html += '<td>Total Due</td>';
-                html += '<td></td>';
-                html += '<td></td>';
-                html += '<td>' + formatUSD(data.grand_total_with_vat) + '</td>';
+                html += '<td></td><td></td>';
+                html += '<td>' + formatEUR(data.grand_total_with_vat) + '</td>';
                 html += '</tr>';
 
                 tbody.innerHTML = html;

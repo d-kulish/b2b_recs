@@ -347,11 +347,14 @@ class TrainingRunAdmin(admin.ModelAdmin):
 
 @admin.register(BillingConfig)
 class BillingConfigAdmin(admin.ModelAdmin):
-    list_display = ('license_fee', 'license_discount_pct', 'default_margin_pct', 'gpu_margin_pct', 'client_project_id')
+    list_display = ('license_fee', 'license_discount_pct', 'default_margin_pct', 'gpu_margin_pct', 'display_currency', 'client_project_id')
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
         ('Pricing', {
             'fields': ('license_fee', 'license_discount_pct', 'default_margin_pct', 'gpu_margin_pct')
+        }),
+        ('Display Currency', {
+            'fields': ('display_currency', 'usd_to_display_rate')
         }),
         ('GCP Billing Export', {
             'fields': ('billing_export_project', 'billing_export_dataset', 'client_project_id')

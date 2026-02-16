@@ -255,14 +255,157 @@ When no models exist, displays:
 
 ## Chapter 3: Billing
 
-Displays subscription and usage information.
+The Billing chapter provides clients with a clear view of their platform costs, along with the license fee. All amounts are displayed in EUR (converted from USD at a configurable exchange rate).
 
-**Fields (all hardcoded/demo data):**
-- Current Plan: Pro (with gradient badge)
-- Billing Period: Feb 1 - Feb 28, 2026
-- Training Hours Used: 12.5 / 100 hrs
-- API Requests: 47,250 / Unlimited
-- Current Charges: $0.00 (green)
+**Chapter Icon:** `fa-credit-card` | **Gradient:** Orange (#f59e0b → #fbbf24)
+
+### Decisions
+
+- **Currency:** GCP billing account uses USD (immutable). All UI amounts are converted to EUR at display time using a configurable rate stored in `BillingConfig.usd_to_display_rate` (default 0.92). The `display_currency` field (default "EUR") and rate can be adjusted in Django Admin.
+- **Scheduler isolation (Option B):** Separate `collect_billing_snapshots` command with its own scheduler job at 05:00 UTC. Billing failures do not affect resource metrics collection.
+
+### Pricing Model
+
+The platform uses a single, simple pricing model — no tiers or plans.
+
+| Component | Description |
+|-----------|-------------|
+| **License Fee** | €1,900/month (shown with % discount — currently 100%) |
+| **Usage Costs** | Per-service costs grouped by category, displayed as a single total per service |
+
+Clients see one total amount per service line. No resource quantities (GB, hours, requests) are shown — only monetary amounts. Internal cost structure (GCP charges, margins) is not exposed in the client-facing UI. The `BillingSnapshot` model retains full cost breakdown (gcp_cost, margin_pct, platform_fee) for internal use and Django Admin.
+
+### Layout
+
+```
++- Summary Bar -----------------------------------------------+
+|  Period: Feb 1-28  |  Estimated: €164    |  License: -100%   |
+|  ============-------  42% of period elapsed                  |
++--------------------------------------------------------------+
+
++- Chart 1 ----------+  +- Chart 2 ----------+  +- Chart 3 ---+
+| Daily Spend         |  | Cost Breakdown     |  | Invoice     |
+| (stacked bar, daily)|  | (donut, current)   |  | Preview     |
++---------------------+  +--------------------+  | (table,     |
++- Chart 4 ----------+  +- Chart 5 ----------+  | spanning)   |
+| Monthly Cost Trend  |  | Cost per Training  |  |             |
+| (stacked bar, 6mo)  |  | (bar, last 10)     |  +-------------+
++---------------------+  +--------------------+
+```
+
+**Grid:** 3 columns x 2 rows. Invoice table spans col 3, rows 1-2.
+
+### Summary Bar
+
+| Element | Content | Styling |
+|---------|---------|---------|
+| Billing Period | `Feb 1 - Feb 28, 2026` | 14px, #6b7280 |
+| Estimated Total | `€163.94` | 24px, font-weight 700, #1f2937 |
+| License Status | `License: -100%` or `License: €1,900` | Badge style — green if discounted |
+| Progress Bar | % of billing period elapsed | Thin bar, green fill |
+| Budget Bar | Spent / Budget (€920) | Green/orange/red based on pace |
+
+### Charts
+
+**Chart 1: Daily Spend** — Stacked bar, current month by category (Data/Training/Inference/System). Y-axis: EUR.
+
+**Chart 2: Cost Breakdown** — Donut with center total (EUR). Current month per-category totals.
+
+**Chart 3: Monthly Cost Trend** — Stacked bar, last 6 months by category. Y-axis: EUR.
+
+**Chart 4: Cost per Training** — Bar, last 10 runs. Color by model type (retrieval=blue, ranking=green, multitask=pink). Y-axis: EUR.
+
+**Category Colors:** Data=#4285f4 (blue), Training=#f59e0b (orange), Inference=#34a853 (green), System=#6b7280 (gray).
+
+### Invoice Preview Table
+
+4-column table spanning col 3 of the chart grid.
+
+| Column | Width | Description |
+|--------|-------|-------------|
+| Service | 30% | Service name or category |
+| Costs | 25% | Cost in EUR (before discounts) |
+| Discount | 20% | Discount % (only License and VAT rows) |
+| Total | 25% | Final amount in EUR |
+
+**Row structure:**
+- **License row** (bold): Costs=€1,900.00, Discount=-100%, Total=€0.00
+- **Category rows** (bold, clickable): Expand/collapse service sub-rows
+- **Service sub-rows** (indented, hidden by default): Individual GCP service costs
+- Separator, **Subtotal**, **Grand Total**, **VAT** (20%), **Total Due**
+
+### Invoice Line Example
+
+| Service | Costs | Discount | Total |
+|---------|-------|----------|-------|
+| **License** | **€1,900.00** | **-100%** | **€0.00** |
+| **▼ Data** | **€115.92** | | **€115.92** |
+| &nbsp;&nbsp;&nbsp;Cloud SQL | €82.80 | | €82.80 |
+| &nbsp;&nbsp;&nbsp;BigQuery | €23.00 | | €23.00 |
+| **▶ Training** | **€38.64** | | **€38.64** |
+| **▶ System** | **€2.94** | | **€2.94** |
+| | | | |
+| **Subtotal** | | | **€157.50** |
+| **Grand Total** | | | **€157.50** |
+| VAT | | 20% | €31.50 |
+| **Total Due** | | | **€189.00** |
+
+### Data Architecture
+
+```
+GCP Billing Export (BigQuery) — resource-level table
+│  Query by project.id + date, GROUP BY service, Cloud Run name, GPU flag
+▼
+Category Classification (CATEGORY_MAP + Cloud Run inference detection)
+├── Data:      BigQuery, Cloud SQL, Cloud Dataflow, Cloud Storage
+├── Training:  Vertex AI (GPU / CPU via sku.description)
+├── Inference: Cloud Run services matching Deployment.cloud_run_service
+└── System:    Cloud Run (other), Cloud Scheduler, Secret Manager, etc.
+▼
+BillingConfig (singleton) → margin_pct per service
+▼  gcp_cost × (1 + margin_pct/100)
+BillingSnapshot (daily per category + service)
+▼  API layer: total_cost × usd_to_display_rate → EUR
+Client UI: Service | Costs | Discount | Total
+```
+
+### Models
+
+**BillingConfig** — Singleton. File: `ml_platform/models.py`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `license_fee` | DecimalField | Monthly license fee (1900.00 EUR — already in display currency) |
+| `license_discount_pct` | IntegerField | Discount on license (0-100, currently 100) |
+| `default_margin_pct` | IntegerField | Margin applied to most GCP services (100) |
+| `gpu_margin_pct` | IntegerField | Margin applied to Vertex AI / GPU costs (100) |
+| `billing_export_project` | CharField | GCP project hosting billing export (`b2b-recs`) |
+| `billing_export_dataset` | CharField | BigQuery dataset name (`billing_export`) |
+| `client_project_id` | CharField | Client's GCP project ID for filtering |
+| `display_currency` | CharField | Currency code for UI display (default "EUR") |
+| `usd_to_display_rate` | DecimalField | Exchange rate: 1 USD = X display currency (default 0.92) |
+
+**BillingSnapshot** — Daily per category+service. File: `ml_platform/models.py`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `date` | DateField | Cost date |
+| `category` | CharField | `Data`, `Training`, `Inference`, `System` |
+| `service_name` | CharField | GCP service name |
+| `gcp_cost` | DecimalField | Actual GCP charge (USD, internal only) |
+| `margin_pct` | IntegerField | Margin % (frozen at snapshot time, internal only) |
+| `platform_fee` | DecimalField | `gcp_cost * margin_pct / 100` (internal only) |
+| `total_cost` | DecimalField | `gcp_cost + platform_fee` (converted to EUR at display) |
+
+**Unique constraint:** `(date, category, service_name)`. **Migrations:** `0059`, `0060`, `0064`.
+
+### GCP Billing Export Setup
+
+- **Billing account:** `0155F9-5165FE-BBC88A`, currency USD
+- **Dataset:** `b2b-recs.billing_export`, EU multi-region
+- **Tables:** `gcp_billing_export_resource_v1_*` (resource-level)
+- **Data availability:** ~24h delay. Collection at 05:00 UTC processes previous day
+- **Isolation:** `billing_export` blocked in ETL dataset browser via `EXCLUDED_DATASETS`
 
 ---
 
@@ -358,6 +501,22 @@ Returns 4 ML-workflow chart datasets (legacy, still available).
 
 Returns last 5 activities merged from multiple sources.
 
+### `GET /api/system/billing/summary/`
+
+Summary bar data: period, estimated total in EUR, license status, % elapsed, currency.
+
+### `GET /api/system/billing/charts/`
+
+All chart datasets (values converted to EUR). Includes `currency` field.
+
+### `GET /api/system/billing/invoice/`
+
+Current month invoice preview — Service + Costs + Discount + Total (EUR). No internal GCP cost/platform fee breakdown.
+
+### `POST /api/system/collect-billing-webhook/`
+
+Cloud Scheduler trigger for daily billing collection. Collects for yesterday.
+
 ---
 
 ## JavaScript
@@ -400,6 +559,15 @@ const SystemDashboard = (function() {
 - Destroys charts before recreating (prevents memory leaks)
 - Graceful fallbacks for missing data ("No data available")
 - Color palettes per resource column (blue/green/red)
+
+### BillingDashboard Module
+
+IIFE module that manages billing data loading:
+
+- `loadSummary()` — Fetches `/api/system/billing/summary/`, populates KPI cards and progress bars
+- `loadCharts()` — Fetches `/api/system/billing/charts/`, renders 4 Chart.js charts
+- `loadInvoice()` — Fetches `/api/system/billing/invoice/`, renders invoice table with collapsible categories
+- `formatEUR(val)` — Formats number as `€X.XXX,XX` (de-DE locale)
 
 ---
 
@@ -456,26 +624,23 @@ The view provides these context variables:
 | `cleanup_gcs_artifacts --include-registered` | Also delete artifacts for registered models (opt-in) |
 | `setup_cleanup_scheduler --url https://<app>` | Creates a Cloud Scheduler job for automated daily cleanup |
 | `setup_cleanup_scheduler --delete` | Deletes the cleanup scheduler job |
+| `collect_billing_snapshots` | Collects yesterday's billing data from GCP Billing Export, classifies by category, applies margins |
+| `collect_billing_snapshots --date 2026-02-01` | Collect for a specific date |
+| `collect_billing_snapshots --backfill --days 30` | Backfill historical billing data |
+| `collect_billing_snapshots --dry-run` | Preview billing collection without saving |
+| `setup_billing_scheduler --url https://<app>` | Creates Cloud Scheduler job for daily billing collection at 05:00 UTC |
+| `setup_billing_scheduler --delete` | Deletes the billing scheduler job |
 
-### Automated Daily Collection
+### Automated Daily Collection (UTC)
 
-Two Cloud Scheduler jobs run daily:
+| Time | Job | Webhook | Purpose |
+|------|-----|---------|---------|
+| 02:00 | `collect-resource-metrics` | `POST /api/system/collect-metrics-webhook/` | KPIs for System Details chapter |
+| 03:00 | `cleanup-gcs-artifacts` | `POST /api/system/cleanup-artifacts-webhook/` | Clean old training artifacts |
+| 04:00 | `cleanup-orphan-models` | — | Remove orphan Vertex AI models |
+| 05:00 | `collect-billing-snapshots` | `POST /api/system/collect-billing-webhook/` | Billing data for Billing chapter |
 
-**1. Metrics Collection** — `POST /api/system/collect-metrics-webhook/` at 02:00 UTC. Runs the same logic as `collect_resource_metrics`.
-
-- **Scheduler job name:** `collect-resource-metrics`
-- **Location:** `europe-central2` (same region as ETL scheduler jobs)
-- **Schedule:** `0 2 * * *` (daily at 02:00 UTC)
-- **Auth:** OIDC token via `etl-runner@b2b-recs.iam.gserviceaccount.com` (no Django login required)
-- **Setup:** `POST /api/system/setup-metrics-scheduler/` from deployed app (follows ETL scheduler pattern — uses `CloudSchedulerManager` from within Cloud Run where the service account has the required IAM roles)
-
-**2. GCS Artifact Cleanup** — `POST /api/system/cleanup-artifacts-webhook/` at 03:00 UTC. Deletes training artifacts older than 7 days while preserving registered models.
-
-- **Scheduler job name:** `cleanup-gcs-artifacts`
-- **Location:** `europe-central2`
-- **Schedule:** `0 3 * * *` (daily at 03:00 UTC, 1 hour after metrics collection)
-- **Auth:** OIDC token (same service account as metrics collection)
-- **Setup:** `python manage.py setup_cleanup_scheduler --url https://<app>`
+All jobs use OIDC auth via `etl-runner@b2b-recs.iam.gserviceaccount.com`, located in `europe-central2`.
 
 ### GCS Bucket Lifecycle Policies
 
@@ -511,9 +676,9 @@ The `cloud_run_total_requests` and `cloud_run_request_details` fields are popula
 ## Future Enhancements
 
 - [ ] Dynamic project ID from settings/database
-- [ ] Real billing data from subscription service
 - [ ] User profile dropdown menu
 - [ ] Quick actions in header
+- [x] ~~Billing chapter with real GCP data~~ (Implemented — BillingSnapshot from GCP Billing Export, EUR display, 4 charts, invoice table)
 - [x] ~~Recent activity feed~~ (Implemented, later replaced by resource charts)
 - [x] ~~Resource charts~~ (Implemented - 6 charts in 3-column layout: Data, Cloud Run, Compute & GPU)
 - [x] ~~Cloud Run request volume via Cloud Monitoring API~~ (Implemented - queries `run.googleapis.com/request_count` for `-serving` services)

@@ -2896,7 +2896,7 @@ class BillingConfig(models.Model):
     """
     license_fee = models.DecimalField(
         max_digits=10, decimal_places=2, default=1900.00,
-        help_text="Monthly license fee in USD"
+        help_text="Monthly license fee in display currency (EUR)"
     )
     license_discount_pct = models.IntegerField(
         default=100,
@@ -2921,6 +2921,14 @@ class BillingConfig(models.Model):
     client_project_id = models.CharField(
         max_length=255, default='b2b-recs',
         help_text="This client's GCP project ID (for filtering billing export)"
+    )
+    display_currency = models.CharField(
+        max_length=3, default='EUR',
+        help_text="Currency code for UI display (e.g., EUR, USD)"
+    )
+    usd_to_display_rate = models.DecimalField(
+        max_digits=8, decimal_places=4, default=0.9200,
+        help_text="Exchange rate: 1 USD = X display currency (e.g., 0.92 for EUR)"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

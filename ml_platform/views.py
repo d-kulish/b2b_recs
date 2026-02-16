@@ -1304,10 +1304,13 @@ def api_system_billing_summary(request):
         estimated_total = float(totals['total'] or 0)
 
         config = BillingConfig.get_solo()
+        rate = float(config.usd_to_display_rate)
+        currency = config.display_currency
         license_fee = float(config.license_fee)
         license_discount_pct = config.license_discount_pct
         license_net = round(license_fee * (1 - license_discount_pct / 100), 2)
-        grand_total = round(estimated_total + license_net, 2)
+        estimated_total_conv = round(estimated_total * rate, 2)
+        grand_total = round(estimated_total_conv + license_net, 2)
 
         period_label = (
             f"{period_start.strftime('%b %-d')} \u2013 "
@@ -1323,13 +1326,12 @@ def api_system_billing_summary(request):
                 'days_elapsed': days_elapsed,
                 'days_total': days_in_month,
                 'pct_elapsed': pct_elapsed,
-                'estimated_gcp': round(estimated_gcp, 2),
-                'estimated_platform_fee': round(estimated_platform_fee, 2),
-                'estimated_total': round(estimated_total, 2),
+                'estimated_total': estimated_total_conv,
                 'license_fee': license_fee,
                 'license_discount_pct': license_discount_pct,
                 'license_net': license_net,
                 'grand_total': grand_total,
+                'currency': currency,
             }
         })
     except Exception as e:
@@ -1350,6 +1352,10 @@ def api_system_billing_charts(request):
         period_start = today.replace(day=1)
         days_in_month = calendar.monthrange(today.year, today.month)[1]
         period_end = today.replace(day=days_in_month)
+
+        config = BillingConfig.get_solo()
+        rate = float(config.usd_to_display_rate)
+        currency = config.display_currency
 
         # ------------------------------------------------------------------
         # 1. Monthly Trend — last 6 months, grouped by month + category
@@ -1375,7 +1381,7 @@ def api_system_billing_charts(request):
         monthly_trend = {
             'labels': month_labels,
             'categories': {
-                cat: [float(month_category[m].get(cat, 0)) for m in month_labels]
+                cat: [round(float(month_category[m].get(cat, 0)) * rate, 2) for m in month_labels]
                 for cat in sorted_categories
             },
         }
@@ -1388,17 +1394,13 @@ def api_system_billing_charts(request):
             .filter(date__gte=period_start, date__lte=period_end)
             .values('category')
             .annotate(
-                gcp=Sum('gcp_cost'),
-                fee=Sum('platform_fee'),
                 total=Sum('total_cost'),
             )
             .order_by('-total')
         )
         cost_breakdown = {
             'labels': [r['category'] for r in breakdown_qs],
-            'gcp_cost': [float(r['gcp']) for r in breakdown_qs],
-            'platform_fee': [float(r['fee']) for r in breakdown_qs],
-            'total': [float(r['total']) for r in breakdown_qs],
+            'total': [round(float(r['total']) * rate, 2) for r in breakdown_qs],
         }
 
         # ------------------------------------------------------------------
@@ -1412,7 +1414,7 @@ def api_system_billing_charts(request):
             .annotate(day_total=Sum('total_cost'))
             .order_by('date')
         )
-        daily_map = {r['date']: float(r['day_total']) for r in daily_qs}
+        daily_map = {r['date']: round(float(r['day_total']) * rate, 2) for r in daily_qs}
 
         # Per-category daily breakdown
         daily_cat_qs = (
@@ -1425,7 +1427,7 @@ def api_system_billing_charts(request):
         daily_cat_map = defaultdict(lambda: defaultdict(float))
         daily_cats_seen = set()
         for row in daily_cat_qs:
-            daily_cat_map[row['date']][row['category']] = float(row['cat_total'])
+            daily_cat_map[row['date']][row['category']] = round(float(row['cat_total']) * rate, 2)
             daily_cats_seen.add(row['category'])
 
         # All days in current month
@@ -1475,7 +1477,7 @@ def api_system_billing_charts(request):
             if vertex_cost:
                 label = f"TR-{run.run_number}"
                 cost_per_training['labels'].append(label)
-                cost_per_training['costs'].append(float(vertex_cost))
+                cost_per_training['costs'].append(round(float(vertex_cost) * rate, 2))
                 cost_per_training['model_types'].append(
                     run.get_model_type_display()
                 )
@@ -1504,7 +1506,7 @@ def api_system_billing_charts(request):
         category_over_time = {
             'labels': [d.isoformat() for d in cot_labels],
             'categories': {
-                cat: [float(cot_data[d].get(cat, 0)) for d in cot_labels]
+                cat: [round(float(cot_data[d].get(cat, 0)) * rate, 2) for d in cot_labels]
                 for cat in sorted_cot_categories
             },
         }
@@ -1517,6 +1519,7 @@ def api_system_billing_charts(request):
                 'daily_spend': daily_spend,
                 'cost_per_training': cost_per_training,
                 'category_over_time': category_over_time,
+                'currency': currency,
             }
         })
     except Exception as e:
@@ -1542,40 +1545,29 @@ def api_system_billing_invoice(request):
             .filter(date__gte=period_start, date__lte=period_end)
             .values('category', 'service_name')
             .annotate(
-                gcp_cost=Sum('gcp_cost'),
-                platform_fee=Sum('platform_fee'),
                 total=Sum('total_cost'),
             )
             .order_by('category', '-total')
         )
 
         # Group services by category
+        config = BillingConfig.get_solo()
+        rate = float(config.usd_to_display_rate)
+        currency = config.display_currency
         category_order = ['Data', 'Training', 'Inference', 'System']
-        cat_map = OrderedDict((c, {'services': [], 'gcp_cost': Decimal('0'), 'platform_fee': Decimal('0'), 'total': Decimal('0')}) for c in category_order)
-        subtotal_gcp = Decimal('0')
-        subtotal_fee = Decimal('0')
+        cat_map = OrderedDict((c, {'services': [], 'total': Decimal('0')}) for c in category_order)
         subtotal = Decimal('0')
 
         for row in items_qs:
-            gcp = row['gcp_cost']
-            fee = row['platform_fee']
             total = row['total']
-            margin_pct = round(float(fee) / float(gcp) * 100) if gcp else 0
             cat = row['category']
             if cat not in cat_map:
-                cat_map[cat] = {'services': [], 'gcp_cost': Decimal('0'), 'platform_fee': Decimal('0'), 'total': Decimal('0')}
+                cat_map[cat] = {'services': [], 'total': Decimal('0')}
             cat_map[cat]['services'].append({
                 'service': row['service_name'],
-                'gcp_cost': float(gcp),
-                'margin_pct': margin_pct,
-                'platform_fee': float(fee),
-                'total': float(total),
+                'total': round(float(total) * rate, 2),
             })
-            cat_map[cat]['gcp_cost'] += gcp
-            cat_map[cat]['platform_fee'] += fee
             cat_map[cat]['total'] += total
-            subtotal_gcp += gcp
-            subtotal_fee += fee
             subtotal += total
 
         items = []
@@ -1583,17 +1575,15 @@ def api_system_billing_invoice(request):
             if data['services']:
                 items.append({
                     'category': cat,
-                    'gcp_cost': float(data['gcp_cost']),
-                    'platform_fee': float(data['platform_fee']),
-                    'total': float(data['total']),
+                    'total': round(float(data['total']) * rate, 2),
                     'services': sorted(data['services'], key=lambda s: -s['total']),
                 })
 
-        config = BillingConfig.get_solo()
         license_fee = float(config.license_fee)
         license_discount_pct = config.license_discount_pct
         license_net = round(license_fee * (1 - license_discount_pct / 100), 2)
-        grand_total = round(float(subtotal) + license_net, 2)
+        subtotal_conv = round(float(subtotal) * rate, 2)
+        grand_total = round(subtotal_conv + license_net, 2)
         vat_pct = 20
         vat_amount = round(grand_total * vat_pct / 100, 2)
         grand_total_with_vat = round(grand_total + vat_amount, 2)
@@ -1605,9 +1595,7 @@ def api_system_billing_invoice(request):
             'data': {
                 'period': period_label,
                 'items': items,
-                'subtotal_gcp': float(subtotal_gcp),
-                'subtotal_platform_fee': float(subtotal_fee),
-                'subtotal': float(subtotal),
+                'subtotal': subtotal_conv,
                 'license_fee': license_fee,
                 'license_discount_pct': license_discount_pct,
                 'license_net': license_net,
@@ -1615,6 +1603,7 @@ def api_system_billing_invoice(request):
                 'vat_pct': vat_pct,
                 'vat_amount': vat_amount,
                 'grand_total_with_vat': grand_total_with_vat,
+                'currency': currency,
             }
         })
     except Exception as e:

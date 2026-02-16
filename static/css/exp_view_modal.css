@@ -932,6 +932,8 @@
 .exp-detail-section-icon.results  { background: linear-gradient(135deg, #10b981, #34d399); }
 .exp-detail-section-icon.tables   { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
 .exp-detail-section-icon.filters  { background: linear-gradient(135deg, #10b981, #34d399); }
+.exp-detail-section-icon.target   { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.exp-detail-section-icon.tensors  { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
 
 .exp-detail-stats {
     display: flex;
@@ -1178,73 +1180,8 @@
 }
 
 /* ==========================================================================
-   Target Column Card (for ranking models)
+   Features Config (Tensor Visualization)
    ========================================================================== */
-.target-column-view-card {
-    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-    border: 1.5px solid #fbbf24;
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-bottom: 16px;
-}
-
-.target-column-view-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #b45309;
-}
-
-.target-column-view-header i {
-    color: #f59e0b;
-}
-
-.target-column-view-badge {
-    background: #fbbf24;
-    color: white;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-left: auto;
-}
-
-.target-column-view-content {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: white;
-    border: 1px solid #fcd34d;
-    border-radius: 8px;
-    padding: 8px 12px;
-}
-
-.target-column-view-name {
-    font-weight: 600;
-    color: #92400e;
-    font-size: 14px;
-}
-
-.target-column-view-type {
-    background: #fef3c7;
-    color: #b45309;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 2px 8px;
-    border-radius: 4px;
-    text-transform: uppercase;
-}
-
-.target-column-view-transforms {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 10px;
-}
-
 .target-transform-tag {
     display: inline-flex;
     align-items: center;
@@ -1255,61 +1192,6 @@
     border-radius: 4px;
     font-size: 11px;
     color: #92400e;
-}
-
-/* ==========================================================================
-   Features Config (Tensor Visualization)
-   ========================================================================== */
-.exp-view-features-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-}
-
-.exp-view-tensor-panel {
-    padding: 16px;
-    border-radius: 10px;
-}
-
-.exp-view-tensor-panel.buyer {
-    background: #eff6ff;
-}
-
-.exp-view-tensor-panel.product {
-    background: #ecfdf5;
-}
-
-.exp-view-tensor-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
-
-.exp-view-tensor-title {
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.exp-view-tensor-title.buyer {
-    color: #1d4ed8;
-}
-
-.exp-view-tensor-title.product {
-    color: #059669;
-}
-
-.exp-view-tensor-total {
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.exp-view-tensor-total.buyer {
-    color: #3b82f6;
-}
-
-.exp-view-tensor-total.product {
-    color: #10b981;
 }
 
 .exp-view-tensor-bar {
@@ -1332,47 +1214,6 @@
     transition: width 0.3s ease;
     overflow: hidden;
     white-space: nowrap;
-}
-
-.exp-view-tensor-features {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.exp-view-tensor-feature-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-}
-
-.exp-view-tensor-feature-name {
-    color: #374151;
-}
-
-.exp-view-tensor-feature-name.cross {
-    font-style: italic;
-}
-
-.exp-view-tensor-feature-name.buyer {
-    color: #1d4ed8;
-}
-
-.exp-view-tensor-feature-name.product {
-    color: #059669;
-}
-
-.exp-view-tensor-feature-dim {
-    font-weight: 500;
-}
-
-.exp-view-tensor-feature-dim.buyer {
-    color: #3b82f6;
-}
-
-.exp-view-tensor-feature-dim.product {
-    color: #10b981;
 }
 
 /* ==========================================================================

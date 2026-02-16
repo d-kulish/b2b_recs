@@ -476,8 +476,6 @@ const ExpViewModal = (function() {
         }
 
         // Features config - load full details
-        const featureConfigName = run.feature_config_name || '-';
-        document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
         if (run.feature_config_id) {
             loadFeaturesConfig(run.feature_config_id);
         } else {
@@ -1348,9 +1346,6 @@ const ExpViewModal = (function() {
         }
 
         // Features config - load full details like training runs
-        const featureConfigName = model.feature_config_name || '-';
-        document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
-
         // Load full features config details using feature_config_id
         if (model.feature_config_id) {
             loadFeaturesConfig(model.feature_config_id);
@@ -2356,15 +2351,14 @@ const ExpViewModal = (function() {
         const regDeploySection = document.getElementById('expViewRegistryDeploymentSection');
         if (regDeploySection) regDeploySection.style.display = 'none';
 
-        const datasetAccordion = document.querySelector('.exp-view-accordion:has(#expViewDatasetName)');
-        const featuresAccordion = document.querySelector('.exp-view-accordion:has(#expViewFeaturesConfigName)');
-        const modelAccordion = document.querySelector('.exp-view-accordion:has(#expViewModelConfigName)');
-        const trainingSetupAccordion = document.querySelector('.exp-view-accordion:has(#expViewTrainingSetupContent)');
-
         // Use alternative approach - hide by finding parent accordions
         document.querySelectorAll('.exp-view-accordion').forEach(acc => {
             acc.style.display = 'none';
         });
+
+        // Hide features config section (no longer an accordion)
+        const featuresConfigContent = document.getElementById('expViewFeaturesConfigContent');
+        if (featuresConfigContent) featuresConfigContent.style.display = 'none';
 
         // Hide results summary (we'll render our own)
         const resultsSummary = document.getElementById('expViewResultsSummary');
@@ -3093,9 +3087,6 @@ const ExpViewModal = (function() {
         }
 
         // Load features config details
-        const featureConfigName = exp.feature_config_name || exp.feature_config?.name || '-';
-        document.getElementById('expViewFeaturesConfigName').textContent = featureConfigName;
-
         const featureConfigId = exp.feature_config_id || exp.feature_config?.id;
         if (featureConfigId) {
             loadFeaturesConfig(featureConfigId);
@@ -3567,8 +3558,10 @@ const ExpViewModal = (function() {
         );
 
         const maxTotal = Math.max(buyerResult.total || 0, productResult.total || 0);
+        const totalFeatures = buyerResult.breakdown.length + productResult.breakdown.length;
+        const totalDim = buyerResult.total + productResult.total;
 
-        // Build target column section (for ranking models)
+        // Build target column card (for ranking models)
         let targetColumnHtml = '';
         if (configData.target_column && configData.config_type === 'ranking') {
             const tc = configData.target_column;
@@ -3577,6 +3570,9 @@ const ExpViewModal = (function() {
             const transforms = tc.transforms || {};
 
             let transformsHtml = '';
+            if (transforms.normalize && transforms.normalize.enabled) {
+                transformsHtml += '<span class="target-transform-tag"><i class="fas fa-compress-arrows-alt"></i> Normalize 0-1</span>';
+            }
             if (transforms.log_transform && transforms.log_transform.enabled) {
                 transformsHtml += '<span class="target-transform-tag"><i class="fas fa-chart-line"></i> Log transform</span>';
             }
@@ -3584,73 +3580,100 @@ const ExpViewModal = (function() {
                 const lower = transforms.clip_outliers.lower?.enabled ? transforms.clip_outliers.lower.percentile : null;
                 const upper = transforms.clip_outliers.upper?.enabled ? transforms.clip_outliers.upper.percentile : null;
                 let clipText = 'Clip';
-                if (lower && upper) {
-                    clipText = `Clip ${lower}%-${upper}%`;
-                } else if (lower) {
-                    clipText = `Clip lower ${lower}%`;
-                } else if (upper) {
-                    clipText = `Clip upper ${upper}%`;
-                }
+                if (lower && upper) clipText = `Clip ${lower}%-${upper}%`;
+                else if (lower) clipText = `Clip lower ${lower}%`;
+                else if (upper) clipText = `Clip upper ${upper}%`;
                 transformsHtml += `<span class="target-transform-tag"><i class="fas fa-cut"></i> ${clipText}</span>`;
             }
 
             targetColumnHtml = `
-                <div class="target-column-view-card">
-                    <div class="target-column-view-header">
-                        <i class="fas fa-bullseye"></i>
-                        <span>Target Column</span>
-                        <span class="target-column-view-badge">For Ranking</span>
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Target Column</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon target"><i class="fas fa-bullseye"></i></div>
+                        <div class="exp-detail-stats">
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">Column</div>
+                                <div class="stat-value">${tcName}</div>
+                            </div>
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">Type</div>
+                                <div class="stat-value">${tcType}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="target-column-view-content">
-                        <span class="target-column-view-name">${tcName}</span>
-                        <span class="target-column-view-type">${tcType}</span>
-                    </div>
-                    ${transformsHtml ? `<div class="target-column-view-transforms">${transformsHtml}</div>` : ''}
+                    ${transformsHtml ? `
+                    <div class="exp-detail-filter-details">
+                        <div class="exp-filter-row" style="grid-template-columns: 100px 1fr;">
+                            <div style="font-size: 13px; color: #6b7280; font-weight: 500;">Transforms:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">${transformsHtml}</div>
+                        </div>
+                    </div>` : ''}
                 </div>
             `;
         }
 
-        // Build HTML
-        let html = targetColumnHtml + '<div class="exp-view-features-grid">';
-
-        // Buyer Tensor Panel
-        html += `
-            <div class="exp-view-tensor-panel buyer">
-                <div class="exp-view-tensor-header">
-                    <span class="exp-view-tensor-title buyer">Buyer Tensor</span>
-                    <span class="exp-view-tensor-total buyer">${buyerResult.total}D</span>
-                </div>
-                <div id="expViewBuyerBar" class="exp-view-tensor-bar"></div>
-                <div class="exp-view-tensor-features">
-                    ${buyerResult.breakdown.map(item => `
-                        <div class="exp-view-tensor-feature-row">
-                            <span class="exp-view-tensor-feature-name buyer ${item.is_cross ? 'cross' : ''}">${item.name}</span>
-                            <span class="exp-view-tensor-feature-dim buyer">${item.dim}D</span>
+        // Build Model Tensors card
+        const tensorsHtml = `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Model Tensors</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon tensors"><i class="fas fa-cubes"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${buyerResult.total || 0}D</div>
+                            <div class="exp-detail-stat-label">Buyer</div>
                         </div>
-                    `).join('')}
-                </div>
-            </div>`;
-
-        // Product Tensor Panel
-        html += `
-            <div class="exp-view-tensor-panel product">
-                <div class="exp-view-tensor-header">
-                    <span class="exp-view-tensor-title product">Product Tensor</span>
-                    <span class="exp-view-tensor-total product">${productResult.total}D</span>
-                </div>
-                <div id="expViewProductBar" class="exp-view-tensor-bar"></div>
-                <div class="exp-view-tensor-features">
-                    ${productResult.breakdown.map(item => `
-                        <div class="exp-view-tensor-feature-row">
-                            <span class="exp-view-tensor-feature-name product ${item.is_cross ? 'cross' : ''}">${item.name}</span>
-                            <span class="exp-view-tensor-feature-dim product">${item.dim}D</span>
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${productResult.total || 0}D</div>
+                            <div class="exp-detail-stat-label">Product</div>
                         </div>
-                    `).join('')}
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${totalFeatures}</div>
+                            <div class="exp-detail-stat-label">Features</div>
+                        </div>
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${totalDim}D</div>
+                            <div class="exp-detail-stat-label">Total</div>
+                        </div>
+                    </div>
                 </div>
-            </div>`;
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="p-4 bg-blue-50 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-blue-800">Buyer Tensor</h4>
+                            <span class="font-semibold text-blue-600">${buyerResult.total}D</span>
+                        </div>
+                        <div id="expViewBuyerBar" class="exp-view-tensor-bar mb-3"></div>
+                        <div class="space-y-1">
+                            ${buyerResult.breakdown.map(item => `
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="${item.is_cross ? 'text-blue-600 italic' : 'text-blue-700'}">${item.name}</span>
+                                    <span class="text-blue-500 font-medium">${item.dim}D</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div class="p-4 bg-green-50 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-green-800">Product Tensor</h4>
+                            <span class="font-semibold text-green-600">${productResult.total}D</span>
+                        </div>
+                        <div id="expViewProductBar" class="exp-view-tensor-bar mb-3"></div>
+                        <div class="space-y-1">
+                            ${productResult.breakdown.map(item => `
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="${item.is_cross ? 'text-green-600 italic' : 'text-green-700'}">${item.name}</span>
+                                    <span class="text-green-500 font-medium">${item.dim}D</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
-        html += '</div>';
-        container.innerHTML = html;
+        container.innerHTML = targetColumnHtml + tensorsHtml;
 
         // Render tensor bars after DOM update
         setTimeout(() => {
@@ -5501,7 +5524,6 @@ const ExpViewModal = (function() {
         const sectionMap = {
             registryDeployment: 'expViewRegistryDeployment',
             dataset: 'expViewDataset',
-            features: 'expViewFeatures',
             model: 'expViewModel',
             trainingSetup: 'expViewTrainingSetup'
         };
@@ -5534,13 +5556,12 @@ const ExpViewModal = (function() {
         state.accordionExpanded = {
             registryDeployment: false,
             dataset: false,
-            features: false,
             model: false,
             trainingSetup: false
         };
 
         // Collapse all accordion contents
-        const prefixes = ['expViewRegistryDeployment', 'expViewDataset', 'expViewFeatures', 'expViewModel', 'expViewTrainingSetup'];
+        const prefixes = ['expViewRegistryDeployment', 'expViewDataset', 'expViewModel', 'expViewTrainingSetup'];
 
         prefixes.forEach(prefix => {
             const content = document.getElementById(`${prefix}Content`);
@@ -5548,6 +5569,13 @@ const ExpViewModal = (function() {
             if (content) content.classList.add('hidden');
             if (chevron) chevron.classList.remove('expanded');
         });
+
+        // Reset features config container (not an accordion, but may be hidden by endpoint mode)
+        const featuresConfig = document.getElementById('expViewFeaturesConfigContent');
+        if (featuresConfig) {
+            featuresConfig.style.display = '';
+            featuresConfig.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+        }
     }
 
     // =============================================================================

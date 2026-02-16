@@ -4394,55 +4394,65 @@
     <!-- =========================================================================== -->
     <!-- CHAPTER 1: DATASETS -->
     <!-- =========================================================================== -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon" style="background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%); color: white;">
-                    <i class="fas fa-database"></i>
+    <div class="chapter-container" data-chapter="datasets">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon" style="background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">Dataset Configs</span>
+                        <span class="chapter-subtitle">Define what data goes into training</span>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">Dataset Configs</h2>
-                    <p class="chapter-subtitle">Define what data goes into training</p>
+                <div class="chapter-header-actions">
+                    <div class="btn-group">
+                        <button onclick="ds_openCompareModal(); event.stopPropagation();" class="btn btn-secondary btn-sm" style="width: 140px;">
+                            <i class="fas fa-columns"></i>Compare
+                        </button>
+                        <button onclick="ds_openWizard(); event.stopPropagation();" class="btn btn-primary btn-sm" style="width: 140px;">
+                            <i class="fas fa-plus"></i>New Dataset
+                        </button>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
             </div>
-            <div class="btn-group">
-                <button onclick="ds_openCompareModal()" class="btn btn-secondary btn-sm" style="width: 140px;">
-                    <i class="fas fa-columns"></i>Compare
-                </button>
-                <button onclick="ds_openWizard()" class="btn btn-primary btn-sm" style="width: 140px;">
-                    <i class="fas fa-plus"></i>New Dataset
-                </button>
-            </div>
         </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <!-- Filter Bar -->
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="flex-1">
+                        <input type="text" id="dsSearchInput" placeholder="Search datasets..."
+                               class="form-input w-full text-sm" onkeyup="ds_debounceSearch()">
+                    </div>
+                </div>
 
-        <!-- Filter Bar -->
-        <div class="flex items-center gap-4 mb-4">
-            <div class="flex-1">
-                <input type="text" id="dsSearchInput" placeholder="Search datasets..."
-                       class="form-input w-full text-sm" onkeyup="ds_debounceSearch()">
-            </div>
-        </div>
+                <!-- Datasets List Container -->
+                <div id="datasetsList" class="space-y-3" style="max-height: 420px; overflow-y: auto;"
+                    <!-- Loading state -->
+                    <div id="datasetsLoading" class="flex items-center justify-center py-12">
+                        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+                        <span class="text-gray-500">Loading datasets...</span>
+                    </div>
+                    <!-- Empty state (hidden by default) -->
+                    <div id="datasetsEmpty" class="card-empty-state hidden">
+                        <p class="card-empty-state-title">No datasets configured</p>
+                        <p class="card-empty-state-text">Create your first dataset to define training data for your ML models</p>
+                    </div>
+                    <!-- Dataset cards will be inserted here by JavaScript -->
+                </div>
 
-        <!-- Datasets List Container -->
-        <div id="datasetsList" class="space-y-3" style="max-height: 420px; overflow-y: auto;"
-            <!-- Loading state -->
-            <div id="datasetsLoading" class="flex items-center justify-center py-12">
-                <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
-                <span class="text-gray-500">Loading datasets...</span>
-            </div>
-            <!-- Empty state (hidden by default) -->
-            <div id="datasetsEmpty" class="card-empty-state hidden">
-                <p class="card-empty-state-title">No datasets configured</p>
-                <p class="card-empty-state-text">Create your first dataset to define training data for your ML models</p>
-            </div>
-            <!-- Dataset cards will be inserted here by JavaScript -->
-        </div>
-
-        <!-- Pagination -->
-        <div id="dsPaginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
-            <div class="flex items-center justify-between">
-                <div id="dsPaginationInfo" class="text-sm text-gray-600"></div>
-                <div id="dsPaginationButtons" class="flex items-center gap-2"></div>
+                <!-- Pagination -->
+                <div id="dsPaginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between">
+                        <div id="dsPaginationInfo" class="text-sm text-gray-600"></div>
+                        <div id="dsPaginationButtons" class="flex items-center gap-2"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -4450,61 +4460,71 @@
     <!-- =========================================================================== -->
     <!-- CHAPTER 2: FEATURES -->
     <!-- =========================================================================== -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon features">
-                    <i class="fas fa-microchip"></i>
+    <div class="chapter-container" data-chapter="features">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon features">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">Feature Configs</span>
+                        <span class="chapter-subtitle">Define how data is transformed</span>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">Feature Configs</h2>
-                    <p class="chapter-subtitle">Define how data is transformed</p>
+                <div class="chapter-header-actions">
+                    <div class="btn-group">
+                        <button onclick="fc_openCompareModal(); event.stopPropagation();" class="btn btn-secondary btn-sm" style="width: 150px;">
+                            <i class="fas fa-columns"></i>Compare
+                        </button>
+                        <button onclick="fc_openWizard(); event.stopPropagation();" class="btn btn-primary btn-sm" style="width: 150px;">
+                            <i class="fas fa-plus"></i>New Feats Set
+                        </button>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
             </div>
-            <div class="btn-group">
-                <button onclick="fc_openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
-                    <i class="fas fa-columns"></i>Compare
-                </button>
-                <button onclick="fc_openWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
-                    <i class="fas fa-plus"></i>New Feats Set
-                </button>
-            </div>
         </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <!-- Filter Bar -->
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-600">Dataset:</label>
+                        <select id="datasetFilter" onchange="filterConfigs()" class="form-select text-sm" style="min-width: 200px;">
+                            <option value="">All Datasets</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <input type="text" id="searchInput" placeholder="Search feature configs..."
+                               class="form-input w-full text-sm" onkeyup="fc_debounceSearch()">
+                    </div>
+                </div>
 
-        <!-- Filter Bar -->
-        <div class="flex items-center gap-4 mb-4">
-            <div class="flex items-center gap-2">
-                <label class="text-sm font-medium text-gray-600">Dataset:</label>
-                <select id="datasetFilter" onchange="filterConfigs()" class="form-select text-sm" style="min-width: 200px;">
-                    <option value="">All Datasets</option>
-                </select>
-            </div>
-            <div class="flex-1">
-                <input type="text" id="searchInput" placeholder="Search feature configs..."
-                       class="form-input w-full text-sm" onkeyup="fc_debounceSearch()">
-            </div>
-        </div>
+                <!-- Feature Configs List - scrollable, shows ~2 cards -->
+                <div id="configsList" class="space-y-3" style="max-height: 420px; overflow-y: auto;"
+                    <!-- Loading state -->
+                    <div id="configsLoading" class="flex items-center justify-center py-12">
+                        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
+                        <span class="text-gray-500">Loading feature configs...</span>
+                    </div>
+                    <!-- Empty state (hidden by default) -->
+                    <div id="configsEmpty" class="card-empty-state hidden">
+                        <p class="card-empty-state-title">No feature configs yet</p>
+                        <p class="card-empty-state-text">Create your first feature config to define how columns are transformed for training</p>
+                    </div>
+                    <!-- Config cards will be inserted here -->
+                </div>
 
-        <!-- Feature Configs List - scrollable, shows ~2 cards -->
-        <div id="configsList" class="space-y-3" style="max-height: 420px; overflow-y: auto;"
-            <!-- Loading state -->
-            <div id="configsLoading" class="flex items-center justify-center py-12">
-                <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mr-3"></i>
-                <span class="text-gray-500">Loading feature configs...</span>
-            </div>
-            <!-- Empty state (hidden by default) -->
-            <div id="configsEmpty" class="card-empty-state hidden">
-                <p class="card-empty-state-title">No feature configs yet</p>
-                <p class="card-empty-state-text">Create your first feature config to define how columns are transformed for training</p>
-            </div>
-            <!-- Config cards will be inserted here -->
-        </div>
-
-        <!-- Pagination -->
-        <div id="fcPaginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
-            <div class="flex items-center justify-between">
-                <div id="fcPaginationInfo" class="text-sm text-gray-600"></div>
-                <div id="fcPaginationButtons" class="flex items-center gap-2"></div>
+                <!-- Pagination -->
+                <div id="fcPaginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between">
+                        <div id="fcPaginationInfo" class="text-sm text-gray-600"></div>
+                        <div id="fcPaginationButtons" class="flex items-center gap-2"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -4512,70 +4532,81 @@
     <!-- =========================================================================== -->
     <!-- CHAPTER 3: MODEL STRUCTURE -->
     <!-- =========================================================================== -->
-    <div class="bg-white rounded-xl border border-black shadow-lg p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-3">
-                <div class="chapter-icon model-structure">
-                    <i class="fas fa-layer-group"></i>
+    <div class="chapter-container" data-chapter="model-structure">
+        <div class="chapter-header" onclick="toggleChapter(this)">
+            <div class="chapter-header-top">
+                <div class="chapter-title-wrapper">
+                    <div class="chapter-icon model-structure">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="chapter-title-text">
+                        <span class="chapter-title">Model Configs</span>
+                        <span class="chapter-subtitle">Define neural network architecture</span>
+                    </div>
                 </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900">Model Configs</h2>
-                    <p class="chapter-subtitle">Define neural network architecture</p>
+                <div class="chapter-header-actions">
+                    <div class="btn-group">
+                        <button onclick="mc_openCompareModal(); event.stopPropagation();" class="btn btn-secondary btn-sm" style="width: 150px;">
+                            <i class="fas fa-columns mr-1"></i>Compare
+                        </button>
+                        <button onclick="openModelConfigWizard(); event.stopPropagation();" class="btn btn-primary btn-sm" style="width: 150px;">
+                            <i class="fas fa-plus mr-1"></i>New Model Config
+                        </button>
+                    </div>
+                    <div class="chapter-toggle">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
-            </div>
-            <div class="btn-group">
-                <button onclick="mc_openCompareModal()" class="btn btn-secondary btn-sm" style="width: 150px;">
-                    <i class="fas fa-columns mr-1"></i>Compare
-                </button>
-                <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm" style="width: 150px;">
-                    <i class="fas fa-plus mr-1"></i>New Model Config
-                </button>
             </div>
         </div>
-        <div id="modelStructureContent">
-            <!-- Filter Bar -->
-            <div id="mcFilterBar" class="mc-filter-bar hidden">
-                <div class="mc-filter-group">
-                    <label class="mc-filter-label">Model Type:</label>
-                    <select id="mcModelTypeFilter" class="mc-filter-select" onchange="filterModelConfigs()">
-                        <option value="">All Types</option>
-                        <option value="retrieval">Retrieval</option>
-                        <option value="ranking">Ranking</option>
-                        <option value="multitask">Multitask</option>
-                    </select>
-                </div>
-                <input type="text" id="mcSearchInput" class="mc-search-input"
-                       placeholder="Search model configs..." onkeyup="debounceMcSearch()">
-            </div>
+        <div class="chapter-content">
+            <div class="chapter-content-inner">
+                <div id="modelStructureContent">
+                    <!-- Filter Bar -->
+                    <div id="mcFilterBar" class="mc-filter-bar hidden">
+                        <div class="mc-filter-group">
+                            <label class="mc-filter-label">Model Type:</label>
+                            <select id="mcModelTypeFilter" class="mc-filter-select" onchange="filterModelConfigs()">
+                                <option value="">All Types</option>
+                                <option value="retrieval">Retrieval</option>
+                                <option value="ranking">Ranking</option>
+                                <option value="multitask">Multitask</option>
+                            </select>
+                        </div>
+                        <input type="text" id="mcSearchInput" class="mc-search-input"
+                               placeholder="Search model configs..." onkeyup="debounceMcSearch()">
+                    </div>
 
-            <!-- Loading state -->
-            <div id="modelConfigsLoading" class="flex items-center justify-center py-8">
-                <i class="fas fa-spinner fa-spin text-xl text-gray-400 mr-3"></i>
-                <span class="text-gray-500">Loading model configs...</span>
-            </div>
-            <!-- Empty state (hidden by default) -->
-            <div id="modelConfigsEmpty" class="chapter-empty-state hidden">
-                <i class="fas fa-cubes chapter-empty-icon"></i>
-                <p class="chapter-empty-text">No model configurations yet</p>
-                <p class="text-sm text-gray-400 mt-2">Create your first model config to define neural network architecture</p>
-                <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm mt-4">
-                    <i class="fas fa-plus mr-1"></i>Create Model Config
-                </button>
-            </div>
-            <!-- No results state (for filtered searches) -->
-            <div id="modelConfigsNoResults" class="chapter-empty-state hidden">
-                <i class="fas fa-search chapter-empty-icon"></i>
-                <p class="chapter-empty-text">No matching model configs</p>
-                <p class="text-sm text-gray-400 mt-2">Try adjusting your filters or search term</p>
-            </div>
-            <!-- Model config cards container -->
-            <div id="modelConfigsGrid" class="model-config-grid hidden" style="max-height: 420px; overflow-y: auto;"></div>
+                    <!-- Loading state -->
+                    <div id="modelConfigsLoading" class="flex items-center justify-center py-8">
+                        <i class="fas fa-spinner fa-spin text-xl text-gray-400 mr-3"></i>
+                        <span class="text-gray-500">Loading model configs...</span>
+                    </div>
+                    <!-- Empty state (hidden by default) -->
+                    <div id="modelConfigsEmpty" class="chapter-empty-state hidden">
+                        <i class="fas fa-cubes chapter-empty-icon"></i>
+                        <p class="chapter-empty-text">No model configurations yet</p>
+                        <p class="text-sm text-gray-400 mt-2">Create your first model config to define neural network architecture</p>
+                        <button onclick="openModelConfigWizard()" class="btn btn-primary btn-sm mt-4">
+                            <i class="fas fa-plus mr-1"></i>Create Model Config
+                        </button>
+                    </div>
+                    <!-- No results state (for filtered searches) -->
+                    <div id="modelConfigsNoResults" class="chapter-empty-state hidden">
+                        <i class="fas fa-search chapter-empty-icon"></i>
+                        <p class="chapter-empty-text">No matching model configs</p>
+                        <p class="text-sm text-gray-400 mt-2">Try adjusting your filters or search term</p>
+                    </div>
+                    <!-- Model config cards container -->
+                    <div id="modelConfigsGrid" class="model-config-grid hidden" style="max-height: 420px; overflow-y: auto;"></div>
 
-            <!-- Pagination -->
-            <div id="mcPaginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
-                <div class="flex items-center justify-between">
-                    <div id="mcPaginationInfo" class="text-sm text-gray-600"></div>
-                    <div id="mcPaginationButtons" class="flex items-center gap-2"></div>
+                    <!-- Pagination -->
+                    <div id="mcPaginationContainer" class="hidden mt-4 pt-4 border-t border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div id="mcPaginationInfo" class="text-sm text-gray-600"></div>
+                            <div id="mcPaginationButtons" class="flex items-center gap-2"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -553,39 +553,56 @@
 }
 
 /* ==========================================================================
-   Tabs - Pill Button Style
+   Tabs - Wizard-Style Nav Pills
    ========================================================================== */
-.exp-view-tabs {
-    display: flex;
-    gap: 8px;
-    padding: 16px 24px;
-    background: white;
-    border-bottom: 1px solid #e5e7eb;
+.exp-view-nav-bar {
+    margin-top: -16px;
+    z-index: 20;
+    position: relative;
+    margin-left: 24px;
+    margin-right: 24px;
+    padding: 4px;
 }
 
-.exp-view-tab {
+.exp-view-nav-pills {
+    display: flex;
+    border: 1px solid #000;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.exp-view-pill {
     flex: 1;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 6px 24px;
+    font-size: 15px;
+    font-weight: 500;
     color: #374151;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    border: none;
+    background: transparent;
+    transition: background 0.2s;
     text-align: center;
 }
 
-.exp-view-tab:hover {
-    background: #f9fafb;
+.exp-view-pill:hover:not(.current) {
+    background: #f3f4f6;
 }
 
-.exp-view-tab.active {
-    background: #eff6ff;
-    border-color: #2563eb;
-    color: #1d4ed8;
+.exp-view-pill.current {
+    color: #fff;
+    padding: 10px 24px;
+    margin: -4px 2px;
+    border-radius: 10px;
 }
+
+/* Status color variants */
+.exp-nav-completed .exp-view-pill.current { background: #16a34a; }
+.exp-nav-failed .exp-view-pill.current { background: #dc2626; }
+.exp-nav-running .exp-view-pill.current { background: #2563eb; }
+.exp-nav-pending .exp-view-pill.current { background: #9ca3af; }
+.exp-nav-cancelled .exp-view-pill.current { background: #6b7280; }
 
 /* ==========================================================================
    Tab Content

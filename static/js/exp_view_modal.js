@@ -318,9 +318,9 @@ const ExpViewModal = (function() {
         state.currentTab = 'overview';
 
         // Reset tabs to default
-        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
-        const overviewTab = document.querySelector('.exp-view-tab[data-tab="overview"]');
-        if (overviewTab) overviewTab.classList.add('active');
+        document.querySelectorAll('.exp-view-pill').forEach(t => t.classList.remove('current'));
+        const overviewTab = document.querySelector('.exp-view-pill[data-tab="overview"]');
+        if (overviewTab) overviewTab.classList.add('current');
 
         document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
         const overviewContent = document.getElementById('expViewTabOverview');
@@ -369,9 +369,9 @@ const ExpViewModal = (function() {
         state.currentTab = 'overview';
 
         // Reset tabs to default
-        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
-        const overviewTab = document.querySelector('.exp-view-tab[data-tab="overview"]');
-        if (overviewTab) overviewTab.classList.add('active');
+        document.querySelectorAll('.exp-view-pill').forEach(t => t.classList.remove('current'));
+        const overviewTab = document.querySelector('.exp-view-pill[data-tab="overview"]');
+        if (overviewTab) overviewTab.classList.add('current');
 
         document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
         const overviewContent = document.getElementById('expViewTabOverview');
@@ -1250,9 +1250,9 @@ const ExpViewModal = (function() {
         state.currentTab = initialTab;
 
         // Reset tabs
-        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
-        const targetTab = document.querySelector(`.exp-view-tab[data-tab="${initialTab}"]`);
-        if (targetTab) targetTab.classList.add('active');
+        document.querySelectorAll('.exp-view-pill').forEach(t => t.classList.remove('current'));
+        const targetTab = document.querySelector(`.exp-view-pill[data-tab="${initialTab}"]`);
+        if (targetTab) targetTab.classList.add('current');
 
         document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
         const targetContent = document.getElementById(`expViewTab${initialTab.charAt(0).toUpperCase() + initialTab.slice(1)}`);
@@ -2276,9 +2276,9 @@ const ExpViewModal = (function() {
         state.currentTab = 'overview';
 
         // Reset tabs
-        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
-        const targetTab = document.querySelector(`.exp-view-tab[data-tab="overview"]`);
-        if (targetTab) targetTab.classList.add('active');
+        document.querySelectorAll('.exp-view-pill').forEach(t => t.classList.remove('current'));
+        const targetTab = document.querySelector(`.exp-view-pill[data-tab="overview"]`);
+        if (targetTab) targetTab.classList.add('current');
 
         document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));
         const targetContent = document.getElementById('expViewTabOverview');
@@ -2872,7 +2872,7 @@ const ExpViewModal = (function() {
             visibleTabs = config.showTabs;
         }
 
-        const allTabs = tabContainer.querySelectorAll('.exp-view-tab');
+        const allTabs = tabContainer.querySelectorAll('.exp-view-pill');
         allTabs.forEach(tab => {
             const tabName = tab.getAttribute('data-tab');
             if (visibleTabs.includes(tabName)) {
@@ -2985,6 +2985,15 @@ const ExpViewModal = (function() {
         // New header: status gradient
         const header = document.getElementById('expViewHeader');
         header.className = `modal-header-soft soft-exp-${exp.status}`;
+
+        // Nav bar status color
+        const navBar = document.getElementById('expViewNavBar');
+        if (navBar) {
+            const statusMap = { completed: 'completed', failed: 'failed', running: 'running',
+                submitting: 'running', pending: 'pending', cancelled: 'cancelled', registered: 'completed' };
+            const navStatus = statusMap[exp.status] || 'pending';
+            navBar.className = `exp-view-nav-bar exp-nav-${navStatus}`;
+        }
 
         // Status badge (circle)
         const statusBadge = document.getElementById('expViewStatusBadge');
@@ -3179,9 +3188,9 @@ const ExpViewModal = (function() {
         state.currentTab = tabName;
 
         // Update tab buttons
-        document.querySelectorAll('.exp-view-tab').forEach(t => t.classList.remove('active'));
-        const activeTab = document.querySelector(`.exp-view-tab[data-tab="${tabName}"]`);
-        if (activeTab) activeTab.classList.add('active');
+        document.querySelectorAll('.exp-view-pill').forEach(t => t.classList.remove('current'));
+        const activeTab = document.querySelector(`.exp-view-pill[data-tab="${tabName}"]`);
+        if (activeTab) activeTab.classList.add('current');
 
         // Update tab content
         document.querySelectorAll('.exp-view-tab-content').forEach(c => c.classList.remove('active'));

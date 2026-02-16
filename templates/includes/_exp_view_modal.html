@@ -79,31 +79,17 @@
         </div>
 
         <!-- Tab Navigation -->
-        <div class="exp-view-tabs" id="expViewTabs">
-            <button class="exp-view-tab active" data-tab="overview" onclick="ExpViewModal.switchTab('overview')">
-                Overview
-            </button>
-            <button class="exp-view-tab" data-tab="pipeline" onclick="ExpViewModal.switchTab('pipeline')">
-                Pipeline
-            </button>
-            <button class="exp-view-tab" data-tab="data" onclick="ExpViewModal.switchTab('data')">
-                Data Insights
-            </button>
-            <button class="exp-view-tab" data-tab="training" onclick="ExpViewModal.switchTab('training')">
-                Training Runs
-            </button>
-            <button class="exp-view-tab" data-tab="versions" onclick="ExpViewModal.switchTab('versions')" style="display: none;">
-                Versions
-            </button>
-            <button class="exp-view-tab" data-tab="artifacts" onclick="ExpViewModal.switchTab('artifacts')" style="display: none;">
-                Artifacts
-            </button>
-            <button class="exp-view-tab" data-tab="lineage" onclick="ExpViewModal.switchTab('lineage')" style="display: none;">
-                Lineage
-            </button>
-            <button class="exp-view-tab" data-tab="logs" onclick="ExpViewModal.switchTab('logs')" style="display: none;">
-                Logs
-            </button>
+        <div class="exp-view-nav-bar exp-nav-pending" id="expViewNavBar">
+            <div class="exp-view-nav-pills" id="expViewTabs">
+                <button class="exp-view-pill current" data-tab="overview" onclick="ExpViewModal.switchTab('overview')">Overview</button>
+                <button class="exp-view-pill" data-tab="pipeline" onclick="ExpViewModal.switchTab('pipeline')">Pipeline</button>
+                <button class="exp-view-pill" data-tab="data" onclick="ExpViewModal.switchTab('data')">Data Insights</button>
+                <button class="exp-view-pill" data-tab="training" onclick="ExpViewModal.switchTab('training')">Training Runs</button>
+                <button class="exp-view-pill" data-tab="versions" onclick="ExpViewModal.switchTab('versions')" style="display: none;">Versions</button>
+                <button class="exp-view-pill" data-tab="artifacts" onclick="ExpViewModal.switchTab('artifacts')" style="display: none;">Artifacts</button>
+                <button class="exp-view-pill" data-tab="lineage" onclick="ExpViewModal.switchTab('lineage')" style="display: none;">Lineage</button>
+                <button class="exp-view-pill" data-tab="logs" onclick="ExpViewModal.switchTab('logs')" style="display: none;">Logs</button>
+            </div>
         </div>
 
         <!-- Tab Content -->

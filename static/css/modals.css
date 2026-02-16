@@ -377,6 +377,49 @@
 .modal-header-status-circle.cancelled { background: #6b7280; }
 .modal-header-status-circle.pending   { background: #9ca3af; }
 
+/* --- Experiment status variants --- */
+.modal-header-soft.soft-exp-completed {
+    background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);
+}
+.modal-header-soft.soft-exp-completed .modal-header-icon-badge { background: #16a34a; }
+.modal-header-soft.soft-exp-completed .modal-header-title { color: #14532d; }
+.modal-header-soft.soft-exp-completed .modal-header-subtitle { color: #166534; }
+
+.modal-header-soft.soft-exp-failed {
+    background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 50%, #dc2626 100%);
+}
+.modal-header-soft.soft-exp-failed .modal-header-icon-badge { background: #dc2626; }
+.modal-header-soft.soft-exp-failed .modal-header-title { color: #7f1d1d; }
+.modal-header-soft.soft-exp-failed .modal-header-subtitle { color: #991b1b; }
+
+.modal-header-soft.soft-exp-running {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-exp-running .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-exp-running .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-exp-running .modal-header-subtitle { color: #1e40af; }
+
+.modal-header-soft.soft-exp-submitting {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-exp-submitting .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-exp-submitting .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-exp-submitting .modal-header-subtitle { color: #1e40af; }
+
+.modal-header-soft.soft-exp-cancelled {
+    background: linear-gradient(135deg, #f3f4f6 0%, #d1d5db 50%, #6b7280 100%);
+}
+.modal-header-soft.soft-exp-cancelled .modal-header-icon-badge { background: #6b7280; }
+.modal-header-soft.soft-exp-cancelled .modal-header-title { color: #1f2937; }
+.modal-header-soft.soft-exp-cancelled .modal-header-subtitle { color: #374151; }
+
+.modal-header-soft.soft-exp-pending {
+    background: linear-gradient(135deg, #f9fafb 0%, #e5e7eb 50%, #9ca3af 100%);
+}
+.modal-header-soft.soft-exp-pending .modal-header-icon-badge { background: #9ca3af; }
+.modal-header-soft.soft-exp-pending .modal-header-title { color: #374151; }
+.modal-header-soft.soft-exp-pending .modal-header-subtitle { color: #4b5563; }
+
 /* ============================================================================
    WIZARD NAV PILL COLOR OVERRIDES
    ============================================================================

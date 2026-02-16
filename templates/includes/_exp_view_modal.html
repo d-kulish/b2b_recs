@@ -40,11 +40,23 @@
 <!-- Experiment View Modal -->
 <div id="expViewModal" class="modal-overlay hidden" onclick="ExpViewModal.handleOverlayClick(event)">
     <div class="modal-container exp-view-modal" onclick="event.stopPropagation()">
-        <!-- Header - Vertex Pipelines Style - 3 Column Layout -->
-        <div class="modal-header exp-view-header" id="expViewHeader">
+        <!-- Header - New ETL-style (experiment mode) -->
+        <div class="modal-header-soft soft-exp-pending" id="expViewHeader">
+            <div class="modal-header-icon-badge"><i class="fas fa-flask"></i></div>
+            <div style="flex: 1;">
+                <h3 class="modal-header-title" id="expViewTitle">Exp #—</h3>
+                <div class="modal-header-subtitle" id="expViewSubtitle">Experiment overview</div>
+            </div>
+            <div class="modal-header-status-circle pending" id="expViewStatusBadge">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+        </div>
+
+        <!-- Header - Legacy 3-Column Layout (training_run / model / endpoint modes) -->
+        <div class="modal-header exp-view-header" id="expViewHeaderLegacy" style="display: none;">
             <!-- Column 1: Experiment Number (20%, centered) -->
             <div class="exp-view-header-number">
-                <h3 class="exp-view-title" id="expViewTitle">Exp #1</h3>
+                <h3 class="exp-view-title" id="expViewTitleLegacy">Run #1</h3>
             </div>
             <!-- Column 2: Name, Description, Times (60%, left-aligned) -->
             <div class="exp-view-header-info">
@@ -98,7 +110,70 @@
         <div class="modal-body exp-view-body">
             <!-- Overview Tab -->
             <div id="expViewTabOverview" class="exp-view-tab-content active">
-                <!-- Results Summary (at top for completed experiments) -->
+                <!-- Card Sections (experiment mode only) -->
+                <div id="expViewCardSections" style="display: none;">
+                    <!-- Card 1: Experiment Information -->
+                    <div class="exp-detail-section" style="margin-bottom: 16px;">
+                        <div class="exp-detail-section-title">Experiment Information</div>
+                        <div class="exp-detail-section-body">
+                            <div class="exp-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                            <div class="exp-detail-stats">
+                                <div class="exp-detail-stat-info" id="expCardName">
+                                    <div class="stat-label">Name</div>
+                                    <div class="stat-value">—</div>
+                                </div>
+                                <div class="exp-detail-stat-info" id="expCardModelType">
+                                    <div class="stat-label">Model Type</div>
+                                    <div class="stat-value">—</div>
+                                </div>
+                                <div class="exp-detail-stat-info" id="expCardDescription" style="flex: 2;">
+                                    <div class="stat-label">Description</div>
+                                    <div class="stat-value">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Timeline -->
+                    <div class="exp-detail-section" style="margin-bottom: 16px;">
+                        <div class="exp-detail-section-title">Timeline</div>
+                        <div class="exp-detail-section-body">
+                            <div class="exp-detail-section-icon timeline"><i class="fas fa-clock"></i></div>
+                            <div class="exp-detail-stats">
+                                <div class="exp-detail-stat-info" id="expCardStart">
+                                    <div class="stat-label">Start</div>
+                                    <div class="stat-value">—</div>
+                                </div>
+                                <div class="exp-detail-stat-info" id="expCardEnd">
+                                    <div class="stat-label">End</div>
+                                    <div class="stat-value">—</div>
+                                </div>
+                                <div class="exp-detail-stat-info" id="expCardDuration">
+                                    <div class="stat-label">Duration</div>
+                                    <div class="stat-value">—</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Results (hidden when not completed) -->
+                    <div class="exp-detail-section" id="expCardResults" style="margin-bottom: 16px; display: none;">
+                        <div class="exp-detail-section-title">Results</div>
+                        <div class="exp-detail-section-body" style="align-items: flex-start;">
+                            <div class="exp-detail-section-icon results"><i class="fas fa-chart-bar"></i></div>
+                            <div id="expCardMetricsContainer" style="flex: 1; display: flex; flex-direction: column; gap: 0;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dataset cards (rendered by JS, replacing the accordion) -->
+                    <div id="expCardDatasetContainer">
+                        <!-- Populated by renderDatasetDetails() in experiment mode -->
+                    </div>
+                </div>
+
+                <!-- Legacy Results Summary (training_run mode) -->
                 <div id="expViewResultsSummary" class="exp-view-results-summary hidden">
                     <h4 class="exp-view-group-title">Results</h4>
                     <div class="exp-view-metrics-row" id="expViewMetricsSummary">
@@ -120,8 +195,8 @@
                     </div>
                 </div>
 
-                <!-- Accordion 2: Dataset Configuration -->
-                <div class="exp-view-accordion">
+                <!-- Accordion 2: Dataset Configuration (hidden in experiment mode) -->
+                <div id="expViewDatasetAccordion" class="exp-view-accordion">
                     <div class="exp-view-accordion-header" onclick="ExpViewModal.toggleAccordion('dataset')">
                         <span class="exp-view-accordion-title">
                             <i class="fas fa-database mr-2 text-purple-500"></i><span class="exp-view-accordion-label">Dataset:</span> <span id="expViewDatasetName" class="exp-view-accordion-value">-</span>

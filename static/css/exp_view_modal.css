@@ -16,8 +16,8 @@
    Modal Container
    ========================================================================== */
 .exp-view-modal {
-    width: 780px;
-    max-width: 780px;
+    width: 936px;
+    max-width: 936px;
     height: 600px;
     max-height: 600px;
     overflow: hidden;
@@ -862,6 +862,302 @@
 
 .exp-view-metrics-multitask .exp-view-metric-card-value {
     font-size: 16px;
+}
+
+/* ==========================================================================
+   New Header (experiment mode) - border-radius for top of modal
+   ========================================================================== */
+.exp-view-modal > .modal-header-soft {
+    border-radius: 12px 12px 0 0;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Experiment Detail Section Cards (new design - experiment mode only)
+   ========================================================================== */
+.exp-detail-section {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 20px;
+    background: white;
+}
+
+.exp-detail-section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 10px;
+}
+
+.exp-detail-section-body {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.exp-detail-section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.exp-detail-section-icon i {
+    color: white;
+    font-size: 18px;
+}
+
+.exp-detail-section-icon.info     { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+.exp-detail-section-icon.timeline { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+.exp-detail-section-icon.results  { background: linear-gradient(135deg, #10b981, #34d399); }
+.exp-detail-section-icon.tables   { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+.exp-detail-section-icon.filters  { background: linear-gradient(135deg, #10b981, #34d399); }
+
+.exp-detail-stats {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+}
+
+.exp-detail-stat {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    background: #f9fafb;
+    border-radius: 8px;
+    min-width: 0;
+}
+
+.exp-detail-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.exp-detail-stat-label {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+
+.exp-detail-stat-info {
+    flex: 1;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.exp-detail-stat-info .stat-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.exp-detail-stat-info .stat-value {
+    font-size: 13px;
+    font-weight: 400;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Model type badge inside stat */
+.exp-detail-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.exp-detail-type-badge.retrieval {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+.exp-detail-type-badge.ranking {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.exp-detail-type-badge.multitask {
+    background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 100%);
+    color: #6b21a8;
+    border: 1px solid #e9d5ff;
+}
+
+/* Results card metrics grid */
+.exp-metrics-group-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.exp-metrics-group-title i {
+    font-size: 12px;
+}
+
+.exp-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.exp-metric-card {
+    text-align: center;
+    padding: 12px 8px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.exp-metric-card-label {
+    font-size: 11px;
+    color: #374151;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.exp-metric-card-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.exp-metrics-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 12px 0;
+}
+
+/* Filter detail breakdowns inside section — key-value grid */
+.exp-detail-filter-details {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.exp-filter-row {
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    align-items: center;
+    border-bottom: 1px solid #f3f4f6;
+    padding: 10px 0;
+}
+
+.exp-filter-row:last-child { border-bottom: none; }
+
+.exp-filter-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.exp-filter-label-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.exp-filter-label-icon i { font-size: 12px; color: white; }
+.exp-filter-label-icon.blue   { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
+.exp-filter-label-icon.green  { background: linear-gradient(135deg, #10b981, #34d399); }
+.exp-filter-label-icon.purple { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+
+.exp-filter-values {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #374151;
+}
+
+.exp-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+}
+
+.exp-filter-connector {
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+/* Filters section — collapsible */
+.exp-detail-filters-header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.exp-detail-filters-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.exp-detail-filters-toggle {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 16px;
+    transition: transform 0.3s ease;
+}
+
+.exp-detail-section.filters-open .exp-detail-filters-toggle {
+    transform: rotate(90deg);
+}
+
+.exp-detail-filters-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.exp-detail-section.filters-open .exp-detail-filters-content {
+    max-height: 2000px;
+    transition: max-height 0.5s ease-in;
 }
 
 /* ==========================================================================

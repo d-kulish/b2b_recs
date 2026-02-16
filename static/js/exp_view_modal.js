@@ -397,9 +397,14 @@ const ExpViewModal = (function() {
         // Store current run for tab data loading
         window.currentViewRun = run;
 
+        // Switch to legacy header, hide card sections
+        showLegacyHeader();
+        const cardSections = document.getElementById('expViewCardSections');
+        if (cardSections) cardSections.style.display = 'none';
+
         // Status gradient on header
         // Use "registered" class (green) if model is registered, regardless of deployment status
-        const header = document.getElementById('expViewHeader');
+        const header = document.getElementById('expViewHeaderLegacy');
         const isRegistered = run.vertex_model_resource_name || run.registered_at;
         const headerStatusClass = isRegistered ? 'registered' : run.status;
         header.className = `modal-header exp-view-header ${headerStatusClass}`;
@@ -417,7 +422,7 @@ const ExpViewModal = (function() {
         statusIcon.innerHTML = `<i class="fas ${statusCfg.icon}${isSpinning ? ' fa-spin' : ''}"></i>`;
 
         // Title (Run #N)
-        document.getElementById('expViewTitle').textContent = `Run #${run.run_number}`;
+        document.getElementById('expViewTitleLegacy').textContent = `Run #${run.run_number}`;
 
         // Run name
         const expNameEl = document.getElementById('expViewExpName');
@@ -1272,8 +1277,13 @@ const ExpViewModal = (function() {
         // Store current model for tab data loading
         window.currentViewModel = model;
 
+        // Switch to legacy header, hide card sections
+        showLegacyHeader();
+        const cardSections = document.getElementById('expViewCardSections');
+        if (cardSections) cardSections.style.display = 'none';
+
         // Model mode header: use "registered" status for green gradient + model-mode class
-        const header = document.getElementById('expViewHeader');
+        const header = document.getElementById('expViewHeaderLegacy');
         header.className = `modal-header exp-view-header registered model-mode`;
 
         // Status panel - registered status
@@ -1286,7 +1296,7 @@ const ExpViewModal = (function() {
         statusIcon.innerHTML = `<i class="fas fa-check"></i>`;
 
         // Title (Model name) - shown prominently with type badge below
-        const titleEl = document.getElementById('expViewTitle');
+        const titleEl = document.getElementById('expViewTitleLegacy');
         const modelType = (model.model_type || 'retrieval').toLowerCase();
         const badgeContents = {
             'retrieval': '<i class="fas fa-search"></i> Retrieval',
@@ -2286,8 +2296,13 @@ const ExpViewModal = (function() {
         // Store current endpoint for tab data loading
         window.currentViewEndpoint = endpoint;
 
+        // Switch to legacy header, hide card sections
+        showLegacyHeader();
+        const cardSections = document.getElementById('expViewCardSections');
+        if (cardSections) cardSections.style.display = 'none';
+
         // Endpoint mode header: use active/inactive status + endpoint-mode class
-        const header = document.getElementById('expViewHeader');
+        const header = document.getElementById('expViewHeaderLegacy');
         const statusClass = endpoint.is_active ? 'active' : 'inactive';
         header.className = `modal-header exp-view-header endpoint-mode ${statusClass}`;
 
@@ -2303,7 +2318,7 @@ const ExpViewModal = (function() {
         statusIcon.innerHTML = `<i class="fas ${iconSymbol}"></i>`;
 
         // Title (Endpoint name) - shown prominently with status badge below
-        const titleEl = document.getElementById('expViewTitle');
+        const titleEl = document.getElementById('expViewTitleLegacy');
         const statusText = endpoint.is_active ? 'Active' : 'Inactive';
         const statusBadge = endpoint.is_active
             ? '<i class="fas fa-check-circle"></i> ACTIVE'
@@ -2872,61 +2887,179 @@ const ExpViewModal = (function() {
     // MODAL POPULATION
     // =============================================================================
 
+    function showNewHeader() {
+        document.getElementById('expViewHeader').style.display = '';
+        document.getElementById('expViewHeaderLegacy').style.display = 'none';
+        // Hide dataset accordion (cards shown directly in experiment mode)
+        const dsAccordion = document.getElementById('expViewDatasetAccordion');
+        if (dsAccordion) dsAccordion.style.display = 'none';
+    }
+
+    function showLegacyHeader() {
+        document.getElementById('expViewHeader').style.display = 'none';
+        document.getElementById('expViewHeaderLegacy').style.display = '';
+        // Show dataset accordion for legacy modes
+        const dsAccordion = document.getElementById('expViewDatasetAccordion');
+        if (dsAccordion) dsAccordion.style.display = '';
+    }
+
+    function computeDuration(startedAt, completedAt) {
+        if (!startedAt || !completedAt) return null;
+        const start = new Date(startedAt);
+        const end = new Date(completedAt);
+        const diffMs = end - start;
+        if (diffMs < 0) return null;
+        return Math.floor(diffMs / 1000);
+    }
+
+    function renderResultsCard(metrics, configType) {
+        const container = document.getElementById('expCardMetricsContainer');
+        if (!container) return;
+
+        const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
+        const formatRMSE = v => v != null ? v.toFixed(2) : 'N/A';
+
+        function renderMetricGrid(items) {
+            return `<div class="exp-metrics-grid">${items.map(item => `
+                <div class="exp-metric-card">
+                    <div class="exp-metric-card-label">${item.label}</div>
+                    <div class="exp-metric-card-value">${item.format(item.value)}</div>
+                </div>
+            `).join('')}</div>`;
+        }
+
+        if (configType === 'multitask') {
+            const retrievalItems = [
+                { label: 'Recall@5', value: metrics['recall_at_5'], format: formatRecall },
+                { label: 'Recall@10', value: metrics['recall_at_10'], format: formatRecall },
+                { label: 'Recall@50', value: metrics['recall_at_50'], format: formatRecall },
+                { label: 'Recall@100', value: metrics['recall_at_100'], format: formatRecall }
+            ];
+            const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
+            const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
+            const testRmse = metrics['test_rmse'];
+            const testMae = metrics['test_mae'];
+            const rankingItems = [
+                { label: 'RMSE', value: rmse, format: formatRMSE },
+                { label: 'Test RMSE', value: testRmse, format: formatRMSE },
+                { label: 'MAE', value: mae, format: formatRMSE },
+                { label: 'Test MAE', value: testMae, format: formatRMSE }
+            ];
+            container.innerHTML = `
+                <div class="exp-metrics-group-title"><i class="fas fa-search"></i> Retrieval Metrics</div>
+                ${renderMetricGrid(retrievalItems)}
+                <div class="exp-metrics-divider"></div>
+                <div class="exp-metrics-group-title"><i class="fas fa-star"></i> Ranking Metrics</div>
+                ${renderMetricGrid(rankingItems)}
+            `;
+        } else if (configType === 'ranking') {
+            const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
+            const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
+            const testRmse = metrics['test_rmse'];
+            const testMae = metrics['test_mae'];
+            const items = [
+                { label: 'RMSE', value: rmse, format: formatRMSE },
+                { label: 'Test RMSE', value: testRmse, format: formatRMSE },
+                { label: 'MAE', value: mae, format: formatRMSE },
+                { label: 'Test MAE', value: testMae, format: formatRMSE }
+            ];
+            container.innerHTML = renderMetricGrid(items);
+        } else {
+            const items = [
+                { label: 'Recall@5', value: metrics['recall_at_5'], format: formatRecall },
+                { label: 'Recall@10', value: metrics['recall_at_10'], format: formatRecall },
+                { label: 'Recall@50', value: metrics['recall_at_50'], format: formatRecall },
+                { label: 'Recall@100', value: metrics['recall_at_100'], format: formatRecall }
+            ];
+            container.innerHTML = renderMetricGrid(items);
+        }
+    }
+
     function populateModal(exp) {
         // Store current exp for tab data loading
         window.currentViewExp = exp;
 
-        // Status gradient on header
+        // Show new header, hide legacy
+        showNewHeader();
+
+        // New header: status gradient
         const header = document.getElementById('expViewHeader');
-        header.className = `modal-header exp-view-header ${exp.status}`;
+        header.className = `modal-header-soft soft-exp-${exp.status}`;
 
-        // Status panel
-        const statusPanel = document.getElementById('expViewStatusPanel');
-        statusPanel.className = `exp-view-status-panel ${exp.status}`;
-
-        // Status icon
-        const statusIcon = document.getElementById('expViewStatusIcon');
+        // Status badge (circle)
+        const statusBadge = document.getElementById('expViewStatusBadge');
         const statusIcons = {
             'submitting': 'fa-sync fa-spin',
             'running': 'fa-sync fa-spin',
             'completed': 'fa-check',
-            'failed': 'fa-exclamation',
+            'failed': 'fa-times',
             'cancelled': 'fa-ban',
             'pending': 'fa-clock'
         };
-        statusIcon.className = `exp-view-status-icon ${exp.status}`;
-        statusIcon.innerHTML = `<i class="fas ${statusIcons[exp.status] || 'fa-circle'}"></i>`;
+        statusBadge.className = `modal-header-status-circle ${exp.status}`;
+        statusBadge.innerHTML = `<i class="fas ${statusIcons[exp.status] || 'fa-circle'}"></i>`;
 
-        // Title (Exp #N)
-        document.getElementById('expViewTitle').textContent = exp.display_name || `Exp #${exp.id}`;
+        // Title: "Exp #N · name" or just "Exp #N"
+        const expName = exp.experiment_name || '';
+        const titleText = expName ? `Exp #${exp.id} \u00b7 ${expName}` : (exp.display_name || `Exp #${exp.id}`);
+        document.getElementById('expViewTitle').textContent = titleText;
 
-        // Experiment name
-        const expNameEl = document.getElementById('expViewExpName');
-        expNameEl.textContent = exp.experiment_name || '';
-        expNameEl.style.display = exp.experiment_name ? '' : 'none';
+        // Subtitle
+        document.getElementById('expViewSubtitle').textContent = 'Experiment overview';
 
-        // Model type badge in header - ensure visible for experiments
-        const typeBadgeEl = document.getElementById('expViewTypeBadge');
-        typeBadgeEl.style.display = '';  // Restore visibility (may be hidden in model mode)
+        // Show card sections, hide legacy results summary
+        const cardSections = document.getElementById('expViewCardSections');
+        if (cardSections) cardSections.style.display = '';
+        const resultsSummary = document.getElementById('expViewResultsSummary');
+        if (resultsSummary) resultsSummary.classList.add('hidden');
+
+        // Card 1: Experiment Information
         const modelType = (exp.model_type || exp.feature_config_type || 'retrieval').toLowerCase();
         const badgeContents = {
             'retrieval': '<i class="fas fa-search"></i> Retrieval',
             'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
             'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
         };
-        typeBadgeEl.className = `exp-view-header-type-badge ${modelType}`;
-        typeBadgeEl.innerHTML = badgeContents[modelType] || badgeContents['retrieval'];
 
-        // Description
-        const descEl = document.getElementById('expViewDescription');
-        descEl.textContent = exp.experiment_description || '';
-        descEl.style.display = exp.experiment_description ? '' : 'none';
+        const nameCard = document.getElementById('expCardName');
+        if (nameCard) nameCard.querySelector('.stat-value').textContent = expName || '\u2014';
 
-        // Start/End times - ensure times are visible for experiments
-        const timesEl = document.querySelector('.exp-view-times');
-        if (timesEl) timesEl.style.display = '';
-        document.getElementById('expViewStartTime').textContent = formatDateTime(exp.started_at || exp.created_at);
-        document.getElementById('expViewEndTime').textContent = exp.completed_at ? formatDateTime(exp.completed_at) : '-';
+        const typeCard = document.getElementById('expCardModelType');
+        if (typeCard) {
+            typeCard.querySelector('.stat-value').innerHTML =
+                `<span class="exp-detail-type-badge ${modelType}">${badgeContents[modelType] || badgeContents['retrieval']}</span>`;
+        }
+
+        const descCard = document.getElementById('expCardDescription');
+        if (descCard) {
+            const desc = exp.experiment_description || '\u2014';
+            descCard.querySelector('.stat-value').textContent = desc;
+        }
+
+        // Card 2: Timeline
+        const startCard = document.getElementById('expCardStart');
+        if (startCard) startCard.querySelector('.stat-value').textContent = formatDateTime(exp.started_at || exp.created_at);
+
+        const endCard = document.getElementById('expCardEnd');
+        if (endCard) endCard.querySelector('.stat-value').textContent = exp.completed_at ? formatDateTime(exp.completed_at) : '\u2014';
+
+        const durationCard = document.getElementById('expCardDuration');
+        if (durationCard) {
+            const durationSec = computeDuration(exp.started_at || exp.created_at, exp.completed_at);
+            durationCard.querySelector('.stat-value').textContent = durationSec != null ? formatDuration(durationSec) : '\u2014';
+        }
+
+        // Card 3: Results (only for completed experiments with metrics)
+        const resultsCard = document.getElementById('expCardResults');
+        if (resultsCard) {
+            if (exp.status === 'completed' && exp.metrics) {
+                resultsCard.style.display = '';
+                const configType = exp.feature_config_type || exp.model_type || 'retrieval';
+                renderResultsCard(exp.metrics, configType);
+            } else {
+                resultsCard.style.display = 'none';
+            }
+        }
 
         // Reset accordion states for overview tab
         resetAccordionStates();
@@ -2935,16 +3068,19 @@ const ExpViewModal = (function() {
         const regDeploySection = document.getElementById('expViewRegistryDeploymentSection');
         if (regDeploySection) regDeploySection.style.display = 'none';
 
-        // Overview Tab - Dataset section
-        const datasetName = exp.dataset_name || exp.dataset?.name || 'Dataset';
-        document.getElementById('expViewDatasetName').textContent = datasetName;
+        // Hide the dataset accordion in experiment mode (cards shown directly instead)
+        const datasetAccordion = document.getElementById('expViewDatasetAccordion');
+        if (datasetAccordion) datasetAccordion.style.display = 'none';
 
-        // Load dataset details
+        // Store dataset name for use in card rendering
+        state.datasetName = exp.dataset_name || exp.dataset?.name || '';
+
+        // Overview Tab - Dataset section: load into card container
         const datasetId = exp.dataset_id || exp.dataset?.id;
         if (datasetId) {
-            loadDatasetDetails(datasetId);
+            loadDatasetDetails(datasetId, 'expCardDatasetContainer');
         } else {
-            document.getElementById('expViewDatasetDetails').innerHTML = '<div class="exp-view-no-filters">No dataset configured</div>';
+            document.getElementById('expCardDatasetContainer').innerHTML = '<div class="exp-view-no-filters">No dataset configured</div>';
         }
 
         // Load features config details
@@ -2987,16 +3123,6 @@ const ExpViewModal = (function() {
 
         // Training Parameters (chip format)
         renderTrainingParamsChips(exp);
-
-        // Results Summary (overview tab)
-        const resultsSummary = document.getElementById('expViewResultsSummary');
-        if (exp.status === 'completed' && exp.metrics) {
-            resultsSummary.classList.remove('hidden');
-            const configType = exp.feature_config_type || exp.model_type || 'retrieval';
-            renderMetricsSummary(exp.metrics, false, configType);
-        } else {
-            resultsSummary.classList.add('hidden');
-        }
 
         // Pipeline Tab
         const isRunning = exp.status === 'running' || exp.status === 'submitting';
@@ -3137,8 +3263,9 @@ const ExpViewModal = (function() {
     // DATASET DETAILS
     // =============================================================================
 
-    function loadDatasetDetails(datasetId) {
-        const container = document.getElementById('expViewDatasetDetails');
+    function loadDatasetDetails(datasetId, targetContainerId) {
+        const containerId = targetContainerId || 'expViewDatasetDetails';
+        const container = document.getElementById(containerId);
         container.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
 
         const url = buildUrl(config.endpoints.datasetSummary, { id: datasetId });
@@ -3152,7 +3279,7 @@ const ExpViewModal = (function() {
                 container.innerHTML = '<div class="exp-view-no-filters">Failed to load dataset details</div>';
                 return;
             }
-            renderDatasetDetails(data.summary);
+            renderDatasetDetails(data.summary, containerId);
         })
         .catch(error => {
             console.error('Error loading dataset details:', error);
@@ -3160,110 +3287,234 @@ const ExpViewModal = (function() {
         });
     }
 
-    function renderDatasetDetails(summary) {
-        const container = document.getElementById('expViewDatasetDetails');
+    function renderDatasetDetails(summary, containerId) {
+        const container = document.getElementById(containerId || 'expViewDatasetDetails');
         const snapshot = summary.summary_snapshot || {};
         const filtersApplied = snapshot.filters_applied || {};
         const joinConfig = summary.join_config || {};
 
-        let html = '';
+        // Tables info
+        const primaryTable = summary.tables?.primary?.replace('raw_data.', '') || '-';
+        const secondaryTables = summary.tables?.secondary || [];
+        const tableCount = 1 + secondaryTables.length;
 
-        // Tables & Joins section
-        const primaryTable = summary.tables.primary?.replace('raw_data.', '') || '-';
-        html += `<div class="exp-view-ds-section">
-            <div class="exp-view-ds-title"><i class="fas fa-database"></i>Tables & Joins</div>
-            <div class="exp-view-ds-grid">
-                <span class="label">Primary:</span>
-                <span class="value">${primaryTable}</span>`;
+        // Build join rows
+        const joinRows = Object.entries(joinConfig).map(([table, cfg]) => {
+            const tableName = table.replace('raw_data.', '');
+            return `
+                <div style="display: flex; align-items: center; font-size: 13px; padding: 4px 0;">
+                    <span style="color: #111827; font-weight: 500;">${primaryTable}.${cfg.join_key}</span>
+                    <i class="fas fa-arrows-alt-h" style="margin: 0 8px; color: #9ca3af; font-size: 10px;"></i>
+                    <span style="color: #111827; font-weight: 500;">${tableName}.${cfg.secondary_column}</span>
+                    <span style="margin-left: 8px; padding: 1px 8px; border-radius: 4px; font-size: 11px; background: #f3f4f6; color: #6b7280;">${cfg.join_type || 'LEFT'}</span>
+                </div>
+            `;
+        }).join('');
 
-        if (summary.tables.secondary?.length > 0) {
-            html += `<span class="label">Secondary:</span>
-                <span class="value">${summary.tables.secondary.map(t => t.replace('raw_data.', '')).join(', ')}</span>`;
-        }
-        html += `</div>`;
+        // Build filter detail rows
+        const filterDetails = [];
 
-        // Join keys
-        if (Object.keys(joinConfig).length > 0) {
-            html += `<div class="exp-view-ds-join"><span>Join Keys:</span>`;
-            for (const [table, configItem] of Object.entries(joinConfig)) {
-                const tableName = table.replace('raw_data.', '');
-                html += `<div class="exp-view-ds-join-row">
-                    <span class="key">${primaryTable}.${configItem.join_key}</span>
-                    <i class="fas fa-arrows-alt-h" style="color:#9ca3af;font-size:10px;"></i>
-                    <span class="key">${tableName}.${configItem.secondary_column}</span>
-                    <span class="badge">${configItem.join_type || 'left'}</span>
-                </div>`;
-            }
-            html += `</div>`;
-        }
-        html += `</div>`;
-
-        // Filters Applied section
-        html += `<div class="exp-view-ds-section">
-            <div class="exp-view-ds-title"><i class="fas fa-filter"></i>Filters Applied</div>`;
-
-        let hasFilters = false;
-
-        // Date filter
         if (filtersApplied.dates?.type === 'rolling') {
-            hasFilters = true;
-            html += `<div class="exp-view-ds-filter date">
-                <div class="exp-view-ds-filter-title"><i class="fas fa-calendar-alt"></i>Date Filter</div>
-                <div class="exp-view-ds-filter-detail">Column: <strong>${filtersApplied.dates.column || 'N/A'}</strong></div>
-                <div class="exp-view-ds-filter-detail">Range: Last ${filtersApplied.dates.days} days (rolling window)</div>
-            </div>`;
+            filterDetails.push(`
+                <div class="exp-filter-row">
+                    <div class="exp-filter-label">
+                        <div class="exp-filter-label-icon blue"><i class="fas fa-calendar-alt"></i></div>
+                        Date Filter
+                    </div>
+                    <div class="exp-filter-values">
+                        <span class="exp-filter-chip">Last ${filtersApplied.dates.days} days</span>
+                        <span class="exp-filter-connector">on</span>
+                        <span class="exp-filter-chip">${filtersApplied.dates.column || 'N/A'}</span>
+                    </div>
+                </div>
+            `);
         } else if (filtersApplied.dates?.type === 'fixed') {
-            hasFilters = true;
-            html += `<div class="exp-view-ds-filter date">
-                <div class="exp-view-ds-filter-title"><i class="fas fa-calendar-alt"></i>Date Filter</div>
-                <div class="exp-view-ds-filter-detail">Column: <strong>${filtersApplied.dates.column || 'N/A'}</strong></div>
-                <div class="exp-view-ds-filter-detail">Start: ${filtersApplied.dates.start_date}</div>
-            </div>`;
+            filterDetails.push(`
+                <div class="exp-filter-row">
+                    <div class="exp-filter-label">
+                        <div class="exp-filter-label-icon blue"><i class="fas fa-calendar-alt"></i></div>
+                        Date Filter
+                    </div>
+                    <div class="exp-filter-values">
+                        <span class="exp-filter-chip">From ${filtersApplied.dates.start_date}</span>
+                        <span class="exp-filter-connector">on</span>
+                        <span class="exp-filter-chip">${filtersApplied.dates.column || 'N/A'}</span>
+                    </div>
+                </div>
+            `);
         }
 
-        // Customer filters
         if (filtersApplied.customers?.type === 'multiple' && filtersApplied.customers.filters?.length > 0) {
-            hasFilters = true;
-            const count = filtersApplied.customers.count || filtersApplied.customers.filters.length;
-            let items = filtersApplied.customers.filters.map(f => {
-                if (f.type === 'top_revenue') {
-                    return `<div class="exp-view-ds-filter-detail">• Top <strong>${f.percent}%</strong> customers by revenue</div>
-                        <div class="exp-view-ds-filter-detail" style="margin-left:10px;font-size:10px;">Customer: ${f.customer_column || 'N/A'}, Revenue: ${f.revenue_column || 'N/A'}</div>`;
+            const customerChips = filtersApplied.customers.filters.map(f => {
+                if (f.type === 'top_revenue') return `<span class="exp-filter-chip">Top ${f.percent}% by revenue</span>`;
+                if (f.type === 'transaction_count') {
+                    const desc = f.filter_type === 'greater_than' ? `> ${f.value}` :
+                                 f.filter_type === 'less_than' ? `< ${f.value}` :
+                                 `${f.min} – ${f.max}`;
+                    return `<span class="exp-filter-chip">Transaction count ${desc}</span>`;
                 }
-                if (f.type === 'category') return `<div class="exp-view-ds-filter-detail">• ${f.column}: ${f.values?.slice(0,3).join(', ')}${f.values?.length > 3 ? '...' : ''}</div>`;
-                return `<div class="exp-view-ds-filter-detail">• ${f.type}</div>`;
+                if (f.type === 'spending') {
+                    const desc = f.filter_type === 'greater_than' ? `> $${f.value}` :
+                                 f.filter_type === 'less_than' ? `< $${f.value}` :
+                                 `$${f.min} – $${f.max}`;
+                    return `<span class="exp-filter-chip">Total spending ${desc}</span>`;
+                }
+                if (f.type === 'category') {
+                    const vals = f.values?.slice(0, 3).join(', ') + (f.values?.length > 3 ? '\u2026' : '');
+                    return `<span class="exp-filter-chip">${f.column}: ${vals}</span>`;
+                }
+                return `<span class="exp-filter-chip">${f.type}</span>`;
             }).join('');
-            html += `<div class="exp-view-ds-filter customer">
-                <div class="exp-view-ds-filter-title"><i class="fas fa-users"></i>Customer Filters (${count})</div>
-                ${items}
-            </div>`;
+            filterDetails.push(`
+                <div class="exp-filter-row">
+                    <div class="exp-filter-label">
+                        <div class="exp-filter-label-icon green"><i class="fas fa-users"></i></div>
+                        Customer (${filtersApplied.customers.count || filtersApplied.customers.filters.length})
+                    </div>
+                    <div class="exp-filter-values">${customerChips}</div>
+                </div>
+            `);
         }
 
-        // Product filters
         if (filtersApplied.products?.type === 'multiple' && filtersApplied.products.filters?.length > 0) {
-            hasFilters = true;
-            const count = filtersApplied.products.count || filtersApplied.products.filters.length;
-            let items = filtersApplied.products.filters.map(f => {
-                if (f.type === 'top_revenue') {
-                    return `<div class="exp-view-ds-filter-detail">• Top <strong>${f.percent}%</strong> products by revenue</div>
-                        <div class="exp-view-ds-filter-detail" style="margin-left:10px;font-size:10px;">Product: ${f.product_column || 'N/A'}, Revenue: ${f.revenue_column || 'N/A'}</div>`;
+            const productChips = filtersApplied.products.filters.map(f => {
+                if (f.type === 'top_revenue') return `<span class="exp-filter-chip">Top ${f.percent}% by revenue</span>`;
+                if (f.type === 'category') {
+                    const vals = f.values?.slice(0, 3).join(', ') + (f.values?.length > 3 ? '\u2026' : '');
+                    return `<span class="exp-filter-chip">${f.column}: ${f.mode || ''} ${vals}</span>`;
                 }
-                if (f.type === 'category') return `<div class="exp-view-ds-filter-detail">• ${f.column}: ${f.values?.slice(0,3).join(', ')}${f.values?.length > 3 ? '...' : ''}</div>`;
-                return `<div class="exp-view-ds-filter-detail">• ${f.type}</div>`;
+                if (f.type === 'numeric') {
+                    const desc = f.filter_type === 'range' ? `${f.min} – ${f.max}` :
+                                 f.filter_type === 'greater_than' ? `> ${f.value}` :
+                                 f.filter_type === 'less_than' ? `< ${f.value}` : `= ${f.value}`;
+                    return `<span class="exp-filter-chip">${f.column}: ${desc}</span>`;
+                }
+                return `<span class="exp-filter-chip">${f.type}</span>`;
             }).join('');
-            html += `<div class="exp-view-ds-filter product">
-                <div class="exp-view-ds-filter-title"><i class="fas fa-box"></i>Product Filters (${count})</div>
-                ${items}
-            </div>`;
+            filterDetails.push(`
+                <div class="exp-filter-row">
+                    <div class="exp-filter-label">
+                        <div class="exp-filter-label-icon purple"><i class="fas fa-box"></i></div>
+                        Product (${filtersApplied.products.count || filtersApplied.products.filters.length})
+                    </div>
+                    <div class="exp-filter-values">${productChips}</div>
+                </div>
+            `);
         }
 
-        if (!hasFilters) {
-            html += `<div class="exp-view-ds-no-filters">No filters applied - using all data</div>`;
-        }
+        // Count filters for stat tablets
+        const dateFilterCount = filtersApplied.dates?.type ? 1 : 0;
+        const customerFilterCount = filtersApplied.customers?.count || 0;
+        const productFilterCount = filtersApplied.products?.count || 0;
+        const totalFilterCount = dateFilterCount + customerFilterCount + productFilterCount;
 
-        html += `</div>`;
+        const html = `
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+
+                <!-- 1. Dataset Information -->
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Dataset Information</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                        <div class="exp-detail-stats">
+                            <div class="exp-detail-stat-info" style="flex: 2;">
+                                <div class="stat-label">Name</div>
+                                <div class="stat-value">${state.datasetName || summary.name || '\u2014'}</div>
+                            </div>
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">Created</div>
+                                <div class="stat-value">${summary.timestamps?.created_at ? new Date(summary.timestamps.created_at).toLocaleDateString() : 'Unknown'}</div>
+                            </div>
+                            <div class="exp-detail-stat">
+                                <div class="exp-detail-stat-value">${snapshot.has_snapshot ? formatNumber(snapshot.total_rows) : '\u2014'}</div>
+                                <div class="exp-detail-stat-label">Rows</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Tables & Joins -->
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Tables & Joins</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon tables"><i class="fas fa-table"></i></div>
+                        <div class="exp-detail-stats">
+                            <div class="exp-detail-stat">
+                                <div class="exp-detail-stat-value">${tableCount}</div>
+                                <div class="exp-detail-stat-label">${tableCount === 1 ? 'Table' : 'Tables'}</div>
+                            </div>
+                            <div class="exp-detail-stat-info" style="flex: 2;">
+                                <div class="stat-label">Primary Table</div>
+                                <div class="stat-value">${primaryTable}</div>
+                            </div>
+                            ${secondaryTables.length > 0 ? `
+                            <div class="exp-detail-stat-info" style="flex: 2;">
+                                <div class="stat-label">Secondary</div>
+                                <div class="stat-value">${secondaryTables.map(t => t.replace('raw_data.', '')).join(', ')}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ${Object.keys(joinConfig).length > 0 ? `
+                    <div class="exp-detail-filter-details">
+                        <div style="font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 4px;">Join Keys</div>
+                        ${joinRows}
+                    </div>
+                    ` : ''}
+                </div>
+
+                <!-- 3. Filters Applied (collapsible) -->
+                <div class="exp-detail-section" id="expViewFiltersCard">
+                    <div class="exp-detail-filters-header" onclick="ExpViewModal.toggleDatasetFilters()">
+                        <div class="exp-detail-filters-title-row">
+                            <div class="exp-detail-section-title" style="margin-bottom: 0;">Filters Applied</div>
+                            ${filterDetails.length > 0 ? `
+                            <div class="exp-detail-filters-toggle">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div class="exp-detail-section-body">
+                            <div class="exp-detail-section-icon filters"><i class="fas fa-filter"></i></div>
+                            <div class="exp-detail-stats">
+                                <div class="exp-detail-stat">
+                                    <div class="exp-detail-stat-value">${totalFilterCount}</div>
+                                    <div class="exp-detail-stat-label">Total Filters</div>
+                                </div>
+                                <div class="exp-detail-stat">
+                                    <div class="exp-detail-stat-value">${dateFilterCount}</div>
+                                    <div class="exp-detail-stat-label">Date</div>
+                                </div>
+                                <div class="exp-detail-stat">
+                                    <div class="exp-detail-stat-value">${customerFilterCount}</div>
+                                    <div class="exp-detail-stat-label">Customer</div>
+                                </div>
+                                <div class="exp-detail-stat">
+                                    <div class="exp-detail-stat-value">${productFilterCount}</div>
+                                    <div class="exp-detail-stat-label">Product</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ${filterDetails.length > 0 ? `
+                    <div class="exp-detail-filters-content">
+                        <div class="exp-detail-filter-details">
+                            ${filterDetails.join('')}
+                        </div>
+                    </div>
+                    ` : `
+                    <div style="margin-top: 10px; font-size: 13px; color: #6b7280;">No filters applied \u2014 using all data</div>
+                    `}
+                </div>
+            </div>
+        `;
 
         container.innerHTML = html;
+    }
+
+    function toggleDatasetFilters() {
+        const card = document.getElementById('expViewFiltersCard');
+        if (card) card.classList.toggle('filters-open');
     }
 
     // =============================================================================
@@ -5335,6 +5586,7 @@ const ExpViewModal = (function() {
 
         // Overview accordion
         toggleAccordion: toggleAccordion,
+        toggleDatasetFilters: toggleDatasetFilters,
 
         // Component logs
         refreshComponentLogs: refreshComponentLogs,

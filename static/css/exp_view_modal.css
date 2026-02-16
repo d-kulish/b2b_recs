@@ -893,7 +893,7 @@
    Experiment Detail Section Cards (new design - experiment mode only)
    ========================================================================== */
 .exp-detail-section {
-    border: 1px solid #e5e7eb;
+    border: 1px solid #1f2937;
     border-radius: 12px;
     padding: 16px 20px;
     background: white;
@@ -1798,7 +1798,7 @@
 
 .training-chart-wrapper {
     background: #ffffff;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #1f2937;
     border-radius: 8px;
     padding: 12px;
     position: relative;

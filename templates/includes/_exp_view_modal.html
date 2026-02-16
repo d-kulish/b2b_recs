@@ -330,53 +330,70 @@
                 </div>
 
                 <!-- Training Curves - Placeholder (shown when no MLflow data) -->
-                <div id="expViewTrainingPlaceholder" class="exp-view-section-group">
-                    <h4 class="exp-view-group-title">Training Progress</h4>
-                    <div class="exp-view-chart-placeholder">
-                        <i class="fas fa-chart-line"></i>
-                        <p id="expViewTrainingMessage">Loading training data...</p>
+                <div id="expViewTrainingPlaceholder" class="exp-detail-section">
+                    <div class="exp-detail-section-title">Training Progress</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon info"><i class="fas fa-chart-line"></i></div>
+                        <div class="exp-view-chart-placeholder">
+                            <i class="fas fa-chart-line"></i>
+                            <p id="expViewTrainingMessage">Loading training data...</p>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Training Curves - Charts (shown when MLflow data available) -->
-                <div id="expViewTrainingCharts" class="exp-view-section-group hidden">
-                    <h4 class="exp-view-group-title">Training Progress</h4>
-                    <div class="training-charts-container">
-                        <div class="training-chart-wrapper">
-                            <h5 class="training-chart-title">Loss</h5>
-                            <canvas id="trainingLossChart" height="170"></canvas>
-                        </div>
-                        <div class="training-chart-wrapper">
-                            <h5 id="metricsChartTitle" class="training-chart-title">Recall Metrics</h5>
-                            <canvas id="trainingMetricsChart" height="170"></canvas>
-                        </div>
-                    </div>
-                    <!-- Second row: Combined Weight Analysis (Norm + Distribution) -->
-                    <div class="training-chart-wrapper" style="margin-top: 16px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                            <h5 class="training-chart-title" style="margin: 0;">Weight Analysis</h5>
-                            <select id="weightAnalysisTower" class="weight-stats-select" onchange="ExpViewModal.updateWeightAnalysisCharts()">
-                                <option value="query">Query Tower</option>
-                                <option value="candidate">Candidate Tower</option>
-                            </select>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div>
-                                <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Norm (L1/L2)</h6>
-                                <canvas id="trainingGradientChart" height="150"></canvas>
-                            </div>
-                            <div>
-                                <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Distribution</h6>
-                                <canvas id="trainingWeightStatsChart" height="150"></canvas>
+                <div id="expViewTrainingCharts" class="hidden">
+                    <!-- Card: Training Progress -->
+                    <div class="exp-detail-section" style="margin-bottom: 16px;">
+                        <div class="exp-detail-section-title">Training Progress</div>
+                        <div class="exp-detail-section-body" style="align-items: flex-start;">
+                            <div class="exp-detail-section-icon info"><i class="fas fa-chart-line"></i></div>
+                            <div class="training-charts-container" style="flex: 1;">
+                                <div class="training-chart-wrapper">
+                                    <h5 class="training-chart-title">Loss</h5>
+                                    <canvas id="trainingLossChart" height="170"></canvas>
+                                </div>
+                                <div class="training-chart-wrapper">
+                                    <h5 id="metricsChartTitle" class="training-chart-title">Recall Metrics</h5>
+                                    <canvas id="trainingMetricsChart" height="170"></canvas>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <!-- Third row: Distribution Histogram (TensorBoard-style ridgeline) - Weights or Gradients -->
-                    <div class="training-charts-container" style="margin-top: 16px;">
-                        <div class="training-chart-wrapper" style="grid-column: span 2;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                                <h5 id="histogramChartTitle" class="training-chart-title" style="margin: 0;">Weight Distribution Histogram</h5>
-                                <div style="display: flex; gap: 8px;">
+
+                    <!-- Card: Weight Analysis -->
+                    <div class="exp-detail-section" style="margin-bottom: 16px;">
+                        <div class="exp-detail-section-title">Weight Analysis</div>
+                        <div class="exp-detail-section-body" style="align-items: flex-start;">
+                            <div class="exp-detail-section-icon tower"><i class="fas fa-weight-hanging"></i></div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 8px;">
+                                    <select id="weightAnalysisTower" class="weight-stats-select" onchange="ExpViewModal.updateWeightAnalysisCharts()">
+                                        <option value="query">Query Tower</option>
+                                        <option value="candidate">Candidate Tower</option>
+                                    </select>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                    <div class="training-chart-wrapper">
+                                        <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Norm (L1/L2)</h6>
+                                        <canvas id="trainingGradientChart" height="150"></canvas>
+                                    </div>
+                                    <div class="training-chart-wrapper">
+                                        <h6 style="font-size: 12px; font-weight: 500; color: #6b7280; margin: 0 0 4px 0;">Weight Distribution</h6>
+                                        <canvas id="trainingWeightStatsChart" height="150"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card: Weight Distribution Histogram -->
+                    <div class="exp-detail-section" style="margin-bottom: 16px;">
+                        <div class="exp-detail-section-title">Weight Distribution Histogram</div>
+                        <div class="exp-detail-section-body" style="align-items: flex-start;">
+                            <div class="exp-detail-section-icon weights"><i class="fas fa-stream"></i></div>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px; gap: 8px;">
                                     <select id="histogramDataType" class="weight-stats-select" onchange="ExpViewModal.updateWeightHistogramChart()">
                                         <option value="weights">Weights</option>
                                         <option value="gradients">Gradients</option>
@@ -386,25 +403,31 @@
                                         <option value="candidate">Candidate Tower</option>
                                     </select>
                                 </div>
+                                <div id="trainingWeightHistogramChart" style="width: 100%;"></div>
                             </div>
-                            <div id="trainingWeightHistogramChart" style="width: 100%;"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Final Metrics -->
-                <div id="expViewFinalMetrics" class="exp-view-section-group hidden">
-                    <h4 class="exp-view-group-title">Final Metrics</h4>
-                    <div class="exp-view-rows" id="expViewMetricsRows">
-                        <!-- Populated by JavaScript -->
+                <div id="expViewFinalMetrics" class="exp-detail-section hidden" style="margin-bottom: 16px;">
+                    <div class="exp-detail-section-title">Final Metrics</div>
+                    <div class="exp-detail-section-body" style="align-items: flex-start;">
+                        <div class="exp-detail-section-icon params"><i class="fas fa-trophy"></i></div>
+                        <div class="exp-view-rows" id="expViewMetricsRows" style="flex: 1;">
+                            <!-- Populated by JavaScript -->
+                        </div>
                     </div>
                 </div>
 
                 <!-- Vocabulary Stats -->
-                <div id="expViewVocabSection" class="exp-view-section-group hidden">
-                    <h4 class="exp-view-group-title">Vocabularies</h4>
-                    <div class="exp-view-rows" id="expViewVocabRows">
-                        <!-- Populated by JavaScript -->
+                <div id="expViewVocabSection" class="exp-detail-section hidden" style="margin-bottom: 16px;">
+                    <div class="exp-detail-section-title">Vocabularies</div>
+                    <div class="exp-detail-section-body" style="align-items: flex-start;">
+                        <div class="exp-detail-section-icon sampling"><i class="fas fa-book"></i></div>
+                        <div class="exp-view-rows" id="expViewVocabRows" style="flex: 1;">
+                            <!-- Populated by JavaScript -->
+                        </div>
                     </div>
                 </div>
             </div>

@@ -97,8 +97,7 @@ const ExpViewModal = (function() {
         accordionExpanded: {
             registryDeployment: false,
             dataset: false,
-            features: false,
-            trainingSetup: false
+            features: false
         }
     };
 
@@ -490,11 +489,11 @@ const ExpViewModal = (function() {
                 '<div class="exp-view-no-filters">No model config</div>';
         }
 
-        // Sampling chips
-        renderTrainingRunSamplingChips(run);
-
-        // Training parameters chips
-        renderTrainingRunParamsChips(run);
+        // Sampling & Training Parameters (card format)
+        const trainingSetupCards = document.getElementById('expViewTrainingSetupCards');
+        if (trainingSetupCards) {
+            trainingSetupCards.innerHTML = renderTrainingRunSamplingCard(run) + renderTrainingRunParamsCard(run);
+        }
 
         // Results Summary (metrics)
         renderTrainingRunMetrics(run);
@@ -533,73 +532,77 @@ const ExpViewModal = (function() {
         renderMetricsSummary(metrics, false, run.model_type || 'retrieval');
     }
 
-    function renderTrainingRunSamplingChips(run) {
-        const container = document.getElementById('expViewSamplingChips');
-        if (!container) return;
-
+    function renderTrainingRunSamplingCard(run) {
         const params = run.training_params || {};
-        const chips = [];
+        const stats = [];
 
         if (params.split_strategy) {
-            chips.push({ label: 'Split Strategy', value: params.split_strategy });
+            stats.push({ label: 'Split Strategy', value: params.split_strategy });
         }
         if (params.train_fraction) {
-            chips.push({ label: 'Train', value: `${(params.train_fraction * 100).toFixed(0)}%` });
+            stats.push({ label: 'Train', value: `${(params.train_fraction * 100).toFixed(0)}%` });
         }
         if (params.val_fraction) {
-            chips.push({ label: 'Val', value: `${(params.val_fraction * 100).toFixed(0)}%` });
+            stats.push({ label: 'Val', value: `${(params.val_fraction * 100).toFixed(0)}%` });
         }
         if (params.test_fraction) {
-            chips.push({ label: 'Test', value: `${(params.test_fraction * 100).toFixed(0)}%` });
+            stats.push({ label: 'Test', value: `${(params.test_fraction * 100).toFixed(0)}%` });
         }
 
-        if (chips.length === 0) {
-            container.innerHTML = '<span class="exp-view-no-filters">No sampling parameters</span>';
-            return;
-        }
+        if (stats.length === 0) return '';
 
-        container.innerHTML = chips.map(chip => `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">${chip.label}:</span>
-                <span class="exp-view-param-chip-value">${chip.value}</span>
-            </div>
-        `).join('');
+        return `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Sampling</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon sampling"><i class="fas fa-percentage"></i></div>
+                    <div class="exp-detail-stats">
+                        ${stats.map(s => `
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">${s.label}</div>
+                                <div class="stat-value">${s.value}</div>
+                            </div>`).join('')}
+                    </div>
+                </div>
+            </div>`;
     }
 
-    function renderTrainingRunParamsChips(run) {
-        const container = document.getElementById('expViewTrainingParamsChips');
-        if (!container) return;
-
+    function renderTrainingRunParamsCard(run) {
         const params = run.training_params || {};
         const gpuConfig = run.gpu_config || {};
-        const chips = [];
+        const stats = [];
 
-        if (params.epochs) chips.push({ label: 'Epochs', value: params.epochs });
-        if (params.batch_size) chips.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
-        if (params.learning_rate) chips.push({ label: 'Learning Rate', value: params.learning_rate });
+        if (params.epochs) stats.push({ label: 'Epochs', value: params.epochs });
+        if (params.batch_size) stats.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
+        if (params.learning_rate) stats.push({ label: 'Learning Rate', value: params.learning_rate });
 
         // GPU config (keys are gpu_type, gpu_count, preemptible - not accelerator_*)
         if (gpuConfig.gpu_type) {
-            chips.push({ label: 'GPU', value: gpuConfig.gpu_type.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
+            stats.push({ label: 'GPU', value: gpuConfig.gpu_type.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
         }
         if (gpuConfig.gpu_count) {
-            chips.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
+            stats.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
         }
         if (gpuConfig.preemptible !== undefined) {
-            chips.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
+            stats.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
         }
 
-        if (chips.length === 0) {
-            container.innerHTML = '<span class="exp-view-no-filters">No training parameters</span>';
-            return;
-        }
+        if (stats.length === 0) return '';
 
-        container.innerHTML = chips.map(chip => `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">${chip.label}:</span>
-                <span class="exp-view-param-chip-value">${chip.value}</span>
-            </div>
-        `).join('');
+        return `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Training Parameters</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon training"><i class="fas fa-cogs"></i></div>
+                    <div class="exp-detail-stats">
+                        ${stats.map(s => `
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">${s.label}</div>
+                                <div class="stat-value">${s.value}</div>
+                            </div>`).join('')}
+                    </div>
+                </div>
+            </div>`;
     }
 
     // =============================================================================
@@ -1346,9 +1349,11 @@ const ExpViewModal = (function() {
                 '<div class="exp-view-no-filters">No model config</div>';
         }
 
-        // Training Setup section - use same format as training runs
-        renderModelSamplingChips(model);
-        renderModelTrainingParamsChips(model);
+        // Sampling & Training Parameters (card format)
+        const trainingSetupCards = document.getElementById('expViewTrainingSetupCards');
+        if (trainingSetupCards) {
+            trainingSetupCards.innerHTML = renderModelSamplingCard(model) + renderModelTrainingParamsCard(model);
+        }
 
         // Results Summary (metrics)
         renderModelMetrics(model);
@@ -1433,85 +1438,86 @@ const ExpViewModal = (function() {
         metricsContainer.innerHTML = metricsHtml;
     }
 
-    function renderModelSamplingChips(model) {
-        const container = document.getElementById('expViewSamplingChips');
-        if (!container) return;
-
+    function renderModelSamplingCard(model) {
         const params = model.training_params || {};
         const sampling = model.sampling_config || {};
-        const chips = [];
+        const stats = [];
 
-        // Split strategy from training_params (same as training runs)
         if (params.split_strategy) {
-            chips.push({ label: 'Split Strategy', value: params.split_strategy });
+            stats.push({ label: 'Split Strategy', value: params.split_strategy });
         }
 
-        // Train/Val/Test fractions from training_params (same as training runs)
         if (params.train_fraction) {
-            chips.push({ label: 'Train', value: `${(params.train_fraction * 100).toFixed(0)}%` });
+            stats.push({ label: 'Train', value: `${(params.train_fraction * 100).toFixed(0)}%` });
         } else if (sampling.train_percent) {
-            chips.push({ label: 'Train', value: `${sampling.train_percent}%` });
+            stats.push({ label: 'Train', value: `${sampling.train_percent}%` });
         }
         if (params.val_fraction) {
-            chips.push({ label: 'Val', value: `${(params.val_fraction * 100).toFixed(0)}%` });
+            stats.push({ label: 'Val', value: `${(params.val_fraction * 100).toFixed(0)}%` });
         } else if (sampling.val_percent) {
-            chips.push({ label: 'Val', value: `${sampling.val_percent}%` });
+            stats.push({ label: 'Val', value: `${sampling.val_percent}%` });
         }
         if (params.test_fraction) {
-            chips.push({ label: 'Test', value: `${(params.test_fraction * 100).toFixed(0)}%` });
+            stats.push({ label: 'Test', value: `${(params.test_fraction * 100).toFixed(0)}%` });
         } else if (sampling.test_percent) {
-            chips.push({ label: 'Test', value: `${sampling.test_percent}%` });
+            stats.push({ label: 'Test', value: `${sampling.test_percent}%` });
         }
 
-        if (chips.length === 0) {
-            container.innerHTML = '<span class="exp-view-no-filters">No sampling parameters</span>';
-            return;
-        }
+        if (stats.length === 0) return '';
 
-        container.innerHTML = chips.map(chip => `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">${chip.label}:</span>
-                <span class="exp-view-param-chip-value">${chip.value}</span>
-            </div>
-        `).join('');
+        return `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Sampling</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon sampling"><i class="fas fa-percentage"></i></div>
+                    <div class="exp-detail-stats">
+                        ${stats.map(s => `
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">${s.label}</div>
+                                <div class="stat-value">${s.value}</div>
+                            </div>`).join('')}
+                    </div>
+                </div>
+            </div>`;
     }
 
-    function renderModelTrainingParamsChips(model) {
-        const container = document.getElementById('expViewTrainingParamsChips');
-        if (!container) return;
-
+    function renderModelTrainingParamsCard(model) {
         const params = model.training_params || {};
         const gpuConfig = model.gpu_config || {};
-        const chips = [];
+        const stats = [];
 
-        // Training parameters
-        if (params.epochs) chips.push({ label: 'Epochs', value: params.epochs });
-        if (params.batch_size) chips.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
-        if (params.learning_rate) chips.push({ label: 'Learning Rate', value: params.learning_rate });
+        if (params.epochs) stats.push({ label: 'Epochs', value: params.epochs });
+        if (params.batch_size) stats.push({ label: 'Batch Size', value: formatNumber(params.batch_size) });
+        if (params.learning_rate) stats.push({ label: 'Learning Rate', value: params.learning_rate });
 
         // GPU config - support both naming conventions (gpu_type from training runs, accelerator_type from models)
         const gpuType = gpuConfig.gpu_type || gpuConfig.accelerator_type;
         if (gpuType) {
-            chips.push({ label: 'GPU', value: gpuType.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
+            stats.push({ label: 'GPU', value: gpuType.replace('NVIDIA_TESLA_', '').replace('NVIDIA_', '') });
         }
         if (gpuConfig.gpu_count) {
-            chips.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
+            stats.push({ label: 'GPU Count', value: gpuConfig.gpu_count });
         }
         if (gpuConfig.preemptible !== undefined) {
-            chips.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
+            stats.push({ label: 'Preemptible', value: gpuConfig.preemptible ? 'Yes' : 'No' });
         }
 
-        if (chips.length === 0) {
-            container.innerHTML = '<span class="exp-view-no-filters">No training parameters</span>';
-            return;
-        }
+        if (stats.length === 0) return '';
 
-        container.innerHTML = chips.map(chip => `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">${chip.label}:</span>
-                <span class="exp-view-param-chip-value">${chip.value}</span>
-            </div>
-        `).join('');
+        return `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Training Parameters</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon training"><i class="fas fa-cogs"></i></div>
+                    <div class="exp-detail-stats">
+                        ${stats.map(s => `
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">${s.label}</div>
+                                <div class="stat-value">${s.value}</div>
+                            </div>`).join('')}
+                    </div>
+                </div>
+            </div>`;
     }
 
     async function loadModelVersions(modelId) {
@@ -3076,11 +3082,11 @@ const ExpViewModal = (function() {
             document.getElementById('expViewModelConfigContent').innerHTML = '<div class="exp-view-no-filters">No model config</div>';
         }
 
-        // Sampling (chip format)
-        renderSamplingChips(exp);
-
-        // Training Parameters (chip format)
-        renderTrainingParamsChips(exp);
+        // Sampling & Training Parameters (card format)
+        const trainingSetupContainer = document.getElementById('expViewTrainingSetupCards');
+        if (trainingSetupContainer) {
+            trainingSetupContainer.innerHTML = renderSamplingCard(exp) + renderTrainingParamsCard(exp);
+        }
 
         // Pipeline Tab
         const isRunning = exp.status === 'running' || exp.status === 'submitting';
@@ -3983,7 +3989,7 @@ const ExpViewModal = (function() {
             ${multitaskHtml}
         `;
 
-        // Update Optimizer in Training Parameters section (training setup accordion)
+        // Update Optimizer in Training Parameters card
         const optimizerEl = document.getElementById('expViewOptimizerValue');
         if (optimizerEl) {
             optimizerEl.textContent = mc.optimizer_display || mc.optimizer || 'Adagrad';
@@ -4109,52 +4115,50 @@ const ExpViewModal = (function() {
     // SAMPLING & TRAINING PARAMS CHIPS
     // =============================================================================
 
-    function renderSamplingChips(exp) {
-        const container = document.getElementById('expViewSamplingChips');
-        if (!container) return;
-
+    function renderSamplingCard(exp) {
         const splitLabels = {
             'random': 'Random 80/15/5',
             'time_holdout': 'Time Holdout',
             'strict_time': 'Strict Temporal'
         };
 
-        let html = `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Sample:</span>
-                <span class="exp-view-param-chip-value">${exp.data_sample_percent || 100}%</span>
-            </div>
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Split Strategy:</span>
-                <span class="exp-view-param-chip-value">${splitLabels[exp.split_strategy] || exp.split_strategy}</span>
-            </div>
-        `;
-
+        let conditionalStats = '';
         if (exp.split_strategy !== 'random' && exp.date_column) {
-            html += `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Date Column:</span>
-                <span class="exp-view-param-chip-value">${exp.date_column}</span>
-            </div>
-            `;
+            conditionalStats += `
+                <div class="exp-detail-stat-info">
+                    <div class="stat-label">Date Column</div>
+                    <div class="stat-value">${exp.date_column}</div>
+                </div>`;
         }
-
         if (exp.split_strategy === 'time_holdout') {
-            html += `
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Test (last N days):</span>
-                <span class="exp-view-param-chip-value">${exp.holdout_days || 1} days</span>
-            </div>
-            `;
+            conditionalStats += `
+                <div class="exp-detail-stat-info">
+                    <div class="stat-label">Holdout Days</div>
+                    <div class="stat-value">${exp.holdout_days || 1} days</div>
+                </div>`;
         }
 
-        container.innerHTML = html;
+        return `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Sampling</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon sampling"><i class="fas fa-percentage"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Sample %</div>
+                            <div class="stat-value">${exp.data_sample_percent || 100}%</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Split Strategy</div>
+                            <div class="stat-value">${splitLabels[exp.split_strategy] || exp.split_strategy}</div>
+                        </div>
+                        ${conditionalStats}
+                    </div>
+                </div>
+            </div>`;
     }
 
-    function renderTrainingParamsChips(exp) {
-        const container = document.getElementById('expViewTrainingParamsChips');
-        if (!container) return;
-
+    function renderTrainingParamsCard(exp) {
         const hardwareSpecs = {
             'e2-standard-4': { name: 'Small', cpu: '4 vCPUs', memory: '16 GB' },
             'e2-standard-8': { name: 'Medium', cpu: '8 vCPUs', memory: '32 GB' },
@@ -4169,30 +4173,35 @@ const ExpViewModal = (function() {
         const hwSpec = hardwareSpecs[machineType] || { name: 'Custom', cpu: '-', memory: '-' };
         const hardwareDisplay = `${hwSpec.cpu}, ${hwSpec.memory}`;
 
-        let html = `
-            <div class="exp-view-param-chip" id="expViewOptimizerChip">
-                <span class="exp-view-param-chip-label">Optimizer:</span>
-                <span class="exp-view-param-chip-value" id="expViewOptimizerValue">-</span>
-            </div>
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Epochs:</span>
-                <span class="exp-view-param-chip-value">${exp.epochs || '-'}</span>
-            </div>
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Batch Size:</span>
-                <span class="exp-view-param-chip-value">${exp.batch_size?.toLocaleString() || '-'}</span>
-            </div>
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Learning Rate:</span>
-                <span class="exp-view-param-chip-value">${exp.learning_rate || '-'}</span>
-            </div>
-            <div class="exp-view-param-chip">
-                <span class="exp-view-param-chip-label">Hardware:</span>
-                <span class="exp-view-param-chip-value">${hardwareDisplay}</span>
-            </div>
-        `;
-
-        container.innerHTML = html;
+        return `
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Training Parameters</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon training"><i class="fas fa-cogs"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Optimizer</div>
+                            <div class="stat-value" id="expViewOptimizerValue">\u2014</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Epochs</div>
+                            <div class="stat-value">${exp.epochs || '\u2014'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Batch Size</div>
+                            <div class="stat-value">${exp.batch_size?.toLocaleString() || '\u2014'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Learning Rate</div>
+                            <div class="stat-value">${exp.learning_rate || '\u2014'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Hardware</div>
+                            <div class="stat-value">${hardwareDisplay}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
     }
 
     // =============================================================================
@@ -5698,7 +5707,6 @@ const ExpViewModal = (function() {
         const sectionMap = {
             registryDeployment: 'expViewRegistryDeployment',
             dataset: 'expViewDataset',
-            trainingSetup: 'expViewTrainingSetup'
         };
 
         const prefix = sectionMap[sectionName];
@@ -5728,12 +5736,11 @@ const ExpViewModal = (function() {
         // Reset all accordions to collapsed state
         state.accordionExpanded = {
             registryDeployment: false,
-            dataset: false,
-            trainingSetup: false
+            dataset: false
         };
 
         // Collapse all accordion contents
-        const prefixes = ['expViewRegistryDeployment', 'expViewDataset', 'expViewTrainingSetup'];
+        const prefixes = ['expViewRegistryDeployment', 'expViewDataset'];
 
         prefixes.forEach(prefix => {
             const content = document.getElementById(`${prefix}Content`);

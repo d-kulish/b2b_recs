@@ -939,6 +939,8 @@
 .exp-detail-section-icon.algo    { background: linear-gradient(135deg, #10b981, #34d399); }
 .exp-detail-section-icon.rating  { background: linear-gradient(135deg, #ec4899, #f472b6); }
 .exp-detail-section-icon.weights { background: linear-gradient(135deg, #ec4899, #f472b6); }
+.exp-detail-section-icon.sampling  { background: linear-gradient(135deg, #14b8a6, #5eead4); }
+.exp-detail-section-icon.training  { background: linear-gradient(135deg, #f97316, #fb923c); }
 
 .exp-detail-stats {
     display: flex;

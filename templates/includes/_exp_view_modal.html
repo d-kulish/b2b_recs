@@ -206,32 +206,9 @@
                     <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
                 </div>
 
-                <!-- Accordion 5: Training Setup -->
-                <div class="exp-view-accordion">
-                    <div class="exp-view-accordion-header" onclick="ExpViewModal.toggleAccordion('trainingSetup')">
-                        <span class="exp-view-accordion-title">
-                            <i class="fas fa-cogs mr-2 text-orange-500"></i>Training Setup
-                        </span>
-                        <i id="expViewTrainingSetupChevron" class="fas fa-chevron-right exp-view-accordion-chevron"></i>
-                    </div>
-                    <div id="expViewTrainingSetupContent" class="exp-view-accordion-content hidden">
-                        <div class="exp-view-training-setup-grid">
-                            <!-- Sampling Column -->
-                            <div class="exp-view-training-setup-column">
-                                <h5 class="exp-view-training-setup-subtitle">Sampling</h5>
-                                <div id="expViewSamplingChips" class="exp-view-training-params">
-                                    <!-- Populated by JavaScript -->
-                                </div>
-                            </div>
-                            <!-- Training Parameters Column -->
-                            <div class="exp-view-training-setup-column">
-                                <h5 class="exp-view-training-setup-subtitle">Training Parameters</h5>
-                                <div id="expViewTrainingParamsChips" class="exp-view-training-params">
-                                    <!-- Populated by JavaScript -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Sampling & Training cards (rendered by JS) -->
+                <div id="expViewTrainingSetupCards" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 12px;">
+                    <!-- Populated by renderSamplingCard() and renderTrainingParamsCard() -->
                 </div>
             </div>
 

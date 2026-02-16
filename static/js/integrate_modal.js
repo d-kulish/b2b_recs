@@ -39,6 +39,7 @@ const IntegrateModal = (function() {
         codeExamples: null,
         currentTab: 'validation',
         currentCodeTab: 'python',
+        testMode: 'single',
         loading: false
     };
 
@@ -117,8 +118,11 @@ const IntegrateModal = (function() {
     }
 
     async function fetchSampleData(endpointId) {
-        const url = buildUrl(config.endpoints.sample, { id: endpointId });
-        const response = await fetch(appendModelEndpointId(url));
+        let url = buildUrl(config.endpoints.sample, { id: endpointId });
+        url = appendModelEndpointId(url);
+        const sep = url.includes('?') ? '&' : '?';
+        url = `${url}${sep}mode=${state.testMode}`;
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.success) {
@@ -131,10 +135,12 @@ const IntegrateModal = (function() {
         }
     }
 
-    async function runTest(endpointId, testType, instance = null) {
+    async function runTest(endpointId, testType, instance = null, instances = null) {
         const url = buildUrl(config.endpoints.test, { id: endpointId });
         const body = { test_type: testType };
-        if (instance) {
+        if (instances) {
+            body.instances = instances;
+        } else if (instance) {
             body.instance = instance;
         }
 
@@ -203,7 +209,9 @@ const IntegrateModal = (function() {
 
     function renderSampleData() {
         const sampleEl = document.getElementById('integrateSampleData');
-        if (state.sampleData && state.sampleData.instance) {
+        if (state.testMode === 'batch' && state.sampleData && state.sampleData.instances) {
+            sampleEl.textContent = formatJson(state.sampleData.instances);
+        } else if (state.sampleData && state.sampleData.instance) {
             sampleEl.textContent = formatJson(state.sampleData.instance);
         } else if (state.sampleData && state.sampleData.error) {
             sampleEl.textContent = `Error: ${state.sampleData.error}`;
@@ -284,6 +292,7 @@ const IntegrateModal = (function() {
         state.codeExamples = null;
         state.currentTab = 'validation';
         state.currentCodeTab = 'python';
+        state.testMode = 'single';
 
         // Reset tabs and accordions to default
         switchTab('validation');
@@ -314,6 +323,18 @@ const IntegrateModal = (function() {
             renderSchema();
             renderSampleData();
             renderCodeExamples();
+
+            // Reset mode toggle to single
+            document.querySelectorAll('.integrate-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === 'single');
+            });
+
+            // Hide toggle for multitask models (batch not supported)
+            const modeToggle = document.getElementById('integrateModeToggle');
+            if (modeToggle) {
+                const modelType = state.endpoint ? state.endpoint.model_type : '';
+                modeToggle.style.display = modelType === 'multitask' ? 'none' : '';
+            }
 
             // Hide prediction result row
             document.getElementById('integratePredictResultRow').style.display = 'none';
@@ -384,8 +405,15 @@ const IntegrateModal = (function() {
     }
 
     async function runPredictionTest() {
-        if (!state.endpointId || !state.sampleData || !state.sampleData.instance) {
+        if (!state.endpointId || !state.sampleData) {
             return;
+        }
+
+        // Validate we have data for the current mode
+        if (state.testMode === 'batch') {
+            if (!state.sampleData.instances || state.sampleData.instances.length === 0) return;
+        } else {
+            if (!state.sampleData.instance) return;
         }
 
         const btn = document.getElementById('integratePredictBtn');
@@ -397,11 +425,21 @@ const IntegrateModal = (function() {
         btn.disabled = true;
 
         try {
-            const result = await runTest(
-                state.endpointId,
-                'predict',
-                state.sampleData.instance
-            );
+            let result;
+            if (state.testMode === 'batch') {
+                result = await runTest(
+                    state.endpointId,
+                    'predict',
+                    null,
+                    state.sampleData.instances
+                );
+            } else {
+                result = await runTest(
+                    state.endpointId,
+                    'predict',
+                    state.sampleData.instance
+                );
+            }
             renderPredictResult(result);
         } catch (error) {
             console.error('Error running prediction test:', error);
@@ -416,6 +454,21 @@ const IntegrateModal = (function() {
             icon.classList.add('fa-play');
             btn.disabled = false;
         }
+    }
+
+    async function switchTestMode(mode) {
+        state.testMode = mode;
+
+        // Toggle active class on mode buttons
+        document.querySelectorAll('.integrate-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === mode);
+        });
+
+        // Hide prediction result (sample changed)
+        document.getElementById('integratePredictResultRow').style.display = 'none';
+
+        // Fetch new sample data for the selected mode
+        await refreshSample();
     }
 
     function switchTab(tabName) {
@@ -520,6 +573,7 @@ const IntegrateModal = (function() {
         close,
         refreshSample,
         runPredictionTest,
+        switchTestMode,
         switchTab,
         toggleAccordion,
         switchCodeTab,

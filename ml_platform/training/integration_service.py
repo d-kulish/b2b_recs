@@ -187,7 +187,7 @@ class IntegrationService:
             }
 
             if not required_columns:
-                return {'instance': {}, 'error': 'No buyer features configured'}
+                return {'instance': {}, 'instances': [], 'error': 'No buyer features configured'}
 
             # For ranking/multitask models, also include product features
             if self._requires_product_features():
@@ -227,35 +227,36 @@ class IntegrationService:
             # Convert to dict
             rows = list(result)
             if not rows:
-                return {'instance': {}, 'error': 'No data found'}
+                return {'instance': {}, 'instances': [], 'error': 'No data found'}
 
-            # Get the first row as a dict, filtering to required feature columns
-            row = rows[0]
-            instance = {}
+            # Build list of instances from all rows
+            instances = []
+            for row in rows:
+                instance = {}
+                for field in result.schema:
+                    # Only include columns that are required features (model inputs)
+                    if field.name not in required_columns:
+                        continue
 
-            for field in result.schema:
-                # Only include columns that are required features (model inputs)
-                if field.name not in required_columns:
-                    continue
+                    value = getattr(row, field.name, None)
+                    # Convert to JSON-serializable format
+                    if value is not None:
+                        if hasattr(value, 'isoformat'):
+                            # Date/datetime objects
+                            value = value.isoformat()
+                        elif isinstance(value, bytes):
+                            value = value.decode('utf-8')
+                    instance[field.name] = value
+                instances.append(instance)
 
-                value = getattr(row, field.name, None)
-                # Convert to JSON-serializable format
-                if value is not None:
-                    if hasattr(value, 'isoformat'):
-                        # Date/datetime objects
-                        value = value.isoformat()
-                    elif isinstance(value, bytes):
-                        value = value.decode('utf-8')
-                instance[field.name] = value
-
-            return {'instance': instance}
+            return {'instance': instances[0], 'instances': instances}
 
         except BigQueryServiceError as e:
             logger.error(f"BigQuery error getting sample data: {e}")
-            return {'instance': {}, 'error': str(e)}
+            return {'instance': {}, 'instances': [], 'error': str(e)}
         except Exception as e:
             logger.exception(f"Error getting sample data: {e}")
-            return {'instance': {}, 'error': str(e)}
+            return {'instance': {}, 'instances': [], 'error': str(e)}
 
     def run_health_check(self) -> Dict:
         """
@@ -398,23 +399,109 @@ class IntegrationService:
                 'latency_ms': 0
             }
 
-    def generate_code_examples(self, instance: Dict) -> Dict[str, str]:
+    def run_batch_prediction_test(self, instances: List[Dict]) -> Dict:
+        """
+        Run batch prediction test against the deployed endpoint.
+
+        POST /v1/models/recommender:predict with multiple instances.
+
+        Args:
+            instances: List of feature dictionaries for prediction
+
+        Returns:
+            Dict with status, latency_ms, and prediction response
+        """
+        if not self.endpoint.is_active:
+            return {
+                'success': False,
+                'status_code': 0,
+                'error': 'Endpoint is not active',
+                'latency_ms': 0
+            }
+
+        if not self.endpoint.service_url:
+            return {
+                'success': False,
+                'status_code': 0,
+                'error': 'Endpoint has no service URL',
+                'latency_ms': 0
+            }
+
+        try:
+            url = f"{self.endpoint.service_url.rstrip('/')}/v1/models/recommender:predict"
+
+            # Format request with multiple instances
+            payload = {
+                "instances": instances
+            }
+
+            headers = {
+                'Content-Type': 'application/json'
+            }
+
+            start_time = time.time()
+            response = requests.post(url, json=payload, headers=headers, timeout=60)
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError:
+                response_data = {'raw': response.text}
+
+            return {
+                'success': response.status_code == 200,
+                'status_code': response.status_code,
+                'latency_ms': latency_ms,
+                'response': response_data
+            }
+
+        except requests.exceptions.Timeout:
+            return {
+                'success': False,
+                'status_code': 0,
+                'error': 'Request timed out',
+                'latency_ms': 60000
+            }
+        except requests.exceptions.RequestException as e:
+            return {
+                'success': False,
+                'status_code': 0,
+                'error': str(e),
+                'latency_ms': 0
+            }
+        except Exception as e:
+            logger.exception(f"Error running batch prediction test: {e}")
+            return {
+                'success': False,
+                'status_code': 0,
+                'error': str(e),
+                'latency_ms': 0
+            }
+
+    def generate_code_examples(self, instance: Dict, mode: str = 'single',
+                               instances: Optional[List[Dict]] = None) -> Dict[str, str]:
         """
         Generate code examples for Python, JavaScript, cURL, and Java.
 
         Args:
-            instance: Sample feature dictionary for examples
+            instance: Sample feature dictionary for examples (single mode)
+            mode: 'single' or 'batch'
+            instances: List of feature dictionaries (batch mode)
 
         Returns:
             Dict with 'python', 'javascript', 'curl', 'java' code strings
         """
         url = f"{self.endpoint.service_url.rstrip('/')}/v1/models/recommender:predict"
-        payload = {"instances": [instance]}
+        if mode == 'batch' and instances:
+            payload = {"instances": instances}
+        else:
+            payload = {"instances": [instance]}
         payload_json = json.dumps(payload, indent=2)
         payload_json_compact = json.dumps(payload)
 
         # Python example
-        python_code = f'''import requests
+        batch_comment = "# Batch prediction with multiple instances\n" if mode == 'batch' else ""
+        python_code = f'''{batch_comment}import requests
 
 url = "{url}"
 payload = {payload_json}

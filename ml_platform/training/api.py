@@ -5925,8 +5925,15 @@ def endpoint_integration_sample(request, endpoint_id):
         # Get new sample data
         try:
             service = IntegrationService(endpoint)
-            sample_data = service.get_sample_data(count=1)
-            code_examples = service.generate_code_examples(sample_data.get('instance', {}))
+            mode = request.GET.get('mode', 'single')
+            count = 3 if mode == 'batch' else 1
+            sample_data = service.get_sample_data(count=count)
+            instances = sample_data.get('instances', [sample_data.get('instance', {})])
+            code_examples = service.generate_code_examples(
+                sample_data.get('instance', {}),
+                mode=mode,
+                instances=instances
+            )
         except IntegrationServiceError as e:
             return JsonResponse({
                 'success': False,
@@ -6006,6 +6013,7 @@ def endpoint_integration_test(request, endpoint_id):
 
         test_type = body.get('test_type', 'health')
         instance = body.get('instance', {})
+        instances = body.get('instances', [])
 
         # Run the test
         try:
@@ -6014,12 +6022,15 @@ def endpoint_integration_test(request, endpoint_id):
             if test_type == 'health':
                 result = service.run_health_check()
             elif test_type == 'predict':
-                if not instance:
+                if instances:
+                    result = service.run_batch_prediction_test(instances)
+                elif instance:
+                    result = service.run_prediction_test(instance)
+                else:
                     return JsonResponse({
                         'success': False,
                         'error': 'Instance data required for prediction test'
                     }, status=400)
-                result = service.run_prediction_test(instance)
             else:
                 return JsonResponse({
                     'success': False,

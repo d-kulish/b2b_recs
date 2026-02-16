@@ -95,6 +95,18 @@
                         <i id="integrateTestChevron" class="fas fa-chevron-right integrate-accordion-chevron expanded"></i>
                     </div>
                     <div id="integrateTestContent" class="integrate-accordion-content">
+                        <!-- Mode Toggle (Single/Batch) -->
+                        <div class="integrate-mode-toggle" id="integrateModeToggle">
+                            <button class="integrate-mode-btn active" data-mode="single"
+                                    onclick="IntegrateModal.switchTestMode('single')">
+                                <i class="fas fa-user"></i> Single
+                            </button>
+                            <button class="integrate-mode-btn" data-mode="batch"
+                                    onclick="IntegrateModal.switchTestMode('batch')">
+                                <i class="fas fa-layer-group"></i> Batch
+                            </button>
+                        </div>
+
                         <!-- Sample Request Row -->
                         <div class="integrate-validation-row integrate-validation-row-expanded">
                             <div class="integrate-validation-label">

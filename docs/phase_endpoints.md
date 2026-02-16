@@ -2290,6 +2290,7 @@ The Integrate Modal provides a one-stop interface for developers to test and int
 1. **Quick Validation** - Health check + prediction test with real data from BigQuery
 2. **Input Schema** - Expected fields extracted from FeatureConfig
 3. **Code Examples** - Python, JavaScript, cURL, Java examples with sample data
+4. **Batch Processing** - Single/Batch toggle to test multi-instance predictions (retrieval & ranking only)
 
 ### Modal Design
 
@@ -2354,7 +2355,7 @@ The Integrate Modal provides a one-stop interface for developers to test and int
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/deployed-endpoints/<id>/integration/` | Get schema, sample data, code examples |
-| GET | `/api/deployed-endpoints/<id>/integration/sample/` | Get new random sample from BigQuery |
+| GET | `/api/deployed-endpoints/<id>/integration/sample/?mode=single\|batch` | Get new random sample from BigQuery (batch returns 3 instances) |
 | POST | `/api/deployed-endpoints/<id>/integration/test/` | Run health check or prediction test |
 
 ### GET /integration/ Response
@@ -2380,7 +2381,8 @@ The Integrate Modal provides a one-stop interface for developers to test and int
       ]
     },
     "sample_data": {
-      "instance": {"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200}
+      "instance": {"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200},
+      "instances": [{"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200}]
     },
     "code_examples": {
       "python": "import requests\n...",
@@ -2399,11 +2401,22 @@ The Integrate Modal provides a one-stop interface for developers to test and int
   "test_type": "health"
 }
 ```
-or
+or (single):
 ```json
 {
   "test_type": "predict",
   "instance": {"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200}
+}
+```
+or (batch):
+```json
+{
+  "test_type": "predict",
+  "instances": [
+    {"customer_id": "CUST-123", "revenue": 5000.0, "date": 1704067200},
+    {"customer_id": "CUST-456", "revenue": 3200.0, "date": 1704153600},
+    {"customer_id": "CUST-789", "revenue": 8100.0, "date": 1704240000}
+  ]
 }
 ```
 
@@ -2443,17 +2456,21 @@ class IntegrationService:
         signature only accepts buyer features as inputs."""
 
     def get_sample_data(self, count=1) -> Dict:
-        """Query BigQuery for random sample, filtered to buyer features only.
-        The model's serving signature only accepts buyer_model_features."""
+        """Query BigQuery for random sample(s). Returns both 'instance' (first row)
+        and 'instances' (all rows) for backward compatibility."""
 
     def run_health_check(self) -> Dict:
         """GET /v1/models/recommender - check endpoint health."""
 
     def run_prediction_test(self, instance) -> Dict:
-        """POST /v1/models/recommender:predict - test prediction."""
+        """POST /v1/models/recommender:predict - single instance prediction."""
 
-    def generate_code_examples(self, instance) -> Dict[str, str]:
-        """Generate Python, JavaScript, cURL, Java code examples."""
+    def run_batch_prediction_test(self, instances) -> Dict:
+        """POST /v1/models/recommender:predict - batch prediction with multiple instances."""
+
+    def generate_code_examples(self, instance, mode='single', instances=None) -> Dict[str, str]:
+        """Generate Python, JavaScript, cURL, Java code examples.
+        When mode='batch', uses instances list in payload."""
 
     def get_integration_data(self) -> Dict:
         """Get all integration data in one call (for modal load)."""
@@ -2492,8 +2509,12 @@ IntegrateModal.refreshSample();
 // Run health check (GET /v1/models/recommender)
 IntegrateModal.runHealthCheck();
 
-// Run prediction test with current sample
+// Run prediction test with current sample (single or batch based on mode)
 IntegrateModal.runPredictionTest();
+
+// Switch between single and batch test mode
+IntegrateModal.switchTestMode('single');  // single, batch
+IntegrateModal.switchTestMode('batch');   // fetches 3 instances, sends as batch
 
 // Switch code example language
 IntegrateModal.switchCodeTab('python');  // python, javascript, curl, java
@@ -2544,6 +2565,8 @@ Button styling:
 | `.integrate-schema-table` | Schema fields table |
 | `.integrate-code-tabs` | Language tab buttons |
 | `.integrate-code-container` | Code display with copy button |
+| `.integrate-mode-toggle` | Single/Batch segmented toggle container |
+| `.integrate-mode-btn` | Toggle button (active = blue background) |
 | `.integrate-btn.integrate` | Purple primary button |
 | `.card-action-btn.integrate` | Table action button (purple) |
 
@@ -2610,3 +2633,60 @@ curl -s "https://<endpoint-url>/v1/models/recommender/metadata" | jq '.metadata.
 - Schema table now shows only the 3 buyer features the model expects
 - Sample data only includes those 3 fields
 - "Run Test" succeeds and returns product recommendations
+
+---
+
+## Batch Processing Support (2026-02-16)
+
+### Overview
+
+Added a **Single / Batch** toggle to the Integrate Modal that lets developers test batch predictions — sending multiple records in one request. TF Serving natively supports batch payloads (`{"instances": [i1, i2, i3]}`), so no serving-side changes were needed.
+
+### Scope
+
+- **Supported**: Retrieval and Ranking model types
+- **Not supported**: Multitask/Hybrid (toggle is hidden)
+- Batch mode fetches **3 random records** from BigQuery and sends them as one request
+
+### UI
+
+A segmented toggle appears inside the Sample Test accordion (between the accordion header and the Sample Request row):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Sample Test                                              [▼]   │
+│                                                                 │
+│  ┌──────────────────┬──────────────────┐                       │
+│  │  👤 Single       │  ☰ Batch         │  ← Mode toggle        │
+│  └──────────────────┴──────────────────┘                       │
+│                                                                 │
+│  Sample Request:                             [Update] [Predict] │
+│  [{"customer_id": "A", ...},                                   │
+│   {"customer_id": "B", ...},                                   │
+│   {"customer_id": "C", ...}]                                   │
+│                                                                 │
+│  Response:                                                      │
+│  {"predictions": [p1, p2, p3]}                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+For multitask models, the toggle is hidden (`display: none`) and only single mode is available.
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/training/integration_service.py` | `get_sample_data()` returns `instances` list; new `run_batch_prediction_test()`; `generate_code_examples()` accepts `mode` and `instances` params |
+| `ml_platform/training/api.py` | `endpoint_integration_sample` accepts `?mode=batch` (returns 3 samples); `endpoint_integration_test` accepts `instances` list |
+| `templates/includes/_integrate_modal.html` | Added `#integrateModeToggle` segmented toggle |
+| `static/js/integrate_modal.js` | Added `state.testMode`, `switchTestMode()`, batch-aware fetch/render/predict |
+| `static/css/integrate_modal.css` | Added `.integrate-mode-toggle` and `.integrate-mode-btn` styles |
+
+### Behavior
+
+1. **Default**: Single mode (1 instance), same as before
+2. **Switch to Batch**: Calls `refreshSample()` with `?mode=batch` → backend fetches 3 random rows → sample box shows array of 3 objects
+3. **Predict (batch)**: Sends `{"instances": [...]}` → response shows `{"predictions": [p1, p2, p3]}`
+4. **Code Examples**: Automatically update to show batch payload when in batch mode
+5. **Switch back to Single**: Reverts to single instance behavior
+6. **Modal re-open**: Always resets to single mode

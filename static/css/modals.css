@@ -272,29 +272,29 @@
 .modal-header-soft.soft-experiment .modal-header-title { color: #164e63; }
 .modal-header-soft.soft-experiment .modal-header-subtitle { color: #155e75; }
 
-/* --- Dataset (teal) --- */
+/* --- Dataset (sky blue) — matches chapter icon #0ea5e9 --- */
 .modal-header-soft.soft-dataset {
-    background: linear-gradient(135deg, #ccfbf1 0%, #5eead4 50%, #0d9488 100%);
+    background: linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 50%, #0ea5e9 100%);
 }
-.modal-header-soft.soft-dataset .modal-header-icon-badge { background: #0d9488; }
-.modal-header-soft.soft-dataset .modal-header-title { color: #134e4a; }
-.modal-header-soft.soft-dataset .modal-header-subtitle { color: #115e59; }
+.modal-header-soft.soft-dataset .modal-header-icon-badge { background: #0ea5e9; }
+.modal-header-soft.soft-dataset .modal-header-title { color: #0c4a6e; }
+.modal-header-soft.soft-dataset .modal-header-subtitle { color: #075985; }
 
-/* --- Feature (blue) --- */
+/* --- Feature (amber) — matches chapter icon #f59e0b --- */
 .modal-header-soft.soft-feature {
-    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+    background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #f59e0b 100%);
 }
-.modal-header-soft.soft-feature .modal-header-icon-badge { background: #2563eb; }
-.modal-header-soft.soft-feature .modal-header-title { color: #1e3a5f; }
-.modal-header-soft.soft-feature .modal-header-subtitle { color: #1e40af; }
+.modal-header-soft.soft-feature .modal-header-icon-badge { background: #f59e0b; }
+.modal-header-soft.soft-feature .modal-header-title { color: #713f12; }
+.modal-header-soft.soft-feature .modal-header-subtitle { color: #92400e; }
 
-/* --- Model (purple) --- */
+/* --- Model (pink) — matches chapter icon #ec4899 --- */
 .modal-header-soft.soft-model {
-    background: linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #7c3aed 100%);
+    background: linear-gradient(135deg, #fce7f3 0%, #f9a8d4 50%, #ec4899 100%);
 }
-.modal-header-soft.soft-model .modal-header-icon-badge { background: #7c3aed; }
-.modal-header-soft.soft-model .modal-header-title { color: #3b1f6e; }
-.modal-header-soft.soft-model .modal-header-subtitle { color: #5b21b6; }
+.modal-header-soft.soft-model .modal-header-icon-badge { background: #ec4899; }
+.modal-header-soft.soft-model .modal-header-title { color: #831843; }
+.modal-header-soft.soft-model .modal-header-subtitle { color: #9d174d; }
 
 /* --- SQL (blue) --- */
 .modal-header-soft.soft-sql {
@@ -418,24 +418,24 @@
 
 /* Dataset (teal) */
 .wizard-nav-bar.pill-dataset .wizard-step-pill.current {
-    background-color: #0d9488;
-    box-shadow: 0 2px 6px rgba(13, 148, 136, 0.3);
+    background-color: #0ea5e9;
+    box-shadow: 0 2px 6px rgba(14, 165, 233, 0.3);
 }
-.wizard-nav-bar.pill-dataset .wizard-step-pill.completed { color: #0d9488; }
+.wizard-nav-bar.pill-dataset .wizard-step-pill.completed { color: #0ea5e9; }
 
-/* Feature (blue) */
+/* Feature (amber) */
 .wizard-nav-bar.pill-feature .wizard-step-pill.current {
-    background-color: #2563eb;
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+    background-color: #f59e0b;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
 }
-.wizard-nav-bar.pill-feature .wizard-step-pill.completed { color: #2563eb; }
+.wizard-nav-bar.pill-feature .wizard-step-pill.completed { color: #f59e0b; }
 
-/* Model (purple) */
+/* Model (pink) */
 .wizard-nav-bar.pill-model .wizard-step-pill.current {
-    background-color: #7c3aed;
-    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.3);
+    background-color: #ec4899;
+    box-shadow: 0 2px 6px rgba(236, 72, 153, 0.3);
 }
-.wizard-nav-bar.pill-model .wizard-step-pill.completed { color: #7c3aed; }
+.wizard-nav-bar.pill-model .wizard-step-pill.completed { color: #ec4899; }
 
 /* Python Code Modal — light code area (mirrors sql-code-light) */
 .python-code-light {

@@ -227,48 +227,40 @@
 
                 <!-- Component Detail Panel (shown on node click) -->
                 <div id="expViewComponentDetail" class="exp-view-component-detail hidden">
-                    <!-- Header Section -->
-                    <div class="component-logs-header">
-                        <div class="component-logs-header-left">
-                            <div class="component-logs-icon">
-                                <i class="fas fa-cube"></i>
+                    <!-- Logs Card (collapsible, ETL-style) -->
+                    <div class="component-logs-card" id="expViewLogsCard">
+                        <div class="component-logs-card-header" onclick="toggleComponentLogs()">
+                            <div class="component-logs-card-header-left">
+                                <div class="component-logs-card-icon"><i class="fas fa-stream"></i></div>
+                                <div class="component-logs-card-title">Logs <span id="expViewLogsComponentName"></span></div>
                             </div>
-                            <div class="component-logs-info">
-                                <h4 id="expViewComponentName">Component</h4>
-                                <div class="component-logs-meta">
-                                    <span class="component-status-badge" id="expViewComponentStatus">pending</span>
-                                    <span class="component-duration">
-                                        <i class="fas fa-clock"></i>
-                                        <span id="expViewComponentDurationText">-</span>
-                                    </span>
+                            <div class="component-logs-card-actions">
+                                <button class="btn btn-primary" id="expViewLoadLogsBtn" onclick="event.stopPropagation(); ExpViewModal.refreshComponentLogs()" style="white-space: nowrap; min-width: auto; padding: 8px 18px; font-size: 13px;">
+                                    <i class="fas fa-sync-alt"></i> Load Logs
+                                </button>
+                                <div class="component-logs-card-toggle">
+                                    <i class="fas fa-chevron-right"></i>
                                 </div>
                             </div>
                         </div>
-                        <div class="component-logs-actions">
-                            <button class="logs-load-btn" id="expViewLoadLogsBtn" onclick="ExpViewModal.refreshComponentLogs()">
-                                <i class="fas fa-sync-alt"></i>
-                                <span>Load Logs</span>
-                            </button>
-                        </div>
-                    </div>
-                    <!-- Logs Container -->
-                    <div class="component-logs-wrapper">
-                        <div class="exp-view-logs-container" id="expViewLogsContainer">
-                            <div class="logs-empty-state">
-                                <div class="logs-empty-icon">
-                                    <i class="fas fa-terminal"></i>
+                        <div class="component-logs-card-content">
+                            <div class="component-logs-card-divider"></div>
+                            <div class="exp-view-logs-container" id="expViewLogsContainer">
+                                <div class="logs-empty-state">
+                                    <div class="logs-empty-icon">
+                                        <i class="fas fa-terminal"></i>
+                                    </div>
+                                    <p class="logs-empty-title">No logs loaded</p>
+                                    <p class="logs-empty-subtitle">Click "Load Logs" to fetch component output</p>
                                 </div>
-                                <p class="logs-empty-title">No logs loaded</p>
-                                <p class="logs-empty-subtitle">Click "Load Logs" to fetch component output</p>
                             </div>
-                        </div>
-                    </div>
-                    <!-- Footer with Legend -->
-                    <div class="component-logs-footer">
-                        <div class="logs-legend">
-                            <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
-                            <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
-                            <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
+                            <div class="component-logs-card-footer">
+                                <div class="logs-legend">
+                                    <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
+                                    <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
+                                    <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

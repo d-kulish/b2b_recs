@@ -1950,118 +1950,96 @@
     gap: 12px;
 }
 
-/* Component Logs Header */
-.component-logs-header {
+/* Component Logs Card (collapsible, ETL-style) */
+.component-logs-card {
+    border: 1px solid #000000;
+    border-radius: 12px;
+    padding: 16px 20px;
+    background: white;
+}
+
+.component-logs-card-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
+    cursor: pointer;
 }
 
-.component-logs-header-left {
+.component-logs-card-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
-.component-logs-icon {
+.component-logs-card-icon {
     width: 40px;
     height: 40px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-    border-radius: 10px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+}
+
+.component-logs-card-icon i {
     color: white;
+    font-size: 18px;
+}
+
+.component-logs-card-title {
     font-size: 16px;
+    font-weight: 700;
+    color: #111827;
 }
 
-.component-logs-info h4 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: #1e293b;
-}
-
-.component-logs-meta {
+.component-logs-card-actions {
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-top: 4px;
 }
 
-.component-status-badge {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.component-status-badge.pending {
-    background: #f1f5f9;
-    color: #64748b;
-}
-
-.component-status-badge.running {
-    background: #dbeafe;
-    color: #1d4ed8;
-}
-
-.component-status-badge.completed {
-    background: #dcfce7;
-    color: #15803d;
-}
-
-.component-status-badge.failed {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-.component-status-badge.skipped {
-    background: #f3f4f6;
-    color: #6b7280;
-}
-
-.component-duration {
+.component-logs-card-toggle {
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: #64748b;
+    justify-content: center;
+    color: #9ca3af;
+    font-size: 16px;
+    transition: transform 0.3s ease;
 }
 
-.component-duration i {
-    font-size: 11px;
+.component-logs-card.logs-open .component-logs-card-toggle {
+    transform: rotate(90deg);
 }
 
-.component-logs-actions {
-    display: flex;
-    gap: 8px;
-}
-
-/* Component Logs Wrapper */
-.component-logs-wrapper {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
+.component-logs-card-content {
+    max-height: 0;
     overflow: hidden;
-    max-height: 200px;
+    transition: max-height 0.3s ease-out;
 }
 
-.component-logs-wrapper .exp-view-logs-container {
+.component-logs-card.logs-open .component-logs-card-content {
+    max-height: 2000px;
+    transition: max-height 0.5s ease-in;
+}
+
+.component-logs-card-content .exp-view-logs-container {
     max-height: 200px;
     overflow-y: auto;
 }
 
-/* Component Logs Footer */
-.component-logs-footer {
+.component-logs-card-divider {
+    height: 1px;
+    margin: 12px 0;
+    background: linear-gradient(to right, transparent 0%, #e5e7eb 10%, #e5e7eb 90%, transparent 100%);
+}
+
+.component-logs-card-footer {
     display: flex;
     justify-content: flex-end;
+    margin-top: 8px;
 }
 
 /* Info banner variant for component notes */

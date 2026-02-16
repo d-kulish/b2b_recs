@@ -13,6 +13,7 @@
  *   - selectDagComponent(componentId) - Select a component node
  *   - loadComponentLogs(componentId, experimentId) - Load logs for a component
  *   - refreshComponentLogs(experimentId) - Refresh logs for selected component
+ *   - toggleComponentLogs() - Toggle logs card expand/collapse
  *   - resetDagState() - Reset DAG state when modal closes
  *   - formatDuration(seconds) - Format seconds as MM:SS
  */
@@ -460,25 +461,17 @@ function selectDagComponent(componentId) {
         detailPanel.classList.remove('hidden');
     }
 
-    // Get stage info
-    const stage = currentStageDetails.find(s => s.name === componentId) || { status: 'pending' };
-
-    // Update header
+    // Update component name in the logs card title
     const component = TFX_PIPELINE.components.find(c => c.id === componentId);
-    const nameEl = document.getElementById('expViewComponentName');
-    if (nameEl) {
-        nameEl.textContent = component ? component.name : componentId;
+    const logsNameEl = document.getElementById('expViewLogsComponentName');
+    if (logsNameEl) {
+        logsNameEl.textContent = component ? component.name : componentId;
     }
 
-    const statusEl = document.getElementById('expViewComponentStatus');
-    if (statusEl) {
-        statusEl.textContent = stage.status || 'pending';
-        statusEl.className = 'component-status-badge ' + (stage.status || 'pending');
-    }
-
-    const durationEl = document.getElementById('expViewComponentDurationText');
-    if (durationEl) {
-        durationEl.textContent = stage.duration_seconds ? formatDuration(stage.duration_seconds) : '-';
+    // Collapse the logs card when switching components
+    const logsCard = document.getElementById('expViewLogsCard');
+    if (logsCard) {
+        logsCard.classList.remove('logs-open');
     }
 
     // Reset logs container to show placeholder (don't auto-load)
@@ -592,6 +585,16 @@ async function loadComponentLogs(componentId, experimentId, mode) {
                 <p class="logs-error-subtitle">Please try again or check your connection</p>
             </div>
         `;
+    }
+}
+
+/**
+ * Toggle the component logs card expand/collapse
+ */
+function toggleComponentLogs() {
+    const card = document.getElementById('expViewLogsCard');
+    if (card) {
+        card.classList.toggle('logs-open');
     }
 }
 

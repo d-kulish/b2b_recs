@@ -201,20 +201,9 @@
                     </div>
                 </div>
 
-                <!-- Accordion 4: Model Architecture -->
-                <div class="exp-view-accordion">
-                    <div class="exp-view-accordion-header" onclick="ExpViewModal.toggleAccordion('model')">
-                        <span class="exp-view-accordion-title">
-                            <i class="fas fa-project-diagram mr-2 text-green-500"></i><span class="exp-view-accordion-label">Model:</span> <span id="expViewModelConfigName" class="exp-view-accordion-value">-</span>
-                        </span>
-                        <span class="exp-view-accordion-badge" id="expViewModelTypeBadgeSmall"></span>
-                        <i id="expViewModelChevron" class="fas fa-chevron-right exp-view-accordion-chevron"></i>
-                    </div>
-                    <div id="expViewModelContent" class="exp-view-accordion-content hidden">
-                        <div id="expViewModelConfigContent">
-                            <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
-                        </div>
-                    </div>
+                <!-- Model Config cards (rendered by JS, replacing the accordion) -->
+                <div id="expViewModelConfigContent" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 12px;">
+                    <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
                 </div>
 
                 <!-- Accordion 5: Training Setup -->

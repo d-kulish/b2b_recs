@@ -98,7 +98,6 @@ const ExpViewModal = (function() {
             registryDeployment: false,
             dataset: false,
             features: false,
-            model: false,
             trainingSetup: false
         }
     };
@@ -484,22 +483,6 @@ const ExpViewModal = (function() {
         }
 
         // Model config - load full details
-        const modelConfigName = run.model_config_name || '-';
-        document.getElementById('expViewModelConfigName').textContent = modelConfigName;
-
-        // Model type badge in accordion header
-        const modelType = (run.model_type || 'retrieval').toLowerCase();
-        const badgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
-        if (badgeSmall) {
-            const badgeLabels = {
-                'retrieval': 'Retrieval',
-                'ranking': 'Ranking',
-                'multitask': 'Multitask'
-            };
-            badgeSmall.textContent = badgeLabels[modelType] || 'Retrieval';
-            badgeSmall.className = 'exp-view-accordion-badge badge-' + modelType;
-        }
-
         if (run.model_config_id) {
             loadModelConfig(run.model_config_id);
         } else {
@@ -1354,16 +1337,7 @@ const ExpViewModal = (function() {
                 '<div class="exp-view-no-filters">No features config</div>';
         }
 
-        // Model config - load full details like training runs
-        const modelConfigName = model.model_config_name || '-';
-        document.getElementById('expViewModelConfigName').textContent = modelConfigName;
-
-        // Hide model type badge in accordion header (shown in main header only)
-        const modelTypeBadgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
-        if (modelTypeBadgeSmall) {
-            modelTypeBadgeSmall.style.display = 'none';
-        }
-
+        // Model config - load full details
         // Load full model config details using model_config_id
         if (model.model_config_id) {
             loadModelConfig(model.model_config_id);
@@ -3095,22 +3069,6 @@ const ExpViewModal = (function() {
         }
 
         // Load model config details
-        const modelConfigName = exp.model_config_name || exp.model_config?.name || '-';
-        document.getElementById('expViewModelConfigName').textContent = modelConfigName;
-
-        // Model type badge in accordion header
-        const expModelType = (exp.model_type || exp.feature_config_type || 'retrieval').toLowerCase();
-        const badgeSmall = document.getElementById('expViewModelTypeBadgeSmall');
-        if (badgeSmall) {
-            const badgeLabels = {
-                'retrieval': 'Retrieval',
-                'ranking': 'Ranking',
-                'multitask': 'Multitask'
-            };
-            badgeSmall.textContent = badgeLabels[expModelType] || 'Retrieval';
-            badgeSmall.className = 'exp-view-accordion-badge badge-' + expModelType;
-        }
-
         const modelConfigId = exp.model_config_id || exp.model_config?.id;
         if (modelConfigId) {
             loadModelConfig(modelConfigId);
@@ -3815,101 +3773,317 @@ const ExpViewModal = (function() {
         const productLayers = mc.product_tower_layers || [];
         const buyerParams = calculateTowerParams(buyerLayers);
         const productParams = calculateTowerParams(productLayers);
+        const totalParams = buyerParams + productParams;
+        const totalParamsDisplay = totalParams >= 1000
+            ? Math.round(totalParams / 1000) + 'K'
+            : totalParams.toLocaleString();
+        const towerHtml = renderCardTowerLayersForView(buyerLayers, productLayers);
 
-        let html = `
-            <div class="exp-view-tower-section-title">Tower Architecture</div>
-            <div class="exp-view-towers-grid">
-                <div class="exp-view-tower-column">
-                    <div class="exp-view-tower-header">
-                        <span class="exp-view-tower-label">BUYER TOWER</span>
+        // Retrieval algorithm section (for retrieval and multitask)
+        let retrievalHtml = '';
+        if (['retrieval', 'multitask'].includes(mc.model_type)) {
+            let retrievalStats = `
+                <div class="exp-detail-stat-info">
+                    <div class="stat-label">Algorithm</div>
+                    <div class="stat-value">${mc.retrieval_algorithm_display || 'Brute Force'}</div>
+                </div>
+                <div class="exp-detail-stat">
+                    <div class="exp-detail-stat-value">${mc.top_k || 100}</div>
+                    <div class="exp-detail-stat-label">Top-K</div>
+                </div>
+            `;
+            if (mc.retrieval_algorithm === 'scann') {
+                retrievalStats += `
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${mc.scann_num_leaves || 100}</div>
+                        <div class="exp-detail-stat-label">Num Leaves</div>
                     </div>
-                    <div class="exp-view-tower-stack buyer">
-                        ${renderTowerLayers(buyerLayers)}
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${mc.scann_leaves_to_search || 10}</div>
+                        <div class="exp-detail-stat-label">Leaves to Search</div>
                     </div>
-                    <div class="exp-view-tower-params buyer">
-                        <div class="exp-view-tower-params-row"><span>Total params:</span><span>${buyerParams.toLocaleString()}</span></div>
-                        <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${buyerParams.toLocaleString()}</span></div>
-                        <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
+                `;
+            }
+            retrievalHtml = `
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Retrieval Algorithm</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon algo"><i class="fas fa-search"></i></div>
+                        <div class="exp-detail-stats">${retrievalStats}</div>
                     </div>
                 </div>
-                <div class="exp-view-tower-column">
-                    <div class="exp-view-tower-header">
-                        <span class="exp-view-tower-label">PRODUCT TOWER</span>
-                    </div>
-                    <div class="exp-view-tower-stack product">
-                        ${renderTowerLayers(productLayers)}
-                    </div>
-                    <div class="exp-view-tower-params product">
-                        <div class="exp-view-tower-params-row"><span>Total params:</span><span>${productParams.toLocaleString()}</span></div>
-                        <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${productParams.toLocaleString()}</span></div>
-                        <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
-                    </div>
-                </div>
-            </div>`;
-
-        // Rating Head section (for ranking and multitask models)
-        if (['ranking', 'multitask'].includes(mc.model_type)) {
-            const ratingHeadLayers = mc.rating_head_layers || [];
-            const ratingHeadParams = calculateTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
-
-            html += `
-            <div class="exp-view-rating-head-section">
-                <div class="exp-view-rating-head-title">Rating Head</div>
-                <div class="exp-view-rating-head-label">RANKING TOWER</div>
-                <div class="exp-view-rating-tower-wrapper">
-                    <div class="exp-view-tower-stack ranking">
-                        ${renderTowerLayers(ratingHeadLayers)}
-                    </div>
-                    <div class="exp-view-tower-params ranking">
-                        <div class="exp-view-tower-params-row"><span>Total params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
-                        <div class="exp-view-tower-params-row"><span>Trainable params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
-                        <div class="exp-view-tower-params-row"><span>Non-trainable params:</span><span>0</span></div>
-                    </div>
-                </div>
-            </div>`;
+            `;
         }
 
-        container.innerHTML = html;
+        // Rating Head section (for ranking and multitask)
+        let ratingHeadHtml = '';
+        if (['ranking', 'multitask'].includes(mc.model_type) && mc.rating_head_layers) {
+            const ratingHeadLayers = mc.rating_head_layers || [];
+            const ratingHeadParams = calculateTowerParams(ratingHeadLayers, (mc.output_embedding_dim || 32) * 2);
+            const ratingLayersHtml = renderRatingHeadLayersForView(ratingHeadLayers);
+            ratingHeadHtml = `
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Rating Head</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon rating"><i class="fas fa-bullseye"></i></div>
+                        <div class="exp-detail-stats">
+                            <div class="exp-detail-stat-info">
+                                <div class="stat-label">Loss Function</div>
+                                <div class="stat-value">${mc.loss_function_display || 'MSE'}</div>
+                            </div>
+                            <div class="exp-detail-stat">
+                                <div class="exp-detail-stat-value">${ratingHeadLayers.length}</div>
+                                <div class="exp-detail-stat-label">Layers</div>
+                            </div>
+                            <div class="exp-detail-stat">
+                                <div class="exp-detail-stat-value">${ratingHeadParams.toLocaleString()}</div>
+                                <div class="exp-detail-stat-label">Params</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6;">
+                        <div class="rating-head-content">
+                            <div class="rating-head-layers-col">
+                                <div class="tower-stack ranking">
+                                    ${ratingLayersHtml}
+                                </div>
+                            </div>
+                            <div class="rating-head-params-col">
+                                <div class="tower-params-summary view-modal" style="margin: 0; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border-color: #8b5cf6;">
+                                    <div class="params-row"><span>Total params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                                    <div class="params-row"><span>Trainable params:</span><span>${ratingHeadParams.toLocaleString()}</span></div>
+                                    <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
-        // Update Optimizer in Training Parameters section
+        // Multitask weights section (for multitask only)
+        let multitaskHtml = '';
+        if (mc.model_type === 'multitask') {
+            multitaskHtml = `
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Multitask Weights</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon weights"><i class="fas fa-balance-scale"></i></div>
+                        <div class="exp-detail-stats">
+                            <div class="exp-detail-stat">
+                                <div class="exp-detail-stat-value">${Math.round((mc.retrieval_weight !== undefined ? mc.retrieval_weight : 1) * 100)}%</div>
+                                <div class="exp-detail-stat-label">Retrieval</div>
+                            </div>
+                            <div class="exp-detail-stat">
+                                <div class="exp-detail-stat-value">${Math.round((mc.ranking_weight !== undefined ? mc.ranking_weight : 1) * 100)}%</div>
+                                <div class="exp-detail-stat-label">Ranking</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = `
+            <!-- Config Information -->
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Config Information</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Name</div>
+                            <div class="stat-value">${mc.name || '—'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Type</div>
+                            <div class="stat-value">${mc.model_type_display || mc.model_type || '—'}</div>
+                        </div>
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${mc.output_embedding_dim || 32}D</div>
+                            <div class="exp-detail-stat-label">Output Dim</div>
+                        </div>
+                        <div class="exp-detail-stat-info" style="flex: 2;">
+                            <div class="stat-label">Description</div>
+                            <div class="stat-value">${mc.description || '—'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tower Architecture -->
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Tower Architecture</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon tower"><i class="fas fa-server"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${buyerLayers.length}</div>
+                            <div class="exp-detail-stat-label">Buyer Layers</div>
+                        </div>
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${productLayers.length}</div>
+                            <div class="exp-detail-stat-label">Product Layers</div>
+                        </div>
+                        <div class="exp-detail-stat">
+                            <div class="exp-detail-stat-value">${totalParamsDisplay}</div>
+                            <div class="exp-detail-stat-label">Total Params</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid #f3f4f6;">
+                    <div class="tower-visual tower-visual-aligned">
+                        <div class="tower-column">
+                            <div class="tower-header"><span class="tower-label">Buyer Tower</span></div>
+                            <div class="tower-stack buyer">${towerHtml.buyer}</div>
+                            <div class="tower-params-summary view-modal">
+                                <div class="params-row"><span>Total params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Trainable params:</span><span>${buyerParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                            </div>
+                        </div>
+                        <div class="tower-column">
+                            <div class="tower-header"><span class="tower-label">Product Tower</span></div>
+                            <div class="tower-stack product">${towerHtml.product}</div>
+                            <div class="tower-params-summary view-modal">
+                                <div class="params-row"><span>Total params:</span><span>${productParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Trainable params:</span><span>${productParams.toLocaleString()}</span></div>
+                                <div class="params-row"><span>Non-trainable params:</span><span>0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            ${ratingHeadHtml}
+
+            <!-- Training Parameters -->
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Training Parameters</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon params"><i class="fas fa-sliders-h"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Optimizer</div>
+                            <div class="stat-value">${mc.optimizer_display || mc.optimizer || '—'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Learning Rate</div>
+                            <div class="stat-value">${mc.learning_rate || '—'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Batch Size</div>
+                            <div class="stat-value">${mc.batch_size ? mc.batch_size.toLocaleString() : '—'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            ${retrievalHtml}
+            ${multitaskHtml}
+        `;
+
+        // Update Optimizer in Training Parameters section (training setup accordion)
         const optimizerEl = document.getElementById('expViewOptimizerValue');
         if (optimizerEl) {
             optimizerEl.textContent = mc.optimizer_display || mc.optimizer || 'Adagrad';
         }
     }
 
-    function renderTowerLayers(layers) {
-        if (!layers || layers.length === 0) {
-            return '<div class="text-xs text-gray-400 italic p-2">No layers</div>';
+    function renderCardTowerLayersForView(buyerLayers, productLayers) {
+        const maxLen = Math.max(buyerLayers.length, productLayers.length);
+        if (maxLen === 0) {
+            return {
+                buyer: '<div class="text-xs text-gray-400 italic p-2">No layers</div>',
+                product: '<div class="text-xs text-gray-400 italic p-2">No layers</div>'
+            };
         }
 
-        return layers.map((layer, idx) => {
-            const isOutput = idx === layers.length - 1;
+        const renderLayer = (layer, isOutput) => {
             let badge = '';
             let params = '';
 
             if (layer.type === 'dense') {
-                badge = '<span class="exp-view-layer-badge dense">DENSE</span>';
+                badge = '<span class="card-layer-badge dense">Dense</span>';
                 params = `${layer.units} units`;
                 if (layer.activation) params += `, ${layer.activation}`;
                 if (layer.l2_regularization) params += `, L2=${layer.l2_regularization}`;
                 else if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
             } else if (layer.type === 'dropout') {
-                badge = '<span class="exp-view-layer-badge dropout">DROPOUT</span>';
+                badge = '<span class="card-layer-badge dropout">Dropout</span>';
                 params = `rate: ${layer.rate}`;
             } else if (layer.type === 'batch_norm') {
-                badge = '<span class="exp-view-layer-badge batch_norm">BATCHNORM</span>';
+                badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
                 params = '';
             } else if (layer.type === 'layer_norm') {
-                badge = '<span class="exp-view-layer-badge layer_norm">LAYERNORM</span>';
+                badge = '<span class="card-layer-badge layer_norm">LayerNorm</span>';
                 params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
             }
 
             return `
-                <div class="exp-view-layer-item${isOutput ? ' output-layer' : ''}">
-                    <span class="exp-view-layer-drag"><i class="fas fa-grip-vertical"></i></span>
+                <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                    <span class="card-drag-handle"><i class="fas fa-grip-vertical"></i></span>
                     ${badge}
-                    <span class="exp-view-layer-params">${params}</span>
+                    <span class="card-layer-params">${params}</span>
+                </div>
+            `;
+        };
+
+        const renderPlaceholder = () => '<div class="card-layer-item empty-placeholder">&nbsp;</div>';
+
+        const buildTowerHtml = (layers, placeholderCount) => {
+            if (layers.length === 0) return '';
+            const result = [];
+            for (let i = 0; i < layers.length - 1; i++) {
+                result.push(renderLayer(layers[i], false));
+            }
+            for (let i = 0; i < placeholderCount; i++) {
+                result.push(renderPlaceholder());
+            }
+            result.push(renderLayer(layers[layers.length - 1], true));
+            return result.join('');
+        };
+
+        const buyerPlaceholders = maxLen - buyerLayers.length;
+        const productPlaceholders = maxLen - productLayers.length;
+
+        return {
+            buyer: buildTowerHtml(buyerLayers, buyerPlaceholders),
+            product: buildTowerHtml(productLayers, productPlaceholders)
+        };
+    }
+
+    function renderRatingHeadLayersForView(layers) {
+        if (!layers || layers.length === 0) {
+            return '<div class="text-xs text-gray-400 italic p-2">No layers defined</div>';
+        }
+
+        return layers.map((layer, idx) => {
+            const isOutput = idx === layers.length - 1 && layer.type === 'dense' && layer.units === 1;
+            let badge = '';
+            let params = '';
+
+            if (layer.type === 'dense') {
+                badge = '<span class="card-layer-badge dense">Dense</span>';
+                params = `${layer.units} units`;
+                if (layer.activation) params += `, ${layer.activation}`;
+                if (layer.l2_reg) params += `, L2=${layer.l2_reg}`;
+            } else if (layer.type === 'dropout') {
+                badge = '<span class="card-layer-badge dropout">Dropout</span>';
+                params = `rate: ${layer.rate}`;
+            } else if (layer.type === 'batch_norm') {
+                badge = '<span class="card-layer-badge batch_norm">BatchNorm</span>';
+                params = '';
+            } else if (layer.type === 'layer_norm') {
+                badge = '<span class="card-layer-badge layer_norm">LayerNorm</span>';
+                params = layer.epsilon ? `ε: ${layer.epsilon}` : '';
+            }
+
+            return `
+                <div class="card-layer-item${isOutput ? ' output-layer' : ''}">
+                    <span class="card-drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                    ${badge}
+                    <span class="card-layer-params">${params}</span>
                 </div>
             `;
         }).join('');
@@ -5524,7 +5698,6 @@ const ExpViewModal = (function() {
         const sectionMap = {
             registryDeployment: 'expViewRegistryDeployment',
             dataset: 'expViewDataset',
-            model: 'expViewModel',
             trainingSetup: 'expViewTrainingSetup'
         };
 
@@ -5556,12 +5729,11 @@ const ExpViewModal = (function() {
         state.accordionExpanded = {
             registryDeployment: false,
             dataset: false,
-            model: false,
             trainingSetup: false
         };
 
         // Collapse all accordion contents
-        const prefixes = ['expViewRegistryDeployment', 'expViewDataset', 'expViewModel', 'expViewTrainingSetup'];
+        const prefixes = ['expViewRegistryDeployment', 'expViewDataset', 'expViewTrainingSetup'];
 
         prefixes.forEach(prefix => {
             const content = document.getElementById(`${prefix}Content`);
@@ -5573,7 +5745,7 @@ const ExpViewModal = (function() {
         // Reset features config container (not an accordion, but may be hidden by endpoint mode)
         const featuresConfig = document.getElementById('expViewFeaturesConfigContent');
         if (featuresConfig) {
-            featuresConfig.style.display = '';
+            featuresConfig.style.display = 'flex';
             featuresConfig.innerHTML = '<div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
         }
     }

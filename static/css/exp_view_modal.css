@@ -934,6 +934,11 @@
 .exp-detail-section-icon.filters  { background: linear-gradient(135deg, #10b981, #34d399); }
 .exp-detail-section-icon.target   { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
 .exp-detail-section-icon.tensors  { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.exp-detail-section-icon.tower   { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+.exp-detail-section-icon.params  { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.exp-detail-section-icon.algo    { background: linear-gradient(135deg, #10b981, #34d399); }
+.exp-detail-section-icon.rating  { background: linear-gradient(135deg, #ec4899, #f472b6); }
+.exp-detail-section-icon.weights { background: linear-gradient(135deg, #ec4899, #f472b6); }
 
 .exp-detail-stats {
     display: flex;
@@ -1439,6 +1444,204 @@
 
 .exp-view-rating-tower-wrapper {
     max-width: 280px;
+}
+
+/* ==========================================================================
+   Card-Style Tower Visualization (shared with model_configs)
+   ========================================================================== */
+.tower-visual {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.tower-visual-aligned .tower-stack {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.tower-visual-aligned .tower-column {
+    display: flex;
+    flex-direction: column;
+}
+
+.tower-column {
+    min-width: 0;
+}
+
+.tower-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.tower-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7280;
+}
+
+.tower-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-radius: 10px;
+    padding: 12px;
+    border: 2px dashed;
+}
+
+.tower-stack.buyer {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-color: #3b82f6;
+}
+
+.tower-stack.product {
+    background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+    border-color: #10b981;
+}
+
+.tower-stack.ranking {
+    background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+    border-color: #8b5cf6;
+}
+
+.card-layer-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.tower-stack.buyer .card-layer-item {
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
+.tower-stack.product .card-layer-item {
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.tower-stack.ranking .card-layer-item {
+    border-color: rgba(139, 92, 246, 0.2);
+}
+
+.card-layer-item.output-layer {
+    border: 2px solid #f87171 !important;
+}
+
+.card-layer-item.empty-placeholder {
+    background: transparent;
+    border: 1px dashed rgba(0, 0, 0, 0.1);
+    visibility: hidden;
+}
+
+.card-layer-item .card-drag-handle {
+    color: #c4c4c4;
+    font-size: 12px;
+}
+
+.card-layer-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+}
+
+.card-layer-badge.dense {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.card-layer-badge.dropout {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.card-layer-badge.batch_norm {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.card-layer-badge.layer_norm {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.card-layer-params {
+    flex: 1;
+    font-size: 12px;
+    color: #4b5563;
+}
+
+.tower-params-summary {
+    margin: 8px 0 0 0;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 8px;
+    border-top: 2px solid rgba(0, 0, 0, 0.1);
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+    font-size: 11px;
+}
+
+.tower-params-summary .params-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    color: #374151;
+}
+
+.tower-params-summary .params-row span:first-child {
+    color: #6b7280;
+}
+
+.tower-params-summary .params-row span:last-child {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* View modal tower summaries - match tower colors */
+.tower-params-summary.view-modal {
+    margin: 8px 0 0 0;
+    border: 2px dashed;
+    border-top: 2px dashed;
+}
+
+.tower-column:first-child .tower-params-summary.view-modal {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-color: #3b82f6;
+}
+
+.tower-column:last-child .tower-params-summary.view-modal {
+    background: linear-gradient(135deg, #f0fdf4 0%, #d1fae5 100%);
+    border-color: #10b981;
+}
+
+/* Rating Head two-column layout (view modal) */
+.rating-head-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.rating-head-layers-col {
+    min-width: 0;
+}
+
+.rating-head-params-col {
+    min-width: 0;
 }
 
 /* ==========================================================================

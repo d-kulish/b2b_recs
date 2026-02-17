@@ -2553,56 +2553,53 @@ const ExpViewModal = (function() {
         const serviceName = endpoint.service_name || endpoint.name || 'Unknown';
 
         container.innerHTML = `
-            <div class="logs-tab-content">
-                <!-- Logs Header Section -->
-                <div class="logs-header-section">
-                    <div class="logs-header-left">
-                        <div class="logs-header-icon">
-                            <i class="fas fa-stream"></i>
+            <div style="padding: 16px 0;">
+                <div class="component-logs-card" id="endpointLogsCard">
+                    <div class="component-logs-card-header" onclick="ExpViewModal.toggleEndpointLogs()">
+                        <div class="component-logs-card-header-left">
+                            <div class="component-logs-card-icon"><i class="fas fa-stream"></i></div>
+                            <div class="component-logs-card-title">Logs ${serviceName}</div>
                         </div>
-                        <div class="logs-header-info">
-                            <h4>Service Logs</h4>
-                            <span class="logs-service-name">${serviceName}</span>
-                        </div>
-                    </div>
-                    <div class="logs-header-actions">
-                        <button class="logs-load-btn" id="endpointLoadLogsBtn"
-                                onclick="ExpViewModal.loadEndpointLogs()">
-                            <i class="fas fa-sync-alt"></i>
-                            <span>Load Logs</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Info Banner -->
-                <div class="logs-info-banner">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Displays the last 100 log entries from Cloud Run. Includes request logs, errors, and service health messages.</span>
-                </div>
-
-                <!-- Logs Container -->
-                <div class="logs-content-wrapper">
-                    <div class="exp-view-logs-container" id="endpointLogsContainer">
-                        <div class="logs-empty-state">
-                            <div class="logs-empty-icon">
-                                <i class="fas fa-terminal"></i>
+                        <div class="component-logs-card-actions">
+                            <button class="btn btn-primary" id="endpointLoadLogsBtn"
+                                    onclick="event.stopPropagation(); ExpViewModal.loadEndpointLogs()"
+                                    style="white-space: nowrap; min-width: auto; padding: 8px 18px; font-size: 13px;">
+                                <i class="fas fa-sync-alt"></i> Load Logs
+                            </button>
+                            <div class="component-logs-card-toggle">
+                                <i class="fas fa-chevron-right"></i>
                             </div>
-                            <p class="logs-empty-title">No logs loaded</p>
-                            <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
                         </div>
                     </div>
-                </div>
-
-                <!-- Logs Footer with Legend -->
-                <div class="logs-footer">
-                    <div class="logs-legend">
-                        <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
-                        <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
-                        <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
+                    <div class="component-logs-card-content">
+                        <div class="component-logs-card-divider"></div>
+                        <div class="exp-view-logs-container" id="endpointLogsContainer">
+                            <div class="logs-empty-state">
+                                <div class="logs-empty-icon">
+                                    <i class="fas fa-terminal"></i>
+                                </div>
+                                <p class="logs-empty-title">No logs loaded</p>
+                                <p class="logs-empty-subtitle">Click "Load Logs" to fetch recent entries from Cloud Run</p>
+                            </div>
+                        </div>
+                        <div class="component-logs-card-footer">
+                            <div class="logs-legend">
+                                <span class="logs-legend-item"><span class="logs-severity-dot INFO"></span> Info</span>
+                                <span class="logs-legend-item"><span class="logs-severity-dot WARNING"></span> Warning</span>
+                                <span class="logs-legend-item"><span class="logs-severity-dot ERROR"></span> Error</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
+    }
+
+    function toggleEndpointLogs() {
+        const card = document.getElementById('endpointLogsCard');
+        if (card) {
+            card.classList.toggle('logs-open');
+        }
     }
 
     async function loadEndpointLogs() {
@@ -2648,6 +2645,9 @@ const ExpViewModal = (function() {
                         }).join('')}
                     </div>
                 `;
+                // Auto-expand the logs card
+                const card = document.getElementById('endpointLogsCard');
+                if (card) card.classList.add('logs-open');
             } else {
                 // Show message
                 const message = data.logs?.message || data.error || 'No logs available';
@@ -5804,6 +5804,7 @@ const ExpViewModal = (function() {
         openForEndpoint: openForEndpoint,
         openWithEndpointData: openWithEndpointData,
         loadEndpointLogs: loadEndpointLogs,
+        toggleEndpointLogs: toggleEndpointLogs,
 
         // Training run actions (Registry & Deployment)
         pushToRegistry: pushToRegistry,

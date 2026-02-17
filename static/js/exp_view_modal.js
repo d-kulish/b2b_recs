@@ -395,60 +395,54 @@ const ExpViewModal = (function() {
         // Store current run for tab data loading
         window.currentViewRun = run;
 
-        // Switch to legacy header, hide card sections
-        showLegacyHeader();
+        // Switch to new ETL-style header, hide card sections
+        showNewHeader();
         const cardSections = document.getElementById('expViewCardSections');
         if (cardSections) cardSections.style.display = 'none';
 
-        // Status gradient on header
-        // Use "registered" class (green) if model is registered, regardless of deployment status
-        const header = document.getElementById('expViewHeaderLegacy');
+        // Re-show dataset accordion (showNewHeader hides it for experiment mode,
+        // but training_run mode still uses the accordion for dataset details)
+        const dsAccordion = document.getElementById('expViewDatasetAccordion');
+        if (dsAccordion) dsAccordion.style.display = '';
+
+        // Determine effective status - "registered" (green) if model is registered
         const isRegistered = run.vertex_model_resource_name || run.registered_at;
-        const headerStatusClass = isRegistered ? 'registered' : run.status;
-        header.className = `modal-header exp-view-header ${headerStatusClass}`;
+        const effectiveStatus = isRegistered ? 'registered' : run.status;
 
-        // Status panel - use "registered" when model is registered
-        const statusPanel = document.getElementById('expViewStatusPanel');
-        statusPanel.className = `exp-view-status-panel ${headerStatusClass}`;
-
-        // Status icon - use "registered" (checkmark) when model is registered
-        const statusIcon = document.getElementById('expViewStatusIcon');
-        const iconStatusKey = isRegistered ? 'registered' : run.status;
-        const statusCfg = TRAINING_STATUS_CONFIG[iconStatusKey] || TRAINING_STATUS_CONFIG.pending;
-        const isSpinning = run.status === 'running' || run.status === 'submitting' || run.status === 'deploying';
-        statusIcon.className = `exp-view-status-icon ${headerStatusClass}`;
-        statusIcon.innerHTML = `<i class="fas ${statusCfg.icon}${isSpinning ? ' fa-spin' : ''}"></i>`;
-
-        // Title (Run #N)
-        document.getElementById('expViewTitleLegacy').textContent = `Run #${run.run_number}`;
-
-        // Run name
-        const expNameEl = document.getElementById('expViewExpName');
-        expNameEl.textContent = run.name || '';
-        expNameEl.style.display = run.name ? '' : 'none';
-
-        // Model type badge in header - ensure visible for training runs
-        const typeBadgeEl = document.getElementById('expViewTypeBadge');
-        typeBadgeEl.style.display = '';  // Restore visibility (may be hidden in model mode)
-        const modelType = (run.model_type || 'retrieval').toLowerCase();
-        const badgeContents = {
-            'retrieval': '<i class="fas fa-search"></i> Retrieval',
-            'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
-            'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
+        // Map training run statuses to CSS class variants
+        const statusMap = {
+            completed: 'completed', failed: 'failed', running: 'running',
+            submitting: 'running', pending: 'pending', cancelled: 'cancelled',
+            registered: 'completed', deployed: 'completed', deploying: 'running',
+            not_blessed: 'failed', deploy_failed: 'failed', scheduled: 'pending'
         };
-        typeBadgeEl.className = `exp-view-header-type-badge ${modelType}`;
-        typeBadgeEl.innerHTML = badgeContents[modelType] || badgeContents['retrieval'];
+        const cssStatus = statusMap[effectiveStatus] || 'pending';
 
-        // Description (empty for training runs or use run notes if available)
-        const descEl = document.getElementById('expViewDescription');
-        descEl.textContent = run.notes || '';
-        descEl.style.display = run.notes ? '' : 'none';
+        // New header: status gradient (submitting has its own soft-exp-submitting class)
+        const header = document.getElementById('expViewHeader');
+        const headerStatus = effectiveStatus === 'submitting' ? 'submitting' : cssStatus;
+        header.className = `modal-header-soft soft-exp-${headerStatus}`;
 
-        // Start/End times - ensure times are visible for training runs
-        const timesEl = document.querySelector('.exp-view-times');
-        if (timesEl) timesEl.style.display = '';
-        document.getElementById('expViewStartTime').textContent = formatDateTime(run.started_at || run.created_at);
-        document.getElementById('expViewEndTime').textContent = run.completed_at ? formatDateTime(run.completed_at) : '-';
+        // Nav bar status color
+        const navBar = document.getElementById('expViewNavBar');
+        if (navBar) {
+            navBar.className = `exp-view-nav-bar exp-nav-${cssStatus}`;
+        }
+
+        // Status badge (circle)
+        const statusBadge = document.getElementById('expViewStatusBadge');
+        const statusCfg = TRAINING_STATUS_CONFIG[effectiveStatus] || TRAINING_STATUS_CONFIG.pending;
+        const isSpinning = run.status === 'running' || run.status === 'submitting' || run.status === 'deploying';
+        statusBadge.className = `modal-header-status-circle ${cssStatus}`;
+        statusBadge.innerHTML = `<i class="fas ${statusCfg.icon}${isSpinning ? ' fa-spin' : ''}"></i>`;
+
+        // Title: "Run #N · name" or just "Run #N"
+        const runName = run.name || '';
+        const titleText = runName ? `Run #${run.run_number} \u00b7 ${runName}` : `Run #${run.run_number}`;
+        document.getElementById('expViewTitle').textContent = titleText;
+
+        // Subtitle
+        document.getElementById('expViewSubtitle').textContent = 'Training run overview';
 
         // Overview Tab - render training run specific content
         renderTrainingRunOverview(run);

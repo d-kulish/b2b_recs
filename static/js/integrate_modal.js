@@ -168,13 +168,13 @@ const IntegrateModal = (function() {
 
     function renderHeader() {
         const title = document.getElementById('integrateModalTitle');
-        const typeBadge = document.getElementById('integrateModalTypeBadge');
+        const subtitle = document.getElementById('integrateModalSubtitle');
 
         if (state.endpoint) {
             // Title shows the service name
             title.textContent = state.endpoint.service_name;
 
-            // Type badge with icon
+            // Subtitle with type badge
             const modelType = state.endpoint.model_type || 'retrieval';
             const typeIcons = {
                 'retrieval': 'fa-search',
@@ -182,8 +182,7 @@ const IntegrateModal = (function() {
                 'multitask': 'fa-layer-group'
             };
             const icon = typeIcons[modelType] || 'fa-cube';
-            typeBadge.className = `integrate-modal-type-badge ${modelType}`;
-            typeBadge.innerHTML = `<i class="fas ${icon}"></i> ${modelType.toUpperCase()}`;
+            subtitle.innerHTML = `Endpoint integration <span class="integrate-type-badge ${modelType}"><i class="fas ${icon}"></i> ${modelType.toUpperCase()}</span>`;
         }
     }
 
@@ -294,9 +293,12 @@ const IntegrateModal = (function() {
         state.currentCodeTab = 'python';
         state.testMode = 'single';
 
-        // Reset tabs and accordions to default
+        // Reset tabs to default
         switchTab('validation');
-        resetAccordions();
+
+        // Reset sample test card to open
+        const sampleTestCard = document.getElementById('integrateSampleTestCard');
+        if (sampleTestCard) sampleTestCard.classList.add('logs-open');
 
         // Show modal with loading state
         const modal = document.getElementById('integrateModal');
@@ -473,13 +475,13 @@ const IntegrateModal = (function() {
     function switchTab(tabName) {
         state.currentTab = tabName;
 
-        // Update tab buttons
-        document.querySelectorAll('.integrate-tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.tab === tabName);
+        // Update pill buttons
+        document.querySelectorAll('#integrateNavBar .exp-view-pill').forEach(pill => {
+            pill.classList.toggle('current', pill.dataset.tab === tabName);
         });
 
         // Update tab content
-        document.querySelectorAll('.integrate-tab-content').forEach(content => {
+        document.querySelectorAll('#integrateModal .exp-view-tab-content').forEach(content => {
             content.classList.remove('active');
         });
 
@@ -491,39 +493,11 @@ const IntegrateModal = (function() {
         }
     }
 
-    function toggleAccordion(section) {
-        const contentId = section === 'schema' ? 'integrateSchemaContent' : 'integrateTestContent';
-        const chevronId = section === 'schema' ? 'integrateSchemaChevron' : 'integrateTestChevron';
-
-        const content = document.getElementById(contentId);
-        const chevron = document.getElementById(chevronId);
-        const header = chevron ? chevron.closest('.integrate-accordion-header') : null;
-
-        if (content && chevron) {
-            content.classList.toggle('hidden');
-            chevron.classList.toggle('expanded');
-            if (header) {
-                header.classList.toggle('expanded');
-            }
+    function toggleSampleTest() {
+        const card = document.getElementById('integrateSampleTestCard');
+        if (card) {
+            card.classList.toggle('logs-open');
         }
-    }
-
-    function resetAccordions() {
-        // Schema: closed by default
-        const schemaContent = document.getElementById('integrateSchemaContent');
-        const schemaChevron = document.getElementById('integrateSchemaChevron');
-        const schemaHeader = schemaChevron ? schemaChevron.closest('.integrate-accordion-header') : null;
-        if (schemaContent) schemaContent.classList.add('hidden');
-        if (schemaChevron) schemaChevron.classList.remove('expanded');
-        if (schemaHeader) schemaHeader.classList.remove('expanded');
-
-        // Test: open by default
-        const testContent = document.getElementById('integrateTestContent');
-        const testChevron = document.getElementById('integrateTestChevron');
-        const testHeader = testChevron ? testChevron.closest('.integrate-accordion-header') : null;
-        if (testContent) testContent.classList.remove('hidden');
-        if (testChevron) testChevron.classList.add('expanded');
-        if (testHeader) testHeader.classList.add('expanded');
     }
 
     function switchCodeTab(lang) {
@@ -574,7 +548,7 @@ const IntegrateModal = (function() {
         runPredictionTest,
         switchTestMode,
         switchTab,
-        toggleAccordion,
+        toggleSampleTest,
         switchCodeTab,
         copyCode,
         handleOverlayClick

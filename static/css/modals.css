@@ -420,6 +420,14 @@
 .modal-header-soft.soft-exp-pending .modal-header-title { color: #374151; }
 .modal-header-soft.soft-exp-pending .modal-header-subtitle { color: #4b5563; }
 
+/* --- Integrate (green – active endpoint) --- */
+.modal-header-soft.soft-integrate {
+    background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);
+}
+.modal-header-soft.soft-integrate .modal-header-icon-badge { background: #16a34a; }
+.modal-header-soft.soft-integrate .modal-header-title { color: #14532d; }
+.modal-header-soft.soft-integrate .modal-header-subtitle { color: #166534; }
+
 /* ============================================================================
    WIZARD NAV PILL COLOR OVERRIDES
    ============================================================================

@@ -603,6 +603,8 @@
 .exp-nav-running .exp-view-pill.current { background: #2563eb; }
 .exp-nav-pending .exp-view-pill.current { background: #9ca3af; }
 .exp-nav-cancelled .exp-view-pill.current { background: #6b7280; }
+.exp-nav-endpoint-active .exp-view-pill.current { background: #16a34a; }
+.exp-nav-endpoint-inactive .exp-view-pill.current { background: #dc2626; }
 
 /* ==========================================================================
    Tab Content
@@ -941,6 +943,21 @@
 .exp-detail-section-icon.weights { background: linear-gradient(135deg, #ec4899, #f472b6); }
 .exp-detail-section-icon.sampling  { background: linear-gradient(135deg, #14b8a6, #5eead4); }
 .exp-detail-section-icon.training  { background: linear-gradient(135deg, #f97316, #fb923c); }
+.exp-detail-section-icon.url       { background: linear-gradient(135deg, #6366f1, #818cf8); }
+.exp-detail-section-icon.hardware  { background: linear-gradient(135deg, #64748b, #94a3b8); }
+
+.exp-detail-url-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.exp-detail-url-row code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 12px;
+    color: #111827;
+    word-break: break-all;
+}
 
 .exp-detail-stats {
     display: flex;

@@ -2281,6 +2281,12 @@ const ExpViewModal = (function() {
         const statusClass = endpoint.is_active ? 'active' : 'inactive';
         header.className = `modal-header exp-view-header endpoint-mode ${statusClass}`;
 
+        // Nav bar color matches header status
+        const navBar = document.getElementById('expViewNavBar');
+        if (navBar) {
+            navBar.className = `exp-view-nav-bar exp-nav-endpoint-${statusClass}`;
+        }
+
         // Status panel
         const statusPanel = document.getElementById('expViewStatusPanel');
         statusPanel.className = `exp-view-status-panel ${statusClass}`;
@@ -2358,139 +2364,150 @@ const ExpViewModal = (function() {
             const formatRecall = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
             const formatRMSE = v => v != null ? v.toFixed(2) : 'N/A';
 
-            let metricsCards = '';
+            let metricsStats = '';
 
             if (modelType === 'ranking') {
-                metricsCards = `
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">RMSE</div>
-                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.rmse)}</div>
+                metricsStats = `
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRMSE(metrics.rmse)}</div>
+                        <div class="exp-detail-stat-label">RMSE</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">MAE</div>
-                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.mae)}</div>
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRMSE(metrics.mae)}</div>
+                        <div class="exp-detail-stat-label">MAE</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Test RMSE</div>
-                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_rmse)}</div>
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRMSE(metrics.test_rmse)}</div>
+                        <div class="exp-detail-stat-label">Test RMSE</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Test MAE</div>
-                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_mae)}</div>
-                    </div>
-                `;
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRMSE(metrics.test_mae)}</div>
+                        <div class="exp-detail-stat-label">Test MAE</div>
+                    </div>`;
             } else if (modelType === 'multitask') {
-                // Multitask: show mix of R@50, R@100 + Test RMSE, Test MAE
-                metricsCards = `
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">R@50</div>
-                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_50)}</div>
+                metricsStats = `
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRecall(metrics.recall_at_50)}</div>
+                        <div class="exp-detail-stat-label">R@50</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">R@100</div>
-                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_100)}</div>
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRecall(metrics.recall_at_100)}</div>
+                        <div class="exp-detail-stat-label">R@100</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Test RMSE</div>
-                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_rmse)}</div>
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRMSE(metrics.test_rmse)}</div>
+                        <div class="exp-detail-stat-label">Test RMSE</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Test MAE</div>
-                        <div class="exp-view-metric-card-value">${formatRMSE(metrics.test_mae)}</div>
-                    </div>
-                `;
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRMSE(metrics.test_mae)}</div>
+                        <div class="exp-detail-stat-label">Test MAE</div>
+                    </div>`;
             } else {
-                // Default: retrieval metrics
-                metricsCards = `
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Recall@5</div>
-                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_5)}</div>
+                metricsStats = `
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRecall(metrics.recall_at_5)}</div>
+                        <div class="exp-detail-stat-label">Recall@5</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Recall@10</div>
-                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_10)}</div>
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRecall(metrics.recall_at_10)}</div>
+                        <div class="exp-detail-stat-label">Recall@10</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Recall@50</div>
-                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_50)}</div>
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRecall(metrics.recall_at_50)}</div>
+                        <div class="exp-detail-stat-label">Recall@50</div>
                     </div>
-                    <div class="exp-view-metric-card">
-                        <div class="exp-view-metric-card-label">Recall@100</div>
-                        <div class="exp-view-metric-card-value">${formatRecall(metrics.recall_at_100)}</div>
-                    </div>
-                `;
+                    <div class="exp-detail-stat">
+                        <div class="exp-detail-stat-value">${formatRecall(metrics.recall_at_100)}</div>
+                        <div class="exp-detail-stat-label">Recall@100</div>
+                    </div>`;
             }
 
             resultsHtml = `
-                <!-- Results Section -->
-                <div class="exp-view-results-summary">
-                    <h4 class="exp-view-group-title">RESULTS</h4>
-                    <div class="exp-view-metrics-row">
-                        ${metricsCards}
+                <div class="exp-detail-section">
+                    <div class="exp-detail-section-title">Results</div>
+                    <div class="exp-detail-section-body">
+                        <div class="exp-detail-section-icon results"><i class="fas fa-chart-bar"></i></div>
+                        <div class="exp-detail-stats">
+                            ${metricsStats}
+                        </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         }
 
         // Build the overview HTML
         let overviewHtml = `
+            <div style="display: flex; flex-direction: column; gap: 16px;">
             ${resultsHtml}
 
             <!-- Service URL Section -->
-            <div class="exp-view-endpoint-url-section">
-                <div class="exp-view-endpoint-url-label">
-                    <i class="fas fa-link"></i> Service URL
-                </div>
-                <div class="exp-view-endpoint-url-value">
-                    <code>${endpoint.service_url || 'N/A'}</code>
-                    <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${endpoint.service_url || ''}')">
-                        <i class="fas fa-copy"></i>
-                    </button>
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Service URL</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon url"><i class="fas fa-link"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info" style="flex: 1;">
+                            <div class="stat-label">Endpoint</div>
+                            <div class="stat-value">
+                                <div class="exp-detail-url-row">
+                                    <code>${endpoint.service_url || 'N/A'}</code>
+                                    <button class="exp-view-copy-btn" onclick="ExpViewModal.copyToClipboard('${endpoint.service_url || ''}')">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Model Information Card -->
-            <div class="exp-view-endpoint-info-card">
-                <div class="exp-view-endpoint-info-card-title">Model Information</div>
-                <div class="exp-view-endpoint-info-grid">
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Model</span>
-                        <span class="exp-view-endpoint-info-item-value">${endpoint.model_name || '-'}</span>
-                    </div>
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Type</span>
-                        <span class="exp-view-endpoint-info-item-value">${modelType.charAt(0).toUpperCase() + modelType.slice(1)}</span>
-                    </div>
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Version</span>
-                        <span class="exp-view-endpoint-info-item-value">v${endpoint.deployed_version || '-'}</span>
-                    </div>
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Run #</span>
-                        <span class="exp-view-endpoint-info-item-value">${endpoint.run_number || '-'}</span>
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Model Information</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon info"><i class="fas fa-info-circle"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Model</div>
+                            <div class="stat-value">${endpoint.model_name || '-'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Type</div>
+                            <div class="stat-value">${modelType.charAt(0).toUpperCase() + modelType.slice(1)}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Version</div>
+                            <div class="stat-value">v${endpoint.deployed_version || '-'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Run #</div>
+                            <div class="stat-value">${endpoint.run_number || '-'}</div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Hardware Configuration Card -->
-            <div class="exp-view-endpoint-info-card">
-                <div class="exp-view-endpoint-info-card-title">Hardware Configuration</div>
-                <div class="exp-view-endpoint-info-grid">
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Memory</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.memory || '4Gi'}</span>
-                    </div>
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">CPU</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.cpu || '2'}</span>
-                    </div>
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Min Instances</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.min_instances !== undefined ? config.min_instances : '0'}</span>
-                    </div>
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Max Instances</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.max_instances || '10'}</span>
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Hardware Configuration</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon hardware"><i class="fas fa-server"></i></div>
+                    <div class="exp-detail-stats">
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Memory</div>
+                            <div class="stat-value">${config.memory || '4Gi'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">CPU</div>
+                            <div class="stat-value">${config.cpu || '2'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Min Instances</div>
+                            <div class="stat-value">${config.min_instances !== undefined ? config.min_instances : '0'}</div>
+                        </div>
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Max Instances</div>
+                            <div class="stat-value">${config.max_instances || '10'}</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2499,29 +2516,32 @@ const ExpViewModal = (function() {
         // Add advanced deployment params if present
         if (config.timeout_seconds || config.concurrency || config.gpu_type) {
             overviewHtml += `
-            <!-- Advanced Deployment Parameters Card -->
-            <div class="exp-view-endpoint-info-card">
-                <div class="exp-view-endpoint-info-card-title">Advanced Parameters</div>
-                <div class="exp-view-endpoint-info-grid">
-                    ${config.timeout_seconds ? `
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Timeout</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.timeout_seconds}s</span>
-                    </div>` : ''}
-                    ${config.concurrency ? `
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">Concurrency</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.concurrency}</span>
-                    </div>` : ''}
-                    ${config.gpu_type ? `
-                    <div class="exp-view-endpoint-info-item">
-                        <span class="exp-view-endpoint-info-item-label">GPU</span>
-                        <span class="exp-view-endpoint-info-item-value">${config.gpu_type}</span>
-                    </div>` : ''}
+            <div class="exp-detail-section">
+                <div class="exp-detail-section-title">Advanced Parameters</div>
+                <div class="exp-detail-section-body">
+                    <div class="exp-detail-section-icon params"><i class="fas fa-sliders-h"></i></div>
+                    <div class="exp-detail-stats">
+                        ${config.timeout_seconds ? `
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Timeout</div>
+                            <div class="stat-value">${config.timeout_seconds}s</div>
+                        </div>` : ''}
+                        ${config.concurrency ? `
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">Concurrency</div>
+                            <div class="stat-value">${config.concurrency}</div>
+                        </div>` : ''}
+                        ${config.gpu_type ? `
+                        <div class="exp-detail-stat-info">
+                            <div class="stat-label">GPU</div>
+                            <div class="stat-value">${config.gpu_type}</div>
+                        </div>` : ''}
+                    </div>
                 </div>
-            </div>
-            `;
+            </div>`;
         }
+
+        overviewHtml += `</div>`; // close flex container
 
         overviewTab.innerHTML = overviewHtml;
     }

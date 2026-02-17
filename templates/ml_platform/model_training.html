@@ -1634,56 +1634,68 @@
 <!-- End Chapter 2: Best Experiments -->
 
 <!-- CHAPTER 3: TRAINING -->
-<div class="bg-white rounded-xl border border-black shadow-lg p-6 mb-6">
-    <div class="chapter-header-top" style="margin-bottom: 24px;">
-        <div class="chapter-title-wrapper">
-            <div class="chapter-icon training">
-                <i class="fas fa-cogs"></i>
+<div class="chapter-container" data-chapter="training-runs">
+    <div class="chapter-header" onclick="toggleChapter(this)">
+        <div class="chapter-header-top">
+            <div class="chapter-title-wrapper">
+                <div class="chapter-icon training">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <div class="chapter-title-text">
+                    <span class="chapter-title">Training Runs</span>
+                    <span class="chapter-subtitle">Launch and monitor model training jobs</span>
+                </div>
             </div>
-            <div class="chapter-title-text">
-                <span class="chapter-title">Training Runs</span>
-                <span class="chapter-subtitle">Launch and monitor model training jobs</span>
+            <div class="chapter-header-actions">
+                <button onclick="event.stopPropagation(); TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 140px;">
+                    <i class="fas fa-plus"></i> New Model
+                </button>
+                <div class="chapter-toggle">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
             </div>
         </div>
-        <button onclick="TrainingWizard.open()" class="btn btn-primary btn-sm" style="width: 140px;">
-            <i class="fas fa-plus"></i> New Model
-        </button>
     </div>
+    <div class="chapter-content">
+        <div class="chapter-content-inner">
+            <div class="chapter-divider" style="margin-top: 0;"></div>
 
-    <!-- Filter Bar (below header) -->
-    <div id="trainingFilterBar">
-        <!-- Filter bar rendered by TrainingCards.init() -->
-    </div>
+            <!-- Filter Bar (below header) -->
+            <div id="trainingFilterBar">
+                <!-- Filter bar rendered by TrainingCards.init() -->
+            </div>
 
-    <!-- Loading State -->
-    <div id="trainingLoading" class="training-loading hidden">
-        <i class="fas fa-spinner fa-spin"></i>
-        <span class="training-loading-text">Loading training runs...</span>
-    </div>
+            <!-- Loading State -->
+            <div id="trainingLoading" class="training-loading hidden">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span class="training-loading-text">Loading training runs...</span>
+            </div>
 
-    <!-- Training Runs List -->
-    <div id="trainingRunsContainer">
-        <div id="trainingCardsList">
-            <!-- Training run cards populated by TrainingCards -->
+            <!-- Training Runs List -->
+            <div id="trainingRunsContainer">
+                <div id="trainingCardsList">
+                    <!-- Training run cards populated by TrainingCards -->
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="trainingPagination">
+                <!-- Pagination controls -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="trainingEmptyState" class="training-empty-state hidden">
+                <div class="empty-icon">
+                    <i class="fas fa-rocket"></i>
+                </div>
+                <h3>No training runs yet</h3>
+                <p>Run experiments first, then promote the best configurations to full-scale training</p>
+                <button class="btn-primary" onclick="TrainingWizard.open()">
+                    <i class="fas fa-plus"></i>
+                    New Training Run
+                </button>
+            </div>
         </div>
-    </div>
-
-    <!-- Pagination -->
-    <div id="trainingPagination">
-        <!-- Pagination controls -->
-    </div>
-
-    <!-- Empty State -->
-    <div id="trainingEmptyState" class="training-empty-state hidden">
-        <div class="empty-icon">
-            <i class="fas fa-rocket"></i>
-        </div>
-        <h3>No training runs yet</h3>
-        <p>Run experiments first, then promote the best configurations to full-scale training</p>
-        <button class="btn-primary" onclick="TrainingWizard.open()">
-            <i class="fas fa-plus"></i>
-            New Training Run
-        </button>
     </div>
 </div>
 <!-- End Chapter 3: Training -->

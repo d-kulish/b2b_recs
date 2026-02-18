@@ -950,6 +950,7 @@
 .exp-detail-section-icon.training  { background: linear-gradient(135deg, #f97316, #fb923c); }
 .exp-detail-section-icon.url       { background: linear-gradient(135deg, #6366f1, #818cf8); }
 .exp-detail-section-icon.hardware  { background: linear-gradient(135deg, #64748b, #94a3b8); }
+.exp-detail-section-icon.registry  { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
 
 .exp-detail-url-row {
     display: flex;

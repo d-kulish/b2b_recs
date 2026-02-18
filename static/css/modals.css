@@ -420,6 +420,100 @@
 .modal-header-soft.soft-exp-pending .modal-header-title { color: #374151; }
 .modal-header-soft.soft-exp-pending .modal-header-subtitle { color: #4b5563; }
 
+/* --- Training Run status variants --- */
+.modal-header-soft.soft-run-completed {
+    background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);
+}
+.modal-header-soft.soft-run-completed .modal-header-icon-badge { background: #16a34a; }
+.modal-header-soft.soft-run-completed .modal-header-title { color: #14532d; }
+.modal-header-soft.soft-run-completed .modal-header-subtitle { color: #166534; }
+
+.modal-header-soft.soft-run-failed {
+    background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 50%, #dc2626 100%);
+}
+.modal-header-soft.soft-run-failed .modal-header-icon-badge { background: #dc2626; }
+.modal-header-soft.soft-run-failed .modal-header-title { color: #7f1d1d; }
+.modal-header-soft.soft-run-failed .modal-header-subtitle { color: #991b1b; }
+
+.modal-header-soft.soft-run-running {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-run-running .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-run-running .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-run-running .modal-header-subtitle { color: #1e40af; }
+
+.modal-header-soft.soft-run-submitting {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-run-submitting .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-run-submitting .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-run-submitting .modal-header-subtitle { color: #1e40af; }
+
+.modal-header-soft.soft-run-pending {
+    background: linear-gradient(135deg, #f9fafb 0%, #e5e7eb 50%, #9ca3af 100%);
+}
+.modal-header-soft.soft-run-pending .modal-header-icon-badge { background: #9ca3af; }
+.modal-header-soft.soft-run-pending .modal-header-title { color: #374151; }
+.modal-header-soft.soft-run-pending .modal-header-subtitle { color: #4b5563; }
+
+.modal-header-soft.soft-run-cancelled {
+    background: linear-gradient(135deg, #f3f4f6 0%, #d1d5db 50%, #6b7280 100%);
+}
+.modal-header-soft.soft-run-cancelled .modal-header-icon-badge { background: #6b7280; }
+.modal-header-soft.soft-run-cancelled .modal-header-title { color: #1f2937; }
+.modal-header-soft.soft-run-cancelled .modal-header-subtitle { color: #374151; }
+
+.modal-header-soft.soft-run-registered {
+    background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);
+}
+.modal-header-soft.soft-run-registered .modal-header-icon-badge { background: #16a34a; }
+.modal-header-soft.soft-run-registered .modal-header-title { color: #14532d; }
+.modal-header-soft.soft-run-registered .modal-header-subtitle { color: #166534; }
+
+.modal-header-soft.soft-run-deployed {
+    background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);
+}
+.modal-header-soft.soft-run-deployed .modal-header-icon-badge { background: #16a34a; }
+.modal-header-soft.soft-run-deployed .modal-header-title { color: #14532d; }
+.modal-header-soft.soft-run-deployed .modal-header-subtitle { color: #166534; }
+
+.modal-header-soft.soft-run-deploying {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 50%, #2563eb 100%);
+}
+.modal-header-soft.soft-run-deploying .modal-header-icon-badge { background: #2563eb; }
+.modal-header-soft.soft-run-deploying .modal-header-title { color: #1e3a5f; }
+.modal-header-soft.soft-run-deploying .modal-header-subtitle { color: #1e40af; }
+
+.modal-header-soft.soft-run-deploy_failed {
+    background: linear-gradient(135deg, #fee2e2 0%, #fca5a5 50%, #dc2626 100%);
+}
+.modal-header-soft.soft-run-deploy_failed .modal-header-icon-badge { background: #dc2626; }
+.modal-header-soft.soft-run-deploy_failed .modal-header-title { color: #7f1d1d; }
+.modal-header-soft.soft-run-deploy_failed .modal-header-subtitle { color: #991b1b; }
+
+.modal-header-soft.soft-run-not_blessed {
+    background: linear-gradient(135deg, #fff7ed 0%, #fdba74 50%, #f97316 100%);
+}
+.modal-header-soft.soft-run-not_blessed .modal-header-icon-badge { background: #f97316; }
+.modal-header-soft.soft-run-not_blessed .modal-header-title { color: #7c2d12; }
+.modal-header-soft.soft-run-not_blessed .modal-header-subtitle { color: #9a3412; }
+
+.modal-header-soft.soft-run-scheduled {
+    background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 50%, #f59e0b 100%);
+}
+.modal-header-soft.soft-run-scheduled .modal-header-icon-badge { background: #f59e0b; }
+.modal-header-soft.soft-run-scheduled .modal-header-title { color: #713f12; }
+.modal-header-soft.soft-run-scheduled .modal-header-subtitle { color: #92400e; }
+
+/* Status circles for training-run-specific statuses */
+.modal-header-status-circle.registered  { background: #16a34a; }
+.modal-header-status-circle.deployed    { background: #16a34a; }
+.modal-header-status-circle.deploying   { background: #2563eb; }
+.modal-header-status-circle.deploy_failed { background: #dc2626; }
+.modal-header-status-circle.not_blessed { background: #f97316; }
+.modal-header-status-circle.scheduled   { background: #f59e0b; }
+.modal-header-status-circle.submitting  { background: #2563eb; }
+
 /* --- Integrate (green – active endpoint) --- */
 .modal-header-soft.soft-integrate {
     background: linear-gradient(135deg, #dcfce7 0%, #86efac 50%, #16a34a 100%);

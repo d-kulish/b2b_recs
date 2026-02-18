@@ -157,6 +157,17 @@
                     <div id="expCardDatasetContainer" style="margin-bottom: 16px;">
                         <!-- Populated by renderDatasetDetails() in experiment mode -->
                     </div>
+
+                    <!-- Card 4: Registry & Deployment (training_run mode only) -->
+                    <div class="exp-detail-section" id="expViewRegistryDeploymentSection" style="margin-bottom: 16px; display: none;">
+                        <div class="exp-detail-section-title">Registry & Deployment</div>
+                        <div class="exp-detail-section-body" style="align-items: flex-start;">
+                            <div class="exp-detail-section-icon registry"><i class="fas fa-cube"></i></div>
+                            <div id="expViewRegistryDeploymentContent" style="flex: 1; display: flex; flex-direction: column; gap: 0;">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Legacy Results Summary (training_run mode) -->
@@ -167,37 +178,15 @@
                     </div>
                 </div>
 
-                <!-- Accordion 1: Registry & Deployment (training_run mode only) -->
-                <div id="expViewRegistryDeploymentSection" class="exp-view-accordion" style="display: none;">
-                    <div class="exp-view-accordion-header" onclick="ExpViewModal.toggleAccordion('registryDeployment')">
-                        <span class="exp-view-accordion-title">
-                            <i class="fas fa-cube mr-2 text-purple-500"></i>Registry & Deployment
-                        </span>
-                        <span class="exp-view-accordion-status" id="expViewRegistryDeploymentStatus"></span>
-                        <i id="expViewRegistryDeploymentChevron" class="fas fa-chevron-right exp-view-accordion-chevron"></i>
-                    </div>
-                    <div id="expViewRegistryDeploymentContent" class="exp-view-accordion-content hidden">
-                        <!-- Populated by JavaScript -->
-                    </div>
-                </div>
-
                 <!-- Features Configuration (card sections) -->
                 <div id="expViewFeaturesConfigContent" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 12px;">
                     <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
                 </div>
 
-                <!-- Accordion 2: Dataset Configuration (hidden in experiment mode) -->
-                <div id="expViewDatasetAccordion" class="exp-view-accordion">
-                    <div class="exp-view-accordion-header" onclick="ExpViewModal.toggleAccordion('dataset')">
-                        <span class="exp-view-accordion-title">
-                            <i class="fas fa-database mr-2 text-purple-500"></i><span class="exp-view-accordion-label">Dataset:</span> <span id="expViewDatasetName" class="exp-view-accordion-value">-</span>
-                        </span>
-                        <i id="expViewDatasetChevron" class="fas fa-chevron-right exp-view-accordion-chevron"></i>
-                    </div>
-                    <div id="expViewDatasetContent" class="exp-view-accordion-content hidden">
-                        <div id="expViewDatasetDetails" class="exp-view-dataset-details">
-                            <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
-                        </div>
+                <!-- Dataset Details (hidden in experiment mode, shown for training_run) -->
+                <div id="expViewDatasetAccordion" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 12px;">
+                    <div id="expViewDatasetDetails" class="exp-view-dataset-details">
+                        <div class="exp-view-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
                     </div>
                 </div>
 

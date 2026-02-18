@@ -1191,55 +1191,93 @@ const ExpViewModal = (function() {
         // Store current model for tab data loading
         window.currentViewModel = model;
 
-        // Switch to legacy header, hide card sections
-        showLegacyHeader();
+        // Show new header, hide legacy
+        showNewHeader();
+
+        // Show dataset section for model mode
+        const dsAccordion = document.getElementById('expViewDatasetAccordion');
+        if (dsAccordion) dsAccordion.style.display = 'flex';
+
+        // New header: registered status gradient
+        const header = document.getElementById('expViewHeader');
+        header.className = 'modal-header-soft soft-run-registered';
+
+        // Icon badge — cube for registered models
+        const iconBadge = header.querySelector('.modal-header-icon-badge');
+        if (iconBadge) iconBadge.innerHTML = '<i class="fas fa-cube"></i>';
+
+        // Title: model name
+        document.getElementById('expViewTitle').textContent = model.vertex_model_name || 'Model';
+
+        // Subtitle
+        document.getElementById('expViewSubtitle').textContent = 'Registered model overview';
+
+        // Status badge (circle) — green checkmark for registered
+        const statusBadge = document.getElementById('expViewStatusBadge');
+        statusBadge.className = 'modal-header-status-circle registered';
+        statusBadge.innerHTML = '<i class="fas fa-check"></i>';
+
+        // Nav bar status color — green (completed) for registered
+        const navBar = document.getElementById('expViewNavBar');
+        if (navBar) {
+            navBar.className = 'exp-view-nav-bar exp-nav-completed';
+        }
+
+        // Show card sections, hide legacy results summary
         const cardSections = document.getElementById('expViewCardSections');
-        if (cardSections) cardSections.style.display = 'none';
+        if (cardSections) cardSections.style.display = '';
+        const resultsSummary = document.getElementById('expViewResultsSummary');
+        if (resultsSummary) resultsSummary.classList.add('hidden');
 
-        // Model mode header: use "registered" status for green gradient + model-mode class
-        const header = document.getElementById('expViewHeaderLegacy');
-        header.className = `modal-header exp-view-header registered model-mode`;
-
-        // Status panel - registered status
-        const statusPanel = document.getElementById('expViewStatusPanel');
-        statusPanel.className = `exp-view-status-panel registered`;
-
-        // Status icon - green checkmark for registered models
-        const statusIcon = document.getElementById('expViewStatusIcon');
-        statusIcon.className = `exp-view-status-icon registered`;
-        statusIcon.innerHTML = `<i class="fas fa-check"></i>`;
-
-        // Title (Model name) - shown prominently with type badge below
-        const titleEl = document.getElementById('expViewTitleLegacy');
+        // Card 1: Model Information
         const modelType = (model.model_type || 'retrieval').toLowerCase();
         const badgeContents = {
             'retrieval': '<i class="fas fa-search"></i> Retrieval',
             'ranking': '<i class="fas fa-sort-amount-down"></i> Ranking',
-            'multitask': '<i class="fas fa-layer-group"></i> Multitask'
+            'multitask': '<i class="fas fa-layer-group"></i> Retrieval / Ranking'
         };
-        // Set model name and add type badge inline below it
-        titleEl.innerHTML = `
-            <span class="exp-view-model-name-text">${model.vertex_model_name || 'Model'}</span>
-            <span class="exp-view-model-type-inline ${modelType}">${badgeContents[modelType] || badgeContents['retrieval']}</span>
-        `;
 
-        // Hide version/run info for model mode (simplified header)
-        const expNameEl = document.getElementById('expViewExpName');
-        expNameEl.textContent = '';
-        expNameEl.style.display = 'none';
+        const nameCard = document.getElementById('expCardName');
+        if (nameCard) nameCard.querySelector('.stat-value').textContent = model.vertex_model_name || '\u2014';
 
-        // Hide the separate type badge in header-info (we show it inline now)
-        const typeBadgeEl = document.getElementById('expViewTypeBadge');
-        typeBadgeEl.style.display = 'none';
+        const typeCard = document.getElementById('expCardModelType');
+        if (typeCard) {
+            typeCard.querySelector('.stat-value').innerHTML =
+                `<span class="exp-detail-type-badge ${modelType}">${badgeContents[modelType] || badgeContents['retrieval']}</span>`;
+        }
 
-        // Description - hidden
-        const descEl = document.getElementById('expViewDescription');
-        descEl.textContent = '';
-        descEl.style.display = 'none';
+        const descCard = document.getElementById('expCardDescription');
+        if (descCard) {
+            descCard.querySelector('.stat-value').textContent = model.notes || '\u2014';
+        }
 
-        // Hide times for model mode (simplified header)
-        const timesEl = document.querySelector('.exp-view-times');
-        if (timesEl) timesEl.style.display = 'none';
+        // Card 2: Timeline
+        const startCard = document.getElementById('expCardStart');
+        if (startCard) startCard.querySelector('.stat-value').textContent = formatDateTime(model.registered_at || model.created_at);
+
+        const endCard = document.getElementById('expCardEnd');
+        if (endCard) endCard.querySelector('.stat-value').textContent = model.registered_at ? formatDateTime(model.registered_at) : '\u2014';
+
+        const durationCard = document.getElementById('expCardDuration');
+        if (durationCard) {
+            durationCard.querySelector('.stat-value').textContent = model.version ? `Version ${model.version}` : '\u2014';
+        }
+
+        // Card 3: Results (metrics)
+        const resultsCard = document.getElementById('expCardResults');
+        if (resultsCard) {
+            if (model.metrics) {
+                const hasMetrics = Object.values(model.metrics).some(v => v != null);
+                if (hasMetrics) {
+                    resultsCard.style.display = '';
+                    renderResultsCard(model.metrics, modelType);
+                } else {
+                    resultsCard.style.display = 'none';
+                }
+            } else {
+                resultsCard.style.display = 'none';
+            }
+        }
 
         // Overview Tab - render model overview
         renderModelOverview(model);
@@ -1282,8 +1320,10 @@ const ExpViewModal = (function() {
             trainingSetupCards.innerHTML = renderModelSamplingCard(model) + renderModelTrainingParamsCard(model);
         }
 
-        // Results Summary (metrics)
-        renderModelMetrics(model);
+        // Results Summary (metrics) — now rendered via renderResultsCard() in card sections
+        // Hide legacy results summary in case it was left visible
+        const resultsSummary = document.getElementById('expViewResultsSummary');
+        if (resultsSummary) resultsSummary.classList.add('hidden');
     }
 
     function renderModelMetrics(model) {

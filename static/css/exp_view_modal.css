@@ -16,10 +16,9 @@
    Modal Container
    ========================================================================== */
 .exp-view-modal {
-    width: 936px;
-    max-width: 936px;
-    height: 600px;
-    max-height: 600px;
+    max-width: 880px;
+    height: 85vh;
+    max-height: 85vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;

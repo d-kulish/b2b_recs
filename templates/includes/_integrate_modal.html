@@ -50,30 +50,40 @@
         <div class="modal-body exp-view-body">
             <!-- Validation Tab -->
             <div id="integrateTabValidation" class="exp-view-tab-content active">
-                <!-- Input Schema Card -->
-                <div class="exp-detail-section" style="margin-bottom: 16px;">
-                    <div class="exp-detail-section-title">Input Schema</div>
-                    <div class="exp-detail-section-body" style="align-items: flex-start;">
-                        <div class="exp-detail-section-icon info"><i class="fas fa-table"></i></div>
-                        <div style="flex: 1;">
-                            <div class="integrate-schema-table-container">
-                                <table class="integrate-schema-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Field</th>
-                                            <th>Type</th>
-                                            <th>Notes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="integrateSchemaBody">
-                                        <tr>
-                                            <td colspan="3" class="integrate-loading">
-                                                <i class="fas fa-spinner fa-spin"></i> Loading schema...
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                <!-- Input Schema Card (collapsible) -->
+                <div class="component-logs-card" id="integrateSchemaCard" style="margin-bottom: 16px;">
+                    <div class="component-logs-card-header" onclick="IntegrateModal.toggleSchema()">
+                        <div class="component-logs-card-header-left">
+                            <div class="component-logs-card-icon" style="background: linear-gradient(135deg, #3b82f6, #60a5fa);">
+                                <i class="fas fa-table"></i>
                             </div>
+                            <div class="component-logs-card-title">Input Schema</div>
+                        </div>
+                        <div class="component-logs-card-actions">
+                            <div class="component-logs-card-toggle">
+                                <i class="fas fa-chevron-right"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="component-logs-card-content">
+                        <div class="component-logs-card-divider"></div>
+                        <div class="integrate-schema-table-container">
+                            <table class="integrate-schema-table">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Type</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="integrateSchemaBody">
+                                    <tr>
+                                        <td colspan="3" class="integrate-loading">
+                                            <i class="fas fa-spinner fa-spin"></i> Loading schema...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -87,26 +97,28 @@
                             </div>
                             <div class="component-logs-card-title">Sample Test</div>
                         </div>
-                        <div class="component-logs-card-actions">
-                            <!-- Mode toggle (Single/Batch) -->
-                            <div class="integrate-mode-toggle" id="integrateModeToggle" style="width: auto; margin-bottom: 0; border: 1px solid #e5e7eb;" onclick="event.stopPropagation();">
-                                <button class="integrate-mode-btn active" data-mode="single"
-                                        onclick="IntegrateModal.switchTestMode('single')">
-                                    <i class="fas fa-user"></i> Single
-                                </button>
-                                <button class="integrate-mode-btn" data-mode="batch"
-                                        onclick="IntegrateModal.switchTestMode('batch')">
-                                    <i class="fas fa-layer-group"></i> Batch
-                                </button>
-                            </div>
-                            <!-- Update & Predict buttons -->
-                            <button class="integrate-action-btn integrate-action-btn-blue" onclick="event.stopPropagation(); IntegrateModal.refreshSample()" id="integrateUpdateBtn">
-                                <i class="fas fa-sync-alt" id="integrateSampleRefreshIcon"></i>
-                                <span>Update</span>
+                        <!-- Mode toggle (Single/Batch) — centered -->
+                        <div class="btn-group-tight" id="integrateModeToggle" onclick="event.stopPropagation();">
+                            <button class="btn btn-sm btn-secondary integrate-mode-btn active" data-mode="single"
+                                    style="min-width: 130px; padding: 10px 30px;"
+                                    onclick="IntegrateModal.switchTestMode('single')">
+                                <i class="fas fa-user"></i> Single
                             </button>
-                            <button class="integrate-action-btn integrate-action-btn-green" onclick="event.stopPropagation(); IntegrateModal.runPredictionTest()" id="integratePredictBtn">
+                            <button class="btn btn-sm btn-secondary integrate-mode-btn" data-mode="batch"
+                                    style="min-width: 130px; padding: 10px 30px;"
+                                    onclick="IntegrateModal.switchTestMode('batch')">
+                                <i class="fas fa-users"></i> Batch
+                            </button>
+                        </div>
+                        <div class="component-logs-card-actions">
+                            <!-- Update & Predict buttons -->
+                            <button class="card-action-btn schedule" style="width: 100px;" onclick="event.stopPropagation(); IntegrateModal.refreshSample()" id="integrateUpdateBtn">
+                                <i class="fas fa-sync-alt" id="integrateSampleRefreshIcon"></i>
+                                Update
+                            </button>
+                            <button class="card-action-btn view" style="width: 100px;" onclick="event.stopPropagation(); IntegrateModal.runPredictionTest()" id="integratePredictBtn">
                                 <i class="fas fa-play" id="integratePredictIcon"></i>
-                                <span>Predict</span>
+                                Predict
                             </button>
                             <div class="component-logs-card-toggle">
                                 <i class="fas fa-chevron-right"></i>
@@ -120,9 +132,7 @@
                             <div class="integrate-validation-label">
                                 <span class="integrate-label-text">Sample Request</span>
                             </div>
-                            <div class="integrate-sample-box">
-                                <pre class="integrate-sample-code" id="integrateSampleData">{"loading": "..."}</pre>
-                            </div>
+                            <pre class="sql-code-light" id="integrateSampleData">{"loading": "..."}</pre>
                         </div>
 
                         <!-- Prediction Response -->
@@ -130,9 +140,7 @@
                             <div class="integrate-validation-label">
                                 <span class="integrate-label-text">Response</span>
                             </div>
-                            <div class="integrate-sample-box">
-                                <pre class="integrate-sample-code" id="integratePredictResult"></pre>
-                            </div>
+                            <pre class="sql-code-light" id="integratePredictResult"></pre>
                         </div>
                     </div>
                 </div>
@@ -146,14 +154,16 @@
                         <div class="exp-detail-section-icon url"><i class="fas fa-code"></i></div>
                         <div style="flex: 1;">
                             <!-- Mode Toggle (Single/Batch) -->
-                            <div class="integrate-mode-toggle" id="integrateCodeModeToggle">
-                                <button class="integrate-mode-btn active" data-mode="single"
+                            <div class="btn-group-tight" id="integrateCodeModeToggle" style="margin-bottom: 12px;">
+                                <button class="btn btn-sm btn-secondary integrate-mode-btn active" data-mode="single"
+                                        style="min-width: 130px; padding: 10px 30px;"
                                         onclick="IntegrateModal.switchTestMode('single')">
                                     <i class="fas fa-user"></i> Single
                                 </button>
-                                <button class="integrate-mode-btn" data-mode="batch"
+                                <button class="btn btn-sm btn-secondary integrate-mode-btn" data-mode="batch"
+                                        style="min-width: 130px; padding: 10px 30px;"
                                         onclick="IntegrateModal.switchTestMode('batch')">
-                                    <i class="fas fa-layer-group"></i> Batch
+                                    <i class="fas fa-users"></i> Batch
                                 </button>
                             </div>
 

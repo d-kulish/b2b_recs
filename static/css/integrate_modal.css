@@ -237,101 +237,23 @@
 }
 
 /* =========================================================================
-   Action Buttons (Update & Predict)
+   Action Buttons (Update & Predict) — use card-action-btn from cards.css
    ========================================================================= */
-.integrate-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100px;
-    height: 36px;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.integrate-action-btn:disabled {
+.component-logs-card-actions .card-action-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-.integrate-action-btn i {
-    font-size: 12px;
-}
-
-/* Blue button (Update) */
-.integrate-action-btn-blue {
-    background: #3b82f6;
-    color: white;
-}
-
-.integrate-action-btn-blue:hover:not(:disabled) {
-    background: #2563eb;
-}
-
-/* Green button (Predict) */
-.integrate-action-btn-green {
-    background: #10b981;
-    color: white;
-}
-
-.integrate-action-btn-green:hover:not(:disabled) {
-    background: #059669;
-}
-
-/* Spinning state */
-.integrate-action-btn i.fa-spin {
+.component-logs-card-actions .card-action-btn i.fa-spin {
     animation: spin 1s linear infinite;
 }
 
 /* =========================================================================
-   Mode Toggle (Single/Batch)
+   Mode Toggle (Single/Batch) — active state for btn-group-tight
    ========================================================================= */
-.integrate-mode-toggle {
-    display: flex;
-    gap: 0;
-    width: 100%;
-    margin-bottom: 12px;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid #e5e7eb;
-}
-
-.integrate-mode-btn {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #374151;
-    background: #ffffff;
-    border: none;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.integrate-mode-btn:first-child {
-    border-right: 1px solid #e5e7eb;
-}
-
-.integrate-mode-btn:hover:not(.active) {
-    background: #f9fafb;
-}
-
-.integrate-mode-btn.active {
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-
-.integrate-mode-btn i {
-    font-size: 12px;
+.integrate-mode-btn.btn.active {
+    background-color: #f3f4f6;
+    font-weight: 700;
 }
 
 /* =========================================================================
@@ -368,6 +290,14 @@
     background: rgba(107, 33, 168, 0.15);
     color: #6b21a8;
 }
+
+/* =========================================================================
+   JSON Syntax Highlighting (light theme, mirrors sql-code-light tokens)
+   ========================================================================= */
+.sql-code-light .json-key  { color: #7c3aed; font-weight: 600; }
+.sql-code-light .json-str  { color: #059669; }
+.sql-code-light .json-num  { color: #b45309; }
+.sql-code-light .json-bool { color: #2563eb; font-weight: 600; }
 
 /* =========================================================================
    Animations

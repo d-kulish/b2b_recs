@@ -606,6 +606,10 @@
 .exp-nav-endpoint-active .exp-view-pill.current { background: #16a34a; }
 .exp-nav-endpoint-inactive .exp-view-pill.current { background: #dc2626; }
 .exp-nav-integrate .exp-view-pill.current { background: #16a34a; }
+.exp-nav-integrate .exp-view-nav-pills {
+    width: 50%;
+    margin: 0 auto;
+}
 
 /* ==========================================================================
    Tab Content

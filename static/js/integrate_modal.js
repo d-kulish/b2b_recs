@@ -96,6 +96,25 @@ const IntegrateModal = (function() {
         }
     }
 
+    function highlightJson(jsonStr) {
+        // Escape HTML first
+        let html = escapeHtml(jsonStr);
+        // Strings (keys and values) — "..."
+        html = html.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, content) => {
+            return `<span class="json-str">"${content}"</span>`;
+        });
+        // Keys — "key": pattern (string followed by colon)
+        html = html.replace(/<span class="json-str">"([^"]*)"<\/span>\s*:/g,
+            '<span class="json-key">"$1"</span>:');
+        // Numbers
+        html = html.replace(/\b(-?\d+\.?\d*(?:[eE][+-]?\d+)?)\b/g,
+            '<span class="json-num">$1</span>');
+        // Booleans and null
+        html = html.replace(/\b(true|false|null)\b/g,
+            '<span class="json-bool">$1</span>');
+        return html;
+    }
+
     // =============================================================================
     // API CALLS
     // =============================================================================
@@ -208,15 +227,18 @@ const IntegrateModal = (function() {
 
     function renderSampleData() {
         const sampleEl = document.getElementById('integrateSampleData');
+        let json;
         if (state.testMode === 'batch' && state.sampleData && state.sampleData.instances) {
-            sampleEl.textContent = formatJson(state.sampleData.instances);
+            json = formatJson(state.sampleData.instances);
         } else if (state.sampleData && state.sampleData.instance) {
-            sampleEl.textContent = formatJson(state.sampleData.instance);
+            json = formatJson(state.sampleData.instance);
         } else if (state.sampleData && state.sampleData.error) {
             sampleEl.textContent = `Error: ${state.sampleData.error}`;
+            return;
         } else {
-            sampleEl.textContent = '{}';
+            json = '{}';
         }
+        sampleEl.innerHTML = highlightJson(json);
     }
 
     function renderCodeExamples() {
@@ -240,7 +262,7 @@ const IntegrateModal = (function() {
         resultRow.style.display = '';
 
         if (result.success) {
-            resultEl.textContent = formatJsonCompact(result.response);
+            resultEl.innerHTML = highlightJson(formatJsonCompact(result.response));
         } else {
             const errorMsg = result.error || `Status ${result.status_code}`;
             resultEl.textContent = `Error: ${errorMsg}`;
@@ -493,6 +515,13 @@ const IntegrateModal = (function() {
         }
     }
 
+    function toggleSchema() {
+        const card = document.getElementById('integrateSchemaCard');
+        if (card) {
+            card.classList.toggle('logs-open');
+        }
+    }
+
     function toggleSampleTest() {
         const card = document.getElementById('integrateSampleTestCard');
         if (card) {
@@ -548,6 +577,7 @@ const IntegrateModal = (function() {
         runPredictionTest,
         switchTestMode,
         switchTab,
+        toggleSchema,
         toggleSampleTest,
         switchCodeTab,
         copyCode,

@@ -3512,15 +3512,13 @@ const ExpViewModal = (function() {
                                 <div class="stat-label">Type</div>
                                 <div class="stat-value">${tcType}</div>
                             </div>
+                            ${transformsHtml ? `
+                            <div class="exp-detail-stat-info" style="flex: 2;">
+                                <div class="stat-label">Transforms</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px;">${transformsHtml}</div>
+                            </div>` : ''}
                         </div>
                     </div>
-                    ${transformsHtml ? `
-                    <div class="exp-detail-filter-details">
-                        <div class="exp-filter-row" style="grid-template-columns: 100px 1fr;">
-                            <div style="font-size: 13px; color: #6b7280; font-weight: 500;">Transforms:</div>
-                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">${transformsHtml}</div>
-                        </div>
-                    </div>` : ''}
                 </div>
             `;
         }

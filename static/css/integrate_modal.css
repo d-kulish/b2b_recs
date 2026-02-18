@@ -179,13 +179,10 @@
     color: #1d4ed8;
 }
 
-/* Code Container */
-.integrate-code-container {
-    position: relative;
-    width: 100%;
-    background: #1e1e1e;
-    border-radius: 6px;
-    overflow: hidden;
+/* Code Display — disable inner scroll; the modal body scrolls */
+#integrateCodeDisplay {
+    max-height: none;
+    overflow-y: visible;
 }
 
 .integrate-copy-btn {
@@ -294,10 +291,13 @@
 /* =========================================================================
    JSON Syntax Highlighting (light theme, mirrors sql-code-light tokens)
    ========================================================================= */
-.sql-code-light .json-key  { color: #7c3aed; font-weight: 600; }
-.sql-code-light .json-str  { color: #059669; }
-.sql-code-light .json-num  { color: #b45309; }
-.sql-code-light .json-bool { color: #2563eb; font-weight: 600; }
+.sql-code-light .json-key     { color: #7c3aed; font-weight: 600; }
+.sql-code-light .json-str     { color: #059669; }
+.sql-code-light .json-num     { color: #b45309; }
+.sql-code-light .json-bool    { color: #2563eb; font-weight: 600; }
+.sql-code-light .code-keyword { color: #2563eb; font-weight: 600; }
+.sql-code-light .code-comment { color: #6b7280; font-style: italic; }
+.sql-code-light .code-func    { color: #7c3aed; }
 
 /* =========================================================================
    Animations

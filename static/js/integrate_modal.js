@@ -96,6 +96,33 @@ const IntegrateModal = (function() {
         }
     }
 
+    function highlightCode(code, lang) {
+        // Single-pass tokenizer to avoid regex overlap issues
+        let kwSet;
+        if (lang === 'python') {
+            kwSet = new Set(['import','from','def','return','if','else','elif','for','in','while','with','as','try','except','raise','class','True','False','None','print','and','or','not']);
+        } else if (lang === 'javascript') {
+            kwSet = new Set(['const','let','var','function','return','if','else','for','while','async','await','new','try','catch','throw','true','false','null','undefined','console']);
+        } else if (lang === 'java') {
+            kwSet = new Set(['import','public','private','static','final','class','new','return','if','else','for','while','try','catch','throw','throws','void','String','int','boolean','true','false','null']);
+        } else {
+            kwSet = new Set(['curl','echo','export']);
+        }
+
+        const html = escapeHtml(code);
+
+        // Combined regex: strings | comments | words | numbers | everything else
+        const tokenRegex = /(\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*')|(#[^\n]*|\/\/[^\n]*)|(\b[a-zA-Z_]\w*\b)|(\b\d+\.?\d*(?:[eE][+-]?\d+)?\b)/g;
+
+        return html.replace(tokenRegex, (match, str, comment, word, num) => {
+            if (str) return `<span class="json-str">${str}</span>`;
+            if (comment) return `<span class="code-comment">${comment}</span>`;
+            if (word && kwSet.has(word)) return `<span class="code-keyword">${word}</span>`;
+            if (num) return `<span class="json-num">${num}</span>`;
+            return match;
+        });
+    }
+
     function highlightJson(jsonStr) {
         // Escape HTML first
         let html = escapeHtml(jsonStr);
@@ -244,9 +271,9 @@ const IntegrateModal = (function() {
     function renderCodeExamples() {
         const codeEl = document.getElementById('integrateCodeDisplay');
         if (state.codeExamples && state.codeExamples[state.currentCodeTab]) {
-            codeEl.textContent = state.codeExamples[state.currentCodeTab];
+            codeEl.innerHTML = highlightCode(state.codeExamples[state.currentCodeTab], state.currentCodeTab);
         } else {
-            codeEl.textContent = '// No code example available';
+            codeEl.innerHTML = highlightCode('// No code example available', state.currentCodeTab);
         }
 
         // Update active tab
@@ -278,7 +305,7 @@ const IntegrateModal = (function() {
             </tr>
         `;
         document.getElementById('integrateSampleData').textContent = '{"loading": "..."}';
-        document.getElementById('integrateCodeDisplay').textContent = '// Loading...';
+        document.getElementById('integrateCodeDisplay').innerHTML = '<span class="code-comment">// Loading...</span>';
     }
 
     // =============================================================================
@@ -513,6 +540,12 @@ const IntegrateModal = (function() {
         if (activeContent) {
             activeContent.classList.add('active');
         }
+
+        // Show Copy button only on Code Examples tab
+        const copyBtn = document.getElementById('integrateCopyCodeBtn');
+        if (copyBtn) {
+            copyBtn.style.display = tabName === 'code' ? '' : 'none';
+        }
     }
 
     function toggleSchema() {
@@ -529,6 +562,13 @@ const IntegrateModal = (function() {
         }
     }
 
+    function toggleCodeExamples() {
+        const card = document.getElementById('integrateCodeExamplesCard');
+        if (card) {
+            card.classList.toggle('logs-open');
+        }
+    }
+
     function switchCodeTab(lang) {
         state.currentCodeTab = lang;
         renderCodeExamples();
@@ -536,22 +576,16 @@ const IntegrateModal = (function() {
 
     async function copyCode() {
         const codeEl = document.getElementById('integrateCodeDisplay');
-        const copyBtn = document.querySelector('.integrate-copy-btn');
-        const copyIcon = document.getElementById('integrateCopyIcon');
         const copyText = document.getElementById('integrateCopyText');
 
         try {
             await navigator.clipboard.writeText(codeEl.textContent);
 
             // Show success state
-            copyBtn.classList.add('copied');
-            copyIcon.className = 'fas fa-check';
             copyText.textContent = 'Copied!';
 
             // Reset after 2 seconds
             setTimeout(() => {
-                copyBtn.classList.remove('copied');
-                copyIcon.className = 'fas fa-copy';
                 copyText.textContent = 'Copy';
             }, 2000);
 
@@ -579,6 +613,7 @@ const IntegrateModal = (function() {
         switchTab,
         toggleSchema,
         toggleSampleTest,
+        toggleCodeExamples,
         switchCodeTab,
         copyCode,
         handleOverlayClick

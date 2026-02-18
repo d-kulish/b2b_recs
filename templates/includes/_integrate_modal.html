@@ -148,50 +148,53 @@
 
             <!-- Code Examples Tab -->
             <div id="integrateTabCode" class="exp-view-tab-content">
-                <div class="exp-detail-section">
-                    <div class="exp-detail-section-title">Code Examples</div>
-                    <div class="exp-detail-section-body" style="align-items: flex-start;">
-                        <div class="exp-detail-section-icon url"><i class="fas fa-code"></i></div>
-                        <div style="flex: 1;">
-                            <!-- Mode Toggle (Single/Batch) -->
-                            <div class="btn-group-tight" id="integrateCodeModeToggle" style="margin-bottom: 12px;">
-                                <button class="btn btn-sm btn-secondary integrate-mode-btn active" data-mode="single"
-                                        style="min-width: 130px; padding: 10px 30px;"
-                                        onclick="IntegrateModal.switchTestMode('single')">
-                                    <i class="fas fa-user"></i> Single
-                                </button>
-                                <button class="btn btn-sm btn-secondary integrate-mode-btn" data-mode="batch"
-                                        style="min-width: 130px; padding: 10px 30px;"
-                                        onclick="IntegrateModal.switchTestMode('batch')">
-                                    <i class="fas fa-users"></i> Batch
-                                </button>
+                <div class="component-logs-card logs-open" id="integrateCodeExamplesCard">
+                    <div class="component-logs-card-header" onclick="IntegrateModal.toggleCodeExamples()">
+                        <div class="component-logs-card-header-left">
+                            <div class="component-logs-card-icon" style="background: linear-gradient(135deg, #6366f1, #818cf8);">
+                                <i class="fas fa-code"></i>
                             </div>
-
-                            <!-- Language Tabs -->
-                            <div class="integrate-code-tabs">
-                                <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
-                                    Python
-                                </button>
-                                <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
-                                    JavaScript
-                                </button>
-                                <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
-                                    cURL
-                                </button>
-                                <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
-                                    Java
-                                </button>
-                            </div>
-
-                            <!-- Code Display -->
-                            <div class="integrate-code-container">
-                                <button class="integrate-copy-btn" onclick="IntegrateModal.copyCode()" title="Copy to clipboard">
-                                    <i class="fas fa-copy" id="integrateCopyIcon"></i>
-                                    <span id="integrateCopyText">Copy</span>
-                                </button>
-                                <pre class="integrate-code-block"><code id="integrateCodeDisplay" class="language-python">Loading...</code></pre>
+                            <div class="component-logs-card-title">Code Examples</div>
+                        </div>
+                        <!-- Mode toggle (Single/Batch) -->
+                        <div class="btn-group-tight" id="integrateCodeModeToggle" onclick="event.stopPropagation();">
+                            <button class="btn btn-sm btn-secondary integrate-mode-btn active" data-mode="single"
+                                    style="min-width: 130px; padding: 10px 30px;"
+                                    onclick="IntegrateModal.switchTestMode('single')">
+                                <i class="fas fa-user"></i> Single
+                            </button>
+                            <button class="btn btn-sm btn-secondary integrate-mode-btn" data-mode="batch"
+                                    style="min-width: 130px; padding: 10px 30px;"
+                                    onclick="IntegrateModal.switchTestMode('batch')">
+                                <i class="fas fa-users"></i> Batch
+                            </button>
+                        </div>
+                        <div class="component-logs-card-actions">
+                            <div class="component-logs-card-toggle">
+                                <i class="fas fa-chevron-right"></i>
                             </div>
                         </div>
+                    </div>
+                    <div class="component-logs-card-content">
+                        <div class="component-logs-card-divider"></div>
+                        <!-- Language Tabs -->
+                        <div class="integrate-code-tabs">
+                            <button class="integrate-code-tab active" data-lang="python" onclick="IntegrateModal.switchCodeTab('python')">
+                                Python
+                            </button>
+                            <button class="integrate-code-tab" data-lang="javascript" onclick="IntegrateModal.switchCodeTab('javascript')">
+                                JavaScript
+                            </button>
+                            <button class="integrate-code-tab" data-lang="curl" onclick="IntegrateModal.switchCodeTab('curl')">
+                                cURL
+                            </button>
+                            <button class="integrate-code-tab" data-lang="java" onclick="IntegrateModal.switchCodeTab('java')">
+                                Java
+                            </button>
+                        </div>
+
+                        <!-- Code Display -->
+                        <pre class="sql-code-light" id="integrateCodeDisplay">Loading...</pre>
                     </div>
                 </div>
             </div>
@@ -201,6 +204,9 @@
         <div class="modal-footer-wizard-neu">
             <div class="footer-left"></div>
             <div class="footer-right">
+                <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="IntegrateModal.copyCode()" id="integrateCopyCodeBtn">
+                    <span class="btn-neu-inner" id="integrateCopyText">Copy</span>
+                </button>
                 <button type="button" class="btn-neu btn-neu-action btn-neu-cancel" onclick="IntegrateModal.close()">
                     <span class="btn-neu-inner">Close</span>
                 </button>

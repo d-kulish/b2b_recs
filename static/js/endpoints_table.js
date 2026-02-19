@@ -293,7 +293,10 @@ const EndpointsTable = (function() {
 
     async function updateEndpointConfig(endpointId, newConfig) {
         try {
-            showToast('Updating endpoint configuration...', 'info');
+            // Show loading overlay on the edit modal (it sits at z-index 150,
+            // so the confirmModal behind it would be invisible)
+            showEditModalLoading();
+
             const response = await fetch(appendModelEndpointId(buildUrl(config.endpoints.config, { id: endpointId })), {
                 method: 'PATCH',
                 headers: {
@@ -305,15 +308,45 @@ const EndpointsTable = (function() {
             const data = await response.json();
 
             if (data.success) {
-                showToast('Endpoint configuration updated successfully', 'success');
-                closeEditModal();
+                closeEditModal(true);
+                // Show success with auto-close
+                showConfirmModal({
+                    title: 'Success',
+                    message: 'Endpoint configuration updated successfully',
+                    type: 'success',
+                    confirmText: 'Ok',
+                    confirmButtonClass: 'btn-neu-save',
+                    hideCancel: true,
+                    autoClose: 3000,
+                    onConfirm: () => {}
+                });
                 fetchEndpoints();
             } else {
-                showToast(data.error || 'Failed to update endpoint config', 'error');
+                editModalState.saving = false;
+                hideEditModalLoading();
+                showConfirmModal({
+                    title: 'Error',
+                    message: data.error || 'Failed to update endpoint config',
+                    type: 'danger',
+                    confirmText: 'Close',
+                    confirmButtonClass: 'btn-neu-cancel',
+                    hideCancel: true,
+                    onConfirm: () => {}
+                });
             }
         } catch (error) {
             console.error('Error updating endpoint config:', error);
-            showToast('Failed to update endpoint config', 'error');
+            editModalState.saving = false;
+            hideEditModalLoading();
+            showConfirmModal({
+                title: 'Error',
+                message: 'Failed to update endpoint config',
+                type: 'danger',
+                confirmText: 'Close',
+                confirmButtonClass: 'btn-neu-cancel',
+                hideCancel: true,
+                onConfirm: () => {}
+            });
         }
     }
 
@@ -556,7 +589,10 @@ const EndpointsTable = (function() {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
-    function closeEditModal() {
+    function closeEditModal(force) {
+        // Prevent closing while save is in progress (unless forced by success callback)
+        if (editModalState.saving && !force) return;
+
         const modal = document.getElementById('endpointEditModal');
         if (modal) {
             modal.remove();
@@ -565,7 +601,8 @@ const EndpointsTable = (function() {
             endpointId: null,
             endpoint: null,
             selectedPreset: 'production',
-            showAdvanced: false
+            showAdvanced: false,
+            saving: false
         };
     }
 
@@ -625,6 +662,9 @@ const EndpointsTable = (function() {
     }
 
     function saveEndpointConfig() {
+        // Prevent double-clicks while saving
+        if (editModalState.saving) return;
+
         const newConfig = {
             memory: document.getElementById('editMemory')?.value,
             cpu: document.getElementById('editCpu')?.value,
@@ -639,7 +679,51 @@ const EndpointsTable = (function() {
             return;
         }
 
+        editModalState.saving = true;
         updateEndpointConfig(editModalState.endpointId, newConfig);
+    }
+
+    function showEditModalLoading() {
+        const modal = document.getElementById('endpointEditModal');
+        if (!modal) return;
+
+        // Disable footer buttons
+        modal.querySelectorAll('.modal-footer-wizard-neu button').forEach(btn => {
+            btn.disabled = true;
+        });
+
+        // Add loading overlay on top of the modal body
+        const body = modal.querySelector('.deploy-wizard-body');
+        if (body) {
+            body.style.position = 'relative';
+            const overlay = document.createElement('div');
+            overlay.id = 'editModalLoadingOverlay';
+            overlay.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(255, 255, 255, 0.88);
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                z-index: 10; border-radius: inherit;
+            `;
+            overlay.innerHTML = `
+                <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #6366f1; margin-bottom: 12px;"></i>
+                <div style="font-size: 15px; font-weight: 600; color: #374151;">Updating configuration...</div>
+                <div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Redeploying with new settings</div>
+            `;
+            body.appendChild(overlay);
+        }
+    }
+
+    function hideEditModalLoading() {
+        const overlay = document.getElementById('editModalLoadingOverlay');
+        if (overlay) overlay.remove();
+
+        const modal = document.getElementById('endpointEditModal');
+        if (!modal) return;
+
+        // Re-enable footer buttons
+        modal.querySelectorAll('.modal-footer-wizard-neu button').forEach(btn => {
+            btn.disabled = false;
+        });
     }
 
     // =============================================================================

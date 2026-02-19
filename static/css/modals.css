@@ -569,6 +569,10 @@
 .wizard-nav-bar.pill-dataset .wizard-step-pill.completed { color: #0ea5e9; }
 
 /* Feature (amber) */
+.wizard-nav-bar.pill-feature .wizard-nav-pills {
+    width: 50%;
+    margin: 0 auto;
+}
 .wizard-nav-bar.pill-feature .wizard-step-pill.current {
     background-color: #f59e0b;
     box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);

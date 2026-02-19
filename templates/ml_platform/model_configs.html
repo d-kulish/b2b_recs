@@ -1014,6 +1014,306 @@
         white-space: nowrap;
     }
 
+    /* ── Feature Configure Modal ──────────────────────────────────────────── */
+    .fc-config-section {
+        background: #fafafa;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin-bottom: 16px;
+    }
+    .fc-config-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    .fc-config-section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        letter-spacing: 0.01em;
+    }
+    .fc-config-meta-row {
+        display: flex;
+        gap: 20px;
+    }
+    .fc-config-meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .fc-config-meta-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #9ca3af;
+    }
+    .fc-config-meta-value {
+        font-size: 13px;
+        font-weight: 500;
+        color: #374151;
+    }
+    .fc-config-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 16px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        font-size: 12px;
+        color: #1e40af;
+        line-height: 1.5;
+    }
+    .fc-config-notice i {
+        margin-top: 1px;
+        flex-shrink: 0;
+    }
+    .fc-config-recommendation {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        font-size: 13px;
+    }
+    .fc-config-recommendation.match {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #166534;
+    }
+    .fc-config-recommendation.match i { color: #16a34a; }
+    .fc-config-recommendation.mismatch {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        color: #92400e;
+    }
+    .fc-config-recommendation.mismatch i { color: #d97706; }
+
+    .fc-config-dim-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #2563eb;
+    }
+    .fc-config-dim-badge.small {
+        padding: 2px 8px;
+        font-size: 11px;
+    }
+
+    .fc-config-dim-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+    .fc-config-dim-btn {
+        padding: 8px 4px;
+        border-radius: 8px;
+        border: 1.5px solid #e5e7eb;
+        background: #ffffff;
+        color: #4b5563;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-align: center;
+    }
+    .fc-config-dim-btn:hover {
+        border-color: #93c5fd;
+        background: #f0f7ff;
+    }
+    .fc-config-dim-btn.active {
+        background: #2563eb;
+        color: #ffffff;
+        border-color: #2563eb;
+    }
+    .fc-config-dim-btn.recommended {
+        box-shadow: 0 0 0 2px #86efac;
+    }
+    .fc-config-dim-btn.active.recommended {
+        box-shadow: 0 0 0 2px #86efac;
+    }
+
+    .fc-config-custom-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: center;
+    }
+    .fc-config-custom-label {
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .fc-config-custom-input {
+        width: 80px;
+        padding: 5px 8px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #374151;
+        text-align: center;
+        transition: border-color 0.15s ease;
+    }
+    .fc-config-custom-input:focus {
+        outline: none;
+        border-color: #93c5fd;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+    }
+    .fc-config-custom-hint {
+        font-size: 11px;
+        color: #9ca3af;
+    }
+
+    .fc-config-notes {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .fc-config-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        color: #6b7280;
+        line-height: 1.4;
+    }
+    .fc-config-note i {
+        margin-top: 1px;
+        flex-shrink: 0;
+        font-size: 12px;
+    }
+
+    .fc-config-select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #374151;
+        background: #ffffff;
+        cursor: pointer;
+        transition: border-color 0.15s ease;
+    }
+    .fc-config-select:focus {
+        outline: none;
+        border-color: #93c5fd;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+    }
+
+    /* ── Transform cards (numeric / temporal) ───────────────────────────── */
+    .fc-transform-card {
+        background: #ffffff;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        overflow: hidden;
+        transition: border-color 0.15s ease;
+    }
+    .fc-transform-card:hover {
+        border-color: #d1d5db;
+    }
+    .fc-transform-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        cursor: pointer;
+    }
+    .fc-transform-check {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        accent-color: #2563eb;
+    }
+    .fc-transform-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .fc-transform-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+    }
+    .fc-transform-desc {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 1px;
+    }
+    .fc-transform-params {
+        display: flex;
+        gap: 16px;
+        padding: 0 16px 12px 44px;
+    }
+    .fc-transform-param {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .fc-transform-param-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: #9ca3af;
+    }
+    .fc-transform-param-select {
+        padding: 4px 8px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #374151;
+        background: #fafafa;
+        cursor: pointer;
+    }
+    .fc-transform-param-select:focus {
+        outline: none;
+        border-color: #93c5fd;
+    }
+
+    /* ── Cyclical feature checkboxes ────────────────────────────────────── */
+    .fc-cyclical-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 0 16px 12px 16px;
+    }
+    .fc-cyclical-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.1s ease;
+    }
+    .fc-cyclical-option:hover {
+        background: #f9fafb;
+    }
+    .fc-cyclical-label {
+        flex: 1;
+        font-size: 12px;
+        color: #4b5563;
+    }
+    .fc-cyclical-dim {
+        font-size: 11px;
+        font-weight: 600;
+        color: #2563eb;
+    }
+
     /* Sample Table Styles */
     .sample-table-container {
         border: 1px solid #e5e7eb;
@@ -7106,7 +7406,7 @@
 
 <!-- Feature Config Wizard Modal -->
 <div id="featureConfigWizardModal" class="modal-overlay hidden">
-    <div class="modal-container modal-container-wizard" style="max-width: 1000px;">
+    <div class="modal-container modal-container-wizard" style="max-width: 1000px; height: 667px; max-height: 92vh;">
         <!-- Modal Header — gradient (matches dataset wizard) -->
         <div class="modal-header-soft soft-feature">
             <div class="modal-header-icon-badge">
@@ -7168,31 +7468,10 @@
                     <select id="configDataset" class="form-select w-full" onchange="onDatasetChange()">
                         <option value="">Select a dataset...</option>
                     </select>
+                    <p id="datasetError" class="text-xs text-red-500 mt-1 hidden" style="font-weight: 500;"></p>
                     <div id="datasetInfo" class="text-xs text-gray-500 mt-2 hidden">
                         <span id="datasetInfoText"></span>
                     </div>
-                </div>
-
-                <!-- Start From Options -->
-                <div class="wizard-field-group">
-                    <label class="wizard-field-label">Start From</label>
-                    <div class="wizard-tab-group" style="display: flex; gap: 0.5rem; width: 100%; margin-top: 8px;">
-                        <button type="button" onclick="selectStartFrom('blank')" id="startFromBlank" class="wizard-tab active" style="flex: 1; text-align: center;">
-                            Blank
-                        </button>
-                        <button type="button" onclick="selectStartFrom('clone')" id="startFromClone" class="wizard-tab" style="flex: 1; text-align: center;">
-                            Clone Existing
-                        </button>
-                    </div>
-                    <input type="hidden" name="startFrom" id="startFromValue" value="blank">
-                </div>
-
-                <!-- Clone Selection (hidden by default) -->
-                <div id="cloneSelection" class="wizard-field-group hidden">
-                    <label class="wizard-field-label">Clone From</label>
-                    <select id="cloneFromConfig" class="form-select w-full">
-                        <option value="">Select a config to clone...</option>
-                    </select>
                 </div>
 
                 <div class="wizard-info-box info">
@@ -7470,17 +7749,17 @@
 
 <!-- Feature Configuration Modal -->
 <div id="featureConfigModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 500px;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
+    <div class="modal-container" style="max-width: 632px; height: 70vh; max-height: 70vh; display: flex; flex-direction: column;">
+        <div class="modal-header-soft soft-feature flex-shrink-0">
+            <div class="modal-header-icon-badge">
                 <i class="fas fa-cog"></i>
             </div>
-            <h3 class="modal-header-title" id="featureModalTitle">Configure Feature</h3>
-            <button type="button" class="modal-close-btn" onclick="closeFeatureModal()">
-                <i class="fas fa-times"></i>
-            </button>
+            <div style="flex: 1;">
+                <h3 class="modal-header-title" id="featureModalTitle">Configure Feature</h3>
+                <div class="modal-header-subtitle" id="featureModalSubtitle">Feature engineering settings</div>
+            </div>
         </div>
-        <div class="modal-body" id="featureModalBody">
+        <div class="modal-body" id="featureModalBody" style="padding: 24px 28px; overflow-y: auto; flex: 1;">
             <!-- Content will be dynamically generated -->
         </div>
         <div class="modal-footer-wizard-neu">
@@ -7499,53 +7778,60 @@
 
 <!-- Cross Feature Modal -->
 <div id="crossFeatureModal" class="modal-overlay hidden">
-    <div class="modal-container" style="max-width: 550px; max-height: 85vh; display: flex; flex-direction: column;">
-        <div class="modal-header">
-            <div class="modal-header-icon info">
-                <i class="fas fa-times"></i>
+    <div class="modal-container" style="max-width: 632px; height: 70vh; max-height: 70vh; display: flex; flex-direction: column;">
+        <div class="modal-header-soft soft-feature flex-shrink-0">
+            <div class="modal-header-icon-badge">
+                <i class="fas fa-project-diagram"></i>
             </div>
-            <h3 class="modal-header-title">Add Cross Feature</h3>
+            <div style="flex: 1;">
+                <h3 class="modal-header-title">Add Cross Feature</h3>
+                <div class="modal-header-subtitle">Combine features for interaction effects</div>
+            </div>
         </div>
-        <div class="modal-body" style="overflow-y: auto; flex: 1;">
-            <div class="modal-form-group">
-                <label class="modal-form-label">Select 2-3 features to cross</label>
-                <div id="crossFeatureOptions" class="space-y-2">
-                    <!-- Feature checkboxes will be inserted here -->
-                </div>
+        <div class="modal-body" style="padding: 24px 28px; overflow-y: auto; flex: 1;">
+            <div class="fc-config-section-header" style="margin-bottom: 8px;">
+                <span class="fc-config-section-title">Select 2-3 features to cross</span>
             </div>
-            <div id="crossPreview" class="text-sm text-gray-600 mt-3 hidden">
-                Selected: <span id="crossPreviewText" class="font-medium"></span>
+            <div id="crossFeatureOptions" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;">
+                <!-- Feature checkboxes will be inserted here -->
+            </div>
+            <div id="crossPreview" class="hidden" style="text-align: center; font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+                Selected: <span id="crossPreviewText" style="font-weight: 600; color: #374151;"></span>
             </div>
             <!-- Bucketization options for numeric/temporal features -->
-            <div id="crossBucketOptions" class="mt-4 hidden">
-                <div class="text-sm font-medium text-gray-700 mb-2">
-                    <i class="fas fa-info-circle text-blue-500 mr-1"></i>
-                    Numeric/temporal features need bucketization for crossing
+            <div id="crossBucketOptions" class="hidden">
+                <div class="fc-config-notice" style="margin-bottom: 12px;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Numeric/temporal features need bucketization for crossing</span>
                 </div>
-                <div id="crossBucketInputs" class="space-y-3">
+                <div id="crossBucketInputs" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
                     <!-- Bucket inputs for each numeric/temporal feature will be inserted here -->
                 </div>
             </div>
-            <div class="modal-form-group mt-4">
-                <label class="modal-form-label">Hash Bucket Size</label>
-                <select id="crossHashBuckets" class="form-select w-full">
+            <div class="fc-config-section">
+                <div class="fc-config-section-header">
+                    <span class="fc-config-section-title">Hash Bucket Size</span>
+                </div>
+                <select id="crossHashBuckets" class="fc-config-select">
                     <option value="1000">1,000</option>
                     <option value="5000" selected>5,000</option>
                     <option value="10000">10,000</option>
                     <option value="50000">50,000</option>
                 </select>
-                <p class="modal-form-hint">Number of hash buckets for the crossed features</p>
+                <p style="font-size: 11px; color: #9ca3af; margin-top: 6px;">Number of hash buckets for the crossed features</p>
             </div>
-            <div class="modal-form-group">
-                <label class="modal-form-label">Embedding Dimension</label>
-                <select id="crossEmbedDim" class="form-select w-full">
+            <div class="fc-config-section">
+                <div class="fc-config-section-header">
+                    <span class="fc-config-section-title">Embedding Dimension</span>
+                </div>
+                <select id="crossEmbedDim" class="fc-config-select">
                     <option value="8">8</option>
                     <option value="16" selected>16</option>
                     <option value="32">32</option>
                 </select>
             </div>
         </div>
-        <div class="modal-footer-wizard-neu">
+        <div class="modal-footer-wizard-neu flex-shrink-0">
             <div class="footer-left"></div>
             <div class="footer-right">
                 <button type="button" class="btn-neu btn-neu-action btn-neu-save" onclick="addCrossFeature()">
@@ -7862,8 +8148,6 @@ let configState = {
     name: '',
     description: '',
     datasetId: null,
-    startFrom: 'blank',
-    cloneFromId: null,
     // Primary ID features (required before adding other features)
     customerIdFeature: null,  // Primary ID for BuyerModel
     productIdFeature: null,   // Primary ID for ProductModel
@@ -15784,8 +16068,6 @@ function fc_openWizard(configId = null) {
         name: '',
         description: '',
         datasetId: null,
-        startFrom: 'blank',
-        cloneFromId: null,
         customerIdFeature: null,
         productIdFeature: null,
         buyerFeatures: [],
@@ -15802,8 +16084,9 @@ function fc_openWizard(configId = null) {
     document.getElementById('configName').value = '';
     document.getElementById('configDescription').value = '';
     document.getElementById('configDataset').value = '';
+    document.getElementById('configDataset').classList.remove('border-red-500');
     document.getElementById('datasetInfo').classList.add('hidden');
-    selectStartFrom('blank');  // Reset to blank and hide clone selection
+    document.getElementById('datasetError').classList.add('hidden');
 
     // Reset name validation state
     configNameIsValid = false;
@@ -15957,7 +16240,9 @@ function fc_nextStep() {
             return;
         }
         if (!datasetId) {
-            showError('Please select a dataset');
+            document.getElementById('datasetError').textContent = 'Please select a dataset';
+            document.getElementById('datasetError').classList.remove('hidden');
+            document.getElementById('configDataset').classList.add('border-red-500');
             return;
         }
         // Check if name validation has been performed and is valid
@@ -15973,8 +16258,6 @@ function fc_nextStep() {
         configState.name = name;
         configState.description = document.getElementById('configDescription').value.trim();
         configState.datasetId = parseInt(datasetId);
-        configState.startFrom = document.getElementById('startFromValue').value;
-
         // Load columns and initialize step 2
         loadColumnsForStep2();
 
@@ -16085,6 +16368,10 @@ function onDatasetChange() {
     const datasetId = document.getElementById('configDataset').value;
     const datasetInfo = document.getElementById('datasetInfo');
 
+    // Clear dataset validation error
+    document.getElementById('datasetError').classList.add('hidden');
+    document.getElementById('configDataset').classList.remove('border-red-500');
+
     if (datasetId) {
         const dataset = allDatasets.find(d => d.id == datasetId);
         if (dataset) {
@@ -16097,7 +16384,6 @@ function onDatasetChange() {
             document.getElementById('datasetInfoText').textContent = `${rowsText} | ${colsText}`;
             datasetInfo.classList.remove('hidden');
         }
-        loadCloneOptions(datasetId);
         // Re-check name availability when dataset changes (name uniqueness is per dataset)
         const name = document.getElementById('configName').value.trim();
         if (name) {
@@ -16112,35 +16398,7 @@ function onDatasetChange() {
     }
 }
 
-function selectStartFrom(value) {
-    // Update hidden input value
-    document.getElementById('startFromValue').value = value;
 
-    // Toggle active class on buttons
-    document.getElementById('startFromBlank').classList.toggle('active', value === 'blank');
-    document.getElementById('startFromClone').classList.toggle('active', value === 'clone');
-
-    // Show/hide clone selection dropdown
-    document.getElementById('cloneSelection').classList.toggle('hidden', value !== 'clone');
-}
-
-// Legacy function for backwards compatibility
-function onStartFromChange() {
-    const startFrom = document.getElementById('startFromValue').value;
-    document.getElementById('cloneSelection').classList.toggle('hidden', startFrom !== 'clone');
-}
-
-function loadCloneOptions(datasetId) {
-    const select = document.getElementById('cloneFromConfig');
-    select.innerHTML = '<option value="">Select a config to clone...</option>';
-
-    allConfigs.filter(c => c.dataset_id == datasetId).forEach(config => {
-        const opt = document.createElement('option');
-        opt.value = config.id;
-        opt.textContent = `${config.name} (${config.buyer_tensor_dim || 0}D + ${config.product_tensor_dim || 0}D)`;
-        select.appendChild(opt);
-    });
-}
 
 // =============================================================================
 // STEP 2: FEATURE ASSIGNMENT
@@ -16152,7 +16410,6 @@ function showStep2Loading(show) {
 
 function loadColumnsForStep2() {
     const datasetId = configState.datasetId;
-    const startFrom = configState.startFrom;
 
     // Show loading spinner
     showStep2Loading(true);
@@ -16166,19 +16423,8 @@ function loadColumnsForStep2() {
                 configState.sampleRows = data.data.sample_rows || [];
                 configState.columnOrder = data.data.column_order || [];
 
-                // Handle start from options
-                if (startFrom === 'clone') {
-                    const cloneFromId = document.getElementById('cloneFromConfig').value;
-                    if (cloneFromId) {
-                        loadCloneData(cloneFromId);
-                    } else {
-                        renderStep2();
-                        showStep2Loading(false);
-                    }
-                } else {
-                    renderStep2();
-                    showStep2Loading(false);
-                }
+                renderStep2();
+                showStep2Loading(false);
             } else {
                 console.error('Failed to load schema:', data.error);
                 showError('Failed to load column schema');
@@ -16188,45 +16434,6 @@ function loadColumnsForStep2() {
         .catch(err => {
             console.error('Error loading schema:', err);
             showError('Error loading column schema');
-            showStep2Loading(false);
-        });
-}
-
-function loadCloneData(configId) {
-    fetch(`/api/feature-configs/${configId}/`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                const buyerFeatures = data.data.buyer_model_features || [];
-                const productFeatures = data.data.product_model_features || [];
-
-                // Find and extract primary ID features
-                const buyerPrimaryIdx = buyerFeatures.findIndex(f => f.is_primary_id);
-                if (buyerPrimaryIdx !== -1) {
-                    configState.customerIdFeature = buyerFeatures[buyerPrimaryIdx];
-                    configState.buyerFeatures = buyerFeatures.filter((_, idx) => idx !== buyerPrimaryIdx);
-                } else {
-                    configState.buyerFeatures = buyerFeatures;
-                }
-
-                const productPrimaryIdx = productFeatures.findIndex(f => f.is_primary_id);
-                if (productPrimaryIdx !== -1) {
-                    configState.productIdFeature = productFeatures[productPrimaryIdx];
-                    configState.productFeatures = productFeatures.filter((_, idx) => idx !== productPrimaryIdx);
-                } else {
-                    configState.productFeatures = productFeatures;
-                }
-
-                configState.buyerCrosses = data.data.buyer_model_crosses || [];
-                configState.productCrosses = data.data.product_model_crosses || [];
-                renderStep2();
-                showStep2Loading(false);
-            } else {
-                showStep2Loading(false);
-            }
-        })
-        .catch(err => {
-            console.error('Error loading clone data:', err);
             showStep2Loading(false);
         });
 }
@@ -17143,6 +17350,7 @@ function openPrimaryIdConfig(model) {
 
     const idLabel = model === 'buyer' ? 'Customer ID' : 'Product ID';
     document.getElementById('featureModalTitle').textContent = `Configure: ${idLabel}`;
+    document.getElementById('featureModalSubtitle').textContent = 'Primary ID embedding settings';
     renderPrimaryIdConfigForm();
     document.getElementById('featureConfigModal').classList.remove('hidden');
 }
@@ -17171,9 +17379,9 @@ function renderPrimaryIdConfigForm() {
     if (cardinalityText) {
         const isRecommended = embedDim === recommendedDim;
         cardinalityBannerHtml = `
-            <div class="flex items-center justify-center gap-2 p-3 rounded-lg mb-4 ${isRecommended ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}">
-                <i class="fas fa-chart-bar ${isRecommended ? 'text-green-600' : 'text-amber-600'}"></i>
-                <span class="text-sm ${isRecommended ? 'text-green-700' : 'text-amber-700'}">
+            <div class="fc-config-recommendation ${isRecommended ? 'match' : 'mismatch'}">
+                <i class="fas fa-chart-bar"></i>
+                <span>
                     ${cardinalityText} unique ${idTypeLabel} →
                     ${isRecommended
                         ? `<strong>✓ ${recommendedDim}D recommended</strong>`
@@ -17184,45 +17392,46 @@ function renderPrimaryIdConfigForm() {
     }
 
     body.innerHTML = `
-        <div class="mb-4">
-            <div class="text-sm text-gray-600 mb-2">
-                <strong>Column:</strong> ${escapeHtml(displayName)}
-            </div>
-            <div class="text-sm text-gray-500">
-                Original type: ${editingFeature.bq_type || 'STRING'} → <span class="text-blue-600 font-medium">Text (forced)</span>
+        <div class="fc-config-section">
+            <div class="fc-config-meta-row">
+                <div class="fc-config-meta-item">
+                    <span class="fc-config-meta-label">Column</span>
+                    <span class="fc-config-meta-value">${escapeHtml(displayName)}</span>
+                </div>
+                <div class="fc-config-meta-item">
+                    <span class="fc-config-meta-label">Type</span>
+                    <span class="fc-config-meta-value">${editingFeature.bq_type || 'STRING'} <i class="fas fa-arrow-right" style="font-size: 10px; color: #9ca3af; margin: 0 4px;"></i> <span style="color: #2563eb;">Text</span></span>
+                </div>
             </div>
         </div>
 
-        <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-            <div class="text-sm text-blue-800">
-                <i class="fas fa-info-circle mr-2"></i>
-                Primary ID columns use text embedding. Other transforms are not available.
-            </div>
+        <div class="fc-config-notice">
+            <i class="fas fa-info-circle"></i>
+            <span>Primary ID columns use text embedding. Other transforms are not available.</span>
         </div>
 
         ${cardinalityBannerHtml}
 
-        <div class="modal-form-group">
-            <label class="modal-form-label">Embedding Dimension</label>
-            <div class="flex gap-2 flex-wrap items-center justify-center">
+        <div class="fc-config-section">
+            <div class="fc-config-section-header">
+                <span class="fc-config-section-title">Embedding Dimension</span>
+                <span class="fc-config-dim-badge" id="primaryIdDimBadge">${embedDim}D</span>
+            </div>
+            <div class="fc-config-dim-grid">
                 ${presetDims.map(dim => `
                     <button type="button"
-                            class="primary-id-dim-btn px-3 py-2 rounded-lg border transition-all ${embedDim === dim && !isCustom
-                                ? 'bg-blue-500 text-white border-blue-500'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}
-                            ${dim === recommendedDim ? 'ring-2 ring-offset-1 ring-green-400' : ''}"
+                            class="fc-config-dim-btn ${embedDim === dim && !isCustom ? 'active' : ''} ${dim === recommendedDim ? 'recommended' : ''}"
                             onclick="selectPrimaryIdDim(${dim})"
                             title="${dim === recommendedDim ? 'Recommended based on cardinality' : ''}">
                         ${dim}D${dim === recommendedDim ? ' ★' : ''}
                     </button>
                 `).join('')}
             </div>
-            <div class="flex items-center gap-3 mt-3 justify-center">
-                <span class="text-sm text-gray-600">Custom:</span>
+            <div class="fc-config-custom-row">
+                <span class="fc-config-custom-label">Custom:</span>
                 <input type="number"
                        id="customEmbedDimInput"
-                       class="form-input text-sm"
-                       style="width: 100px;"
+                       class="fc-config-custom-input"
                        min="4"
                        max="1024"
                        step="1"
@@ -17230,17 +17439,17 @@ function renderPrimaryIdConfigForm() {
                        placeholder="e.g. 512"
                        onchange="onCustomDimChange(this.value)"
                        oninput="onCustomDimInput(this.value)">
-                <span class="text-xs text-gray-500">Range: 4 - 1024</span>
+                <span class="fc-config-custom-hint">4 - 1024</span>
             </div>
         </div>
 
-        <div class="border-t border-gray-200 pt-4 mt-4 space-y-2">
-            <div class="flex items-start gap-2 text-xs text-gray-600">
-                <i class="fas fa-database text-blue-500 mt-0.5"></i>
+        <div class="fc-config-notes">
+            <div class="fc-config-note">
+                <i class="fas fa-database" style="color: #3b82f6;"></i>
                 <span><strong>Vocabulary:</strong> Auto-detected from training data</span>
             </div>
-            <div class="flex items-start gap-2 text-xs text-gray-600">
-                <i class="fas fa-plus-circle text-green-500 mt-0.5"></i>
+            <div class="fc-config-note">
+                <i class="fas fa-plus-circle" style="color: #10b981;"></i>
                 <span><strong>+1 OOV:</strong> New ${idTypeLabel} not in training data will use a learned "cold start" embedding</span>
             </div>
         </div>
@@ -17258,25 +17467,25 @@ function selectPrimaryIdDim(dim) {
         customInput.value = '';
     }
 
+    // Update badge
+    const badge = document.getElementById('primaryIdDimBadge');
+    if (badge) badge.textContent = `${dim}D`;
+
     // Update button styles
-    const buttons = document.querySelectorAll('.primary-id-dim-btn');
-    buttons.forEach(btn => {
+    document.querySelectorAll('#featureModalBody .fc-config-dim-btn').forEach(btn => {
         const btnDim = parseInt(btn.textContent);
-        if (btnDim === dim) {
-            btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500';
-        } else {
-            btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
-        }
+        btn.classList.toggle('active', btnDim === dim);
     });
 }
 
 function onCustomDimInput(value) {
     // Live update as user types - deselect preset buttons
     if (value) {
-        const buttons = document.querySelectorAll('.primary-id-dim-btn');
-        buttons.forEach(btn => {
-            btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        document.querySelectorAll('#featureModalBody .fc-config-dim-btn').forEach(btn => {
+            btn.classList.remove('active');
         });
+        const badge = document.getElementById('primaryIdDimBadge');
+        if (badge) badge.textContent = `${value}D`;
     }
 }
 
@@ -17293,10 +17502,13 @@ function onCustomDimChange(value) {
 
     document.getElementById('primaryIdEmbedDim').value = dim;
 
+    // Update badge
+    const badge = document.getElementById('primaryIdDimBadge');
+    if (badge) badge.textContent = `${dim}D`;
+
     // Deselect all preset buttons
-    const buttons = document.querySelectorAll('.primary-id-dim-btn');
-    buttons.forEach(btn => {
-        btn.className = 'primary-id-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+    document.querySelectorAll('#featureModalBody .fc-config-dim-btn').forEach(btn => {
+        btn.classList.remove('active');
     });
 }
 
@@ -17334,24 +17546,20 @@ function selectTextEmbedDim(dim) {
     }
 
     // Update button styles
-    const buttons = document.querySelectorAll('.text-embed-dim-btn');
-    buttons.forEach(btn => {
+    document.querySelectorAll('#featureModalBody .fc-config-dim-btn').forEach(btn => {
         const btnDim = parseInt(btn.textContent);
-        if (btnDim === dim) {
-            btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-blue-500 text-white border-blue-500';
-        } else {
-            btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
-        }
+        btn.classList.toggle('active', btnDim === dim);
     });
 }
 
 function onCustomTextEmbedDimInput(value) {
     // Live update as user types - deselect preset buttons
     if (value) {
-        const buttons = document.querySelectorAll('.text-embed-dim-btn');
-        buttons.forEach(btn => {
-            btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+        document.querySelectorAll('#featureModalBody .fc-config-dim-btn').forEach(btn => {
+            btn.classList.remove('active');
         });
+        const dimLabel = document.getElementById('embeddingDimLabel');
+        if (dimLabel) dimLabel.textContent = `+${value}D`;
     }
 }
 
@@ -17375,9 +17583,8 @@ function onCustomTextEmbedDimChange(value) {
     }
 
     // Deselect all preset buttons
-    const buttons = document.querySelectorAll('.text-embed-dim-btn');
-    buttons.forEach(btn => {
-        btn.className = 'text-embed-dim-btn px-3 py-2 rounded-lg border transition-all bg-white text-gray-700 border-gray-300 hover:border-blue-400';
+    document.querySelectorAll('#featureModalBody .fc-config-dim-btn').forEach(btn => {
+        btn.classList.remove('active');
     });
 }
 
@@ -17587,7 +17794,9 @@ function openFeatureConfig(model, idx) {
 
     // Use display_name (alias) if available
     const displayName = editingFeature.display_name || editingFeature.column;
+    const towerLabel = model === 'buyer' ? 'BuyerModel' : 'ProductModel';
     document.getElementById('featureModalTitle').textContent = `Configure: ${displayName}`;
+    document.getElementById('featureModalSubtitle').textContent = `${towerLabel} feature transforms`;
     renderFeatureConfigForm();
     document.getElementById('featureConfigModal').classList.remove('hidden');
 }
@@ -17612,35 +17821,43 @@ function renderFeatureConfigForm() {
 
     if (dataType === 'numeric') {
         transformsHtml = `
-            <div class="transform-option">
-                <input type="checkbox" id="featureNormalize" ${t.normalize?.enabled ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Normalize</div>
-                    <div class="transform-option-desc">Scale values to [-1, 1] range</div>
-                </div>
-                <span class="transform-option-dim">+1D</span>
+            <div class="fc-transform-card">
+                <label class="fc-transform-row">
+                    <input type="checkbox" id="featureNormalize" class="fc-transform-check" ${t.normalize?.enabled ? 'checked' : ''}>
+                    <div class="fc-transform-info">
+                        <div class="fc-transform-name">Normalize</div>
+                        <div class="fc-transform-desc">Scale values to [-1, 1] range</div>
+                    </div>
+                    <span class="fc-config-dim-badge small">+1D</span>
+                </label>
             </div>
-            <div class="transform-option">
-                <input type="checkbox" id="featureBucketize" ${t.bucketize?.enabled ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Bucketize + Embed</div>
-                    <div class="transform-option-desc">Discretize into buckets with learned embedding</div>
-                    <div class="mt-2">
-                        <label class="text-xs text-gray-500">Buckets:</label>
-                        <select id="featureBuckets" class="form-select form-select-sm ml-2" style="width: 80px;">
+            <div class="fc-transform-card">
+                <label class="fc-transform-row">
+                    <input type="checkbox" id="featureBucketize" class="fc-transform-check" ${t.bucketize?.enabled ? 'checked' : ''}>
+                    <div class="fc-transform-info">
+                        <div class="fc-transform-name">Bucketize + Embed</div>
+                        <div class="fc-transform-desc">Discretize into buckets with learned embedding</div>
+                    </div>
+                    <span class="fc-config-dim-badge small" id="bucketizeDimLabel">+${t.bucketize?.embedding_dim || 32}D</span>
+                </label>
+                <div class="fc-transform-params">
+                    <div class="fc-transform-param">
+                        <label class="fc-transform-param-label">Buckets</label>
+                        <select id="featureBuckets" class="fc-transform-param-select">
                             ${[10, 50, 100, 200].map(b =>
                                 `<option value="${b}" ${(t.bucketize?.buckets || 100) == b ? 'selected' : ''}>${b}</option>`
                             ).join('')}
                         </select>
-                        <label class="text-xs text-gray-500 ml-3">Dim:</label>
-                        <select id="featureBucketDim" class="form-select form-select-sm ml-2" style="width: 80px;">
+                    </div>
+                    <div class="fc-transform-param">
+                        <label class="fc-transform-param-label">Dim</label>
+                        <select id="featureBucketDim" class="fc-transform-param-select">
                             ${[8, 16, 32, 64].map(d =>
                                 `<option value="${d}" ${(t.bucketize?.embedding_dim || 32) == d ? 'selected' : ''}>${d}</option>`
                             ).join('')}
                         </select>
                     </div>
                 </div>
-                <span class="transform-option-dim" id="bucketizeDimLabel">+${t.bucketize?.embedding_dim || 32}D</span>
             </div>
         `;
     } else if (dataType === 'text') {
@@ -17659,9 +17876,9 @@ function renderFeatureConfigForm() {
         if (cardinalityText && recommendedDim) {
             const isRecommended = embedDim === recommendedDim;
             cardinalityInfoHtml = `
-                <div class="flex items-center justify-center gap-2 mb-3 p-2 rounded-lg ${isRecommended ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}">
-                    <i class="fas fa-chart-bar ${isRecommended ? 'text-green-600' : 'text-amber-600'}"></i>
-                    <span class="text-sm ${isRecommended ? 'text-green-700' : 'text-amber-700'}">
+                <div class="fc-config-recommendation ${isRecommended ? 'match' : 'mismatch'}">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>
                         ${cardinalityText} unique values →
                         ${isRecommended
                             ? `<strong>✓ ${recommendedDim}D recommended</strong>`
@@ -17672,38 +17889,34 @@ function renderFeatureConfigForm() {
         }
 
         transformsHtml = `
-            <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                <div class="flex items-center justify-between mb-3">
+            <div class="fc-config-section" style="margin-bottom: 0;">
+                <div class="fc-config-section-header">
                     <div>
-                        <div class="font-medium text-gray-800">Embedding</div>
-                        <div class="text-xs text-gray-500">Learn vector representation for categorical values</div>
+                        <span class="fc-config-section-title">Embedding</span>
+                        <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Learn vector representation for categorical values</div>
                     </div>
-                    <span class="text-blue-600 font-medium" id="embeddingDimLabel">+${embedDim}D</span>
+                    <span class="fc-config-dim-badge" id="embeddingDimLabel">+${embedDim}D</span>
                 </div>
 
                 ${cardinalityInfoHtml}
 
-                <div class="mb-3">
-                    <label class="text-xs text-gray-600 font-medium mb-2 block">Embedding Dimension</label>
-                    <div class="flex gap-2 flex-wrap items-center justify-center">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; font-weight: 500; color: #6b7280; display: block; margin-bottom: 8px;">Embedding Dimension</label>
+                    <div class="fc-config-dim-grid">
                         ${presetDims.map(dim => `
                             <button type="button"
-                                    class="text-embed-dim-btn px-3 py-2 rounded-lg border transition-all ${embedDim === dim && !isCustomDim
-                                        ? 'bg-blue-500 text-white border-blue-500'
-                                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'}
-                                    ${dim === recommendedDim ? 'ring-2 ring-offset-1 ring-green-400' : ''}"
+                                    class="fc-config-dim-btn ${embedDim === dim && !isCustomDim ? 'active' : ''} ${dim === recommendedDim ? 'recommended' : ''}"
                                     onclick="selectTextEmbedDim(${dim})"
                                     title="${dim === recommendedDim ? 'Recommended based on cardinality' : ''}">
                                 ${dim}D${dim === recommendedDim ? ' ★' : ''}
                             </button>
                         `).join('')}
                     </div>
-                    <div class="flex items-center gap-3 mt-3 justify-center">
-                        <span class="text-xs text-gray-600">Custom:</span>
+                    <div class="fc-config-custom-row">
+                        <span class="fc-config-custom-label">Custom:</span>
                         <input type="number"
                                id="customTextEmbedDimInput"
-                               class="form-input text-sm"
-                               style="width: 80px;"
+                               class="fc-config-custom-input"
                                min="4"
                                max="1024"
                                step="1"
@@ -17711,18 +17924,18 @@ function renderFeatureConfigForm() {
                                placeholder="e.g. 512"
                                onchange="onCustomTextEmbedDimChange(this.value)"
                                oninput="onCustomTextEmbedDimInput(this.value)">
-                        <span class="text-xs text-gray-400">4 - 1024</span>
+                        <span class="fc-config-custom-hint">4 - 1024</span>
                     </div>
                 </div>
 
-                <div class="border-t border-gray-200 pt-3 mt-3 space-y-2">
-                    <div class="flex items-start gap-2 text-xs text-gray-600">
-                        <i class="fas fa-database text-blue-500 mt-0.5"></i>
-                        <span><strong>Vocabulary:</strong> Auto-detected from training data (no manual limit needed)</span>
+                <div class="fc-config-notes" style="margin-top: 0;">
+                    <div class="fc-config-note">
+                        <i class="fas fa-database" style="color: #3b82f6;"></i>
+                        <span><strong>Vocabulary:</strong> Auto-detected from training data</span>
                     </div>
-                    <div class="flex items-start gap-2 text-xs text-gray-600">
-                        <i class="fas fa-plus-circle text-green-500 mt-0.5"></i>
-                        <span><strong>+1 OOV:</strong> One extra dimension is automatically reserved for new/unknown values</span>
+                    <div class="fc-config-note">
+                        <i class="fas fa-plus-circle" style="color: #10b981;"></i>
+                        <span><strong>+1 OOV:</strong> One extra dimension reserved for new/unknown values</span>
                     </div>
                 </div>
             </div>
@@ -17731,89 +17944,99 @@ function renderFeatureConfigForm() {
     } else if (dataType === 'temporal') {
         const c = t.cyclical || {};
         transformsHtml = `
-            <div class="transform-option">
-                <input type="checkbox" id="featureNormalize" ${t.normalize?.enabled ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Normalize</div>
-                    <div class="transform-option-desc">Scale timestamp to [-1, 1] range</div>
-                </div>
-                <span class="transform-option-dim">+1D</span>
-            </div>
-            <div class="transform-option" style="flex-direction: column; align-items: stretch;">
-                <div class="flex items-start gap-2 w-full">
-                    <div class="transform-option-content flex-1">
-                        <div class="transform-option-title">Cyclical Features</div>
-                        <div class="transform-option-desc">Extract periodic patterns using sin/cos encoding</div>
+            <div class="fc-transform-card">
+                <label class="fc-transform-row">
+                    <input type="checkbox" id="featureNormalize" class="fc-transform-check" ${t.normalize?.enabled ? 'checked' : ''}>
+                    <div class="fc-transform-info">
+                        <div class="fc-transform-name">Normalize</div>
+                        <div class="fc-transform-desc">Scale timestamp to [-1, 1] range</div>
                     </div>
-                    <span class="transform-option-dim">varies</span>
+                    <span class="fc-config-dim-badge small">+1D</span>
+                </label>
+            </div>
+            <div class="fc-transform-card">
+                <div class="fc-transform-row" style="cursor: default;">
+                    <div class="fc-transform-info">
+                        <div class="fc-transform-name">Cyclical Features</div>
+                        <div class="fc-transform-desc">Extract periodic patterns using sin/cos encoding</div>
+                    </div>
+                    <span class="fc-config-dim-badge small">varies</span>
                 </div>
-                <div class="space-y-1 mt-3">
-                    <label class="flex items-center gap-2 text-xs">
+                <div class="fc-cyclical-grid">
+                    <label class="fc-cyclical-option">
                         <input type="checkbox" id="cyclicalYearly" ${c.yearly ? 'checked' : ''}>
-                        <span>Yearly (month of year)</span>
-                        <span class="text-blue-600 ml-auto">+2D</span>
+                        <span class="fc-cyclical-label">Yearly (month of year)</span>
+                        <span class="fc-cyclical-dim">+2D</span>
                     </label>
-                    <label class="flex items-center gap-2 text-xs">
+                    <label class="fc-cyclical-option">
                         <input type="checkbox" id="cyclicalQuarterly" ${c.quarterly ? 'checked' : ''}>
-                        <span>Quarterly (month of quarter)</span>
-                        <span class="text-blue-600 ml-auto">+2D</span>
+                        <span class="fc-cyclical-label">Quarterly (month of quarter)</span>
+                        <span class="fc-cyclical-dim">+2D</span>
                     </label>
-                    <label class="flex items-center gap-2 text-xs">
+                    <label class="fc-cyclical-option">
                         <input type="checkbox" id="cyclicalMonthly" ${c.monthly ? 'checked' : ''}>
-                        <span>Monthly (day of month)</span>
-                        <span class="text-blue-600 ml-auto">+2D</span>
+                        <span class="fc-cyclical-label">Monthly (day of month)</span>
+                        <span class="fc-cyclical-dim">+2D</span>
                     </label>
-                    <label class="flex items-center gap-2 text-xs">
+                    <label class="fc-cyclical-option">
                         <input type="checkbox" id="cyclicalWeekly" ${c.weekly ? 'checked' : ''}>
-                        <span>Weekly (day of week)</span>
-                        <span class="text-blue-600 ml-auto">+2D</span>
+                        <span class="fc-cyclical-label">Weekly (day of week)</span>
+                        <span class="fc-cyclical-dim">+2D</span>
                     </label>
-                    <label class="flex items-center gap-2 text-xs">
+                    <label class="fc-cyclical-option">
                         <input type="checkbox" id="cyclicalDaily" ${c.daily ? 'checked' : ''}>
-                        <span>Daily (hour of day)</span>
-                        <span class="text-blue-600 ml-auto">+2D</span>
+                        <span class="fc-cyclical-label">Daily (hour of day)</span>
+                        <span class="fc-cyclical-dim">+2D</span>
                     </label>
                 </div>
             </div>
-            <div class="transform-option">
-                <input type="checkbox" id="featureBucketize" ${t.bucketize?.enabled ? 'checked' : ''}>
-                <div class="transform-option-content">
-                    <div class="transform-option-title">Bucketize + Embed</div>
-                    <div class="transform-option-desc">Discretize into time buckets with learned embedding</div>
-                    <div class="mt-2">
-                        <label class="text-xs text-gray-500">Buckets:</label>
-                        <select id="featureBuckets" class="form-select form-select-sm ml-2" style="width: 80px;">
+            <div class="fc-transform-card">
+                <label class="fc-transform-row">
+                    <input type="checkbox" id="featureBucketize" class="fc-transform-check" ${t.bucketize?.enabled ? 'checked' : ''}>
+                    <div class="fc-transform-info">
+                        <div class="fc-transform-name">Bucketize + Embed</div>
+                        <div class="fc-transform-desc">Discretize into time buckets with learned embedding</div>
+                    </div>
+                    <span class="fc-config-dim-badge small">+${t.bucketize?.embedding_dim || 32}D</span>
+                </label>
+                <div class="fc-transform-params">
+                    <div class="fc-transform-param">
+                        <label class="fc-transform-param-label">Buckets</label>
+                        <select id="featureBuckets" class="fc-transform-param-select">
                             ${[10, 50, 100, 200].map(b =>
                                 `<option value="${b}" ${(t.bucketize?.buckets || 100) == b ? 'selected' : ''}>${b}</option>`
                             ).join('')}
                         </select>
-                        <label class="text-xs text-gray-500 ml-3">Dim:</label>
-                        <select id="featureBucketDim" class="form-select form-select-sm ml-2" style="width: 80px;">
+                    </div>
+                    <div class="fc-transform-param">
+                        <label class="fc-transform-param-label">Dim</label>
+                        <select id="featureBucketDim" class="fc-transform-param-select">
                             ${[8, 16, 32, 64].map(d =>
                                 `<option value="${d}" ${(t.bucketize?.embedding_dim || 32) == d ? 'selected' : ''}>${d}</option>`
                             ).join('')}
                         </select>
                     </div>
                 </div>
-                <span class="transform-option-dim">+${t.bucketize?.embedding_dim || 32}D</span>
             </div>
         `;
     }
 
     body.innerHTML = `
-        <div class="modal-form-group">
-            <label class="modal-form-label">Data Type</label>
-            <select id="modalDataType" class="form-select w-full" onchange="onModalDataTypeChange(this.value)">
+        <div class="fc-config-section">
+            <div class="fc-config-section-header">
+                <span class="fc-config-section-title">Data Type</span>
+                <span style="font-size: 11px; color: #9ca3af;">BQ: ${editingFeature.bq_type || 'STRING'}</span>
+            </div>
+            <select id="modalDataType" class="fc-config-select" onchange="onModalDataTypeChange(this.value)">
                 ${dataTypeOptions}
             </select>
-            <p class="modal-form-hint">Original BQ type: ${editingFeature.bq_type || 'STRING'}</p>
         </div>
-        <div class="modal-form-group">
-            <label class="modal-form-label">Transformations</label>
-            <p class="text-xs text-gray-500 mb-2">Select at least one transformation to include this feature in the model</p>
-            <div id="transformOptions">
-                ${transformsHtml}
-            </div>
+        <div class="fc-config-section-header" style="margin-bottom: 8px;">
+            <span class="fc-config-section-title">Transformations</span>
+        </div>
+        <p style="font-size: 11px; color: #9ca3af; margin: 0 0 12px 0;">Select at least one to include this feature in the model</p>
+        <div id="transformOptions">
+            ${transformsHtml}
         </div>
     `;
 }

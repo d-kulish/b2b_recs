@@ -11,60 +11,19 @@
 
 /* Deploy Wizard Modal Container */
 .deploy-wizard-modal {
-    max-width: 640px;
+    max-width: 880px;
     width: 100%;
-    height: 680px;
+    height: 85vh;
     max-height: 85vh;
     display: flex;
     flex-direction: column;
     position: relative;
 }
 
-/* Deploy Wizard Modal Header - Soft teal gradient theme */
-.deploy-wizard-header {
-    padding: 18px 24px;
-    border-bottom: 1px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: linear-gradient(135deg, #f0fdfa 0%, #e0f2fe 100%);
+/* Deploy Wizard Header - uses modal-header-soft from modals.css */
+.deploy-wizard-modal > .modal-header-soft {
     border-radius: 12px 12px 0 0;
-}
-
-.deploy-wizard-header-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
     flex-shrink: 0;
-    box-shadow: 0 3px 10px rgba(13, 148, 136, 0.25);
-}
-
-.deploy-wizard-header-text {
-    flex: 1;
-}
-
-.deploy-wizard-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #111827;
-    margin: 0 0 4px 0;
-}
-
-.deploy-wizard-subtitle {
-    font-size: 13px;
-    color: #0f766e;
-    margin: 0;
-}
-
-/* Close button hidden - Cancel button in footer serves same purpose */
-.deploy-wizard-close {
-    display: none;
 }
 
 /* Deploy Wizard Modal Body */

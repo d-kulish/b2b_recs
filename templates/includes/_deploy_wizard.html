@@ -27,16 +27,12 @@
 <div id="deployWizardModal" class="modal-overlay hidden" onclick="DeployWizard.handleOverlayClick(event)">
     <div class="modal-container deploy-wizard-modal" onclick="event.stopPropagation()">
         <!-- Header -->
-        <div class="modal-header deploy-wizard-header">
-            <div class="deploy-wizard-header-icon">
-                <i class="fas fa-rocket"></i>
+        <div class="modal-header-soft soft-deploy" id="deployWizardHeader">
+            <div class="modal-header-icon-badge"><i class="fas fa-rocket"></i></div>
+            <div style="flex: 1;">
+                <h3 class="modal-header-title">Deploy to Cloud Run</h3>
+                <div class="modal-header-subtitle" id="deployWizardSubtitle">Cloud Run deployment</div>
             </div>
-            <div class="deploy-wizard-header-text">
-                <h3 class="deploy-wizard-title">Deploy to Cloud Run</h3>
-            </div>
-            <button class="deploy-wizard-close" onclick="DeployWizard.close()" title="Close">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
 
         <!-- Body -->

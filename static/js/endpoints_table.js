@@ -403,7 +403,7 @@ const EndpointsTable = (function() {
 
         editModalState.endpointId = endpointId;
         editModalState.endpoint = endpoint;
-        editModalState.showAdvanced = false;
+        editModalState.showAdvanced = true;
 
         // Detect current preset based on config
         const currentConfig = endpoint.deployment_config || {};
@@ -436,99 +436,118 @@ const EndpointsTable = (function() {
         const currentConfig = endpoint.deployment_config || {};
 
         const modalHtml = `
-            <div id="endpointEditModal" class="endpoint-edit-modal-overlay">
-                <div class="endpoint-edit-modal">
-                    <div class="endpoint-edit-modal-header">
-                        <h3><i class="fas fa-cog"></i> Edit Endpoint Configuration</h3>
-                        <button class="endpoint-edit-modal-close" onclick="EndpointsTable.closeEditModal()">
-                            <i class="fas fa-times"></i>
-                        </button>
+            <div id="endpointEditModal" class="modal-overlay" onclick="if(event.target===this) EndpointsTable.closeEditModal()" style="z-index: 150;">
+                <div class="modal-container deploy-wizard-modal" style="height: 68vh; max-height: 68vh;" onclick="event.stopPropagation()">
+                    <!-- Header -->
+                    <div class="modal-header-soft soft-deploy">
+                        <div class="modal-header-icon-badge"><i class="fas fa-cog"></i></div>
+                        <div style="flex: 1;">
+                            <h3 class="modal-header-title">Edit Endpoint Configuration</h3>
+                            <div class="modal-header-subtitle">${endpoint.service_name}</div>
+                        </div>
                     </div>
 
-                    <div class="endpoint-edit-modal-body">
-                        <!-- Endpoint Info -->
-                        <div class="edit-endpoint-info">
-                            <span class="edit-endpoint-name">${endpoint.service_name}</span>
-                            <span class="edit-endpoint-version">Version ${endpoint.deployed_version || 'v1'}</span>
+                    <!-- Body -->
+                    <div class="modal-body deploy-wizard-body">
+                        <!-- Endpoint Info Card -->
+                        <div class="deploy-model-info-card">
+                            <div class="deploy-model-info-item">
+                                <div class="deploy-model-info-label">Endpoint</div>
+                                <div class="deploy-model-info-value">${endpoint.service_name}</div>
+                            </div>
+                            <div class="deploy-model-info-item">
+                                <div class="deploy-model-info-label">Version</div>
+                                <div class="deploy-model-info-value">${endpoint.deployed_version || 'v1'}</div>
+                            </div>
                         </div>
 
-                        <!-- Deployment Presets -->
-                        <div class="edit-section-label">Configuration Preset</div>
-                        <div class="deploy-preset-cards">
-                            ${Object.entries(PRESETS).map(([key, preset]) => `
-                                <div class="deploy-preset-card ${editModalState.selectedPreset === key ? 'selected' : ''}"
-                                     data-preset="${key}"
-                                     onclick="EndpointsTable.selectPreset('${key}')">
-                                    <div class="deploy-preset-icon"><i class="fas ${preset.icon}"></i></div>
-                                    <div class="deploy-preset-name">${preset.name}</div>
-                                    <div class="deploy-preset-desc">${preset.description}</div>
-                                    <div class="deploy-preset-specs">
-                                        ${preset.config.cpu} vCPU, ${preset.config.memory}
+                        <!-- Deployment Preset Toggle -->
+                        <div class="deploy-preset-toggle expanded" onclick="EndpointsTable.toggleEditPresets()">
+                            <span class="deploy-preset-toggle-text"><i class="fas fa-layer-group mr-2 text-indigo-500"></i>Configuration Preset</span>
+                            <i class="fas fa-chevron-right deploy-preset-toggle-chevron" id="editPresetChevron"></i>
+                        </div>
+
+                        <!-- Preset Cards -->
+                        <div class="deploy-preset-options visible" id="editPresetOptions">
+                            <div class="deploy-preset-cards">
+                                ${Object.entries(PRESETS).map(([key, preset]) => `
+                                    <div class="deploy-preset-card ${editModalState.selectedPreset === key ? 'selected' : ''}"
+                                         data-preset="${key}"
+                                         onclick="EndpointsTable.selectPreset('${key}')">
+                                        <div class="deploy-preset-name">${preset.name}</div>
+                                        <div class="deploy-preset-specs">
+                                            <strong>${preset.config.min_instances}-${preset.config.max_instances}</strong> instances
+                                        </div>
+                                        <div class="deploy-preset-specs">
+                                            <strong>${preset.config.memory}</strong> / <strong>${preset.config.cpu}</strong> CPU
+                                        </div>
+                                        <div class="deploy-preset-use-case">${preset.description}</div>
                                     </div>
-                                </div>
-                            `).join('')}
+                                `).join('')}
+                            </div>
                         </div>
 
                         <!-- Advanced Options Toggle -->
-                        <div class="edit-advanced-header" onclick="EndpointsTable.toggleAdvancedOptions()">
-                            <i class="fas fa-sliders-h"></i>
-                            <span>Advanced Options</span>
-                            <i class="fas fa-chevron-${editModalState.showAdvanced ? 'up' : 'down'}" id="advancedChevron"></i>
+                        <div class="deploy-advanced-toggle expanded" id="editAdvancedToggle" onclick="EndpointsTable.toggleAdvancedOptions()">
+                            <span class="deploy-advanced-toggle-text"><i class="fas fa-cog mr-2 text-green-500"></i>Advanced Options</span>
+                            <i class="fas fa-chevron-right deploy-advanced-toggle-chevron" id="editAdvancedChevron"></i>
                         </div>
 
                         <!-- Advanced Options Panel -->
-                        <div class="edit-advanced-options ${editModalState.showAdvanced ? 'visible' : ''}" id="editAdvancedOptions">
-                            <div class="edit-option-row">
-                                <div class="edit-option-group">
-                                    <label>Memory</label>
-                                    <select id="editMemory">
+                        <div class="deploy-advanced-options visible" id="editAdvancedOptions">
+                            <div class="deploy-options-grid">
+                                <div class="deploy-option-field">
+                                    <label class="deploy-option-label" for="editMinInstances">Min Instances</label>
+                                    <input type="number" id="editMinInstances" class="deploy-option-input"
+                                           min="0" max="100" value="${currentConfig.min_instances || 0}">
+                                </div>
+                                <div class="deploy-option-field">
+                                    <label class="deploy-option-label" for="editMaxInstances">Max Instances</label>
+                                    <input type="number" id="editMaxInstances" class="deploy-option-input"
+                                           min="1" max="1000" value="${currentConfig.max_instances || 10}">
+                                </div>
+                                <div class="deploy-option-field">
+                                    <label class="deploy-option-label" for="editMemory">Memory</label>
+                                    <select id="editMemory" class="deploy-option-select">
                                         ${['1Gi', '2Gi', '4Gi', '8Gi', '16Gi', '32Gi'].map(m =>
                                             `<option value="${m}" ${currentConfig.memory === m ? 'selected' : ''}>${m}</option>`
                                         ).join('')}
                                     </select>
                                 </div>
-                                <div class="edit-option-group">
-                                    <label>CPU</label>
-                                    <select id="editCpu">
+                                <div class="deploy-option-field">
+                                    <label class="deploy-option-label" for="editCpu">CPU</label>
+                                    <select id="editCpu" class="deploy-option-select">
                                         ${['1', '2', '4', '8'].map(c =>
                                             `<option value="${c}" ${currentConfig.cpu === c ? 'selected' : ''}>${c} vCPU</option>`
                                         ).join('')}
                                     </select>
                                 </div>
-                            </div>
-                            <div class="edit-option-row">
-                                <div class="edit-option-group">
-                                    <label>Min Instances</label>
-                                    <input type="number" id="editMinInstances" min="0" max="100"
-                                           value="${currentConfig.min_instances || 0}">
-                                </div>
-                                <div class="edit-option-group">
-                                    <label>Max Instances</label>
-                                    <input type="number" id="editMaxInstances" min="1" max="1000"
-                                           value="${currentConfig.max_instances || 10}">
-                                </div>
-                            </div>
-                            <div class="edit-option-row">
-                                <div class="edit-option-group" style="flex: 1;">
-                                    <label>Timeout (seconds)</label>
-                                    <input type="number" id="editTimeout" min="1" max="3600"
-                                           value="${currentConfig.timeout || 300}">
+                                <div class="deploy-option-field">
+                                    <label class="deploy-option-label" for="editTimeout">Timeout</label>
+                                    <input type="number" id="editTimeout" class="deploy-option-input"
+                                           min="1" max="3600" value="${currentConfig.timeout || 300}">
                                 </div>
                             </div>
                         </div>
 
                         <!-- Warning -->
-                        <div class="edit-warning">
+                        <div class="deploy-service-warning" style="display: flex;">
                             <i class="fas fa-exclamation-triangle"></i>
                             <span>This will undeploy and redeploy the endpoint with the new configuration. There may be brief downtime.</span>
                         </div>
                     </div>
 
-                    <div class="endpoint-edit-modal-footer">
-                        <button class="btn-cancel" onclick="EndpointsTable.closeEditModal()">Cancel</button>
-                        <button class="btn-save" onclick="EndpointsTable.saveEndpointConfig()">
-                            <i class="fas fa-check"></i> Apply Changes
-                        </button>
+                    <!-- Footer -->
+                    <div class="modal-footer-wizard-neu">
+                        <div class="footer-left"></div>
+                        <div class="footer-right">
+                            <button class="btn-neu btn-neu-action btn-neu-save" onclick="EndpointsTable.saveEndpointConfig()">
+                                <span class="btn-neu-inner">Apply</span>
+                            </button>
+                            <button class="btn-neu btn-neu-action btn-neu-cancel" onclick="EndpointsTable.closeEditModal()">
+                                <span class="btn-neu-inner">Cancel</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -569,25 +588,39 @@ const EndpointsTable = (function() {
             if (timeoutInput) timeoutInput.value = preset.config.timeout;
         }
 
-        // Update selected state on preset cards
-        document.querySelectorAll('.deploy-preset-card').forEach(card => {
-            card.classList.remove('selected');
-            if (card.dataset.preset === presetName) {
-                card.classList.add('selected');
-            }
-        });
+        // Update selected state on preset cards (scoped to edit modal)
+        const editModal = document.getElementById('endpointEditModal');
+        if (editModal) {
+            editModal.querySelectorAll('.deploy-preset-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.dataset.preset === presetName) {
+                    card.classList.add('selected');
+                }
+            });
+        }
     }
 
     function toggleAdvancedOptions() {
         editModalState.showAdvanced = !editModalState.showAdvanced;
         const panel = document.getElementById('editAdvancedOptions');
-        const chevron = document.getElementById('advancedChevron');
+        const toggle = document.getElementById('editAdvancedToggle');
 
         if (panel) {
             panel.classList.toggle('visible', editModalState.showAdvanced);
         }
-        if (chevron) {
-            chevron.className = `fas fa-chevron-${editModalState.showAdvanced ? 'up' : 'down'}`;
+        if (toggle) {
+            toggle.classList.toggle('expanded', editModalState.showAdvanced);
+        }
+    }
+
+    function toggleEditPresets() {
+        const options = document.getElementById('editPresetOptions');
+        const toggle = options?.previousElementSibling;
+        if (options) {
+            options.classList.toggle('visible');
+        }
+        if (toggle) {
+            toggle.classList.toggle('expanded');
         }
     }
 
@@ -1487,6 +1520,7 @@ const EndpointsTable = (function() {
         closeEditModal,
         selectPreset,
         toggleAdvancedOptions,
+        toggleEditPresets,
         saveEndpointConfig,
         nextPage,
         prevPage,

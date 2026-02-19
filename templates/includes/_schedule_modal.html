@@ -25,17 +25,12 @@
 <div id="scheduleModal" class="modal-overlay hidden" onclick="ScheduleModal.handleOverlayClick(event)">
     <div class="modal-container schedule-modal" onclick="event.stopPropagation()">
         <!-- Header -->
-        <div class="modal-header schedule-modal-header">
-            <div class="schedule-modal-header-icon">
-                <i class="fas fa-calendar-alt"></i>
+        <div class="modal-header-soft soft-schedule" id="scheduleModalHeader">
+            <div class="modal-header-icon-badge"><i class="fas fa-calendar-alt"></i></div>
+            <div style="flex: 1;">
+                <h3 class="modal-header-title" id="scheduleModalTitle">Create Training Schedule</h3>
+                <div class="modal-header-subtitle" id="scheduleModalSubtitle">Schedule recurring training runs</div>
             </div>
-            <div class="schedule-modal-header-text">
-                <h3 class="schedule-modal-title" id="scheduleModalTitle">Create Training Schedule</h3>
-                <p class="schedule-modal-subtitle" id="scheduleModalSubtitle">Schedule recurring training runs</p>
-            </div>
-            <button class="schedule-modal-close" onclick="ScheduleModal.close()" title="Close">
-                <i class="fas fa-times"></i>
-            </button>
         </div>
 
         <!-- Body -->

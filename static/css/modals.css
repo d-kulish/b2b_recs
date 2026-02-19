@@ -522,6 +522,22 @@
 .modal-header-soft.soft-integrate .modal-header-title { color: #14532d; }
 .modal-header-soft.soft-integrate .modal-header-subtitle { color: #166534; }
 
+/* --- Deploy (sky blue) --- */
+.modal-header-soft.soft-deploy {
+    background: linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 50%, #0ea5e9 100%);
+}
+.modal-header-soft.soft-deploy .modal-header-icon-badge { background: #0ea5e9; }
+.modal-header-soft.soft-deploy .modal-header-title { color: #0c4a6e; }
+.modal-header-soft.soft-deploy .modal-header-subtitle { color: #075985; }
+
+/* --- Schedule (violet) --- */
+.modal-header-soft.soft-schedule {
+    background: linear-gradient(135deg, #ede9fe 0%, #c4b5fd 50%, #8b5cf6 100%);
+}
+.modal-header-soft.soft-schedule .modal-header-icon-badge { background: #8b5cf6; }
+.modal-header-soft.soft-schedule .modal-header-title { color: #3b0764; }
+.modal-header-soft.soft-schedule .modal-header-subtitle { color: #581c87; }
+
 /* ============================================================================
    WIZARD NAV PILL COLOR OVERRIDES
    ============================================================================

@@ -131,6 +131,7 @@ def serialize_dataset(ds, include_details=False):
             'date_range_end': ds.date_range_end.isoformat() if ds.date_range_end else None,
             # Use snapshot column_stats (from Step 4 wizard) if available, fallback to model field
             'column_stats': column_stats if column_stats else ds.column_stats,
+            'summary_snapshot': ds.summary_snapshot or {},
         })
 
     return data
@@ -621,6 +622,7 @@ def clone_dataset(request, dataset_id):
             column_mapping=original.column_mapping,
             column_aliases=original.column_aliases,
             filters=original.filters,
+            summary_snapshot=original.summary_snapshot,
             bq_location=original.bq_location,
             created_by=request.user,
         )

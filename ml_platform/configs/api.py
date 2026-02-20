@@ -240,8 +240,13 @@ def update_feature_config(request, config_id):
         fc = get_object_or_404(FeatureConfig, id=config_id)
         data = json.loads(request.body)
 
+        # Resolve target dataset (may differ from current if user changed it)
+        target_dataset = fc.dataset
+        if 'dataset_id' in data and data['dataset_id'] != fc.dataset_id:
+            target_dataset = get_object_or_404(Dataset, id=data['dataset_id'])
+
         # Validate
-        is_valid, errors = validate_feature_config(data, fc.dataset, exclude_config_id=fc.id)
+        is_valid, errors = validate_feature_config(data, target_dataset, exclude_config_id=fc.id)
         if not is_valid:
             return JsonResponse({
                 'success': False,
@@ -274,6 +279,8 @@ def update_feature_config(request, config_id):
             fc.version += 1
 
         # Update fields
+        if 'dataset_id' in data:
+            fc.dataset = target_dataset
         if 'name' in data:
             fc.name = data['name'].strip()
         if 'description' in data:

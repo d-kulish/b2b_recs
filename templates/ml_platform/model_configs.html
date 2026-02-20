@@ -13843,7 +13843,7 @@ function ds_saveDataset() {
         selected_columns: ds_wizardData.selectedColumns,
         column_aliases: ds_wizardData.columnAliases || {},
         filters: ds_wizardData.filters,
-        summary_snapshot: summarySnapshot
+        ...(ds_datasetStatsData ? { summary_snapshot: summarySnapshot } : {})
     };
 
     const url = ds_wizardEditMode
@@ -14264,6 +14264,16 @@ function ds_loadDatasetForEdit(datasetId) {
                 ds_wizardData.selectedColumns = ds.selected_columns || {};
                 ds_wizardData.columnAliases = ds.column_aliases || {};
                 ds_wizardData.filters = ds.filters || {};
+
+                // Restore summary snapshot so save doesn't wipe it
+                if (ds.summary_snapshot && ds.summary_snapshot.column_stats) {
+                    ds_datasetStatsData = {
+                        status: 'success',
+                        summary: { total_rows: ds.summary_snapshot.total_rows || 0 },
+                        filters_applied: ds.summary_snapshot.filters_applied || {},
+                        column_stats: ds.summary_snapshot.column_stats || {}
+                    };
+                }
 
                 // Restore schema builder state for Step 3
                 ds_schemaBuilderState.selectedColumns = {...ds_wizardData.selectedColumns};

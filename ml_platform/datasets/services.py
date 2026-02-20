@@ -1125,6 +1125,21 @@ class BigQueryService:
                     if stats.get('null_count', 0) > 0:
                         nullable_columns.add(col_key)
 
+            # Fallback: if summary_snapshot is empty/missing, query live BQ schema
+            # This ensures TIMESTAMP conversion works even without cached stats
+            if for_tfx and not column_types:
+                for table, columns in selected_columns.items():
+                    table_alias = table.split('.')[-1]
+                    try:
+                        schema = self.get_table_schema(table)
+                        schema_dict = {col['name']: col['type'] for col in schema}
+                        for col in columns:
+                            col_key = f"{table_alias}.{col}"
+                            col_type = schema_dict.get(col, 'STRING')
+                            column_types[col_key] = col_type
+                    except Exception:
+                        logger.warning(f"Could not fetch schema for {table}, TIMESTAMP conversion may be incomplete")
+
             # Build set of LEFT-JOINed table aliases (columns may be NULL from unmatched rows)
             left_join_tables = set()
             if for_tfx:

@@ -218,7 +218,7 @@ class PipelineService:
         # This uses the existing BigQueryService that handles joins, filters, etc.
         from ml_platform.datasets.services import BigQueryService
         bq_service = BigQueryService(dataset.model_endpoint, dataset=dataset)
-        query_sql = bq_service.generate_query(dataset)
+        query_sql = bq_service.generate_query(dataset, for_tfx=True)
 
         return {
             # Data source - SQL query instead of direct table reference

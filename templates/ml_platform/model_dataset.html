@@ -9337,7 +9337,7 @@ function saveDataset() {
         selected_columns: wizardData.selectedColumns,
         column_aliases: wizardData.columnAliases || {},
         filters: wizardData.filters,
-        summary_snapshot: summarySnapshot
+        ...(datasetStatsData ? { summary_snapshot: summarySnapshot } : {})
     };
 
     const url = wizardEditMode
@@ -9650,6 +9650,16 @@ function loadDatasetForEdit(datasetId) {
             wizardData.selectedColumns = ds.selected_columns || {};
             wizardData.columnAliases = ds.column_aliases || {};
             wizardData.filters = ds.filters || {};
+
+            // Restore summary snapshot so save doesn't wipe it
+            if (ds.summary_snapshot && ds.summary_snapshot.column_stats) {
+                datasetStatsData = {
+                    status: 'success',
+                    summary: { total_rows: ds.summary_snapshot.total_rows || 0 },
+                    filters_applied: ds.summary_snapshot.filters_applied || {},
+                    column_stats: ds.summary_snapshot.column_stats || {}
+                };
+            }
 
             // Restore column aliases to schema builder state
             schemaBuilderState.columnAliases = {...wizardData.columnAliases};

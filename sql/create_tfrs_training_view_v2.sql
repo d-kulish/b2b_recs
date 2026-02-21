@@ -5,6 +5,7 @@
 -- v2 changes vs v1:
 --   - Added brand_name, stratbuy_domain_desc, mge_main_cat_desc, mge_sub_cat_desc
 --   - Fixed product deduplication: ROW_NUMBER by update_date instead of SELECT DISTINCT
+--   - Added art_name (product name) from test_articles
 
 CREATE OR REPLACE VIEW `b2b-recs.raw_data.tfrs_training_examples_v2` AS
 WITH filtered_invoices AS (
@@ -25,6 +26,7 @@ products_with_id AS (
   -- Latest product metadata per product_id, deduplicated by update_date
   SELECT
     product_id,
+    art_name,
     division_desc,
     stratbuy_domain_desc,
     mge_main_cat_desc,
@@ -34,6 +36,7 @@ products_with_id AS (
   FROM (
     SELECT
       CAST(art_no AS INT64) * 1000000 + CAST(var_tu_key AS INT64) AS product_id,
+      art_name,
       division_desc,
       stratbuy_domain_desc,
       mge_main_cat_desc,
@@ -80,6 +83,7 @@ SELECT
   s.city,
 
   -- Product context
+  p.art_name,
   p.division_desc,
   p.stratbuy_domain_desc,
   p.mge_main_cat_desc,

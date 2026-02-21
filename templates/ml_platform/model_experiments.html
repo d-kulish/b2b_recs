@@ -3161,7 +3161,7 @@ function appendModelEndpointId(url) {
 let allFeatureConfigs = [];
 let allModelConfigs = [];
 let experiments = [];
-let pagination = { page: 1, page_size: 10, total_count: 0, total_pages: 1 };
+let pagination = { page: 1, page_size: 5, total_count: 0, total_pages: 1 };
 
 // Wizard state
 let wizardStep = 1;
@@ -3618,7 +3618,7 @@ async function loadInitialData() {
         const [fcResponse, mcResponse, expResponse] = await Promise.all([
             fetch(appendModelEndpointId(`/api/models/${modelId}/feature-configs/`)),
             fetch(appendModelEndpointId(`/api/models/${modelId}/model-configs/`)),
-            fetch(appendModelEndpointId('/api/quick-tests/?page=1&page_size=10'))
+            fetch(appendModelEndpointId(`/api/quick-tests/?page=1&page_size=${pagination.page_size}`))
         ]);
 
         const fcData = await fcResponse.json();
@@ -3958,61 +3958,39 @@ function renderStagesBar(stages, expStatus) {
 
 function renderPagination() {
     const container = document.getElementById('expPagination');
-    if (pagination.total_pages <= 1) {
+    const infoEl = document.getElementById('expPaginationInfo');
+    const buttonsEl = document.getElementById('expPaginationButtons');
+
+    if (!pagination || pagination.total_count <= pagination.page_size) {
         container.classList.add('hidden');
         return;
     }
 
     container.classList.remove('hidden');
 
+    const totalPages = pagination.total_pages;
     const start = (pagination.page - 1) * pagination.page_size + 1;
     const end = Math.min(pagination.page * pagination.page_size, pagination.total_count);
+    infoEl.textContent = `Showing ${start}-${end} of ${pagination.total_count}`;
 
-    document.getElementById('expPaginationInfo').textContent = `Showing ${start}-${end} of ${pagination.total_count}`;
-
-    const buttonsContainer = document.getElementById('expPaginationButtons');
-    let buttonsHtml = '';
-
-    // Previous button (hidden when on first page)
-    if (pagination.has_prev) {
-        buttonsHtml += `<button onclick="goToPage(${pagination.page - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
+    let buttons = '';
+    if (pagination.page > 1) {
+        buttons += `<button onclick="goToPage(${pagination.page - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
     }
 
-    // Page numbers with ellipsis
-    const totalPages = pagination.total_pages;
-    if (totalPages <= 4) {
-        for (let i = 1; i <= totalPages; i++) {
-            buttonsHtml += expPageButton(i);
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === pagination.page) {
+            buttons += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
+        } else {
+            buttons += `<button onclick="goToPage(${i})" class="btn btn-secondary btn-xs">${i}</button>`;
         }
-    } else {
-        buttonsHtml += expPageButton(1);
-        if (pagination.page > 3) {
-            buttonsHtml += `<span class="px-1 text-gray-400">...</span>`;
-        }
-        const s = Math.max(2, pagination.page - 1);
-        const e = Math.min(totalPages - 1, pagination.page + 1);
-        for (let i = s; i <= e; i++) {
-            buttonsHtml += expPageButton(i);
-        }
-        if (pagination.page < totalPages - 2) {
-            buttonsHtml += `<span class="px-1 text-gray-400">...</span>`;
-        }
-        buttonsHtml += expPageButton(totalPages);
     }
 
-    // Next button (hidden when on last page)
-    if (pagination.has_next) {
-        buttonsHtml += `<button onclick="goToPage(${pagination.page + 1})" class="btn btn-secondary btn-xs">Next</button>`;
+    if (pagination.page < totalPages) {
+        buttons += `<button onclick="goToPage(${pagination.page + 1})" class="btn btn-secondary btn-xs">Next</button>`;
     }
 
-    buttonsContainer.innerHTML = buttonsHtml;
-}
-
-function expPageButton(pageNum) {
-    if (pageNum === pagination.page) {
-        return `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${pageNum}</button>`;
-    }
-    return `<button onclick="goToPage(${pageNum})" class="btn btn-secondary btn-xs">${pageNum}</button>`;
+    buttonsEl.innerHTML = buttons;
 }
 
 async function goToPage(page) {

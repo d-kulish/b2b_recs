@@ -15701,7 +15701,7 @@ function cfg_scrollToModelConfig(mcId, name) {
 }
 
 /**
- * Smooth scroll to a chapter section.
+ * Smooth scroll to a chapter section and ensure it is expanded.
  */
 function cfg_scrollToChapter(chapterId) {
     // Map friendly IDs to actual element patterns
@@ -15714,9 +15714,12 @@ function cfg_scrollToChapter(chapterId) {
     const targetId = chapterMap[chapterId] || chapterId;
     const target = document.getElementById(targetId);
     if (target) {
-        // Scroll to the parent chapter section
-        const chapter = target.closest('.bg-white') || target.closest('.chapter-section');
+        const chapter = target.closest('.chapter-container');
         if (chapter) {
+            // Expand the chapter if it's collapsed
+            if (!chapter.classList.contains('open')) {
+                chapter.classList.add('open');
+            }
             chapter.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
@@ -15730,13 +15733,21 @@ function cfg_searchAndScrollToChapter(chapterId, searchName, searchInputId, sear
     const searchInput = document.getElementById(searchInputId);
     if (searchInput && searchName) {
         searchInput.value = searchName;
-        // Trigger the search
-        if (typeof searchFunction === 'function') {
+        // Call the underlying render/filter directly, bypassing the debounce
+        // so results are ready before we scroll.
+        if (searchFunction === debounceMcSearch) {
+            filterModelConfigs();
+        } else if (searchFunction === fc_debounceSearch) {
+            fc_currentPage = 1;
+            renderConfigs();
+        } else if (searchFunction === ds_debounceSearch) {
+            ds_loadDatasets(1);
+        } else if (typeof searchFunction === 'function') {
             searchFunction();
         }
     }
-    // Scroll to the chapter
-    cfg_scrollToChapter(chapterId);
+    // Scroll to the chapter after a short delay to let the DOM update
+    setTimeout(() => cfg_scrollToChapter(chapterId), 50);
 }
 
 function cfg_scrollToDataset(datasetId, name) {

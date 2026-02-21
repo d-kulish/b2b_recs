@@ -2783,7 +2783,7 @@ class ServingModel(tf.keras.Model):
     def serve(self, {params_str}):
         """
         Serving function that accepts raw tensor inputs.
-        Returns top-100 product recommendations with scores.
+        Returns top-K product recommendations with scores.
 
         Example JSON request to TF Serving:
         {{
@@ -2810,8 +2810,8 @@ class ServingModel(tf.keras.Model):
             transpose_b=True
         )
 
-        # Get top-100 recommendations
-        top_scores, top_indices = tf.nn.top_k(similarities, k=100)
+        # Get top-K recommendations
+        top_scores, top_indices = tf.nn.top_k(similarities, k=TOP_K)
 
         # Map indices to product IDs
         recommended_products = tf.gather(self.product_ids, top_indices)
@@ -2923,8 +2923,8 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
                 transpose_b=True
             )  # [batch_size, num_products]
 
-            # Get top-100 indices
-            _, top_indices = tf.nn.top_k(similarities, k=min(100, len(product_ids)))
+            # Get top-K indices
+            _, top_indices = tf.nn.top_k(similarities, k=min(TOP_K, len(product_ids)))
             top_indices = top_indices.numpy()
 
             # Get actual product IDs from batch
@@ -3336,8 +3336,8 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
                 transpose_b=True
             )  # [batch_size, num_products]
 
-            # Get top-100 indices
-            _, top_indices = tf.nn.top_k(similarities, k=min(100, len(product_ids)))
+            # Get top-K indices
+            _, top_indices = tf.nn.top_k(similarities, k=min(TOP_K, len(product_ids)))
             top_indices = top_indices.numpy()
 
             # Get actual product IDs from batch
@@ -5844,8 +5844,8 @@ def _evaluate_recall_on_test_set(model, test_dataset, product_ids, product_embed
                 transpose_b=True
             )
 
-            # Get top-100 indices
-            _, top_indices = tf.nn.top_k(similarities, k=min(100, len(product_ids)))
+            # Get top-K indices
+            _, top_indices = tf.nn.top_k(similarities, k=min(TOP_K, len(product_ids)))
             top_indices = top_indices.numpy()
 
             # Get actual product IDs from batch

@@ -4041,6 +4041,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info(f"Loaded {{len(original_product_ids)}} original product IDs from vocabulary")
 
+        # Map deduped vocab indices to original IDs (aligned with embeddings)
+        serving_product_ids = [original_product_ids[vid] for vid in product_ids]
+        logging.info(f"Mapped {{len(serving_product_ids)}} serving product IDs (aligned with embeddings)")
+
         # Build retrieval index based on configured algorithm
         use_scann = False
         scann_index = None
@@ -4119,14 +4123,14 @@ def run_fn(fn_args: tfx.components.FnArgs):
             serving_model = ScaNNServingModel(
                 scann_index=scann_index,
                 tf_transform_output=tf_transform_output,
-                original_product_ids=original_product_ids
+                original_product_ids=serving_product_ids
             )
         else:
             logging.info("Building brute-force serving model...")
             serving_model = ServingModel(
                 retrieval_model=model,
                 tf_transform_output=tf_transform_output,
-                product_ids=original_product_ids,
+                product_ids=serving_product_ids,
                 product_embeddings=product_embeddings
             )
 
@@ -6473,6 +6477,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
         )
         logging.info(f"Loaded {{len(original_product_ids)}} original product IDs from vocabulary")
 
+        # Map deduped vocab indices to original IDs (aligned with embeddings)
+        serving_product_ids = [original_product_ids[vid] for vid in product_ids]
+        logging.info(f"Mapped {{len(serving_product_ids)}} serving product IDs (aligned with embeddings)")
+
         # =========================================================================
         # TEST SET EVALUATION - BOTH RETRIEVAL AND RANKING METRICS
         # =========================================================================
@@ -6553,7 +6561,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         serving_model = MultitaskServingModel(
             multitask_model=model,
             tf_transform_output=tf_transform_output,
-            product_ids=original_product_ids,
+            product_ids=serving_product_ids,
             product_embeddings=product_embeddings,
             transform_params=transform_params
         )

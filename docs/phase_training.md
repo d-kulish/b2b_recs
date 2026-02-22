@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training and manages model deployment to Cloud Run.
 
-**Last Updated**: 2026-02-02 (Fixed ranking/multitask serving to accept raw JSON inputs)
+**Last Updated**: 2026-02-22 (Fixed serving model product_ids/embeddings misalignment)
 
 ---
 
@@ -3936,6 +3936,54 @@ Training run 53 (ScaNN retrieval, same FeatureConfig) succeeded without issues.
 2. **`_generate_serve_fn_multitask()`** — Added the same function definition after `_evaluate_recall_on_test_set` in the generated code.
 
 **Resolution:** Redeploy the Django app, then rerun training run 54 to regenerate `trainer_module.py` with the fix.
+
+---
+
+### Fix: Serving Model product_ids / embeddings Misalignment (2026-02-22)
+
+**Problem:** Serving model recall was near-random (~13.8%) despite correct training recall (~33.9%). The `ServingModel` and `MultitaskServingModel` received `product_ids` and `product_embeddings` arrays of different lengths and orderings, so `tf.gather(self.product_ids, top_indices)` returned wrong product IDs.
+
+**Root Cause:** The 2026-02-02 fix (vocab indices → actual IDs) introduced a subtler misalignment:
+
+- `_precompute_candidate_embeddings()` iterates the **eval dataset**, deduplicates, and returns `(vocab_indices, embeddings)` — only products present in eval, in encounter order (e.g., 858 entries).
+- `_load_original_product_ids()` reads the **full TFT vocabulary** — all products across all splits, in vocab order (e.g., 904 entries).
+- The previous fix passed `original_product_ids` (904, vocab order) directly to the serving model, but `product_embeddings` had 858 entries in encounter order. Position `i` in embeddings did not correspond to position `i` in the product IDs array.
+
+**Data Flow (Before Fix):**
+```
+_precompute_candidate_embeddings() → product_ids = [3, 7, 0, 12, ...]  (858 vocab indices, encounter order)
+_load_original_product_ids()       → original_product_ids = ["P0", "P1", "P2", "P3", ...]  (904, vocab order)
+    ↓ ServingModel.__init__(product_ids=original_product_ids, product_embeddings=embeddings)
+    ↓ product_ids.shape=904, product_embeddings.shape=(858, dim) — MISALIGNED
+    ↓ tf.gather(self.product_ids, top_indices) — wrong mapping
+```
+
+**Fix (5 changes in `ml_platform/configs/services.py`):**
+
+1. **Retrieval `run_fn()`** — After loading `original_product_ids`, added mapping: `serving_product_ids = [original_product_ids[vid] for vid in product_ids]`. This translates each vocab index from `_precompute_candidate_embeddings` to its actual product ID, aligned 1:1 with the embeddings array.
+
+2. **Brute-force `ServingModel`** — Changed `product_ids=original_product_ids` → `product_ids=serving_product_ids`.
+
+3. **ScaNN `ScaNNServingModel`** — Changed `original_product_ids=original_product_ids` → `original_product_ids=serving_product_ids`.
+
+4. **Multitask `run_fn()`** — Added the same `serving_product_ids` mapping after `original_product_ids` loading.
+
+5. **`MultitaskServingModel`** — Changed `product_ids=original_product_ids` → `product_ids=serving_product_ids`.
+
+**Data Flow (After Fix):**
+```
+_precompute_candidate_embeddings() → product_ids = [3, 7, 0, 12, ...]  (858 vocab indices)
+_load_original_product_ids()       → original_product_ids = ["P0", "P1", "P2", "P3", ...]  (904, vocab order)
+serving_product_ids = [original_product_ids[vid] for vid in product_ids]
+                                   → ["P3", "P7", "P0", "P12", ...]  (858, aligned with embeddings)
+    ↓ ServingModel.__init__(product_ids=serving_product_ids, product_embeddings=embeddings)
+    ↓ product_ids.shape=858, product_embeddings.shape=(858, dim) — ALIGNED
+    ↓ tf.gather(self.product_ids, top_indices) — correct mapping
+```
+
+**Affected Models:** All retrieval (brute-force and ScaNN) and multitask models.
+
+**Resolution:** Re-run experiments to regenerate `trainer_module.py` with the fix and export correctly aligned serving models.
 
 ---
 

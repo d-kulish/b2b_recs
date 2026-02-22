@@ -345,6 +345,29 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            max-height: none;
+            overflow-y: auto;
+            transition: max-height 0.2s ease;
+        }
+        .models-grid.paginated {
+            /* Show ~3 cards; user scrolls within to see remaining 2 on the page */
+            max-height: 330px;
+        }
+        .projects-search-input {
+            width: 100%;
+            padding: 6px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+        }
+        .projects-search-input:focus {
+            outline: none;
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.1);
+        }
+        .projects-search-input::placeholder {
+            color: #9ca3af;
         }
 
         .model-card {
@@ -989,6 +1012,10 @@
                     <div class="chapter-content-inner">
                         <div class="chapter-divider" style="margin-top: 0;"></div>
                         {% if models %}
+                        <div id="projectsSearchBar" class="hidden" style="margin-bottom: 12px;">
+                            <input type="text" id="projectsSearchInput" class="projects-search-input"
+                                   placeholder="Search projects..." onkeyup="ProjectsPagination.debounceSearch()">
+                        </div>
                         <div class="models-grid">
                             {% for model in models %}
                             <div class="bg-white border border-black rounded-xl px-6 py-3 shadow-lg">
@@ -999,7 +1026,7 @@
                                             {% if model.is_endpoint_active %}text-green-900
                                             {% elif model.status == 'failed' %}text-red-900
                                             {% else %}text-blue-900{% endif %}">
-                                            {{ model.name }}
+                                            {{ model.name|lower }}
                                         </h2>
                                         <p class="text-sm text-gray-600 mt-1 truncate">
                                             {% if model.description %}
@@ -1070,6 +1097,13 @@
                                 </div>
                             </div>
                             {% endfor %}
+                        </div>
+                        <!-- Pagination -->
+                        <div id="projectsPagination" class="hidden mt-4 pt-4 border-t border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <div id="projectsPaginationInfo" class="text-sm text-gray-600"></div>
+                                <div id="projectsPaginationButtons" class="flex items-center gap-2"></div>
+                            </div>
                         </div>
                         {% else %}
                         <div class="empty-state">
@@ -1250,6 +1284,111 @@
             const container = header.closest('.chapter-container');
             container.classList.toggle('open');
         }
+
+        // Projects Pagination (client-side: show 3 visible, scroll to 5, paginate beyond)
+        const ProjectsPagination = (function() {
+            let currentPage = 1;
+            const pageSize = 5;
+            let allCards = [];
+            let filteredCards = [];
+            let searchTimer = null;
+            let grid = null;
+
+            function init() {
+                grid = document.querySelector('.models-grid');
+                if (!grid) return;
+                allCards = Array.from(grid.children);
+                filteredCards = allCards.slice();
+                if (allCards.length > 1) {
+                    document.getElementById('projectsSearchBar').classList.remove('hidden');
+                }
+                render(1);
+            }
+
+            function render(page) {
+                currentPage = page;
+                const total = filteredCards.length;
+                const totalPages = Math.ceil(total / pageSize) || 1;
+                const start = (page - 1) * pageSize;
+                const end = Math.min(start + pageSize, total);
+
+                // Hide all cards first
+                allCards.forEach(c => c.style.display = 'none');
+                // Show only current page's filtered cards
+                for (let i = start; i < end; i++) {
+                    filteredCards[i].style.display = '';
+                }
+
+                // Apply scrollable constraint when paginated
+                if (total > pageSize) {
+                    grid.classList.add('paginated');
+                } else {
+                    grid.classList.remove('paginated');
+                }
+
+                renderControls(total > 0 ? start + 1 : 0, end, total, totalPages);
+            }
+
+            function renderControls(start, end, total, totalPages) {
+                const container = document.getElementById('projectsPagination');
+                const infoEl = document.getElementById('projectsPaginationInfo');
+                const buttonsEl = document.getElementById('projectsPaginationButtons');
+
+                if (total <= pageSize) {
+                    container.classList.add('hidden');
+                    return;
+                }
+
+                container.classList.remove('hidden');
+                infoEl.textContent = `Showing ${start}-${end} of ${total}`;
+
+                let buttons = '';
+                if (currentPage > 1) {
+                    buttons += `<button onclick="ProjectsPagination.goToPage(${currentPage - 1})" class="btn btn-secondary btn-xs">Previous</button>`;
+                }
+                for (let i = 1; i <= totalPages; i++) {
+                    if (i === currentPage) {
+                        buttons += `<button class="btn btn-primary btn-xs" style="background-color: #6b7280; color: #fff; border-color: #6b7280;">${i}</button>`;
+                    } else {
+                        buttons += `<button onclick="ProjectsPagination.goToPage(${i})" class="btn btn-secondary btn-xs">${i}</button>`;
+                    }
+                }
+                if (currentPage < totalPages) {
+                    buttons += `<button onclick="ProjectsPagination.goToPage(${currentPage + 1})" class="btn btn-secondary btn-xs">Next</button>`;
+                }
+                buttonsEl.innerHTML = buttons;
+            }
+
+            function goToPage(page) {
+                const totalPages = Math.ceil(filteredCards.length / pageSize) || 1;
+                if (page < 1 || page > totalPages) return;
+                render(page);
+                grid.scrollTop = 0;
+            }
+
+            function applySearch() {
+                const query = (document.getElementById('projectsSearchInput').value || '').trim().toLowerCase();
+                if (!query) {
+                    filteredCards = allCards.slice();
+                } else {
+                    filteredCards = allCards.filter(card => {
+                        const name = (card.querySelector('h2') || {}).textContent || '';
+                        const desc = (card.querySelector('p') || {}).textContent || '';
+                        return name.toLowerCase().includes(query) || desc.toLowerCase().includes(query);
+                    });
+                }
+                render(1);
+            }
+
+            function debounceSearch() {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(applySearch, 300);
+            }
+
+            return { init, goToPage, debounceSearch };
+        })();
+
+        ProjectsPagination.init();
 
         // System Dashboard Module
         const SystemDashboard = (function() {

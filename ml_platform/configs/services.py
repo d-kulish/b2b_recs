@@ -4243,6 +4243,9 @@ NORMALIZE_APPLIED = {normalize_applied}
 LOG_APPLIED = {log_applied}
 CLIP_LOWER_APPLIED = {clip_lower_applied}
 CLIP_UPPER_APPLIED = {clip_upper_applied}
+
+# Class weight flag: auto-compute positive class weight for BCE loss
+USE_CLASS_WEIGHTS = {self.loss_function == 'binary_crossentropy'}
 '''
 
     def _generate_input_fn_ranking(self) -> str:
@@ -4284,15 +4287,27 @@ def _input_fn(
         # Generate rating head layers code
         rating_head_code = self._generate_rating_head_code()
 
+        # Detect if output layer has sigmoid activation (affects from_logits for BCE)
+        output_has_sigmoid = False
+        if self.rating_head_layers:
+            last_layer = self.rating_head_layers[-1]
+            if last_layer.get('activation', '').lower() == 'sigmoid':
+                output_has_sigmoid = True
+
         # Get loss function
         # Use default reduction (SUM_OVER_BATCH_SIZE) for properly scaled gradients.
         # Reduction.SUM was causing training instability: gradients were ~batch_size
         # times too large, and clipnorm=1.0 created a fixed-step dynamic that
         # prevented convergence (val loss diverged, predictions went far out of range).
         # Default AUTO/SUM_OVER_BATCH_SIZE works correctly with MirroredStrategy in TF 2.x.
+        if output_has_sigmoid:
+            bce_str = 'tf.keras.losses.BinaryCrossentropy()'
+        else:
+            bce_str = 'tf.keras.losses.BinaryCrossentropy(from_logits=True)'
+
         loss_mapping = {
             'mse': 'tf.keras.losses.MeanSquaredError()',
-            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(from_logits=True)',
+            'binary_crossentropy': bce_str,
             'huber': 'tf.keras.losses.Huber()',
         }
         loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
@@ -4334,6 +4349,9 @@ class RankingModel(tfrs.Model):
                 # Histogram bins (25 bins, range will be determined dynamically)
                 'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
             }}
+
+        # Class weight for binary classification (set by run_fn if USE_CLASS_WEIGHTS)
+        self.pos_class_weight = 1.0
 
         # Feature extraction models
         self.buyer_model = BuyerModel(tf_transform_output)
@@ -4386,6 +4404,16 @@ class RankingModel(tfrs.Model):
 
         # Get predictions
         predictions = self(feature_dict)
+
+        # Apply class weights for binary classification
+        if self.pos_class_weight != 1.0:
+            sample_weight = tf.where(
+                tf.cast(labels, tf.float32) > 0.5,
+                self.pos_class_weight,
+                1.0
+            )
+            return self.task(labels=labels, predictions=predictions,
+                             sample_weight=sample_weight)
 
         # Compute loss using TFRS Ranking task
         return self.task(labels=labels, predictions=predictions)
@@ -5100,6 +5128,26 @@ def run_fn(fn_args: tfx.components.FnArgs):
         except Exception as e:
             logging.warning(f"Could not extract transform params: {{e}}")
 
+    # Compute class weights from training data (only for BCE)
+    pos_class_weight = 1.0
+    if USE_CLASS_WEIGHTS:
+        logging.info("Computing class weights from training data...")
+        label_sum = 0.0
+        label_count = 0
+        for batch in train_dataset:
+            _, labels = batch
+            label_sum += tf.reduce_sum(tf.cast(labels, tf.float32)).numpy()
+            label_count += labels.shape[0]
+        label_mean = label_sum / label_count if label_count > 0 else 0.5
+        pos_class_weight = (1.0 - label_mean) / max(label_mean, 1e-7)
+        logging.info(f"Label mean: {{label_mean:.4f}}, pos_class_weight: {{pos_class_weight:.2f}}")
+
+        # Reload dataset (consumed by iteration)
+        train_dataset = _input_fn(
+            fn_args.train_files, fn_args.data_accessor,
+            tf_transform_output, batch_size
+        )
+
     # Initialize MetricsCollector
     global _metrics_collector
     _metrics_collector = MetricsCollector(gcs_output_path=gcs_output_path)
@@ -5125,6 +5173,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
         'feature_config_name': '{feature_config_name}',
         'model_config_name': '{model_config_name}',
         'dataset_name': '{dataset_name}',
+        'use_class_weights': USE_CLASS_WEIGHTS,
+        'class_weight_positive': pos_class_weight,
     }})
 
     try:
@@ -5136,6 +5186,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
             # Compile with configured optimizer
             optimizer = {optimizer_class}(learning_rate=learning_rate, clipnorm=1.0)
             model.compile(optimizer=optimizer)
+
+        # Set class weight on model (after creation, outside strategy scope)
+        model.pos_class_weight = pos_class_weight
+
         logging.info(f"Using optimizer: {self.optimizer} with lr={{learning_rate}}, clipnorm=1.0")
         logging.info(f"Model built with strategy: {{type(strategy).__name__}}")
 
@@ -5376,6 +5430,9 @@ NORMALIZE_APPLIED = {normalize_applied}
 LOG_APPLIED = {log_applied}
 CLIP_LOWER_APPLIED = {clip_lower_applied}
 CLIP_UPPER_APPLIED = {clip_upper_applied}
+
+# Class weight flag: auto-compute positive class weight for BCE loss
+USE_CLASS_WEIGHTS = {self.loss_function == 'binary_crossentropy'}
 '''
 
     def _generate_input_fn_multitask(self) -> str:
@@ -5417,12 +5474,24 @@ def _input_fn(
         # Generate rating head layers code
         rating_head_code = self._generate_rating_head_code()
 
+        # Detect if output layer has sigmoid activation (affects from_logits for BCE)
+        output_has_sigmoid = False
+        if self.rating_head_layers:
+            last_layer = self.rating_head_layers[-1]
+            if last_layer.get('activation', '').lower() == 'sigmoid':
+                output_has_sigmoid = True
+
         # Get loss function
         # Use default reduction (SUM_OVER_BATCH_SIZE) for properly scaled gradients.
         # See ranking model comment for details on why Reduction.SUM was removed.
+        if output_has_sigmoid:
+            bce_str = 'tf.keras.losses.BinaryCrossentropy()'
+        else:
+            bce_str = 'tf.keras.losses.BinaryCrossentropy(from_logits=True)'
+
         loss_mapping = {
             'mse': 'tf.keras.losses.MeanSquaredError()',
-            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(from_logits=True)',
+            'binary_crossentropy': bce_str,
             'huber': 'tf.keras.losses.Huber()',
         }
         loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
@@ -5464,6 +5533,9 @@ class MultitaskModel(tfrs.Model):
                 'max': tf.Variable(float('-inf'), trainable=False, name=f'{{tower}}_grad_max'),
                 'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
             }}
+
+        # Class weight for binary classification (set by run_fn if USE_CLASS_WEIGHTS)
+        self.pos_class_weight = 1.0
 
         # Feature extraction models (shared between both tasks)
         self.buyer_model = BuyerModel(tf_transform_output)
@@ -5535,7 +5607,18 @@ class MultitaskModel(tfrs.Model):
         # RANKING LOSS: rating prediction vs actual labels
         concatenated = tf.concat([query_embedding, candidate_embedding], axis=1)
         rating_predictions = self.rating_head(concatenated)
-        ranking_loss = self.ranking_task(labels=labels, predictions=rating_predictions)
+
+        # Apply class weights for binary classification
+        if self.pos_class_weight != 1.0:
+            sample_weight = tf.where(
+                tf.cast(labels, tf.float32) > 0.5,
+                self.pos_class_weight,
+                1.0
+            )
+            ranking_loss = self.ranking_task(labels=labels, predictions=rating_predictions,
+                                              sample_weight=sample_weight)
+        else:
+            ranking_loss = self.ranking_task(labels=labels, predictions=rating_predictions)
 
         # WEIGHTED COMBINATION
         total_loss = (
@@ -6393,25 +6476,6 @@ def run_fn(fn_args: tfx.components.FnArgs):
     global _metrics_collector
     _metrics_collector = MetricsCollector(gcs_output_path=gcs_output_path)
 
-    # Log training parameters
-    _metrics_collector.log_params({{
-        'model_type': 'multitask',
-        'feature_config_id': {feature_config_id},
-        'feature_config_name': '{feature_config_name}',
-        'model_config_id': {model_config_id},
-        'model_config_name': '{model_config_name}',
-        'dataset_id': {dataset_id},
-        'dataset_name': '{dataset_name}',
-        'epochs': epochs,
-        'batch_size': batch_size,
-        'learning_rate': learning_rate,
-        'output_embedding_dim': OUTPUT_EMBEDDING_DIM,
-        'retrieval_weight': RETRIEVAL_WEIGHT,
-        'ranking_weight': RANKING_WEIGHT,
-        'retrieval_algorithm': RETRIEVAL_ALGORITHM,
-        'top_k': TOP_K,
-    }})
-
     try:
         # Load Transform output
         tf_transform_output = tft.TFTransformOutput(fn_args.transform_output)
@@ -6427,6 +6491,44 @@ def run_fn(fn_args: tfx.components.FnArgs):
         train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, batch_size)
         eval_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
 
+        # Compute class weights from training data (only for BCE)
+        pos_class_weight = 1.0
+        if USE_CLASS_WEIGHTS:
+            logging.info("Computing class weights from training data...")
+            label_sum = 0.0
+            label_count = 0
+            for batch in train_dataset:
+                _, labels = batch
+                label_sum += tf.reduce_sum(tf.cast(labels, tf.float32)).numpy()
+                label_count += labels.shape[0]
+            label_mean = label_sum / label_count if label_count > 0 else 0.5
+            pos_class_weight = (1.0 - label_mean) / max(label_mean, 1e-7)
+            logging.info(f"Label mean: {{label_mean:.4f}}, pos_class_weight: {{pos_class_weight:.2f}}")
+
+            # Reload dataset (consumed by iteration)
+            train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, batch_size)
+
+        # Log training parameters
+        _metrics_collector.log_params({{
+            'model_type': 'multitask',
+            'feature_config_id': {feature_config_id},
+            'feature_config_name': '{feature_config_name}',
+            'model_config_id': {model_config_id},
+            'model_config_name': '{model_config_name}',
+            'dataset_id': {dataset_id},
+            'dataset_name': '{dataset_name}',
+            'epochs': epochs,
+            'batch_size': batch_size,
+            'learning_rate': learning_rate,
+            'output_embedding_dim': OUTPUT_EMBEDDING_DIM,
+            'retrieval_weight': RETRIEVAL_WEIGHT,
+            'ranking_weight': RANKING_WEIGHT,
+            'retrieval_algorithm': RETRIEVAL_ALGORITHM,
+            'top_k': TOP_K,
+            'use_class_weights': USE_CLASS_WEIGHTS,
+            'class_weight_positive': pos_class_weight,
+        }})
+
         # Create model within distribution strategy scope
         logging.info("Creating MultitaskModel...")
         with strategy.scope():
@@ -6434,6 +6536,10 @@ def run_fn(fn_args: tfx.components.FnArgs):
 
             # Compile
             model.compile(optimizer={optimizer_class}(learning_rate=learning_rate))
+
+        # Set class weight on model (after creation, outside strategy scope)
+        model.pos_class_weight = pos_class_weight
+
         logging.info(f"Model compiled with {{'{self.optimizer}'}} optimizer, lr={{learning_rate}}")
         logging.info(f"Loss weights: retrieval={{RETRIEVAL_WEIGHT}}, ranking={{RANKING_WEIGHT}}")
         logging.info(f"Model built with strategy: {{type(strategy).__name__}}")

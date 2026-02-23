@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-13 (GPU T4 support enabled for experiments)
+**Last Updated**: 2026-02-23 (Fixed Reduction.SUM causing ranking model training instability)
 
 ---
 
@@ -547,6 +547,64 @@ The Dataflow **region** stays hardcoded to `europe-west1` (Belgium) — this is 
 
 - `ml_platform/training/services.py:3176` — Training pipeline Dataflow also hardcodes `n1-standard-4`. Separate domain, separate fix.
 - `cloudbuild/tfx-trainer-gpu/` — GPU Custom Jobs require `n1-standard` (GPUs don't attach to e2 VMs).
+
+---
+
+## Bug Fix: Ranking Model Loss Reduction Causing Training Instability (2026-02-23)
+
+### Problem
+
+Ranking model experiments with binary labels (e.g., "probability to buy" with values 0/1) showed catastrophic training instability:
+- Validation loss exploded from ~500 to 2,000+ over 100 epochs while training loss decreased
+- RMSE of 3.25 on binary (0/1) labels — should be ≤1.0; predictions diverged far outside [0,1]
+- Train RMSE ≈ Test RMSE (3.25 ≈ 3.23) — model equally broken on all data, not classic overfitting
+
+Retrieval models were unaffected because `tfrs.tasks.Retrieval()` uses its own internally-normalized softmax loss.
+
+### Root Cause
+
+The ranking loss functions in `TrainerModuleGenerator` used `Reduction.SUM`:
+
+```python
+# ml_platform/configs/services.py (ranking + multitask paths)
+loss_mapping = {
+    'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
+    'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)',
+    'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
+}
+```
+
+`Reduction.SUM` sums loss over the batch instead of averaging. For batch_size=4096, gradients were ~4096x too large. Combined with `clipnorm=1.0`, this created a **fixed-step training dynamic**: the optimizer always took steps of magnitude `learning_rate × 1.0` regardless of proximity to the optimum. The model could never converge — it perpetually overshot, and the unbounded output layer (`Dense(1)` with no activation) allowed predictions to diverge to arbitrary values.
+
+Additionally, `BinaryCrossentropy` was instantiated without `from_logits=True`, but the output layer produces raw logits (no sigmoid). This caused BCE to treat logits as probabilities, clipping them internally and destroying gradient signal.
+
+### Fix Applied
+
+**File:** `ml_platform/configs/services.py` — two locations (ranking path line ~4293, multitask path line ~5423)
+
+Removed `Reduction.SUM` (use default `SUM_OVER_BATCH_SIZE`) and added `from_logits=True` to BCE:
+
+```python
+loss_mapping = {
+    'mse': 'tf.keras.losses.MeanSquaredError()',
+    'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(from_logits=True)',
+    'huber': 'tf.keras.losses.Huber()',
+}
+```
+
+### Impact on Existing Models
+
+| Target Type | Loss | Effect |
+|---|---|---|
+| **Binary (0/1)** | BCE | Fixed — `from_logits=True` + proper gradient scaling |
+| **Binary (0/1)** | MSE | Fixed — properly scaled gradients allow convergence |
+| **Continuous (sales)** | MSE/Huber | Safe — default reduction averages correctly; `clipnorm=1.0` still protects against gradient spikes |
+
+The `clipnorm=1.0` on the optimizer remains as a safety net but no longer dominates training dynamics.
+
+### Verification
+
+Rerun experiment #149 (or any ranking experiment) — validation loss should now track close to training loss, and RMSE on binary labels should be well below 1.0.
 
 ---
 

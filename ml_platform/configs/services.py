@@ -4285,14 +4285,17 @@ def _input_fn(
         rating_head_code = self._generate_rating_head_code()
 
         # Get loss function
-        # CRITICAL: Must use Reduction.SUM for distributed training (multi-GPU)
-        # Default AUTO/SUM_OVER_BATCH_SIZE is incompatible with MirroredStrategy
+        # Use default reduction (SUM_OVER_BATCH_SIZE) for properly scaled gradients.
+        # Reduction.SUM was causing training instability: gradients were ~batch_size
+        # times too large, and clipnorm=1.0 created a fixed-step dynamic that
+        # prevented convergence (val loss diverged, predictions went far out of range).
+        # Default AUTO/SUM_OVER_BATCH_SIZE works correctly with MirroredStrategy in TF 2.x.
         loss_mapping = {
-            'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
-            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)',
-            'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
+            'mse': 'tf.keras.losses.MeanSquaredError()',
+            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(from_logits=True)',
+            'huber': 'tf.keras.losses.Huber()',
         }
-        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)')
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
 
         return f'''
 # =============================================================================
@@ -5415,14 +5418,14 @@ def _input_fn(
         rating_head_code = self._generate_rating_head_code()
 
         # Get loss function
-        # CRITICAL: Must use Reduction.SUM for distributed training (multi-GPU)
-        # Default AUTO/SUM_OVER_BATCH_SIZE is incompatible with MirroredStrategy
+        # Use default reduction (SUM_OVER_BATCH_SIZE) for properly scaled gradients.
+        # See ranking model comment for details on why Reduction.SUM was removed.
         loss_mapping = {
-            'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
-            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)',
-            'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
+            'mse': 'tf.keras.losses.MeanSquaredError()',
+            'binary_crossentropy': 'tf.keras.losses.BinaryCrossentropy(from_logits=True)',
+            'huber': 'tf.keras.losses.Huber()',
         }
-        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)')
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
 
         return f'''
 # =============================================================================

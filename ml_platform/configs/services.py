@@ -4378,6 +4378,7 @@ class RankingModel(tfrs.Model):
             metrics=[
                 tf.keras.metrics.RootMeanSquaredError(name='rmse'),
                 tf.keras.metrics.MeanAbsoluteError(name='mae'),
+                tf.keras.metrics.AUC(name='auc_roc', curve='ROC'),
             ]
         )
 
@@ -5128,6 +5129,26 @@ def run_fn(fn_args: tfx.components.FnArgs):
         except Exception as e:
             logging.warning(f"Could not extract transform params: {{e}}")
 
+    # Detect binary labels (0/1) for classification metrics
+    IS_BINARY_LABELS = False
+    try:
+        sample_batch = next(iter(train_dataset))
+        _, sample_labels = sample_batch
+        unique_vals = tf.unique(tf.reshape(tf.cast(sample_labels, tf.float32), [-1]))[0]
+        unique_set = set(unique_vals.numpy().tolist())
+        IS_BINARY_LABELS = len(unique_set) <= 2 and unique_set.issubset({{0.0, 1.0}})
+        logging.info(f"Binary label detection: {{IS_BINARY_LABELS}} (unique values: {{unique_set}})")
+
+        # Reload dataset since we consumed one batch
+        train_dataset = _input_fn(
+            fn_args.train_files,
+            fn_args.data_accessor,
+            tf_transform_output,
+            batch_size
+        )
+    except Exception as e:
+        logging.warning(f"Binary label detection failed: {{e}}")
+
     # Compute class weights from training data (only for BCE)
     pos_class_weight = 1.0
     if USE_CLASS_WEIGHTS:
@@ -5175,6 +5196,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         'dataset_name': '{dataset_name}',
         'use_class_weights': USE_CLASS_WEIGHTS,
         'class_weight_positive': pos_class_weight,
+        'is_binary_labels': IS_BINARY_LABELS,
     }})
 
     try:
@@ -5564,6 +5586,7 @@ class MultitaskModel(tfrs.Model):
             metrics=[
                 tf.keras.metrics.RootMeanSquaredError(name='rmse'),
                 tf.keras.metrics.MeanAbsoluteError(name='mae'),
+                tf.keras.metrics.AUC(name='auc_roc', curve='ROC'),
             ]
         )
 
@@ -6491,6 +6514,21 @@ def run_fn(fn_args: tfx.components.FnArgs):
         train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, batch_size)
         eval_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
 
+        # Detect binary labels (0/1) for classification metrics
+        IS_BINARY_LABELS = False
+        try:
+            sample_batch = next(iter(train_dataset))
+            _, sample_labels = sample_batch
+            unique_vals = tf.unique(tf.reshape(tf.cast(sample_labels, tf.float32), [-1]))[0]
+            unique_set = set(unique_vals.numpy().tolist())
+            IS_BINARY_LABELS = len(unique_set) <= 2 and unique_set.issubset({{0.0, 1.0}})
+            logging.info(f"Binary label detection: {{IS_BINARY_LABELS}} (unique values: {{unique_set}})")
+
+            # Reload dataset since we consumed one batch
+            train_dataset = _input_fn(train_files, fn_args.data_accessor, tf_transform_output, batch_size)
+        except Exception as e:
+            logging.warning(f"Binary label detection failed: {{e}}")
+
         # Compute class weights from training data (only for BCE)
         pos_class_weight = 1.0
         if USE_CLASS_WEIGHTS:
@@ -6527,6 +6565,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
             'top_k': TOP_K,
             'use_class_weights': USE_CLASS_WEIGHTS,
             'class_weight_positive': pos_class_weight,
+            'is_binary_labels': IS_BINARY_LABELS,
         }})
 
         # Create model within distribution strategy scope

@@ -116,6 +116,10 @@ def _serialize_training_run(training_run, include_details=False):
     }
 
     # Add metrics based on model type
+    # Extract is_binary_labels from training history params
+    _history = training_run.training_history_json or {}
+    _is_binary_labels = (_history.get('params', {}) or {}).get('is_binary_labels', False)
+
     if training_run.model_type == TrainingRun.MODEL_TYPE_MULTITASK:
         # Multitask: Include BOTH retrieval and ranking metrics
         data.update({
@@ -130,6 +134,10 @@ def _serialize_training_run(training_run, include_details=False):
             'test_rmse': training_run.test_rmse,
             'test_mae': training_run.test_mae,
             'loss': training_run.loss,
+            # AUC-ROC metrics (binary labels)
+            'auc_roc': training_run.auc_roc,
+            'test_auc_roc': training_run.test_auc_roc,
+            'is_binary_labels': _is_binary_labels,
         })
     elif training_run.model_type == TrainingRun.MODEL_TYPE_RANKING:
         # Ranking model metrics
@@ -139,6 +147,10 @@ def _serialize_training_run(training_run, include_details=False):
             'test_rmse': training_run.test_rmse,
             'test_mae': training_run.test_mae,
             'loss': training_run.loss,
+            # AUC-ROC metrics (binary labels)
+            'auc_roc': training_run.auc_roc,
+            'test_auc_roc': training_run.test_auc_roc,
+            'is_binary_labels': _is_binary_labels,
             # Keep recall fields as None for consistency
             'recall_at_5': None,
             'recall_at_10': None,
@@ -3369,6 +3381,9 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
         model_status = 'idle'
 
     # Get primary metrics based on model type
+    _reg_history = training_run.training_history_json or {}
+    _reg_is_binary = (_reg_history.get('params', {}) or {}).get('is_binary_labels', False)
+
     metrics = {}
     if training_run.model_type == TrainingRun.MODEL_TYPE_MULTITASK:
         metrics = {
@@ -3378,6 +3393,9 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
             'mae': training_run.mae,
             'test_rmse': training_run.test_rmse,
             'test_mae': training_run.test_mae,
+            'auc_roc': training_run.auc_roc,
+            'test_auc_roc': training_run.test_auc_roc,
+            'is_binary_labels': _reg_is_binary,
         }
     elif training_run.model_type == TrainingRun.MODEL_TYPE_RANKING:
         metrics = {
@@ -3385,6 +3403,9 @@ def _serialize_registered_model(training_run, include_details=False, deployed_mo
             'mae': training_run.mae,
             'test_rmse': training_run.test_rmse,
             'test_mae': training_run.test_mae,
+            'auc_roc': training_run.auc_roc,
+            'test_auc_roc': training_run.test_auc_roc,
+            'is_binary_labels': _reg_is_binary,
         }
     else:  # Retrieval
         metrics = {

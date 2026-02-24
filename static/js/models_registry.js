@@ -437,26 +437,48 @@ const ModelsRegistry = (function() {
         let metricsHtml = '';
         if (model.metrics) {
             if (model.model_type === 'ranking') {
-                metricsHtml = `
-                    <div class="models-metric-item">
-                        <span class="models-metric-label">RMSE</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
-                    </div>
-                    <div class="models-metric-item">
-                        <span class="models-metric-label">Test RMSE</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.test_rmse, 2)}</span>
-                    </div>
-                    <div class="models-metric-item">
-                        <span class="models-metric-label">MAE</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.mae, 2)}</span>
-                    </div>
-                    <div class="models-metric-item">
-                        <span class="models-metric-label">Test MAE</span>
-                        <span class="models-metric-value">${formatMetric(model.metrics.test_mae, 2)}</span>
-                    </div>
-                `;
+                if (model.metrics.is_binary_labels) {
+                    metricsHtml = `
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">AUC</span>
+                            <span class="models-metric-value">${formatMetricAsPercent(model.metrics.auc_roc)}</span>
+                        </div>
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">Test AUC</span>
+                            <span class="models-metric-value">${formatMetricAsPercent(model.metrics.test_auc_roc)}</span>
+                        </div>
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">RMSE</span>
+                            <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
+                        </div>
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">Test RMSE</span>
+                            <span class="models-metric-value">${formatMetric(model.metrics.test_rmse, 2)}</span>
+                        </div>
+                    `;
+                } else {
+                    metricsHtml = `
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">RMSE</span>
+                            <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
+                        </div>
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">Test RMSE</span>
+                            <span class="models-metric-value">${formatMetric(model.metrics.test_rmse, 2)}</span>
+                        </div>
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">MAE</span>
+                            <span class="models-metric-value">${formatMetric(model.metrics.mae, 2)}</span>
+                        </div>
+                        <div class="models-metric-item">
+                            <span class="models-metric-label">Test MAE</span>
+                            <span class="models-metric-value">${formatMetric(model.metrics.test_mae, 2)}</span>
+                        </div>
+                    `;
+                }
             } else if (model.model_type === 'multitask') {
-                // Hybrid/Multitask: R@50, R@100, RMSE, Test RMSE
+                // Hybrid/Multitask: R@50, R@100, then AUC or RMSE based on binary labels
+                const isBinary = model.metrics.is_binary_labels;
                 metricsHtml = `
                     <div class="models-metric-item">
                         <span class="models-metric-label">R@50</span>
@@ -466,6 +488,16 @@ const ModelsRegistry = (function() {
                         <span class="models-metric-label">R@100</span>
                         <span class="models-metric-value">${formatMetricAsPercent(model.metrics.recall_at_100)}</span>
                     </div>
+                    ${isBinary ? `
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">AUC</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.auc_roc)}</span>
+                    </div>
+                    <div class="models-metric-item">
+                        <span class="models-metric-label">Test AUC</span>
+                        <span class="models-metric-value">${formatMetricAsPercent(model.metrics.test_auc_roc)}</span>
+                    </div>
+                    ` : `
                     <div class="models-metric-item">
                         <span class="models-metric-label">RMSE</span>
                         <span class="models-metric-value">${formatMetric(model.metrics.rmse, 2)}</span>
@@ -474,6 +506,7 @@ const ModelsRegistry = (function() {
                         <span class="models-metric-label">Test RMSE</span>
                         <span class="models-metric-value">${formatMetric(model.metrics.test_rmse, 2)}</span>
                     </div>
+                    `}
                 `;
             } else {
                 // Retrieval: R@5, R@10, R@50, R@100

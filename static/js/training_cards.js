@@ -931,6 +931,16 @@ const TrainingCards = (function() {
                             <i class="fas fa-star"></i> Ranking
                         </div>
                         <div class="ml-card-metrics-row">
+                            ${run.is_binary_labels ? `
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">AUC</div>
+                                <div class="ml-card-metric-value ${run.auc_roc == null ? 'empty' : ''}">${formatPercent(run.auc_roc)}</div>
+                            </div>
+                            <div class="ml-card-metric">
+                                <div class="ml-card-metric-label">TEST AUC</div>
+                                <div class="ml-card-metric-value ${run.test_auc_roc == null ? 'empty' : ''}">${formatPercent(run.test_auc_roc)}</div>
+                            </div>
+                            ` : ''}
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">RMSE</div>
                                 <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 2)}</div>
@@ -939,6 +949,7 @@ const TrainingCards = (function() {
                                 <div class="ml-card-metric-label">TEST RMSE</div>
                                 <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 2)}</div>
                             </div>
+                            ${!run.is_binary_labels ? `
                             <div class="ml-card-metric">
                                 <div class="ml-card-metric-label">MAE</div>
                                 <div class="ml-card-metric-value ${run.mae == null ? 'empty' : ''}">${formatNumber(run.mae, 2)}</div>
@@ -947,11 +958,34 @@ const TrainingCards = (function() {
                                 <div class="ml-card-metric-label">TEST MAE</div>
                                 <div class="ml-card-metric-value ${run.test_mae == null ? 'empty' : ''}">${formatNumber(run.test_mae, 2)}</div>
                             </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
             `;
         } else if (run.model_type === 'ranking') {
+            if (run.is_binary_labels) {
+                return `
+                    <div class="ml-card-metrics-row">
+                        <div class="ml-card-metric">
+                            <div class="ml-card-metric-label">AUC</div>
+                            <div class="ml-card-metric-value ${run.auc_roc == null ? 'empty' : ''}">${formatPercent(run.auc_roc)}</div>
+                        </div>
+                        <div class="ml-card-metric">
+                            <div class="ml-card-metric-label">TEST AUC</div>
+                            <div class="ml-card-metric-value ${run.test_auc_roc == null ? 'empty' : ''}">${formatPercent(run.test_auc_roc)}</div>
+                        </div>
+                        <div class="ml-card-metric">
+                            <div class="ml-card-metric-label">RMSE</div>
+                            <div class="ml-card-metric-value ${run.rmse == null ? 'empty' : ''}">${formatNumber(run.rmse, 2)}</div>
+                        </div>
+                        <div class="ml-card-metric">
+                            <div class="ml-card-metric-label">TEST RMSE</div>
+                            <div class="ml-card-metric-value ${run.test_rmse == null ? 'empty' : ''}">${formatNumber(run.test_rmse, 2)}</div>
+                        </div>
+                    </div>
+                `;
+            }
             return `
                 <div class="ml-card-metrics-row">
                     <div class="ml-card-metric">

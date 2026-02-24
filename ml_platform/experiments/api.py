@@ -74,12 +74,18 @@ def _get_experiment_metrics(qt):
             'mae': qt.mae,
             'test_rmse': qt.test_rmse,
             'test_mae': qt.test_mae,
+            # AUC-ROC metrics (binary labels)
+            'auc_roc': qt.auc_roc,
+            'test_auc_roc': qt.test_auc_roc,
         })
 
         # Fallback to training_history_json for both metric types
         if qt.training_history_json:
             hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
             final_metrics = hist.get('final_metrics', {})
+            params = hist.get('params', {})
+
+            metrics['is_binary_labels'] = params.get('is_binary_labels', False)
 
             # Retrieval metrics fallback
             if metrics['recall_at_100'] is None:
@@ -101,6 +107,13 @@ def _get_experiment_metrics(qt):
             if metrics['test_mae'] is None:
                 metrics['test_mae'] = final_metrics.get('test_mae')
 
+            # AUC-ROC fallback
+            if metrics['auc_roc'] is None:
+                metrics['auc_roc'] = (final_metrics.get('final_val_auc_roc') or
+                                      final_metrics.get('auc_roc'))
+            if metrics['test_auc_roc'] is None:
+                metrics['test_auc_roc'] = final_metrics.get('test_auc_roc')
+
     elif config_type == 'ranking':
         # Ranking model metrics
         metrics.update({
@@ -108,6 +121,8 @@ def _get_experiment_metrics(qt):
             'mae': qt.mae,
             'test_rmse': qt.test_rmse,
             'test_mae': qt.test_mae,
+            'auc_roc': qt.auc_roc,
+            'test_auc_roc': qt.test_auc_roc,
         })
 
         # Fallback to training_history_json
@@ -115,6 +130,9 @@ def _get_experiment_metrics(qt):
         if qt.training_history_json:
             hist = qt.training_history_json if isinstance(qt.training_history_json, dict) else {}
             final_metrics = hist.get('final_metrics', {})
+            params = hist.get('params', {})
+
+            metrics['is_binary_labels'] = params.get('is_binary_labels', False)
 
             if metrics['rmse'] is None:
                 # Prefer validation metrics, fallback to training metrics
@@ -133,6 +151,13 @@ def _get_experiment_metrics(qt):
             if metrics['test_mae'] is None:
                 metrics['test_mae'] = (final_metrics.get('test_mae') or
                                        final_metrics.get('test_mean_absolute_error'))
+
+            # AUC-ROC fallback
+            if metrics['auc_roc'] is None:
+                metrics['auc_roc'] = (final_metrics.get('final_val_auc_roc') or
+                                      final_metrics.get('auc_roc'))
+            if metrics['test_auc_roc'] is None:
+                metrics['test_auc_roc'] = final_metrics.get('test_auc_roc')
     else:
         # Retrieval model metrics
         metrics.update({
@@ -938,12 +963,19 @@ def _get_model_metrics(quick_test):
             'mae': quick_test.mae,
             'test_rmse': quick_test.test_rmse,
             'test_mae': quick_test.test_mae,
+            # AUC-ROC metrics (binary labels)
+            'auc_roc': quick_test.auc_roc,
+            'test_auc_roc': quick_test.test_auc_roc,
         })
 
         # Fallback to training_history_json for all metrics
         try:
             history = quick_test.training_history_json or {}
             final_metrics = history.get('final_metrics', {})
+            params = history.get('params', {})
+
+            metrics['is_binary_labels'] = params.get('is_binary_labels', False)
+
             if final_metrics:
                 # Retrieval fallbacks
                 if metrics['recall_at_5'] is None:
@@ -967,6 +999,12 @@ def _get_model_metrics(quick_test):
                     metrics['test_rmse'] = final_metrics.get('test_rmse')
                 if metrics['test_mae'] is None:
                     metrics['test_mae'] = final_metrics.get('test_mae')
+                # AUC-ROC fallback
+                if metrics['auc_roc'] is None:
+                    metrics['auc_roc'] = (final_metrics.get('final_val_auc_roc') or
+                                          final_metrics.get('auc_roc'))
+                if metrics['test_auc_roc'] is None:
+                    metrics['test_auc_roc'] = final_metrics.get('test_auc_roc')
         except Exception:
             pass
 
@@ -977,6 +1015,8 @@ def _get_model_metrics(quick_test):
             'mae': quick_test.mae,
             'test_rmse': quick_test.test_rmse,
             'test_mae': quick_test.test_mae,
+            'auc_roc': quick_test.auc_roc,
+            'test_auc_roc': quick_test.test_auc_roc,
         })
 
         # Fallback to training_history_json
@@ -984,6 +1024,10 @@ def _get_model_metrics(quick_test):
         try:
             history = quick_test.training_history_json or {}
             final_metrics = history.get('final_metrics', {})
+            params = history.get('params', {})
+
+            metrics['is_binary_labels'] = params.get('is_binary_labels', False)
+
             if final_metrics:
                 if metrics['rmse'] is None:
                     # Prefer validation metrics, fallback to training metrics
@@ -1002,6 +1046,12 @@ def _get_model_metrics(quick_test):
                 if metrics['test_mae'] is None:
                     metrics['test_mae'] = (final_metrics.get('test_mae') or
                                            final_metrics.get('test_mean_absolute_error'))
+                # AUC-ROC fallback
+                if metrics['auc_roc'] is None:
+                    metrics['auc_roc'] = (final_metrics.get('final_val_auc_roc') or
+                                          final_metrics.get('auc_roc'))
+                if metrics['test_auc_roc'] is None:
+                    metrics['test_auc_roc'] = final_metrics.get('test_auc_roc')
         except Exception:
             pass
     else:
@@ -1121,6 +1171,10 @@ def _serialize_quick_test(quick_test, include_details=False):
             'mae': model_metrics.get('mae'),
             'test_rmse': model_metrics.get('test_rmse'),
             'test_mae': model_metrics.get('test_mae'),
+            # AUC-ROC metrics (binary labels)
+            'auc_roc': model_metrics.get('auc_roc'),
+            'test_auc_roc': model_metrics.get('test_auc_roc'),
+            'is_binary_labels': model_metrics.get('is_binary_labels', False),
         })
     elif config_type == 'ranking':
         # Ranking model metrics
@@ -1129,6 +1183,10 @@ def _serialize_quick_test(quick_test, include_details=False):
             'mae': model_metrics.get('mae'),
             'test_rmse': model_metrics.get('test_rmse'),
             'test_mae': model_metrics.get('test_mae'),
+            # AUC-ROC metrics (binary labels)
+            'auc_roc': model_metrics.get('auc_roc'),
+            'test_auc_roc': model_metrics.get('test_auc_roc'),
+            'is_binary_labels': model_metrics.get('is_binary_labels', False),
             # Keep recall fields as None for consistency
             'recall_at_5': None,
             'recall_at_10': None,
@@ -1165,6 +1223,10 @@ def _serialize_quick_test(quick_test, include_details=False):
                 'mae': model_metrics.get('mae'),
                 'test_rmse': model_metrics.get('test_rmse'),
                 'test_mae': model_metrics.get('test_mae'),
+                # AUC-ROC
+                'auc_roc': model_metrics.get('auc_roc'),
+                'test_auc_roc': model_metrics.get('test_auc_roc'),
+                'is_binary_labels': model_metrics.get('is_binary_labels', False),
             }
         elif config_type == 'ranking':
             data['metrics'] = {
@@ -1173,6 +1235,9 @@ def _serialize_quick_test(quick_test, include_details=False):
                 'mae': model_metrics.get('mae'),
                 'test_rmse': model_metrics.get('test_rmse'),
                 'test_mae': model_metrics.get('test_mae'),
+                'auc_roc': model_metrics.get('auc_roc'),
+                'test_auc_roc': model_metrics.get('test_auc_roc'),
+                'is_binary_labels': model_metrics.get('is_binary_labels', False),
             }
         else:
             data['metrics'] = {

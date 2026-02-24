@@ -102,6 +102,7 @@ const ExpViewModal = (function() {
     let charts = {
         lossChart: null,
         metricsChart: null,
+        aucRocChart: null,
         gradientChart: null,
         weightStatsChart: null,
         versionsChart: null
@@ -2886,6 +2887,9 @@ const ExpViewModal = (function() {
             `).join('')}</div>`;
         }
 
+        const isBinaryLabels = metrics['is_binary_labels'] === true;
+        const formatAuc = v => v != null ? (v * 100).toFixed(2) + '%' : 'N/A';
+
         if (configType === 'multitask') {
             const retrievalItems = [
                 { label: 'Recall@5', value: metrics['recall_at_5'], format: formatRecall },
@@ -2903,6 +2907,12 @@ const ExpViewModal = (function() {
                 { label: 'MAE', value: mae, format: formatRMSE },
                 { label: 'Test MAE', value: testMae, format: formatRMSE }
             ];
+            if (isBinaryLabels) {
+                rankingItems.unshift(
+                    { label: 'AUC-ROC', value: metrics['auc_roc'], format: formatAuc },
+                    { label: 'Test AUC-ROC', value: metrics['test_auc_roc'], format: formatAuc }
+                );
+            }
             container.innerHTML = `
                 <div class="exp-metrics-group-title"><i class="fas fa-search"></i> Retrieval Metrics</div>
                 ${renderMetricGrid(retrievalItems)}
@@ -2915,12 +2925,19 @@ const ExpViewModal = (function() {
             const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
             const testRmse = metrics['test_rmse'];
             const testMae = metrics['test_mae'];
-            const items = [
+            const items = [];
+            if (isBinaryLabels) {
+                items.push(
+                    { label: 'AUC-ROC', value: metrics['auc_roc'], format: formatAuc },
+                    { label: 'Test AUC-ROC', value: metrics['test_auc_roc'], format: formatAuc }
+                );
+            }
+            items.push(
                 { label: 'RMSE', value: rmse, format: formatRMSE },
                 { label: 'Test RMSE', value: testRmse, format: formatRMSE },
                 { label: 'MAE', value: mae, format: formatRMSE },
                 { label: 'Test MAE', value: testMae, format: formatRMSE }
-            ];
+            );
             container.innerHTML = renderMetricGrid(items);
         } else {
             const items = [
@@ -4850,6 +4867,7 @@ const ExpViewModal = (function() {
     function destroyCharts() {
         if (charts.lossChart) { charts.lossChart.destroy(); charts.lossChart = null; }
         if (charts.metricsChart) { charts.metricsChart.destroy(); charts.metricsChart = null; }
+        if (charts.aucRocChart) { charts.aucRocChart.destroy(); charts.aucRocChart = null; }
         if (charts.gradientChart) { charts.gradientChart.destroy(); charts.gradientChart = null; }
         if (charts.weightStatsChart) { charts.weightStatsChart.destroy(); charts.weightStatsChart = null; }
         if (charts.versionsChart) { charts.versionsChart.destroy(); charts.versionsChart = null; }
@@ -4859,6 +4877,7 @@ const ExpViewModal = (function() {
     function renderTrainingCharts(history) {
         renderLossChart(history);
         renderMetricsChart(history);
+        renderAucRocChart(history);
 
         const tower = document.getElementById('weightAnalysisTower')?.value || 'query';
         renderGradientChart(history, tower);
@@ -4949,31 +4968,51 @@ const ExpViewModal = (function() {
         if (!ctx) return;
 
         const finalMetrics = history.final_metrics || {};
+        const params = history.params || {};
+        const isBinaryLabels = params.is_binary_labels === true;
         const configType = window.currentViewRun?.model_type || window.currentViewExp?.feature_config_type || 'retrieval';
 
         let metricLabels = [];
         let metricValues = [];
+        let metricColors = [];
         const colors = ['#06b6d4', '#10b981', '#8b5cf6', '#ec4899'];
         let isRanking = configType === 'ranking';
         let chartTitle, yAxisTitle, formatValue, formatLabel;
 
         if (isRanking) {
-            const rankingMetrics = [
-                { label: 'RMSE', value: finalMetrics['rmse'] ?? finalMetrics['final_val_rmse'] ?? finalMetrics['final_rmse'] },
-                { label: 'Test RMSE', value: finalMetrics['test_rmse'] },
-                { label: 'MAE', value: finalMetrics['mae'] ?? finalMetrics['final_val_mae'] ?? finalMetrics['final_mae'] },
-                { label: 'Test MAE', value: finalMetrics['test_mae'] }
-            ];
+            const allMetrics = [];
 
-            rankingMetrics.forEach(({ label, value }) => {
+            // Add AUC-ROC metrics first if binary labels (higher is better — green)
+            if (isBinaryLabels) {
+                const aucVal = finalMetrics['auc_roc'] ?? finalMetrics['final_val_auc_roc'];
+                const aucTest = finalMetrics['test_auc_roc'];
+                if (aucVal !== undefined && aucVal !== null) {
+                    allMetrics.push({ label: 'AUC-ROC (val)', value: aucVal, color: '#10b981' });
+                }
+                if (aucTest !== undefined && aucTest !== null) {
+                    allMetrics.push({ label: 'AUC-ROC (test)', value: aucTest, color: '#059669' });
+                }
+            }
+
+            // Then RMSE/MAE (lower is better — cyan/purple)
+            const rankingMetrics = [
+                { label: 'RMSE', value: finalMetrics['rmse'] ?? finalMetrics['final_val_rmse'] ?? finalMetrics['final_rmse'], color: '#06b6d4' },
+                { label: 'Test RMSE', value: finalMetrics['test_rmse'], color: '#8b5cf6' },
+                { label: 'MAE', value: finalMetrics['mae'] ?? finalMetrics['final_val_mae'] ?? finalMetrics['final_mae'], color: '#06b6d4' },
+                { label: 'Test MAE', value: finalMetrics['test_mae'], color: '#8b5cf6' }
+            ];
+            allMetrics.push(...rankingMetrics);
+
+            allMetrics.forEach(({ label, value, color }) => {
                 if (value !== undefined && value !== null) {
                     metricLabels.push(label);
                     metricValues.push(value);
+                    metricColors.push(color);
                 }
             });
 
-            chartTitle = 'Error Metrics';
-            yAxisTitle = 'Error Value';
+            chartTitle = isBinaryLabels ? 'Classification & Error Metrics' : 'Error Metrics';
+            yAxisTitle = 'Value';
             formatValue = v => v.toFixed(4);
             formatLabel = v => v.toFixed(4);
         } else {
@@ -5035,10 +5074,10 @@ const ExpViewModal = (function() {
             data: {
                 labels: metricLabels,
                 datasets: [{
-                    label: isRanking ? 'Error Metrics' : 'Test Recall',
+                    label: isRanking ? (isBinaryLabels ? 'Classification & Error Metrics' : 'Error Metrics') : 'Test Recall',
                     data: metricValues,
-                    backgroundColor: colors.slice(0, metricValues.length),
-                    borderColor: colors.slice(0, metricValues.length).map(c => c),
+                    backgroundColor: metricColors.length > 0 ? metricColors : colors.slice(0, metricValues.length),
+                    borderColor: (metricColors.length > 0 ? metricColors : colors.slice(0, metricValues.length)).map(c => c),
                     borderWidth: 1,
                     borderRadius: 4,
                     barThickness: 40
@@ -5087,6 +5126,95 @@ const ExpViewModal = (function() {
                         ticks: chartDefaults.scales.x.ticks
                     }
                 }
+            }
+        });
+    }
+
+    function renderAucRocChart(history) {
+        const wrapper = document.getElementById('aucRocChartWrapper');
+        const ctx = document.getElementById('trainingAucRocChart');
+        if (!ctx || !wrapper) return;
+
+        const params = history.params || {};
+        const isBinaryLabels = params.is_binary_labels === true;
+        const lossData = history.loss || {};
+        const valAucRoc = lossData['val_auc_roc'] || [];
+
+        if (!isBinaryLabels || valAucRoc.length === 0) {
+            wrapper.style.display = 'none';
+            return;
+        }
+
+        wrapper.style.display = '';
+        const epochs = valAucRoc.map((_, i) => i + 1);
+        const trainAucRoc = lossData['auc_roc'] || [];
+
+        const datasets = [];
+        if (trainAucRoc.length > 0) {
+            datasets.push({
+                label: 'Train AUC-ROC',
+                data: trainAucRoc,
+                borderColor: '#06b6d4',
+                backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                tension: 0.3,
+                pointRadius: 2,
+                borderWidth: 2,
+                fill: false
+            });
+        }
+        datasets.push({
+            label: 'Val AUC-ROC',
+            data: valAucRoc,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.3,
+            pointRadius: 2,
+            borderWidth: 2,
+            fill: false
+        });
+
+        charts.aucRocChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: epochs,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: chartDefaults.layout,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { font: { size: 11 }, boxWidth: 12, padding: 8 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${(context.parsed.y * 100).toFixed(2)}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 1,
+                        title: { display: true, text: 'AUC-ROC', ...chartDefaults.scales.y.title },
+                        ticks: {
+                            ...chartDefaults.scales.y.ticks,
+                            callback: function(value) {
+                                return (value * 100).toFixed(0) + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        title: { display: true, text: 'Epoch', ...chartDefaults.scales.x?.title },
+                        ticks: chartDefaults.scales.x.ticks
+                    }
+                },
+                interaction: { mode: 'nearest', axis: 'x', intersect: false }
             }
         });
     }
@@ -5576,6 +5704,10 @@ const ExpViewModal = (function() {
         if (!container || !section) return;
 
         const finalMetrics = history.final_metrics || {};
+        const params = history.params || {};
+        const isBinaryLabels = params.is_binary_labels === true;
+        const configType = window.currentViewRun?.model_type || window.currentViewExp?.feature_config_type || 'retrieval';
+        const isRanking = configType === 'ranking' || configType === 'multitask';
 
         if (Object.keys(finalMetrics).length === 0) {
             section.classList.add('hidden');
@@ -5587,6 +5719,19 @@ const ExpViewModal = (function() {
             { name: 'Reg. Loss', train: finalMetrics['final_regularization_loss'], val: finalMetrics['final_val_regularization_loss'], test: finalMetrics['test_regularization_loss'] },
             { name: 'Total Loss', train: finalMetrics['final_total_loss'], val: finalMetrics['final_val_total_loss'], test: finalMetrics['test_total_loss'] }
         ];
+
+        // Add ranking-specific metrics
+        if (isRanking) {
+            tableRows.push(
+                { name: 'RMSE', train: finalMetrics['final_rmse'], val: finalMetrics['final_val_rmse'], test: finalMetrics['test_rmse'] },
+                { name: 'MAE', train: finalMetrics['final_mae'], val: finalMetrics['final_val_mae'], test: finalMetrics['test_mae'] }
+            );
+            if (isBinaryLabels) {
+                tableRows.push(
+                    { name: 'AUC-ROC', train: finalMetrics['final_auc_roc'], val: finalMetrics['final_val_auc_roc'], test: finalMetrics['test_auc_roc'] }
+                );
+            }
+        }
 
         const formatVal = (value) => value == null ? '—' : value.toFixed(2);
 

@@ -2159,6 +2159,16 @@ class QuickTest(models.Model):
         blank=True,
         help_text="Mean Absolute Error (test set) - for ranking models"
     )
+    auc_roc = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="AUC-ROC (validation) - for ranking models with binary labels"
+    )
+    test_auc_roc = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="AUC-ROC (test set) - for ranking models with binary labels"
+    )
 
     # Vocabulary statistics
     vocabulary_stats = models.JSONField(

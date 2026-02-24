@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training and manages model deployment to Cloud Run.
 
-**Last Updated**: 2026-02-22 (Fixed serving model product_ids/embeddings misalignment)
+**Last Updated**: 2026-02-24 (AUC-ROC metrics for binary label ranking models)
 
 ---
 
@@ -4113,6 +4113,21 @@ Result: {"predictions": [[0.85]], "predictions_normalized": [[0.42]]}
 ### Depended On By
 - **Experiments Domain**: Training results feed into comparison
 - **Deployment Domain**: Completed runs can be deployed
+
+---
+
+## Feature: AUC-ROC Metrics for Binary Label Ranking Models (2026-02-24)
+
+AUC-ROC metrics are now tracked for ranking and multitask models with binary labels (0/1). Binary labels are auto-detected during training. The training cards and models registry show AUC/Test AUC when `is_binary_labels` is true.
+
+**Training-specific changes:**
+- `ml_platform/training/models.py`: Added `auc_roc`, `test_auc_roc` fields to TrainingRun
+- `ml_platform/training/services.py`: Extract AUC-ROC from `val_auc_roc[-1]` and `test_auc_roc`
+- `ml_platform/training/api.py`: Serialize `auc_roc`, `test_auc_roc`, `is_binary_labels` in both serialization functions
+- `static/js/training_cards.js`: Show AUC/Test AUC in training run cards for binary ranking models
+- `static/js/models_registry.js`: Show AUC/Test AUC in registered model cards for binary ranking models
+
+See [phase_experiments.md](phase_experiments.md) for full feature documentation including code generation, binary detection logic, and view modal changes.
 
 ---
 

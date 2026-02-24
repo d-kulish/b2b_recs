@@ -1704,6 +1704,15 @@ if __name__ == "__main__":
                     quick_test.test_mae = final_metrics['test_mae']
                     update_fields.append('test_mae')
 
+                # AUC-ROC metrics (ranking models with binary labels)
+                if 'val_auc_roc' in loss_data and loss_data['val_auc_roc']:
+                    quick_test.auc_roc = loss_data['val_auc_roc'][-1]
+                    update_fields.append('auc_roc')
+
+                if 'test_auc_roc' in final_metrics:
+                    quick_test.test_auc_roc = final_metrics['test_auc_roc']
+                    update_fields.append('test_auc_roc')
+
                 if update_fields:
                     quick_test.save(update_fields=update_fields)
 

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-23 (Fixed Reduction.SUM causing ranking model training instability)
+**Last Updated**: 2026-02-24 (AUC-ROC metrics for binary label ranking models)
 
 ---
 
@@ -59,8 +59,10 @@ The Experiments domain allows users to:
 | Model Type | Purpose | Metrics | TFRS Task |
 |------------|---------|---------|-----------|
 | **Retrieval** | Find candidate items | Recall@5/10/50/100 | `tfrs.tasks.Retrieval()` |
-| **Ranking** | Score/rank candidates | RMSE, MAE | `tfrs.tasks.Ranking()` |
-| **Multitask** | Combined objectives | All 8 metrics | Weighted loss |
+| **Ranking** | Score/rank candidates | RMSE, MAE, AUC-ROC* | `tfrs.tasks.Ranking()` |
+| **Multitask** | Combined objectives | All metrics | Weighted loss |
+
+*AUC-ROC is auto-detected and displayed only when labels are binary (0/1).
 
 ---
 
@@ -84,7 +86,7 @@ Each card displays:
 - Status badge (Running/Completed/Failed/Cancelled)
 - Model type badge (Retrieval/Ranking/Multitask)
 - Configuration summary (Dataset, Features, Model)
-- Metrics (Recall@K for retrieval, RMSE/MAE for ranking)
+- Metrics (Recall@K for retrieval, RMSE/MAE for ranking, AUC-ROC for binary ranking)
 - Progress bar (for running experiments)
 - Action buttons: View, Rerun, Cancel/Delete
 
@@ -204,7 +206,7 @@ ExpViewModal.open(expId);
 
 #### Training Tab (lazy-loaded)
 - Loss curves (train/eval)
-- Metrics charts (Recall@K or RMSE/MAE)
+- Metrics charts (Recall@K or RMSE/MAE, AUC-ROC line chart for binary ranking)
 - Weight analysis (L1/L2 norms by tower)
 - Weight histogram (TensorBoard-style ridgeline)
 - Final metrics table
@@ -331,6 +333,8 @@ class QuickTest(models.Model):
     mae = FloatField(null=True)
     test_rmse = FloatField(null=True)
     test_mae = FloatField(null=True)
+    auc_roc = FloatField(null=True)       # Binary labels only
+    test_auc_roc = FloatField(null=True)  # Binary labels only
 
     # Cached training history (for fast UI loading)
     training_history_json = JSONField(default=dict)
@@ -688,6 +692,47 @@ Wizard (GPU T4 card)
 - Vertex AI pipeline's Trainer spawns a Custom Job in `europe-west4` with 1x T4 GPU using `tfx-trainer-gpu:latest` image
 - Rerun preserves `gpu_config` from the original experiment
 - Compare view shows GPU info (e.g., "T4 x1") in the Training section
+
+---
+
+## Feature: AUC-ROC Metrics for Binary Label Ranking Models (2026-02-24)
+
+### Background
+
+Ranking models predict "probability to buy" with binary labels (0/1). Previously only RMSE/MAE were tracked — these measure prediction magnitude accuracy, not ranking quality. For binary classification, AUC-ROC is the standard metric that measures whether the model ranks positives above negatives (higher is better, 0.5 = random, 1.0 = perfect).
+
+### How It Works
+
+**Binary label auto-detection:** During training, the first batch of data is scanned to detect whether labels consist only of {0.0, 1.0}. The result is stored as `is_binary_labels` in `training_metrics.json → params`. No user configuration required.
+
+**AUC-ROC metric:** `tf.keras.metrics.AUC(name='auc_roc', curve='ROC')` is always added to ranking and multitask model task metrics. For non-binary labels, the metric still computes but the UI hides it since its interpretation is less meaningful for continuous targets.
+
+**Frontend display logic:** The `is_binary_labels` flag controls what the UI shows:
+- **Binary labels → AUC-ROC primary:** Experiment cards, training cards, model registry, and view modal all show AUC-ROC alongside RMSE. The view modal adds a per-epoch AUC-ROC line chart and includes AUC-ROC in the final metrics table.
+- **Non-binary labels → unchanged:** RMSE/MAE display only, fully backward compatible with existing experiments.
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/configs/services.py` | Added AUC metric to ranking/multitask tasks; binary label detection in both run_fn paths; `is_binary_labels` param logging |
+| `ml_platform/models.py` | Added `auc_roc`, `test_auc_roc` fields to QuickTest |
+| `ml_platform/training/models.py` | Added `auc_roc`, `test_auc_roc` fields to TrainingRun |
+| `ml_platform/experiments/services.py` | Extract `val_auc_roc[-1]` and `test_auc_roc` from training metrics |
+| `ml_platform/training/services.py` | Same extraction for TrainingRun |
+| `ml_platform/experiments/api.py` | Serialize `auc_roc`, `test_auc_roc`, `is_binary_labels` in 3 metrics helpers |
+| `ml_platform/training/api.py` | Serialize same fields in 2 serialization locations |
+| `static/js/exp_view_modal.js` | AUC-ROC bar chart bars, per-epoch line chart, results card, final metrics table |
+| `templates/includes/_exp_view_modal.html` | New canvas for AUC-ROC line chart |
+| `templates/ml_platform/model_experiments.html` | AUC-ROC in experiment cards (ranking + multitask) |
+| `static/js/training_cards.js` | AUC-ROC in training run cards |
+| `static/js/models_registry.js` | AUC-ROC in registered model cards |
+
+### Backward Compatibility
+
+- Old experiments without `is_binary_labels` in params default to `false` — UI shows RMSE/MAE only
+- AUC-ROC model fields are nullable — no impact on existing data
+- `tf.keras.metrics.AUC` is always compiled into the model but only surfaced in UI when binary
 
 ---
 

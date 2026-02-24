@@ -757,6 +757,18 @@ class TrainingRun(models.Model):
         help_text="Mean Absolute Error (test set)"
     )
 
+    auc_roc = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="AUC-ROC (validation set)"
+    )
+
+    test_auc_roc = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="AUC-ROC (test set)"
+    )
+
     # =========================================================================
     # Evaluation Results
     # =========================================================================

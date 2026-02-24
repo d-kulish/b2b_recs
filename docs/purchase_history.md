@@ -373,10 +373,235 @@ The buyer tower gains exactly **+embedding_dim** (e.g., +32D) regardless of how 
 
 ## 8. Next Steps
 
-1. **Prototype SQL**: Create a v3 training view with `purchase_history` ARRAY column for Ternopil data
-2. **Manual trainer module**: Write a trainer_module.py manually (not auto-generated) that implements the shared embedding + averaging pattern, to validate the approach with a Quick Test
-3. **Evaluate**: Compare RMSE/AUC-ROC with and without purchase history on the ranking model
-4. **If successful**: Extend the Feature Config system and TrainerModuleGenerator to support the new "History" feature type
+1. **Prototype SQL**: Create a v3 training view with `purchase_history` and `co_purchase_history` ARRAY columns for Ternopil data
+2. **Manual trainer module**: Write a trainer_module.py manually (not auto-generated) that implements the shared embedding + averaging pattern for both towers, to validate the approach with a Quick Test
+3. **Evaluate**: Compare RMSE/AUC-ROC with and without history features on the ranking model. Test incrementally: (a) purchase_history only, (b) co_purchase_history only, (c) both
+4. **PMI evaluation**: If co-purchase results show popularity bias, switch from raw count to PMI-based ranking
+5. **If successful**: Extend the Feature Config system and TrainerModuleGenerator to support the new "History" feature type
+
+---
+
+## 9. Product Co-Purchase Vector (Product Tower Enhancement)
+
+### 9.1 Problem
+
+The product tower currently encodes what a product **is** — its ID, category hierarchy, brand name. But two products in the same category can have very different purchase contexts:
+
+- **Milk**: co-purchased with Bread, Eggs, Cereal, Butter → "daily staples basket"
+- **Artisan Cheese**: co-purchased with Wine, Olives, Crackers, Prosciutto → "premium basket"
+
+Both are Dairy and get similar category embeddings. The model can't distinguish which *kind* of Dairy product this is in terms of purchasing behavior.
+
+### 9.2 Solution: Co-Purchase History Vector
+
+The product-side analog of the buyer's averaged purchase history. For each product, collect the products most frequently co-purchased with it (bought by the same customers), embed them using the **same shared embedding table**, and average into a fixed-width vector.
+
+This vector encodes the product's **purchase context** — what kind of basket it belongs to.
+
+### 9.3 Architecture
+
+The shared product embedding table is now used in three places:
+
+```
+                    SHARED PRODUCT EMBEDDING TABLE
+                    ┌─────────────────────────────┐
+                    │ Embedding(vocab_size, 32)    │
+                    └──┬──────────┬──────────┬─────┘
+                       │          │          │
+          ┌────────────┘          │          └────────────┐
+          ▼                       ▼                       ▼
+  BUYER TOWER              PRODUCT TOWER           PRODUCT TOWER
+  ┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
+  │ purchase_    │    │ product_id       │    │ co_purchase_     │
+  │ history:     │    │ → lookup → 32D   │    │ history:         │
+  │ [P1,P2,P3]  │    │                  │    │ [P7,P8,P9,P10]  │
+  │ → lookup each│    │                  │    │ → lookup each    │
+  │ → avg → 32D │    │                  │    │ → avg → 32D     │
+  └──────────────┘    └──────────────────┘    └──────────────────┘
+        │                      │                       │
+        │              ┌───────┴───────┐               │
+        │              │  Concatenate  │◄──────────────┘
+        │              │  + category   │
+        │              │  + brand      │
+        │              │  + other      │
+        │              └───────┬───────┘
+        │                      │
+        ▼                      ▼
+   buyer_emb (32D)      product_emb (32D)
+        │                      │
+        └───── dot product ────┘
+```
+
+### 9.4 Why It Helps
+
+The dot product / rating head now has richer signal on both sides:
+
+| Buyer history avg | Product co-purchase avg | Interpretation |
+|---|---|---|
+| ≈ "staples region" | ≈ "staples region" | High affinity — basket patterns match |
+| ≈ "premium region" | ≈ "staples region" | Lower affinity — mismatch |
+| ≈ "premium region" | ≈ "premium region" | High affinity — premium buyer meets premium context |
+
+Without these vectors, the model only knows "buyer C1 likes Dairy" and "Milk is Dairy" — same score for Milk and Artisan Cheese. With the vectors, the model distinguishes *which kind* of Dairy product matches this buyer's pattern.
+
+### 9.5 SQL
+
+```sql
+-- For each product, find top-N most frequently co-purchased products
+-- "Co-purchased" = bought by the same customer
+co_purchases AS (
+  SELECT
+    a.product_id,
+    b.product_id AS co_product_id,
+    COUNT(DISTINCT a.customer_id) AS co_buyer_count
+  FROM transactions a
+  JOIN transactions b
+    ON a.customer_id = b.customer_id
+    AND a.product_id != b.product_id
+  GROUP BY a.product_id, b.product_id
+),
+
+product_co_purchase AS (
+  SELECT
+    product_id,
+    ARRAY_AGG(co_product_id ORDER BY co_buyer_count DESC LIMIT 20)
+      AS co_purchase_history
+  FROM co_purchases
+  GROUP BY product_id
+)
+
+-- Join to each training row on product_id
+```
+
+### 9.6 Popularity Bias Mitigation
+
+Popular products (Bread, Milk) appear in nearly every product's co-purchase list, diluting the signal. Two mitigation strategies:
+
+**Strategy 1: Top-N filtering** (simple, use first)
+
+`LIMIT 20` already keeps only the strongest co-purchase signals. Start here.
+
+**Strategy 2: PMI (Pointwise Mutual Information)** (use if popularity bias appears)
+
+Rank co-purchases by how much more likely they co-occur than expected by chance, instead of raw count:
+
+```sql
+-- PMI: co-occurrence relative to random chance
+-- High PMI = surprising co-occurrence (informative)
+-- Low PMI = expected co-occurrence (not informative)
+pmi_scores AS (
+  SELECT
+    a.product_id,
+    b.product_id AS co_product_id,
+    LOG(
+      -- P(A and B bought by same customer)
+      COUNT(DISTINCT a.customer_id) * total_customers
+      /
+      -- P(A bought) * P(B bought)
+      (product_a_buyers * product_b_buyers)
+    ) AS pmi_score
+  FROM ...
+)
+
+-- Then: ARRAY_AGG(co_product_id ORDER BY pmi_score DESC LIMIT 20)
+```
+
+PMI surfaces informative pairings ("Artisan Cheese → Wine") over trivial ones ("Artisan Cheese → Bread").
+
+### 9.7 Trainer Code
+
+The product tower uses the shared embedding the same way the buyer tower uses it for purchase history:
+
+```python
+class ProductModel(tf.keras.Model):
+    def __init__(self, shared_product_embedding, ...):
+        super().__init__()
+        self.shared_product_embedding = shared_product_embedding  # shared
+        self.category_embedding = tf.keras.layers.Embedding(...)
+        self.brand_embedding = tf.keras.layers.Embedding(...)
+        self.dense_layers = tf.keras.Sequential([...])
+
+    def call(self, inputs):
+        features = []
+
+        # Product ID embedding
+        features.append(self.shared_product_embedding(inputs['product_id']))
+
+        # Co-purchase context vector (averaged)
+        co_ids = inputs['co_purchase_history']                        # [batch, N]
+        co_embs = self.shared_product_embedding(co_ids)               # [batch, N, 32]
+        mask = tf.cast(co_ids != 0, tf.float32)
+        mask = tf.expand_dims(mask, -1)                               # [batch, N, 1]
+        avg_co = tf.reduce_sum(co_embs * mask, axis=1)                # [batch, 32]
+        avg_co = avg_co / (tf.reduce_sum(mask, axis=1) + 1e-8)
+        features.append(avg_co)
+
+        # Other product features
+        features.append(self.category_embedding(inputs['mge_main_cat_desc']))
+        features.append(self.brand_embedding(inputs['brand_name']))
+        # ...
+
+        return self.dense_layers(tf.concat(features, axis=-1))
+```
+
+### 9.8 No Tower Independence Issues
+
+The co-purchase vector is a pure product-level feature — it depends only on the product's historical co-purchase patterns, not on which buyer is being scored. It's pre-computed from the full transaction history and is the same for every (buyer, product) pair involving that product. Safe for both retrieval and ranking.
+
+### 9.9 Dimension Impact
+
+| Tower | Without history features | With both history features | Change |
+|---|---|---|---|
+| Buyer | ~96D | ~128D | +32D (purchase history avg) |
+| Product | ~160D | ~192D | +32D (co-purchase history avg) |
+
+Both additions use the same shared embedding table. Total model parameter increase is minimal — the embedding table is already there; only the tower dense layers grow slightly to accommodate +32D input each.
+
+### 9.10 Cold-Start Products
+
+Products with no purchase history (new products) get a zero co-purchase vector. The model falls back on category, brand, and other categorical features for these products — same behavior as cold-start buyers with no purchase history.
+
+### 9.11 Transform Changes
+
+The `preprocessing_fn` applies the same product vocabulary to all three fields:
+
+```python
+def preprocessing_fn(inputs):
+    outputs = {}
+
+    # 1. Single product_id → vocab index
+    outputs['product_id'] = tft.compute_and_apply_vocabulary(
+        inputs['product_id'],
+        vocab_filename='product_id_vocab'
+    )
+
+    # 2. Buyer's purchase history → same vocab
+    outputs['purchase_history'] = tft.apply_vocabulary(
+        inputs['purchase_history'],
+        deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab')
+    )
+
+    # 3. Product's co-purchase history → same vocab
+    outputs['co_purchase_history'] = tft.apply_vocabulary(
+        inputs['co_purchase_history'],
+        deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab')
+    )
+
+    # ... other features unchanged
+    return outputs
+```
+
+---
+
+## 10. Combined Feature Summary
+
+| Feature | Tower | What it encodes | Encoding | +Dim |
+|---|---|---|---|---|
+| `purchase_history` | Buyer | Buyer's past purchases (taste) | Shared embed + average | +32D |
+| `co_purchase_history` | Product | Products co-purchased with this product (context) | Shared embed + average | +32D |
+| All existing features | Both | IDs, categories, brands, scalars | Existing transforms | unchanged |
+
+Both new features use one shared `tf.keras.layers.Embedding(vocab_size, 32)` table, referenced in three places: buyer history averaging, product co-purchase averaging, and product ID lookup in the product tower.
 
 ---
 

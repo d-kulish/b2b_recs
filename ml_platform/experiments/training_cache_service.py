@@ -211,8 +211,10 @@ class TrainingCacheService:
             # Recall metrics (sampled)
             'metrics': self._sample_dict_values(full_history.get('metrics', {}), sampled_indices),
 
-            # Training params from TrainingRun's training_params JSONField
+            # Training params — merge trainer-reported params from GCS with DB fields
+            # GCS params (is_binary_labels, label_key, etc.) go first so DB fields override duplicates
             'params': {
+                **full_history.get('params', {}),
                 'epochs': training_params.get('epochs'),
                 'batch_size': training_params.get('batch_size'),
                 'learning_rate': float(training_params.get('learning_rate')) if training_params.get('learning_rate') else None,
@@ -396,8 +398,10 @@ class TrainingCacheService:
             # Recall metrics (sampled)
             'metrics': self._sample_dict_values(full_history.get('metrics', {}), sampled_indices),
 
-            # Training params from quick_test
+            # Training params — merge trainer-reported params from GCS with DB fields
+            # GCS params (is_binary_labels, label_key, etc.) go first so DB fields override duplicates
             'params': {
+                **full_history.get('params', {}),
                 'epochs': quick_test.epochs,
                 'batch_size': quick_test.batch_size,
                 'learning_rate': float(quick_test.learning_rate) if quick_test.learning_rate else None,

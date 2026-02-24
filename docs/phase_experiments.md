@@ -736,6 +736,71 @@ Ranking models predict "probability to buy" with binary labels (0/1). Previously
 
 ---
 
+## Bug Fix: AUC-ROC Metrics Not Displayed Despite Being Computed (2026-02-24)
+
+### Problem
+
+After deploying AUC-ROC metrics (commit `e9d6420`), experiment QT-159 (and all other binary-label experiments) showed no AUC-ROC metrics — neither on experiment cards nor in the Training History tab of the view modal. RMSE/MAE displayed correctly; only AUC-ROC was missing.
+
+### Root Cause
+
+The `TrainingCacheService._extract_cacheable_data()` in `ml_platform/experiments/training_cache_service.py` constructs the cached `params` dict from hardcoded QuickTest DB fields:
+
+```python
+# BEFORE (bug): params built only from DB fields — trainer-reported params dropped
+'params': {
+    'epochs': quick_test.epochs,
+    'batch_size': quick_test.batch_size,
+    'learning_rate': ...,
+    'optimizer': ...,
+    'embedding_dim': ...,
+},
+```
+
+The trainer writes `is_binary_labels` into `training_metrics.json → params` in GCS, but this flag was **dropped during caching** because the cache service rebuilt `params` from scratch using only DB fields. Since `is_binary_labels` never made it into the cached training history, the entire UI display chain evaluated it as `false`:
+
+- Experiment cards (`model_experiments.html`): `if (exp.is_binary_labels)` → `false` → AUC-ROC hidden
+- View modal metrics chart (`exp_view_modal.js`): `params.is_binary_labels === true` → `false` → AUC-ROC bars skipped
+- View modal AUC-ROC line chart: same check → chart wrapper hidden
+- View modal final metrics table: same check → AUC-ROC row omitted
+
+The per-epoch AUC-ROC values (`loss.auc_roc`, `loss.val_auc_roc`) and final AUC-ROC values (`final_metrics.test_auc_roc`) were all correctly cached — only the `is_binary_labels` gate was missing.
+
+### Fix Applied
+
+**File:** `ml_platform/experiments/training_cache_service.py` — two methods:
+- `_extract_cacheable_data()` (QuickTest path)
+- `_extract_cacheable_data_for_run()` (TrainingRun path)
+
+Merge trainer-reported params from GCS into the cached params dict. GCS params go first so DB fields override duplicates:
+
+```python
+# AFTER (fix): merge GCS params (is_binary_labels, label_key, etc.) with DB fields
+'params': {
+    **full_history.get('params', {}),  # ← trainer-reported params preserved
+    'epochs': quick_test.epochs,
+    'batch_size': quick_test.batch_size,
+    'learning_rate': ...,
+    'optimizer': ...,
+    'embedding_dim': ...,
+},
+```
+
+**File:** `ml_platform/management/commands/backfill_training_cache.py`
+
+Updated queryset filter to include experiments with `gcs_artifacts_path` (not just `mlflow_run_id`), so newer MetricsCollector-based experiments are picked up by the backfill command.
+
+### Re-cache
+
+After the fix, all completed experiments were re-cached:
+
+```bash
+python manage.py backfill_training_cache --force
+# Result: 24 experiments re-cached from GCS with corrected params
+```
+
+---
+
 ## Implementation Status
 
 ### Completed Features

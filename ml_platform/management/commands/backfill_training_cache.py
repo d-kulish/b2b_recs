@@ -46,11 +46,13 @@ class Command(BaseCommand):
         force = options['force']
 
         # Find completed experiments that need caching
+        # Include experiments with either MLflow run ID or GCS artifacts path
+        from django.db.models import Q
         queryset = QuickTest.objects.filter(
             status='completed',
-            mlflow_run_id__isnull=False,
-        ).exclude(
-            mlflow_run_id=''
+        ).filter(
+            Q(mlflow_run_id__isnull=False) & ~Q(mlflow_run_id='') |
+            Q(gcs_artifacts_path__isnull=False) & ~Q(gcs_artifacts_path='')
         )
 
         if not force:

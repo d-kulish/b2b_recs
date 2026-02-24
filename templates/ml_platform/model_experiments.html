@@ -3750,7 +3750,7 @@ function renderMetricsRow(exp) {
             { label: 'R@50', value: exp.recall_at_50, format: formatRecall },
             { label: 'R@100', value: exp.recall_at_100, format: formatRecall }
         ];
-        const formatAucMt = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
+        const formatAucMt = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
         const rankingMetrics = [];
         if (exp.is_binary_labels) {
             rankingMetrics.push(
@@ -3793,7 +3793,7 @@ function renderMetricsRow(exp) {
         `;
     } else if (configType === 'ranking') {
         // Ranking model metrics - RMSE/MAE (lower is better)
-        const formatAuc = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
+        const formatAuc = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
         if (exp.is_binary_labels) {
             metrics = [
                 { label: 'AUC', value: exp.auc_roc, format: formatAuc },
@@ -7572,5 +7572,5 @@ function openWizardWithSuggestion(featureConfigId, modelConfigId, suggestedParam
 <script src="{% static 'js/pipeline_dag.js' %}?v=2"></script>
 
 <!-- Reusable Experiment View Modal Module -->
-<script src="{% static 'js/exp_view_modal.js' %}?v=13"></script>
+<script src="{% static 'js/exp_view_modal.js' %}?v=14"></script>
 {% endblock %}

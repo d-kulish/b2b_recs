@@ -490,7 +490,9 @@ const ExpViewModal = (function() {
                     recall_at_5: run.recall_at_5, recall_at_10: run.recall_at_10,
                     recall_at_50: run.recall_at_50, recall_at_100: run.recall_at_100,
                     rmse: run.rmse, mae: run.mae, test_rmse: run.test_rmse,
-                    test_mae: run.test_mae, loss: run.loss
+                    test_mae: run.test_mae, loss: run.loss,
+                    auc_roc: run.auc_roc, test_auc_roc: run.test_auc_roc,
+                    is_binary_labels: run.is_binary_labels
                 };
                 const hasMetrics = Object.values(metrics).some(v => v != null);
                 if (hasMetrics) {
@@ -577,7 +579,8 @@ const ExpViewModal = (function() {
             mae: run.mae,
             test_rmse: run.test_rmse,
             test_mae: run.test_mae,
-            loss: run.loss
+            loss: run.loss,
+            is_binary_labels: run.is_binary_labels
         };
 
         // Delegate to renderMetricsSummary for consistent rendering
@@ -2888,7 +2891,7 @@ const ExpViewModal = (function() {
         }
 
         const isBinaryLabels = metrics['is_binary_labels'] === true;
-        const formatAuc = v => v != null ? (v * 100).toFixed(2) + '%' : 'N/A';
+        const formatAuc = v => v != null ? (v * 100).toFixed(0) + '%' : 'N/A';
 
         if (configType === 'multitask') {
             const retrievalItems = [
@@ -2898,19 +2901,24 @@ const ExpViewModal = (function() {
                 { label: 'Recall@100', value: metrics['recall_at_100'], format: formatRecall }
             ];
             const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
-            const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
             const testRmse = metrics['test_rmse'];
-            const testMae = metrics['test_mae'];
-            const rankingItems = [
-                { label: 'RMSE', value: rmse, format: formatRMSE },
-                { label: 'Test RMSE', value: testRmse, format: formatRMSE },
-                { label: 'MAE', value: mae, format: formatRMSE },
-                { label: 'Test MAE', value: testMae, format: formatRMSE }
-            ];
+            const rankingItems = [];
             if (isBinaryLabels) {
-                rankingItems.unshift(
+                rankingItems.push(
                     { label: 'AUC-ROC', value: metrics['auc_roc'], format: formatAuc },
                     { label: 'Test AUC-ROC', value: metrics['test_auc_roc'], format: formatAuc }
+                );
+            }
+            rankingItems.push(
+                { label: 'RMSE', value: rmse, format: formatRMSE },
+                { label: 'Test RMSE', value: testRmse, format: formatRMSE }
+            );
+            if (!isBinaryLabels) {
+                const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
+                const testMae = metrics['test_mae'];
+                rankingItems.push(
+                    { label: 'MAE', value: mae, format: formatRMSE },
+                    { label: 'Test MAE', value: testMae, format: formatRMSE }
                 );
             }
             container.innerHTML = `
@@ -2922,9 +2930,7 @@ const ExpViewModal = (function() {
             `;
         } else if (configType === 'ranking') {
             const rmse = metrics['rmse'] ?? metrics['final_val_rmse'] ?? metrics['final_rmse'];
-            const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
             const testRmse = metrics['test_rmse'];
-            const testMae = metrics['test_mae'];
             const items = [];
             if (isBinaryLabels) {
                 items.push(
@@ -2934,10 +2940,16 @@ const ExpViewModal = (function() {
             }
             items.push(
                 { label: 'RMSE', value: rmse, format: formatRMSE },
-                { label: 'Test RMSE', value: testRmse, format: formatRMSE },
-                { label: 'MAE', value: mae, format: formatRMSE },
-                { label: 'Test MAE', value: testMae, format: formatRMSE }
+                { label: 'Test RMSE', value: testRmse, format: formatRMSE }
             );
+            if (!isBinaryLabels) {
+                const mae = metrics['mae'] ?? metrics['final_val_mae'] ?? metrics['final_mae'];
+                const testMae = metrics['test_mae'];
+                items.push(
+                    { label: 'MAE', value: mae, format: formatRMSE },
+                    { label: 'Test MAE', value: testMae, format: formatRMSE }
+                );
+            }
             container.innerHTML = renderMetricGrid(items);
         } else {
             const items = [

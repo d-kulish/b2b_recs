@@ -3,7 +3,7 @@ ETL Page Views
 
 Handles rendering of ETL-related pages.
 """
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Q, Sum, Avg, Count, F, ExpressionWrapper, DurationField
@@ -18,7 +18,9 @@ from ml_platform.models import (
     ModelEndpoint,
     ETLConfiguration,
     DataSource,
+    DataSourceTable,
     ETLRun,
+    Connection,
 )
 
 
@@ -273,21 +275,26 @@ def sync_running_etl_runs_with_dataflow(running_etl_runs):
 @login_required
 def model_etl(request, model_id):
     """
-    ETL Page - Configure data source connections, set extraction schedules, monitor ETL jobs.
+    Legacy ETL page — redirects to the standalone ETL page.
     """
-    model = get_object_or_404(ModelEndpoint, id=model_id)
+    return redirect('etl_page')
 
-    # Get or create ETL configuration
-    try:
-        etl_config = model.etl_config
-    except ETLConfiguration.DoesNotExist:
-        etl_config = ETLConfiguration.objects.create(
-            model_endpoint=model,
-            schedule_type='manual',
-        )
 
-    # Get all data sources for this model (prefetch connection, tables, and runs for display)
-    data_sources = etl_config.data_sources.all().select_related('connection').prefetch_related('tables', 'runs')
+@login_required
+def etl_page(request):
+    """
+    Standalone ETL Page — system-wide view of all ETL resources.
+    """
+    model = None  # No model scope
+
+    # Get or create system-wide ETL configuration (model_endpoint=None)
+    etl_config, _ = ETLConfiguration.objects.get_or_create(
+        model_endpoint=None,
+        defaults={'schedule_type': 'manual'},
+    )
+
+    # Get ALL data sources across all ETL configs
+    data_sources = DataSource.objects.all().select_related('connection').prefetch_related('tables', 'runs')
 
     # Calculate statistics
     enabled_sources = data_sources.filter(is_enabled=True)
@@ -300,8 +307,11 @@ def model_etl(request, model_id):
     # Get recent ETL runs with 30-day filter and pagination
     cutoff_date = timezone.now() - timedelta(days=30)
 
+    # All ETL runs system-wide
+    all_etl_runs = ETLRun.objects.all()
+
     # Filter runs from last 30 days, including runs with NULL started_at (pending/running jobs)
-    filtered_runs = model.etl_runs.filter(
+    filtered_runs = all_etl_runs.filter(
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
     )
 
@@ -320,18 +330,18 @@ def model_etl(request, model_id):
 
     # Sync any "running" or "pending" runs with their actual status
     # Priority: Dataflow jobs first (more accurate for large-scale ETL), then Cloud Run
-    running_runs = model.etl_runs.filter(status__in=['running', 'pending'])
+    running_runs = all_etl_runs.filter(status__in=['running', 'pending'])
 
     # First, sync runs that have Dataflow job IDs (these are more accurate)
     sync_running_etl_runs_with_dataflow(running_runs)
 
     # Then, sync remaining runs via Cloud Run execution status
     # (Re-filter to get only runs not yet updated by Dataflow sync)
-    remaining_running_runs = model.etl_runs.filter(status__in=['running', 'pending'])
+    remaining_running_runs = all_etl_runs.filter(status__in=['running', 'pending'])
     sync_running_etl_runs_with_cloud_run(remaining_running_runs)
 
     # Re-fetch filtered runs after sync (to get updated statuses)
-    filtered_runs = model.etl_runs.filter(
+    filtered_runs = all_etl_runs.filter(
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
     )
 
@@ -342,7 +352,7 @@ def model_etl(request, model_id):
         filtered_runs = filtered_runs.filter(status__in=active_statuses)
 
     # Check if any runs exist at all (for empty state differentiation)
-    has_any_runs = model.etl_runs.exists()
+    has_any_runs = all_etl_runs.exists()
 
     # Check if filters are active (for empty state messaging)
     has_active_filters = bool(search_query or active_statuses)
@@ -354,7 +364,7 @@ def model_etl(request, model_id):
 
     # Build JSON data for all runs (for client-side filtering)
     # Get all runs from last 30 days without server-side filtering
-    all_runs_for_js = model.etl_runs.filter(
+    all_runs_for_js = all_etl_runs.filter(
         Q(started_at__gte=cutoff_date) | Q(started_at__isnull=True)
     ).select_related('data_source', 'data_source__connection').prefetch_related('data_source__tables').order_by('-started_at')
 
@@ -402,7 +412,7 @@ def model_etl(request, model_id):
     # Prepare diverging chart data for ETL Job Runs visualization
     # Shows individual runs as stacked bars: succeeded above zero, failed below
     diverging_cutoff_date = timezone.now() - timedelta(days=30)
-    all_runs_30_days = model.etl_runs.filter(
+    all_runs_30_days = all_etl_runs.filter(
         started_at__gte=diverging_cutoff_date,
         status__in=['completed', 'partial', 'failed']
     ).select_related('data_source').order_by('started_at')
@@ -472,7 +482,7 @@ def model_etl(request, model_id):
     # KPI Dashboard Aggregations (Last 30 Days)
     # =========================================================================
     # Get all runs from the last 30 days for KPI calculations
-    kpi_runs = model.etl_runs.filter(
+    kpi_runs = all_etl_runs.filter(
         started_at__gte=cutoff_date
     )
 
@@ -608,10 +618,14 @@ def model_etl(request, model_id):
     sched_page_number = request.GET.get('sched_page', 1)
     scheduled_jobs_page = scheduled_paginator.get_page(sched_page_number)
 
+    # Get all connections for the connections chapter
+    connections = Connection.objects.all().order_by('-created_at')
+
     context = {
         'model': model,
         'etl_config': etl_config,
         'data_sources': data_sources,
+        'connections': connections,
         'enabled_sources_count': enabled_sources_count,
         'total_tables_count': total_tables_count,
         'enabled_tables_count': enabled_tables_count,
@@ -630,4 +644,4 @@ def model_etl(request, model_id):
         'all_runs_json': all_runs_json,
     }
 
-    return render(request, 'ml_platform/model_etl.html', context)
+    return render(request, 'ml_platform/etl_page.html', context)

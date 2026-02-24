@@ -8,9 +8,18 @@ from . import views, api, webhooks
 
 urlpatterns = [
     # === PAGE VIEWS ===
-    path('models/<int:model_id>/etl/', views.model_etl, name='model_etl'),
+    path('etl/', views.etl_page, name='etl_page'),
+    path('models/<int:model_id>/etl/', views.model_etl, name='model_etl'),  # Redirect to standalone
 
-    # === ETL JOB MANAGEMENT APIs ===
+    # === SYSTEM-WIDE ETL APIs (no model_id) ===
+    path('api/etl/add-source/', api.add_source_standalone, name='api_etl_add_source_standalone'),
+    path('api/etl/check-name/', api.check_job_name_standalone, name='api_etl_check_job_name_standalone'),
+    path('api/etl/create-job/', api.create_job_standalone, name='api_etl_create_job_standalone'),
+    path('api/etl/connections/', api.get_connections_standalone, name='api_etl_get_connections_standalone'),
+    path('api/etl/dashboard-stats/', api.etl_dashboard_stats_standalone, name='api_etl_dashboard_stats_standalone'),
+    path('api/etl/save-draft/', api.save_draft_source_standalone, name='api_etl_save_draft_source_standalone'),
+
+    # === LEGACY MODEL-SCOPED ETL APIs (kept for backward compat) ===
     path('api/models/<int:model_id>/etl/add-source/', api.add_source, name='api_etl_add_source'),
     path('api/models/<int:model_id>/etl/save-draft/', api.save_draft_source, name='api_etl_save_draft_source'),
     path('api/models/<int:model_id>/etl/check-name/', api.check_job_name, name='api_etl_check_job_name'),
@@ -45,7 +54,7 @@ urlpatterns = [
     # === TEST CONNECTION ===
     path('api/etl/test-connection/', api.test_connection_wizard, name='api_etl_test_connection_wizard'),
 
-    # === NEW SIMPLIFIED ETL WIZARD APIs ===
+    # === ETL WIZARD APIs (model-scoped, kept for backward compat) ===
     path('api/models/<int:model_id>/etl/connections/', api.get_connections, name='api_etl_get_connections'),
     path('api/models/<int:model_id>/etl/create-job/', api.create_job, name='api_etl_create_job'),
     path('api/connections/<int:connection_id>/test-wizard/', api.test_connection_in_wizard, name='api_etl_test_connection_in_wizard'),

@@ -46,11 +46,12 @@ The starting page is intentionally **different** from model pages to provide cle
 
 ### Main Content
 
-Three collapsible chapters displayed vertically:
+Four collapsible chapters displayed vertically:
 
 1. **System Details** - Platform metrics, charts, and recent activity
-2. **Your Projects** - Manage ML models and endpoints
-3. **Billing** - Usage tracking and subscription details
+2. **ETL** - Data ingestion pipelines (system-wide)
+3. **Your Projects** - Manage ML models and endpoints
+4. **Billing** - Usage tracking and subscription details
 
 ---
 
@@ -101,6 +102,7 @@ Three collapsible chapters displayed vertically:
 | Chapter | Icon | Background Gradient |
 |---------|------|---------------------|
 | System Details | `fa-server` | Blue (#3b82f6 → #60a5fa) |
+| ETL | `fa-arrow-right-arrow-left` | Green (#10b981 → #34d399) |
 | Your Projects | `fa-cube` | Purple (#8b5cf6 → #a78bfa) |
 | Billing | `fa-credit-card` | Orange (#f59e0b → #fbbf24) |
 
@@ -188,7 +190,31 @@ Daily snapshot model storing GCP resource usage. Populated by `python manage.py 
 
 ---
 
-## Chapter 2: Your Projects
+## Chapter 2: ETL
+
+Provides a quick overview of ETL status with a link to the standalone ETL page. ETL is system-wide (not per-project).
+
+**Chapter Icon:** `fa-arrow-right-arrow-left` | **Gradient:** Green (#10b981 → #34d399)
+
+### Header Row
+
+The chapter header contains the title on the left and an "Open ETL" button next to the collapse arrow on the right. The button links to `{% url 'etl_page' %}` (`/etl/`) and uses `event.stopPropagation()` to avoid triggering the chapter toggle.
+
+### KPI Row (5 KPIs)
+
+KPIs are displayed inline in the chapter header (not in a collapsible body). Data is loaded asynchronously from `GET /api/system/etl-summary/`.
+
+| KPI | ID | Data Source |
+|-----|----|-------------|
+| Connections | `etlKpiConnections` | `Connection.objects.count()` |
+| Active Jobs | `etlKpiActiveJobs` | `DataSource.objects.filter(is_enabled=True).count()` |
+| Runs (24h) | `etlKpiRuns24h` | `ETLRun.objects.filter(started_at__gte=now-24h).count()` |
+| Success Rate | `etlKpiSuccessRate` | Completed / Total finished ETL runs (last 30 days) × 100 |
+| Rows Loaded | `etlKpiRowsLoaded` | `Sum(ETLRun.rows_loaded)` for all runs |
+
+---
+
+## Chapter 3: Your Projects
 
 Displays grouped KPI containers for assets and model accuracy, plus model cards linking to their dashboards.
 
@@ -253,7 +279,7 @@ When no models exist, displays:
 
 ---
 
-## Chapter 3: Billing
+## Chapter 4: Billing
 
 The Billing chapter provides clients with a clear view of their platform costs, along with the license fee. All amounts are displayed in EUR (converted from USD at a configurable exchange rate).
 
@@ -410,6 +436,24 @@ Client UI: Service | Costs | Discount | Total
 ---
 
 ## API Endpoints
+
+### `GET /api/system/etl-summary/`
+
+Returns ETL KPIs for the ETL chapter on the system dashboard.
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": {
+        "connections": 4,
+        "active_jobs": 6,
+        "runs_24h": 3,
+        "success_rate": 92.5,
+        "total_rows_loaded": 1234567
+    }
+}
+```
 
 ### `GET /api/system/kpis/`
 
@@ -684,3 +728,4 @@ The `cloud_run_total_requests` and `cloud_run_request_details` fields are popula
 - [x] ~~Cloud Run request volume via Cloud Monitoring API~~ (Implemented - queries `run.googleapis.com/request_count` for `-serving` services)
 - [x] ~~Scheduled `collect_resource_metrics` via Cloud Scheduler~~ (Implemented - daily at 02:00 UTC via webhook)
 - [x] ~~Requests KPI wired to real data~~ (Implemented - `requests_30d` now sums `ResourceMetrics.cloud_run_total_requests` over 30 days via `api_system_kpis`)
+- [x] ~~ETL chapter on system dashboard~~ (Implemented — system-wide ETL with standalone `/etl/` page, KPI summary, "Open ETL" button)

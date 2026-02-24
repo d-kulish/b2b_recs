@@ -8,7 +8,14 @@ from . import api
 
 urlpatterns = [
     # =========================================================================
-    # CONNECTION MANAGEMENT APIs (Model-scoped)
+    # SYSTEM-WIDE CONNECTION APIs (no model_id)
+    # =========================================================================
+    path('api/connections/create/', api.create_system, name='api_connection_create_system'),
+    path('api/connections/list/', api.list_connections_system, name='api_connection_list_system'),
+    path('api/connections/test-wizard/', api.test_wizard_system, name='api_connection_test_wizard_system'),
+
+    # =========================================================================
+    # CONNECTION MANAGEMENT APIs (Model-scoped, kept for backward compat)
     # =========================================================================
     path('api/models/<int:model_id>/connections/test-wizard/', api.test_wizard, name='api_connection_test_wizard'),
     path('api/models/<int:model_id>/connections/create/', api.create, name='api_connection_create'),

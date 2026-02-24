@@ -48,6 +48,7 @@ urlpatterns = [
     # =========================================================================
     # SYSTEM-LEVEL API ENDPOINTS
     # =========================================================================
+    path('api/system/etl-summary/', views.api_system_etl_summary, name='api_system_etl_summary'),
     path('api/system/kpis/', views.api_system_kpis, name='api_system_kpis'),
     path('api/system/charts/', views.api_system_charts, name='api_system_charts'),
     path('api/system/resource-charts/', views.api_system_resource_charts, name='api_system_resource_charts'),

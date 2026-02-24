@@ -1542,3 +1542,256 @@ def fetch_table_preview(request, connection_id):
             'status': 'error',
             'message': str(e),
         }, status=500)
+
+
+# =============================================================================
+# SYSTEM-WIDE CONNECTION APIs (no model_id)
+# =============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def test_wizard_system(request):
+    """System-wide version of test_wizard (no model_id)."""
+    from ml_platform.utils.connection_manager import test_and_fetch_metadata
+    from ml_platform.models import Connection
+
+    try:
+        data = json.loads(request.body)
+        source_type = data.get('source_type')
+        host = data.get('host', '')
+        port = data.get('port')
+        database = data.get('database', '')
+        username = data.get('username', '')
+        password = data.get('password', '')
+
+        connection_params = {
+            'host': host,
+            'port': port,
+            'database': database,
+            'username': username,
+            'password': password,
+            'project_id': data.get('project_id', ''),
+            'dataset': data.get('dataset', ''),
+            'service_account_json': data.get('service_account_json', ''),
+            'connection_string': data.get('connection_string', ''),
+            'bucket_path': data.get('bucket_path', ''),
+            'aws_access_key_id': data.get('aws_access_key_id', ''),
+            'aws_secret_access_key': data.get('aws_secret_access_key', ''),
+            'aws_region': data.get('aws_region', ''),
+            'azure_storage_account': data.get('azure_storage_account', ''),
+            'azure_account_key': data.get('azure_account_key', ''),
+            'azure_sas_token': data.get('azure_sas_token', ''),
+        }
+
+        test_result = test_and_fetch_metadata(source_type, connection_params)
+
+        if not test_result['success']:
+            return JsonResponse({
+                'status': 'error',
+                'message': test_result['message'],
+            }, status=400)
+
+        # Check for duplicates system-wide
+        existing_connection = Connection.objects.filter(
+            source_type=source_type,
+            source_host=host,
+            source_port=port,
+            source_database=database,
+            source_username=username,
+        ).first()
+
+        if existing_connection:
+            return JsonResponse({
+                'status': 'success',
+                'duplicate': True,
+                'connection_id': existing_connection.id,
+                'connection_name': existing_connection.name,
+                'message': test_result['message'],
+                'tables': test_result['tables'],
+            })
+        else:
+            source_type_display = dict(Connection.SOURCE_TYPE_CHOICES).get(source_type, source_type)
+            suggested_name = f"{source_type_display} - {database}" if database else source_type_display
+            return JsonResponse({
+                'status': 'success',
+                'duplicate': False,
+                'suggested_name': suggested_name,
+                'message': test_result['message'],
+                'tables': test_result['tables'],
+                'connection_data': {
+                    'source_type': source_type,
+                    'host': host,
+                    'port': port,
+                    'database': database,
+                    'username': username,
+                    'schema': data.get('schema', ''),
+                }
+            })
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_system(request):
+    """System-wide version of create (no model_id). Creates a connection with model_endpoint=None."""
+    from ml_platform.utils.connection_manager import test_and_fetch_metadata, save_connection_credentials
+    from ml_platform.models import Connection
+
+    try:
+        data = json.loads(request.body)
+        connection_name = data.get('name', 'Untitled Connection')
+        source_type = data.get('source_type')
+        test_first = data.get('test_first', False)
+
+        connection_params = data.get('connection_params', {})
+        if not connection_params:
+            connection_params = data
+
+        # Check for duplicate name system-wide
+        if Connection.objects.filter(name=connection_name).exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'A connection named "{connection_name}" already exists.',
+            }, status=400)
+
+        DB_TYPES = {'postgresql', 'mysql', 'oracle', 'sqlserver', 'db2', 'redshift', 'synapse', 'bigquery', 'snowflake', 'mariadb', 'teradata'}
+        STORAGE_TYPES = {'gcs', 's3', 'azure_blob'}
+        NOSQL_TYPES = {'mongodb', 'firestore', 'cassandra', 'dynamodb', 'redis'}
+
+        connection_data = {
+            'model_endpoint': None,
+            'name': connection_name,
+            'source_type': source_type,
+            'description': data.get('description', ''),
+            'is_enabled': True,
+        }
+        credentials_dict = {}
+
+        if source_type in DB_TYPES:
+            connection_data.update({
+                'source_host': connection_params.get('host', ''),
+                'source_port': connection_params.get('port'),
+                'source_database': connection_params.get('database', ''),
+                'source_schema': connection_params.get('schema', ''),
+                'source_username': connection_params.get('username', ''),
+            })
+            credentials_dict.update({
+                'host': connection_params.get('host', ''),
+                'port': connection_params.get('port'),
+                'database': connection_params.get('database', ''),
+                'schema': connection_params.get('schema', ''),
+                'username': connection_params.get('username', ''),
+                'password': connection_params.get('password', ''),
+            })
+            if source_type == 'bigquery':
+                connection_data['bigquery_project'] = connection_params.get('project_id', '')
+                connection_data['bigquery_dataset'] = connection_params.get('dataset', '')
+                credentials_dict['project_id'] = connection_params.get('project_id', '')
+                credentials_dict['dataset'] = connection_params.get('dataset', '')
+                credentials_dict['service_account_json'] = connection_params.get('service_account_json', '')
+
+        elif source_type in STORAGE_TYPES:
+            bucket_path = connection_params.get('bucket_path', '')
+            connection_data['bucket_path'] = bucket_path
+            if source_type == 'gcs':
+                sa_json = connection_params.get('service_account_json', '')
+                if sa_json:
+                    connection_data['service_account_json'] = sa_json
+                    credentials_dict['service_account_json'] = sa_json
+                credentials_dict['bucket_path'] = bucket_path
+            elif source_type == 's3':
+                connection_data['aws_access_key_id'] = connection_params.get('aws_access_key_id', '')
+                connection_data['aws_region'] = connection_params.get('aws_region', 'us-east-1')
+                credentials_dict.update({
+                    'bucket_path': bucket_path,
+                    'aws_access_key_id': connection_params.get('aws_access_key_id', ''),
+                    'aws_secret_access_key': connection_params.get('aws_secret_access_key', ''),
+                    'aws_region': connection_params.get('aws_region', 'us-east-1'),
+                })
+            elif source_type == 'azure_blob':
+                connection_data['azure_storage_account'] = connection_params.get('azure_storage_account', '')
+                credentials_dict.update({
+                    'bucket_path': bucket_path,
+                    'azure_storage_account': connection_params.get('azure_storage_account', ''),
+                    'azure_account_key': connection_params.get('azure_account_key', ''),
+                    'azure_sas_token': connection_params.get('azure_sas_token', ''),
+                })
+
+        elif source_type in NOSQL_TYPES:
+            connection_data['connection_string'] = connection_params.get('connection_string', '')
+            credentials_dict['connection_string'] = connection_params.get('connection_string', '')
+
+        if test_first:
+            test_result = test_and_fetch_metadata(source_type, connection_params)
+            if not test_result['success']:
+                return JsonResponse({'status': 'error', 'message': test_result['message']}, status=400)
+            connection_data['connection_tested'] = True
+            connection_data['last_test_at'] = timezone.now()
+            connection_data['last_test_status'] = 'success'
+            connection_data['last_test_message'] = test_result.get('message', '')
+
+        # Save credentials to Secret Manager
+        try:
+            secret_name = save_connection_credentials(
+                connection_name=connection_name,
+                credentials=credentials_dict,
+            )
+            connection_data['credentials_secret_name'] = secret_name
+        except Exception as e:
+            logger.warning(f"Failed to save credentials to Secret Manager: {e}")
+
+        connection = Connection.objects.create(**connection_data)
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Connection created successfully',
+            'connection_id': connection.id,
+            'connection_name': connection.name,
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def list_connections_system(request):
+    """System-wide list of all connections (no model_id)."""
+    from ml_platform.models import Connection
+
+    try:
+        connections = Connection.objects.all().order_by('-created_at')
+
+        connections_data = [{
+            'id': conn.id,
+            'name': conn.name,
+            'source_type': conn.source_type,
+            'source_type_display': conn.get_source_type_display(),
+            'source_host': conn.source_host,
+            'source_port': conn.source_port,
+            'source_database': conn.source_database,
+            'source_schema': conn.source_schema,
+            'source_username': conn.source_username,
+            'bigquery_project': conn.bigquery_project,
+            'bigquery_dataset': conn.bigquery_dataset,
+            'bucket_path': conn.bucket_path,
+            'connection_string': conn.connection_string,
+            'is_enabled': conn.is_enabled,
+            'connection_tested': conn.connection_tested,
+            'last_test_at': conn.last_test_at.isoformat() if conn.last_test_at else None,
+            'last_test_status': conn.last_test_status,
+            'created_at': conn.created_at.isoformat(),
+            'jobs_count': conn.get_dependent_jobs_count(),
+        } for conn in connections]
+
+        return JsonResponse({
+            'status': 'success',
+            'connections': connections_data,
+        })
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

@@ -455,6 +455,54 @@ def _system_avg_latency_p95(since_date):
 
 
 @login_required
+def api_system_etl_summary(request):
+    """
+    API endpoint returning ETL summary KPIs for the system dashboard ETL chapter.
+    Returns: connection count, active jobs, runs (24h), success rate, total rows loaded.
+    """
+    from django.db.models import Q, Sum, Count
+    from .models import Connection, DataSource, ETLRun
+
+    try:
+        now = timezone.now()
+        cutoff_24h = now - timedelta(hours=24)
+        cutoff_30d = now - timedelta(days=30)
+
+        connections_count = Connection.objects.count()
+        active_jobs = DataSource.objects.filter(is_enabled=True).count()
+
+        runs_24h = ETLRun.objects.filter(started_at__gte=cutoff_24h).count()
+
+        # Success rate (30d)
+        runs_30d = ETLRun.objects.filter(started_at__gte=cutoff_30d)
+        agg = runs_30d.aggregate(
+            total=Count('id'),
+            completed=Count('id', filter=Q(status='completed')),
+            partial=Count('id', filter=Q(status='partial')),
+        )
+        total = agg['total'] or 0
+        successful = (agg['completed'] or 0) + (agg['partial'] or 0)
+        success_rate = round((successful / total * 100), 1) if total > 0 else 0
+
+        total_rows = ETLRun.objects.aggregate(
+            total=Sum('total_rows_extracted')
+        )['total'] or 0
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'connections': connections_count,
+                'active_jobs': active_jobs,
+                'runs_24h': runs_24h,
+                'success_rate': success_rate,
+                'total_rows': total_rows,
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
 def api_system_kpis(request):
     """
     API endpoint returning 8 system KPIs for the dashboard.

@@ -61,7 +61,7 @@ class ETLConfiguration(models.Model):
         ('monthly', 'Monthly'),
     ]
 
-    model_endpoint = models.OneToOneField(ModelEndpoint, on_delete=models.CASCADE, related_name='etl_config')
+    model_endpoint = models.OneToOneField(ModelEndpoint, on_delete=models.CASCADE, null=True, blank=True, related_name='etl_config')
 
     # Schedule configuration (applies to all data sources)
     schedule_type = models.CharField(max_length=20, choices=SCHEDULE_CHOICES, default='manual')
@@ -91,7 +91,9 @@ class ETLConfiguration(models.Model):
         verbose_name_plural = 'ETL Configurations'
 
     def __str__(self):
-        return f"ETL Config for {self.model_endpoint.name}"
+        if self.model_endpoint:
+            return f"ETL Config for {self.model_endpoint.name}"
+        return "System ETL Config"
 
 
 class Connection(models.Model):
@@ -127,7 +129,7 @@ class Connection(models.Model):
         ('redis', 'Redis'),
     ]
 
-    model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, related_name='connections')
+    model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, null=True, blank=True, related_name='connections')
 
     # Connection identification
     name = models.CharField(max_length=255, help_text="Friendly name (e.g., 'Production PostgreSQL')")
@@ -187,10 +189,6 @@ class Connection(models.Model):
 
     class Meta:
         ordering = ['name']
-        unique_together = [
-            ['model_endpoint', 'name'],  # Unique connection names per model
-            ['model_endpoint', 'source_type', 'source_host', 'source_port', 'source_database', 'source_username']  # Prevent duplicate connections
-        ]
         verbose_name = 'Connection'
         verbose_name_plural = 'Connections'
 
@@ -523,7 +521,7 @@ class ETLRun(models.Model):
     ]
 
     etl_config = models.ForeignKey(ETLConfiguration, on_delete=models.CASCADE, related_name='runs')
-    model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, related_name='etl_runs')
+    model_endpoint = models.ForeignKey(ModelEndpoint, on_delete=models.CASCADE, null=True, blank=True, related_name='etl_runs')
     data_source = models.ForeignKey(
         'DataSource',
         on_delete=models.CASCADE,
@@ -588,7 +586,8 @@ class ETLRun(models.Model):
         verbose_name_plural = 'ETL Runs'
 
     def __str__(self):
-        return f"ETL Run {self.id} - {self.model_endpoint.name} ({self.status})"
+        name = self.model_endpoint.name if self.model_endpoint else 'System'
+        return f"ETL Run {self.id} - {name} ({self.status})"
 
     def get_duration_seconds(self):
         if self.started_at and self.completed_at:

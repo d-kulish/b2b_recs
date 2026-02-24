@@ -109,10 +109,6 @@
                            class="progress-step-pill progress-step-pill-link {% if request.resolver_match.url_name == 'model_dashboard' %}current{% else %}future{% endif %}">
                             Dashboard
                         </a>
-                        <a href="{% url 'model_etl' model.id %}"
-                           class="progress-step-pill progress-step-pill-link {% if request.resolver_match.url_name == 'model_etl' %}current{% else %}future{% endif %}">
-                            ETL
-                        </a>
                         <a href="{% url 'model_configs' model.id %}"
                            class="progress-step-pill progress-step-pill-link {% if request.resolver_match.url_name == 'model_configs' or request.resolver_match.url_name == 'model_dataset' %}current{% else %}future{% endif %}">
                             Configs

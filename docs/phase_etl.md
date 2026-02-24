@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **ETL (Extract, Transform, Load)** domain in the ML Platform. The ETL domain manages data ingestion from external sources into BigQuery for model training.
 
-**Last Updated**: 2026-02-03 (v16 - ETL Jobs: Added filter bar with Status, Connection, Schedule filters)
+**Last Updated**: 2026-02-24 (v19 - System-wide ETL: Moved ETL out of project scope to standalone page)
 
 ---
 
@@ -18,15 +18,17 @@ The ETL domain allows users to:
 
 ### Key Principles
 
-1. **Connections are Reusable.** A single connection (e.g., "Production PostgreSQL") can be used by multiple ETL jobs. This prevents credential duplication and simplifies maintenance.
+1. **ETL is System-Wide.** ETL lives outside of individual projects. Connections, jobs, and runs are accessible from a standalone ETL page (`/etl/`) linked from the system dashboard. The old per-project ETL tab has been removed; visiting `/models/{id}/etl/` redirects to `/etl/`.
 
-2. **Credentials are Secure.** Database passwords and API keys are stored in Google Secret Manager, not in the Django database. Only secret references are stored.
+2. **Connections are Reusable.** A single connection (e.g., "Production PostgreSQL") can be used by multiple ETL jobs. This prevents credential duplication and simplifies maintenance. Connections have `model_endpoint=None` (nullable FK).
 
-3. **ETL Jobs are Atomic.** Each ETL job extracts data from one connection to one BigQuery table. Complex pipelines are composed of multiple jobs.
+3. **Credentials are Secure.** Database passwords and API keys are stored in Google Secret Manager, not in the Django database. Only secret references are stored.
 
-4. **Scheduling is Optional.** Jobs can be manual-only or scheduled (hourly, daily, weekly, monthly) via Cloud Scheduler.
+4. **ETL Jobs are Atomic.** Each ETL job extracts data from one connection to one BigQuery table. Complex pipelines are composed of multiple jobs.
 
-5. **Incremental Loads Supported.** Jobs can be configured for full replacement or incremental extraction based on a timestamp column.
+5. **Scheduling is Optional.** Jobs can be manual-only or scheduled (hourly, daily, weekly, monthly) via Cloud Scheduler.
+
+6. **Incremental Loads Supported.** Jobs can be configured for full replacement or incremental extraction based on a timestamp column.
 
 ### Architecture Overview
 
@@ -306,7 +308,7 @@ Each connection card displays:
 ```python
 class Connection(models.Model):
     # Foreign Keys
-    model_endpoint = ForeignKey(ModelEndpoint)  # Parent model
+    model_endpoint = ForeignKey(ModelEndpoint, null=True, blank=True)  # Nullable — system-wide connections have None
 
     # Identification
     name = CharField(max_length=255)            # "Production PostgreSQL"
@@ -358,30 +360,34 @@ class Connection(models.Model):
     updated_at = DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = [
-            ['model_endpoint', 'name'],
-            ['model_endpoint', 'source_type', 'source_host', 'source_port',
-             'source_database', 'source_username']
-        ]
+        # No unique_together — connection names are globally unique (enforced at API level)
 ```
 
 ---
 
 ### API Endpoints
 
-#### Connection Management APIs
+#### Connection Management APIs (System-Wide)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/models/{id}/connections/test-wizard/` | Test connection and check for duplicates |
-| `POST` | `/api/models/{id}/connections/create/` | Create new connection |
-| `GET` | `/api/models/{id}/connections/` | List all connections for a model |
+| `POST` | `/api/connections/test-wizard/` | Test connection and check for duplicates (system-wide) |
+| `POST` | `/api/connections/create/` | Create new connection (system-wide, `model_endpoint=None`) |
+| `GET` | `/api/connections/list/` | List all connections (system-wide) |
 | `GET` | `/api/connections/{id}/` | Get connection details |
 | `GET` | `/api/connections/{id}/credentials/` | Get decrypted credentials |
 | `POST` | `/api/connections/{id}/test/` | Test existing connection |
 | `POST` | `/api/connections/{id}/update/` | Update connection |
 | `GET` | `/api/connections/{id}/usage/` | Get ETL jobs using this connection |
 | `POST` | `/api/connections/{id}/delete/` | Delete connection |
+
+**Legacy (model-scoped, kept for backward compatibility):**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/models/{id}/connections/test-wizard/` | Test connection (model-scoped) |
+| `POST` | `/api/models/{id}/connections/create/` | Create connection (model-scoped) |
+| `GET` | `/api/models/{id}/connections/` | List connections for a model |
 
 #### Schema and Table Fetching APIs
 
@@ -565,7 +571,7 @@ const ITEMS_PER_PAGE = 5;           // Items per page (configurable)
 │  2. Frontend sends to Django API (HTTPS)                                    │
 │     ↓                                                                        │
 │  3. Django stores in Google Secret Manager                                  │
-│     Secret name: "etl-conn-{model_id}-{connection_id}"                      │
+│     Secret name: "etl-conn-{connection_name}"                                │
 │     ↓                                                                        │
 │  4. Django stores secret reference in Connection model                      │
 │     credentials_secret_name = "etl-conn-5-12"                               │
@@ -874,7 +880,7 @@ class DataSourceTable(models.Model):
 class ETLRun(models.Model):
     # References
     etl_config = ForeignKey(ETLConfiguration)
-    model_endpoint = ForeignKey(ModelEndpoint)
+    model_endpoint = ForeignKey(ModelEndpoint, null=True, blank=True)  # Nullable — system-wide runs have None
     data_source = ForeignKey(DataSource)
 
     # Status
@@ -1086,11 +1092,16 @@ python main.py \
 
 ### API Endpoints
 
-#### ETL Job Management
+#### ETL Job Management (System-Wide)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/models/{id}/etl/create-job/` | Create new ETL job |
+| `POST` | `/api/etl/create-job/` | Create new ETL job (system-wide) |
+| `POST` | `/api/etl/add-source/` | Add a new data source (system-wide) |
+| `POST` | `/api/etl/check-name/` | Check if ETL job name is unique (system-wide) |
+| `GET` | `/api/etl/connections/` | List all connections for ETL wizard (system-wide) |
+| `GET` | `/api/etl/dashboard-stats/` | ETL dashboard stats (system-wide) |
+| `POST` | `/api/etl/save-draft/` | Save draft data source (system-wide) |
 | `GET` | `/api/etl/sources/{id}/` | Get ETL job details |
 | `POST` | `/api/etl/sources/{id}/edit/` | Update ETL job |
 | `POST` | `/api/etl/sources/{id}/delete/` | Delete ETL job |
@@ -2714,7 +2725,8 @@ Three independent issues:
 
 | File | Purpose |
 |------|---------|
-| `templates/ml_platform/model_etl.html` | Main ETL page template |
+| `templates/ml_platform/etl_page.html` | Standalone system-wide ETL page template |
+| `templates/ml_platform/model_etl.html` | Legacy per-project ETL template (redirects to standalone page) |
 | `static/css/cards.css` | Card styling for connections/jobs |
 | `static/css/modals.css` | Modal styling for wizards |
 
@@ -2724,6 +2736,7 @@ Three independent issues:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v19 | 2026-02-24 | System-wide ETL: Moved ETL out of per-project scope; made `model_endpoint` nullable on Connection, ETLConfiguration, ETLRun; created standalone `/etl/` page and system-wide API endpoints; removed ETL tab from project nav; added ETL chapter to system dashboard; old `/models/<id>/etl/` URLs redirect to `/etl/` |
 | v18 | 2026-02-07 | ETL Run Cards: Added Rerun button to run cards with `data_source_id` in run JSON; reuses `runSourceNow()` and existing trigger endpoint; disabled for running/pending states |
 | v17 | 2026-02-07 | ETL Run Cards: Replaced frozen 4-segment bar with animated shimmer indicator for running/pending jobs; fixed polling to target cards instead of table rows; added missing API fields |
 | v16 | 2026-02-03 | ETL Jobs: Added filter bar (Status, Connection, Schedule) matching ETL Runs style |

@@ -2866,3 +2866,540 @@ def _get_schedule_display_api(source):
             suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
         return f"Monthly {day}{suffix} {time_str}" if time_str else f"Monthly {day}{suffix}"
     return "Manual"
+
+
+# =============================================================================
+# SYSTEM-WIDE (STANDALONE) API ENDPOINTS — No model_id required
+# =============================================================================
+
+def _get_system_etl_config():
+    """Get or create the system-wide ETL configuration (model_endpoint=None)."""
+    etl_config, _ = ETLConfiguration.objects.get_or_create(
+        model_endpoint=None,
+        defaults={'schedule_type': 'manual'},
+    )
+    return etl_config
+
+
+@login_required
+@require_http_methods(["POST"])
+def add_source_standalone(request):
+    """System-wide version of add_source (no model_id)."""
+    try:
+        etl_config = _get_system_etl_config()
+        data = json.loads(request.body)
+
+        connection_id = data.get('connection_id')
+        if connection_id:
+            connection = get_object_or_404(Connection, id=connection_id)
+            source = DataSource.objects.create(
+                etl_config=etl_config,
+                connection=connection,
+                name=data.get('name'),
+                source_type=connection.source_type,
+                is_enabled=data.get('is_enabled', True),
+            )
+        else:
+            source = DataSource.objects.create(
+                etl_config=etl_config,
+                name=data.get('name'),
+                source_type=data.get('source_type'),
+                is_enabled=data.get('is_enabled', True),
+            )
+
+        tables_data = data.get('tables', [])
+        for table_data in tables_data:
+            DataSourceTable.objects.create(
+                data_source=source,
+                source_table_name=table_data.get('source_table_name'),
+                dest_table_name=table_data.get('dest_table_name'),
+                dest_dataset=table_data.get('dest_dataset', 'raw_data'),
+                sync_mode=table_data.get('sync_mode', 'replace'),
+                is_enabled=table_data.get('is_enabled', True),
+            )
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Data source added successfully',
+            'source_id': source.id,
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])
+def check_job_name_standalone(request):
+    """System-wide version of check_job_name (no model_id)."""
+    try:
+        etl_config = _get_system_etl_config()
+        data = json.loads(request.body)
+        job_name = data.get('name', '').strip()
+
+        if not job_name:
+            return JsonResponse({'status': 'error', 'message': 'Job name is required'}, status=400)
+
+        exists = DataSource.objects.filter(etl_config=etl_config, name=job_name).exists()
+
+        if exists:
+            return JsonResponse({
+                'status': 'error',
+                'exists': True,
+                'message': f'ETL job "{job_name}" already exists. Please choose a different name.',
+            }, status=400)
+
+        return JsonResponse({'status': 'success', 'exists': False})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def get_connections_standalone(request):
+    """System-wide version of get_connections (no model_id)."""
+    try:
+        connections = Connection.objects.all().order_by('name')
+        connections_data = []
+        for conn in connections:
+            connections_data.append({
+                'id': conn.id,
+                'name': conn.name,
+                'source_type': conn.source_type,
+                'source_type_display': conn.get_source_type_display(),
+                'host': conn.source_host,
+                'port': conn.source_port,
+                'database': conn.source_database,
+                'last_test_status': conn.last_test_status or 'untested',
+                'last_test_at': conn.last_test_at.isoformat() if conn.last_test_at else None,
+                'last_used_at': conn.last_used_at.isoformat() if conn.last_used_at else None,
+                'jobs_count': conn.data_sources.count(),
+                'is_enabled': conn.is_enabled,
+            })
+
+        return JsonResponse({'status': 'success', 'connections': connections_data})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def create_job_standalone(request):
+    """System-wide version of create_job (no model_id). Delegates to create_job with etl_config."""
+    from django.conf import settings as django_settings
+
+    try:
+        etl_config = _get_system_etl_config()
+        data = json.loads(request.body)
+
+        job_name = data.get('name', '').strip()
+        connection_id = data.get('connection_id')
+        is_file_based = data.get('is_file_based', False)
+        schema_name = data.get('schema_name', '').strip()
+        tables = data.get('tables', [])
+        file_path_prefix = data.get('file_path_prefix', '').strip()
+        file_pattern = data.get('file_pattern', '').strip()
+        file_format = data.get('file_format', '').strip()
+        file_format_options = data.get('file_format_options', {})
+        load_latest_only = data.get('load_latest_only', True)
+        schema_fingerprint = data.get('schema_fingerprint', '').strip()
+        load_type = data.get('load_type', 'transactional')
+        timestamp_column = data.get('timestamp_column', '').strip()
+        historical_start_date = data.get('historical_start_date')
+        selected_columns = data.get('selected_columns', [])
+        use_existing_table = data.get('use_existing_table', False)
+        existing_table_name = data.get('existing_table_name', '').strip()
+        bq_table_name = data.get('bigquery_table_name', '').strip()
+        bq_schema_columns = data.get('bigquery_schema', [])
+        schedule_config = data.get('schedule_config', {})
+        schedule_type = schedule_config.get('schedule_type', 'manual')
+        schedule_time = schedule_config.get('schedule_time')
+        schedule_minute = schedule_config.get('schedule_minute')
+        schedule_day_of_week = schedule_config.get('schedule_day_of_week')
+        schedule_day_of_month = schedule_config.get('schedule_day_of_month')
+
+        if not job_name:
+            return JsonResponse({'status': 'error', 'message': 'ETL job name is required'}, status=400)
+        if not connection_id:
+            return JsonResponse({'status': 'error', 'message': 'Connection is required'}, status=400)
+
+        if is_file_based:
+            if not file_pattern:
+                return JsonResponse({'status': 'error', 'message': 'File pattern is required'}, status=400)
+            if not file_format:
+                return JsonResponse({'status': 'error', 'message': 'File format is required'}, status=400)
+        else:
+            if not tables or len(tables) == 0:
+                return JsonResponse({'status': 'error', 'message': 'At least one table must be selected'}, status=400)
+
+        if use_existing_table:
+            if not existing_table_name:
+                return JsonResponse({'status': 'error', 'message': 'Existing table name is required'}, status=400)
+            bq_table_name = existing_table_name
+        else:
+            if not bq_table_name:
+                return JsonResponse({'status': 'error', 'message': 'BigQuery table name is required'}, status=400)
+
+        if not bq_schema_columns or len(bq_schema_columns) == 0:
+            return JsonResponse({'status': 'error', 'message': 'BigQuery schema must have at least one column'}, status=400)
+
+        connection = get_object_or_404(Connection, id=connection_id)
+
+        if DataSource.objects.filter(etl_config=etl_config, name=job_name).exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': f'ETL job "{job_name}" already exists.',
+            }, status=400)
+
+        # BigQuery table setup
+        from ml_platform.utils.bigquery_manager import BigQueryTableManager
+
+        project_id = getattr(django_settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        if not project_id:
+            return JsonResponse({'status': 'error', 'message': 'GCP_PROJECT_ID not configured'}, status=500)
+
+        bq_manager = BigQueryTableManager(project_id=project_id, dataset_id='raw_data')
+        dataset_result = bq_manager.ensure_dataset_exists()
+        if not dataset_result['success']:
+            return JsonResponse({'status': 'error', 'message': f'Failed to create/verify dataset: {dataset_result["message"]}'}, status=500)
+
+        if use_existing_table:
+            if not bq_manager.table_exists(existing_table_name):
+                return JsonResponse({'status': 'error', 'message': f'Table "{existing_table_name}" does not exist'}, status=400)
+            table_metadata = bq_manager.get_table_metadata(existing_table_name)
+            if not table_metadata['success']:
+                return JsonResponse({'status': 'error', 'message': f'Failed to get table metadata: {table_metadata["message"]}'}, status=500)
+            existing_load_type = table_metadata['table']['load_type']
+            if existing_load_type != 'unknown' and existing_load_type != load_type:
+                return JsonResponse({'status': 'error', 'message': f'Load type mismatch'}, status=400)
+            add_result = bq_manager.add_columns_to_table(existing_table_name, bq_schema_columns)
+            if not add_result['success']:
+                return JsonResponse({'status': 'error', 'message': f'Failed to add columns: {add_result["message"]}'}, status=500)
+        else:
+            if is_file_based:
+                table_description = f"ETL source: {file_pattern} files from {connection.name} ({load_type} load)"
+            else:
+                table_description = f"ETL source: {schema_name}.{tables[0]['source_table_name']} from {connection.name} ({load_type} load)"
+            table_result = bq_manager.create_table_from_schema(
+                table_name=bq_table_name,
+                schema_columns=bq_schema_columns,
+                load_type=load_type,
+                timestamp_column=timestamp_column if load_type == 'transactional' else None,
+                description=table_description,
+                overwrite=False,
+            )
+            if not table_result['success']:
+                return JsonResponse({'status': 'error', 'message': f'Failed to create BigQuery table: {table_result["message"]}'}, status=500)
+
+        # Create DataSource
+        data_source = DataSource.objects.create(
+            etl_config=etl_config,
+            connection=connection,
+            name=job_name,
+            source_type=connection.source_type,
+            is_enabled=True,
+            schedule_type=schedule_type,
+            use_incremental=(load_type == 'transactional'),
+            incremental_column=timestamp_column if load_type == 'transactional' else '',
+            historical_start_date=historical_start_date,
+        )
+
+        # Create DataSourceTable
+        if is_file_based:
+            column_mapping = {}
+            for col in bq_schema_columns:
+                original_name = col.get('original_name')
+                sanitized_name = col.get('name')
+                if original_name and sanitized_name:
+                    column_mapping[original_name] = sanitized_name
+
+            DataSourceTable.objects.create(
+                data_source=data_source,
+                schema_name='',
+                source_table_name=file_pattern,
+                dest_table_name=bq_table_name,
+                sync_mode='replace',
+                is_file_based=True,
+                file_path_prefix=file_path_prefix,
+                file_pattern=file_pattern,
+                file_format=file_format,
+                file_format_options=file_format_options,
+                load_latest_only=load_latest_only,
+                schema_fingerprint=schema_fingerprint,
+                column_mapping=column_mapping,
+                load_type=load_type,
+                timestamp_column=timestamp_column if load_type == 'transactional' else '',
+                historical_start_date=historical_start_date,
+                selected_columns=selected_columns,
+                schedule_type=schedule_type,
+                schedule_time=schedule_time,
+                schedule_minute=schedule_minute,
+                schedule_day_of_week=schedule_day_of_week,
+                schedule_day_of_month=schedule_day_of_month,
+            )
+        else:
+            for table_data in tables:
+                DataSourceTable.objects.create(
+                    data_source=data_source,
+                    schema_name=schema_name,
+                    source_table_name=table_data.get('source_table_name', ''),
+                    dest_table_name=bq_table_name,
+                    dest_dataset='raw_data',
+                    sync_mode=table_data.get('sync_mode', 'replace'),
+                    load_type=load_type,
+                    timestamp_column=timestamp_column if load_type == 'transactional' else '',
+                    historical_start_date=historical_start_date,
+                    selected_columns=selected_columns,
+                    schedule_type=schedule_type,
+                    schedule_time=schedule_time,
+                    schedule_minute=schedule_minute,
+                    schedule_day_of_week=schedule_day_of_week,
+                    schedule_day_of_month=schedule_day_of_month,
+                )
+
+        # Create Cloud Scheduler job if scheduled
+        cloud_scheduler_job_name = ''
+        if schedule_type != 'manual':
+            try:
+                from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+                region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+                scheduler_manager = CloudSchedulerManager(project_id=project_id, region=region)
+
+                first_table = data_source.tables.first()
+                cron_schedule = scheduler_manager.build_cron_expression(
+                    schedule_type=schedule_type,
+                    schedule_time=schedule_time,
+                    schedule_minute=schedule_minute,
+                    schedule_day_of_week=schedule_day_of_week,
+                    schedule_day_of_month=schedule_day_of_month,
+                )
+
+                cloud_run_service_url = os.getenv('CLOUD_RUN_SERVICE_URL', '')
+                webhook_url = f"{cloud_run_service_url}/api/etl/sources/{data_source.id}/scheduler-webhook/"
+
+                result = scheduler_manager.create_schedule(
+                    job_name=f"etl-{data_source.id}-{job_name.lower().replace(' ', '-')[:30]}",
+                    schedule=cron_schedule,
+                    webhook_url=webhook_url,
+                    description=f"ETL schedule for {job_name}",
+                )
+
+                if result.get('success'):
+                    cloud_scheduler_job_name = result.get('job_name', '')
+                    data_source.cloud_scheduler_job_name = cloud_scheduler_job_name
+                    data_source.save()
+            except Exception as e:
+                logger.warning(f"Failed to create Cloud Scheduler job: {e}")
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'ETL job created successfully',
+            'source_id': data_source.id,
+            'cloud_scheduler_job_name': cloud_scheduler_job_name,
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to create ETL job: {e}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def save_draft_source_standalone(request):
+    """System-wide version of save_draft_source (no model_id)."""
+    try:
+        etl_config = _get_system_etl_config()
+        data = json.loads(request.body)
+        source_name = data.get('name', 'Untitled Job')
+        connection_id = data.get('connection_id')
+
+        if connection_id:
+            connection = get_object_or_404(Connection, id=connection_id)
+            source = DataSource.objects.create(
+                etl_config=etl_config,
+                connection=connection,
+                name=source_name,
+                source_type=connection.source_type,
+                is_enabled=False,
+                connection_tested=True,
+                wizard_last_step=2,
+                wizard_completed_steps=[1, 2],
+            )
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Draft ETL job saved',
+                'source_id': source.id,
+            })
+        else:
+            return JsonResponse({'status': 'error', 'message': 'connection_id is required'}, status=400)
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])
+def etl_dashboard_stats_standalone(request):
+    """System-wide ETL dashboard stats (no model_id). Used by the standalone ETL page."""
+    from datetime import timedelta
+    from django.db.models import Q, Sum, Count
+
+    all_etl_runs = ETLRun.objects.all()
+    data_sources = DataSource.objects.all().select_related('connection').prefetch_related('tables')
+
+    cutoff_date = timezone.now() - timedelta(days=30)
+    kpi_runs = all_etl_runs.filter(started_at__gte=cutoff_date)
+
+    kpi_aggregates = kpi_runs.aggregate(
+        total_runs=Count('id'),
+        completed_runs=Count('id', filter=Q(status='completed')),
+        failed_runs=Count('id', filter=Q(status='failed')),
+        partial_runs=Count('id', filter=Q(status='partial')),
+        total_rows_extracted=Sum('total_rows_extracted'),
+    )
+
+    completed_runs_with_times = kpi_runs.filter(
+        status__in=['completed', 'partial'],
+        started_at__isnull=False,
+        completed_at__isnull=False,
+    )
+
+    avg_duration_seconds = 0
+    if completed_runs_with_times.exists():
+        total_duration = 0
+        count = 0
+        for run in completed_runs_with_times:
+            if run.started_at and run.completed_at:
+                duration = (run.completed_at - run.started_at).total_seconds()
+                if duration > 0:
+                    total_duration += duration
+                    count += 1
+        if count > 0:
+            avg_duration_seconds = total_duration / count
+
+    total_runs = kpi_aggregates['total_runs'] or 0
+    completed_runs = kpi_aggregates['completed_runs'] or 0
+    partial_runs = kpi_aggregates['partial_runs'] or 0
+    successful_runs = completed_runs + partial_runs
+    success_rate = round((successful_runs / total_runs * 100), 1) if total_runs > 0 else 0
+
+    kpi_data = {
+        'total_runs': total_runs,
+        'completed_runs': completed_runs,
+        'failed_runs': kpi_aggregates['failed_runs'] or 0,
+        'successful_runs': successful_runs,
+        'success_rate': success_rate,
+        'total_rows_extracted': kpi_aggregates['total_rows_extracted'] or 0,
+        'avg_duration_seconds': round(avg_duration_seconds),
+    }
+
+    # Scheduled Jobs
+    scheduled_jobs_list = []
+    scheduled_sources = data_sources.filter(
+        schedule_type__in=['hourly', 'daily', 'weekly', 'monthly'],
+        cloud_scheduler_job_name__isnull=False,
+    ).exclude(cloud_scheduler_job_name='')
+
+    if scheduled_sources.exists():
+        project_id = getattr(settings, 'GCP_PROJECT_ID', os.getenv('GCP_PROJECT_ID'))
+        region = os.getenv('CLOUD_SCHEDULER_REGION', 'europe-central2')
+        if project_id:
+            try:
+                from ml_platform.utils.cloud_scheduler import CloudSchedulerManager
+                scheduler_manager = CloudSchedulerManager(project_id=project_id, region=region)
+                enabled_jobs = []
+                paused_jobs = []
+                for source in scheduled_sources:
+                    schedule_display = _get_schedule_display_api(source)
+                    try:
+                        status = scheduler_manager.get_schedule_status(source.cloud_scheduler_job_name)
+                        next_run_time = status.get('next_run_time') if status.get('success') else None
+                        state = status.get('state', 'UNKNOWN') if status.get('success') else 'UNKNOWN'
+                        is_paused = state == 'PAUSED'
+                    except Exception:
+                        next_run_time = None
+                        state = 'UNKNOWN'
+                        is_paused = not source.is_enabled
+                    job_info = {
+                        'id': source.id,
+                        'name': source.name,
+                        'schedule_type': source.schedule_type,
+                        'schedule_display': schedule_display,
+                        'next_run_time': next_run_time.isoformat() if next_run_time else None,
+                        'state': state,
+                        'is_paused': is_paused,
+                    }
+                    if is_paused:
+                        paused_jobs.append(job_info)
+                    else:
+                        enabled_jobs.append(job_info)
+                from datetime import datetime as dt
+                far_future = dt(2099, 12, 31)
+                enabled_jobs.sort(key=lambda x: x['next_run_time'] or far_future.isoformat())
+                paused_jobs.sort(key=lambda x: x['name'].lower())
+                scheduled_jobs_list = enabled_jobs + paused_jobs
+            except (ImportError, Exception):
+                pass
+
+    # Diverging Chart Data
+    diverging_cutoff_date = timezone.now() - timedelta(days=30)
+    all_runs_30_days = all_etl_runs.filter(
+        started_at__gte=diverging_cutoff_date,
+        status__in=['completed', 'partial', 'failed'],
+    ).select_related('data_source').order_by('started_at')
+
+    diverging_runs = []
+    all_job_names = set()
+    durations = []
+
+    for run in all_runs_30_days:
+        if not run.data_source or not run.started_at:
+            continue
+        job_name = run.data_source.name
+        duration = run.get_duration_seconds() or 0
+        rows_loaded = run.total_rows_extracted or 0
+        if run.status == 'completed':
+            status = 'completed'
+        elif run.status == 'partial':
+            status = 'partial'
+        else:
+            status = 'failed'
+        all_job_names.add(job_name)
+        if duration > 0:
+            durations.append(duration)
+        diverging_runs.append({
+            'job_name': job_name,
+            'data_source_id': run.data_source.id,
+            'data_source_created_at': run.data_source.created_at.isoformat(),
+            'started_at': run.started_at.isoformat(),
+            'duration': duration,
+            'status': status,
+            'rows_loaded': rows_loaded,
+            'error_message': run.error_message or '',
+        })
+
+    min_duration = min(durations) if durations else 1
+    max_duration = max(durations) if durations else 1
+    now = timezone.now()
+    start_date = (now - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = now.replace(hour=23, minute=59, second=59, microsecond=0)
+
+    return JsonResponse({
+        'success': True,
+        'data': {
+            'kpi': kpi_data,
+            'scheduled_jobs': scheduled_jobs_list,
+            'scheduled_jobs_total': len(scheduled_jobs_list),
+            'diverging_chart': {
+                'runs': diverging_runs,
+                'job_names': sorted(list(all_job_names)),
+                'date_range': {
+                    'start': start_date.isoformat(),
+                    'end': end_date.isoformat(),
+                },
+                'duration_stats': {
+                    'min': min_duration,
+                    'max': max_duration,
+                },
+            },
+        }
+    })

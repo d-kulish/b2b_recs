@@ -185,6 +185,11 @@
         .system-kpi-icon.inference { background: linear-gradient(135deg, #10b981, #34d399); }
         .system-kpi-icon.training { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
         .system-kpi-icon.data { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
+        .system-kpi-icon.etl-yesterday { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+        .system-kpi-icon.etl-week { background: linear-gradient(135deg, #10b981, #34d399); }
+
+        .system-kpi-stat.stat-success { background: #f0fdf4; }
+        .system-kpi-stat.stat-failed { background: #fef2f2; }
 
         .system-kpi-icon i {
             color: white;
@@ -216,6 +221,9 @@
         }
         .chapter-kpi-equal .system-kpi-card:last-child .system-kpi-stats {
             grid-template-columns: repeat(3, 1fr);
+        }
+        [data-chapter="etl"] .chapter-kpi-equal .system-kpi-card .system-kpi-stats {
+            grid-template-columns: repeat(4, 1fr);
         }
 
         .system-kpi-value {
@@ -937,79 +945,6 @@
                 </div>
             </div>
 
-            <!-- Chapter: ETL -->
-            <div class="chapter-container" data-chapter="etl">
-                <div class="chapter-header" onclick="toggleChapter(this)">
-                    <div class="chapter-header-top">
-                        <div class="chapter-title-wrapper">
-                            <div class="chapter-icon etl">
-                                <i class="fas fa-arrow-right-arrow-left"></i>
-                            </div>
-                            <div class="chapter-title-text">
-                                <span class="chapter-title">ETL</span>
-                                <span class="chapter-subtitle">Extract, Transform, Load — Data ingestion pipelines</span>
-                            </div>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <a href="{% url 'etl_page' %}" class="btn btn-primary" onclick="event.stopPropagation();">
-                                <i class="fas fa-external-link-alt"></i> Open ETL
-                            </a>
-                            <div class="chapter-toggle">
-                                <i class="fas fa-chevron-right"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="chapter-divider"></div>
-                    <div class="chapter-kpi-row" id="etlKpiRow">
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon green">
-                                <i class="fas fa-plug"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <div class="chapter-kpi-value" id="etlKpiConnections">--</div>
-                                <div class="chapter-kpi-label">Connections</div>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon blue">
-                                <i class="fas fa-briefcase"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <div class="chapter-kpi-value" id="etlKpiActiveJobs">--</div>
-                                <div class="chapter-kpi-label">Active Jobs</div>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon purple">
-                                <i class="fas fa-play-circle"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <div class="chapter-kpi-value" id="etlKpiRuns24h">--</div>
-                                <div class="chapter-kpi-label">Runs (24h)</div>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon green">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <div class="chapter-kpi-value" id="etlKpiSuccessRate">--</div>
-                                <div class="chapter-kpi-label">Success Rate</div>
-                            </div>
-                        </div>
-                        <div class="chapter-kpi-card">
-                            <div class="chapter-kpi-icon orange">
-                                <i class="fas fa-database"></i>
-                            </div>
-                            <div class="chapter-kpi-content">
-                                <div class="chapter-kpi-value" id="etlKpiRowsLoaded">--</div>
-                                <div class="chapter-kpi-label">Rows Loaded</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Chapter 2: Your Projects -->
             <div class="chapter-container" data-chapter="models">
                 <div class="chapter-header" onclick="toggleChapter(this)">
@@ -1024,7 +959,7 @@
                             </div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <button class="btn btn-primary" onclick="event.stopPropagation(); openCreateProjectModal();" style="white-space: nowrap;">
+                            <button class="btn btn-primary" onclick="event.stopPropagation(); openCreateProjectModal();" style="white-space: nowrap; min-width: 170px;">
                                 <i class="fas fa-plus"></i> New Project
                             </button>
                             <div class="chapter-toggle">
@@ -1197,7 +1132,56 @@
                 </div>
             </div>
 
-            <!-- Chapter 3: Billing -->
+            <!-- Chapter 3: ETL -->
+            <div class="chapter-container" data-chapter="etl">
+                <div class="chapter-header">
+                    <div class="chapter-header-top">
+                        <div class="chapter-title-wrapper">
+                            <div class="chapter-icon etl">
+                                <i class="fas fa-arrow-right-arrow-left"></i>
+                            </div>
+                            <div class="chapter-title-text">
+                                <span class="chapter-title">ETL</span>
+                                <span class="chapter-subtitle">Data ingestion pipelines</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="window.location.href='{% url 'etl_page' %}';" style="white-space: nowrap; min-width: 170px; margin-right: 44px;">
+                            <i class="fas fa-external-link-alt"></i> Open ETL
+                        </button>
+                    </div>
+                    <div class="chapter-divider"></div>
+                    <div class="system-kpi-groups chapter-kpi-equal" style="grid-template-columns: 1fr 1fr;">
+                        <!-- Yesterday Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Yesterday</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon etl-yesterday"><i class="fas fa-calendar-day"></i></div>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat"><div class="system-kpi-value" id="etlYesterdayJobs">--</div><div class="system-kpi-label">Active Jobs</div></div>
+                                    <div class="system-kpi-stat stat-failed"><div class="system-kpi-value" id="etlYesterdayFailed">--</div><div class="system-kpi-label">Failed</div></div>
+                                    <div class="system-kpi-stat stat-success"><div class="system-kpi-value" id="etlYesterdaySuccess">--</div><div class="system-kpi-label">Success</div></div>
+                                    <div class="system-kpi-stat"><div class="system-kpi-value" id="etlYesterdayRows">--</div><div class="system-kpi-label">Rows</div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Last Week Card -->
+                        <div class="system-kpi-card">
+                            <div class="system-kpi-title">Last Week</div>
+                            <div class="system-kpi-content">
+                                <div class="system-kpi-icon etl-week"><i class="fas fa-calendar-week"></i></div>
+                                <div class="system-kpi-stats">
+                                    <div class="system-kpi-stat"><div class="system-kpi-value" id="etlWeekJobs">--</div><div class="system-kpi-label">Active Jobs</div></div>
+                                    <div class="system-kpi-stat stat-failed"><div class="system-kpi-value" id="etlWeekFailed">--</div><div class="system-kpi-label">Failed</div></div>
+                                    <div class="system-kpi-stat stat-success"><div class="system-kpi-value" id="etlWeekSuccess">--</div><div class="system-kpi-label">Success</div></div>
+                                    <div class="system-kpi-stat"><div class="system-kpi-value" id="etlWeekRows">--</div><div class="system-kpi-label">Rows</div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chapter 4: Billing -->
             <div class="chapter-container" data-chapter="billing">
                 <div class="chapter-header" onclick="toggleChapter(this)">
                     <div class="chapter-header-top">
@@ -1925,11 +1909,14 @@
                     const d = result.data;
                     const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
                     const fmtNum = (n) => { if (n >= 1000000) return (n/1000000).toFixed(1)+'M'; if (n >= 1000) return (n/1000).toFixed(1)+'K'; return n.toString(); };
-                    setText('etlKpiConnections', d.connections);
-                    setText('etlKpiActiveJobs', d.active_jobs);
-                    setText('etlKpiRuns24h', d.runs_24h);
-                    setText('etlKpiSuccessRate', d.success_rate + '%');
-                    setText('etlKpiRowsLoaded', fmtNum(d.total_rows));
+                    setText('etlYesterdayJobs', d.yesterday.active_jobs);
+                    setText('etlYesterdayFailed', d.yesterday.failed);
+                    setText('etlYesterdaySuccess', d.yesterday.success);
+                    setText('etlYesterdayRows', fmtNum(d.yesterday.rows));
+                    setText('etlWeekJobs', d.week.active_jobs);
+                    setText('etlWeekFailed', d.week.failed);
+                    setText('etlWeekSuccess', d.week.success);
+                    setText('etlWeekRows', fmtNum(d.week.rows));
                 }
             } catch (e) {
                 console.error('Failed to load ETL KPIs:', e);

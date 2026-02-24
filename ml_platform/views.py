@@ -458,44 +458,35 @@ def _system_avg_latency_p95(since_date):
 def api_system_etl_summary(request):
     """
     API endpoint returning ETL summary KPIs for the system dashboard ETL chapter.
-    Returns: connection count, active jobs, runs (24h), success rate, total rows loaded.
+    Returns two time windows (yesterday/24h and last week/7d) with:
+    active_jobs, failed, success, rows for each.
     """
-    from django.db.models import Q, Sum, Count
-    from .models import Connection, DataSource, ETLRun
+    from django.db.models import Q, Sum
+    from .models import DataSource, ETLRun
+
+    def get_etl_stats(cutoff):
+        runs = ETLRun.objects.filter(started_at__gte=cutoff)
+        active_jobs = DataSource.objects.filter(runs__started_at__gte=cutoff).distinct().count()
+        failed = runs.filter(status='failed').count()
+        success = runs.filter(status__in=['completed', 'partial']).count()
+        rows = runs.aggregate(total=Sum('rows_loaded'))['total'] or 0
+        return {
+            'active_jobs': active_jobs,
+            'failed': failed,
+            'success': success,
+            'rows': rows,
+        }
 
     try:
         now = timezone.now()
         cutoff_24h = now - timedelta(hours=24)
-        cutoff_30d = now - timedelta(days=30)
-
-        connections_count = Connection.objects.count()
-        active_jobs = DataSource.objects.filter(is_enabled=True).count()
-
-        runs_24h = ETLRun.objects.filter(started_at__gte=cutoff_24h).count()
-
-        # Success rate (30d)
-        runs_30d = ETLRun.objects.filter(started_at__gte=cutoff_30d)
-        agg = runs_30d.aggregate(
-            total=Count('id'),
-            completed=Count('id', filter=Q(status='completed')),
-            partial=Count('id', filter=Q(status='partial')),
-        )
-        total = agg['total'] or 0
-        successful = (agg['completed'] or 0) + (agg['partial'] or 0)
-        success_rate = round((successful / total * 100), 1) if total > 0 else 0
-
-        total_rows = ETLRun.objects.aggregate(
-            total=Sum('total_rows_extracted')
-        )['total'] or 0
+        cutoff_7d = now - timedelta(days=7)
 
         return JsonResponse({
             'success': True,
             'data': {
-                'connections': connections_count,
-                'active_jobs': active_jobs,
-                'runs_24h': runs_24h,
-                'success_rate': success_rate,
-                'total_rows': total_rows,
+                'yesterday': get_etl_stats(cutoff_24h),
+                'week': get_etl_stats(cutoff_7d),
             }
         })
     except Exception as e:

@@ -371,13 +371,75 @@ The buyer tower gains exactly **+embedding_dim** (e.g., +32D) regardless of how 
 
 ---
 
-## 8. Next Steps
+## 8. Implementation Progress
 
-1. **Prototype SQL**: Create a v3 training view with `purchase_history` and `co_purchase_history` ARRAY columns for Ternopil data
-2. **Manual trainer module**: Write a trainer_module.py manually (not auto-generated) that implements the shared embedding + averaging pattern for both towers, to validate the approach with a Quick Test
-3. **Evaluate**: Compare RMSE/AUC-ROC with and without history features on the ranking model. Test incrementally: (a) purchase_history only, (b) co_purchase_history only, (c) both
-4. **PMI evaluation**: If co-purchase results show popularity bias, switch from raw count to PMI-based ranking
-5. **If successful**: Extend the Feature Config system and TrainerModuleGenerator to support the new "History" feature type
+### 8.1 Completed: BigQuery Views (v4)
+
+**Date**: 2026-02-25
+
+Created four v4 BigQuery views adding `purchase_history` ARRAY column, and updated v3 retrieval views to include top-80% product filter for consistency.
+
+**Views created:**
+
+| View | Type | Rows | Buyers | Avg History |
+|---|---|---|---|---|
+| `ternopil_train_v4` | Retrieval (no negatives) | 122,828 | 8,334 | 24.2 |
+| `ternopil_test_v4` | Retrieval (no negatives) | 1,059 | 232 | 22.7 |
+| `ternopil_prob_train_v4` | Ranking (1:4 negatives) | 440,850 | 8,334 | 22.6 |
+| `ternopil_prob_test_v4` | Ranking (1:4 negatives) | 4,820 | 232 | 22.7 |
+
+**Views updated (v3):**
+
+| View | Change |
+|---|---|
+| `ternopil_train_v3` | Added top-80% product filter (was unfiltered) |
+| `ternopil_test_v3` | Added top-80% product filter (was unfiltered) |
+
+The v3 views serve as baselines — same data as v4 but without `purchase_history`.
+
+**`purchase_history` column specification:**
+- Type: `ARRAY<STRING>` (product IDs are 12-digit strings like `"321780001001"`)
+- Content: Top 50 most recently purchased product IDs per buyer, deduplicated
+- Ordering: By most recent purchase date (descending), capped at 50
+- Scope: All-time (within training period), restricted to top-80% products by revenue
+- No leakage exclusion: The current row's product_id is NOT excluded — in an averaged embedding of ~23 products mapped to 32D, a single product's contribution (~4%) is noise, not a learnable shortcut
+- Point-in-time correctness: Test views compute history from training period only (all dates except last day)
+- Cold-start: Buyers with no training-period history get NULL (→ zero vector after padding/masking). Test set has ~19% cold-start buyers
+
+**SQL files:**
+
+| File | View |
+|---|---|
+| `sql/create_ternopil_train_v4_view.sql` | `ternopil_train_v4` |
+| `sql/create_ternopil_test_v4_view.sql` | `ternopil_test_v4` |
+| `sql/create_ternopil_prob_train_v4_view.sql` | `ternopil_prob_train_v4` |
+| `sql/create_ternopil_prob_test_v4_view.sql` | `ternopil_prob_test_v4` |
+| `sql/create_ternopil_train_v3_view.sql` | `ternopil_train_v3` (updated) |
+| `sql/create_ternopil_test_v3_view.sql` | `ternopil_test_v3` (updated) |
+
+### 8.2 Next: Manual Trainer Module (Validation Experiment)
+
+The goal is to validate whether the taste vector improves model quality before investing in platform changes (Feature Config system, TrainerModuleGenerator).
+
+**Experiment plan:**
+
+1. **Write a manual `trainer_module.py`** that implements the shared embedding + masked averaging pattern. This module is NOT auto-generated — it hardcodes the feature list and architecture for this specific experiment.
+
+2. **Run baseline experiment** on v3 data (no purchase_history) using the same architecture to establish a clean comparison point.
+
+3. **Run taste vector experiment** on v4 data (with purchase_history) using the manual trainer module with shared embedding + averaging in the buyer tower.
+
+4. **Compare**: RMSE and AUC-ROC between baseline and taste vector experiments. Both retrieval (Recall@K) and ranking (RMSE/AUC-ROC) models should be tested.
+
+5. **If successful** (meaningful metric improvement): proceed with `co_purchase_history` on the product tower (Section 9), then generalize into the platform (Feature Config system + TrainerModuleGenerator).
+
+6. **If not successful**: investigate whether the dataset is too small for the embedding to learn meaningful clusters, try reducing embedding_dim from 32 to 16/8, or try category-level history as a simpler alternative.
+
+### 8.3 Future Steps
+
+- **Co-purchase vector**: Add `co_purchase_history` to product tower (Section 9)
+- **PMI evaluation**: If co-purchase results show popularity bias, switch from raw count to PMI-based ranking
+- **Platform integration**: Extend Feature Config system and TrainerModuleGenerator to support "History" feature type
 
 ---
 
@@ -641,8 +703,14 @@ End-to-end shared embedding table with variable-length history input.
 
 | File | Relevance |
 |---|---|
-| `sql/create_ternopil_prob_train_v2_view.sql` | Current training view — needs `purchase_history` column |
-| `sql/create_ternopil_prob_test_v2_view.sql` | Current test view — same change |
+| `sql/create_ternopil_train_v4_view.sql` | v4 retrieval training view with `purchase_history` |
+| `sql/create_ternopil_test_v4_view.sql` | v4 retrieval test view with `purchase_history` |
+| `sql/create_ternopil_prob_train_v4_view.sql` | v4 ranking training view with `purchase_history` |
+| `sql/create_ternopil_prob_test_v4_view.sql` | v4 ranking test view with `purchase_history` |
+| `sql/create_ternopil_train_v3_view.sql` | v3 retrieval training view (baseline, top-80% filtered) |
+| `sql/create_ternopil_test_v3_view.sql` | v3 retrieval test view (baseline, top-80% filtered) |
+| `sql/create_ternopil_prob_train_v3_view.sql` | v3 ranking training view (baseline) |
+| `sql/create_ternopil_prob_test_v3_view.sql` | v3 ranking test view (baseline) |
 | `ml_platform/configs/services.py` | PreprocessingFnGenerator + TrainerModuleGenerator — need extensions |
 | `ml_platform/models.py` | FeatureConfig model — needs "History" feature type |
 | `templates/ml_platform/model_configs.html` | Feature Config UI — needs History feature option |

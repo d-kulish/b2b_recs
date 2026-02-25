@@ -759,6 +759,29 @@ Shows real-time statistics after filters are applied:
 - Active filter badges (Dates, Customers, Products)
 - Column statistics table with Data Type and Statistics columns
 
+### ARRAY Column Support (2026-02-25)
+
+The v4 views introduced `purchase_history` — an `ARRAY<STRING>` column (BigQuery REPEATED mode) containing per-buyer taste vectors. This required fixes across three layers:
+
+**Problem:** Standard SQL aggregates (`COUNT DISTINCT`, `MIN`, `MAX`, `AVG`) fail on ARRAY columns, causing `_get_column_stats()` to crash and the Dataset Summary to show only an "error" row.
+
+**Affected Code Paths & Fixes:**
+
+| Layer | File | Fix |
+|-------|------|-----|
+| **Sample loading** | `preview_service.py` `_execute_sample_query()` | Guard `isinstance(val, (list, dict))` before `pd.isna()` — ARRAY values are Python lists which crash `pd.isna()` |
+| **Sample preview** | `preview_service.py` `_dataframe_to_preview()` | Same `pd.isna()` guard + `json.dumps()` for JSON serialization of list values |
+| **Column stats (BQ)** | `services.py` `BigQueryService.get_column_stats()` | Detect `field.mode == 'REPEATED'`, use `ARRAY_LENGTH()` instead of scalar aggregates |
+| **Column stats (Dataset)** | `services.py` `DatasetStatsService._get_column_stats()` | Same: read `mode` from schema, skip scalar stats, use `ARRAY_LENGTH()` for REPEATED columns |
+| **Frontend rendering** | `model_configs.html` `ds_formatColumnStats()` | Render `ARRAY<*>` type with Avg/Min/Max length stats |
+
+**ARRAY Column Statistics:**
+- Type displayed as `ARRAY<STRING>` (not just `STRING`)
+- Stats: Avg length, Min length, Max length (via `ARRAY_LENGTH()`)
+- Null count/percent still works (BigQuery supports `IS NULL` on arrays)
+
+**Key Principle:** Any code path that iterates over BigQuery schema fields must check `mode == 'REPEATED'` before applying scalar operations. This applies to SQL generation, Python value handling (`pd.isna`), and frontend type rendering.
+
 ### Dataset Compare Feature (2026-01-14)
 
 Side-by-side comparison modal for any two datasets:
@@ -2132,6 +2155,7 @@ The UI uses a simplified 3-type system that maps from BigQuery types:
 | **Numeric** | INTEGER, INT64, FLOAT, FLOAT64, NUMERIC, BIGNUMERIC | Normalize, Bucketize + Embed |
 | **Text** | STRING, BYTES | Embedding (vocabulary lookup) |
 | **Temporal** | TIMESTAMP, DATETIME, DATE, TIME | Normalize, Cyclical, Bucketize + Embed |
+| **Array** | ARRAY<STRING>, ARRAY<INT64>, etc. (mode=REPEATED) | Shared embedding lookup + pooling (taste vector) |
 
 ### Supported Transformations
 

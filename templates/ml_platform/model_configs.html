@@ -11400,7 +11400,18 @@ function ds_formatColumnStats(stats) {
     const items = [];
 
     // Handle different column types
-    if (stats.type === 'STRING' || stats.type === 'BYTES') {
+    if (stats.type && stats.type.startsWith('ARRAY<')) {
+        // ARRAY/REPEATED columns — show length statistics
+        if (stats.avg_length !== undefined && stats.avg_length !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Avg len:</span> <span class="stat-value">${stats.avg_length}</span></span>`);
+        }
+        if (stats.min_length !== undefined && stats.min_length !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Min len:</span> <span class="stat-value">${stats.min_length}</span></span>`);
+        }
+        if (stats.max_length !== undefined && stats.max_length !== null) {
+            items.push(`<span class="stat-item"><span class="stat-label">Max len:</span> <span class="stat-value">${stats.max_length}</span></span>`);
+        }
+    } else if (stats.type === 'STRING' || stats.type === 'BYTES') {
         if (stats.unique_count !== undefined) {
             items.push(`<span class="stat-item"><span class="stat-label">Unique:</span> <span class="stat-value">${stats.unique_count.toLocaleString()}</span></span>`);
         }

@@ -10,6 +10,7 @@ Key features:
 - Generate previews using pandas joins
 - Auto-detect join keys between tables
 """
+import json
 import uuid
 import logging
 from datetime import datetime, timedelta
@@ -399,6 +400,8 @@ class DatasetPreviewService:
                     val = getattr(row, col, None)
                     if hasattr(val, 'isoformat'):
                         row_data[col] = val.isoformat()
+                    elif isinstance(val, (list, dict)):
+                        row_data[col] = val
                     elif pd.isna(val):
                         row_data[col] = None
                     else:
@@ -425,7 +428,9 @@ class DatasetPreviewService:
         # Ensure all values are JSON-serializable
         for record in records:
             for key, val in record.items():
-                if pd.isna(val):
+                if isinstance(val, (list, dict)):
+                    record[key] = json.dumps(val)
+                elif pd.isna(val):
                     record[key] = None
                 elif hasattr(val, 'isoformat'):
                     record[key] = val.isoformat()

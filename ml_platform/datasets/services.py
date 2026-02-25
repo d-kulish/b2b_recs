@@ -433,8 +433,17 @@ class BigQueryService:
             for field in fields_to_analyze:
                 col_name = field.name
                 col_type = field.field_type
+                col_mode = field.mode
 
-                # Null count for all columns
+                # REPEATED (ARRAY) columns — standard aggregates fail on arrays
+                if col_mode == 'REPEATED':
+                    stats_parts.append(f"COUNTIF(`{col_name}` IS NULL) AS `{col_name}__null_count`")
+                    stats_parts.append(f"AVG(ARRAY_LENGTH(`{col_name}`)) AS `{col_name}__avg_length`")
+                    stats_parts.append(f"MIN(ARRAY_LENGTH(`{col_name}`)) AS `{col_name}__min_length`")
+                    stats_parts.append(f"MAX(ARRAY_LENGTH(`{col_name}`)) AS `{col_name}__max_length`")
+                    continue
+
+                # Null count for all scalar columns
                 stats_parts.append(f"COUNTIF(`{col_name}` IS NULL) AS `{col_name}__null_count`")
 
                 # Type-specific stats
@@ -472,16 +481,26 @@ class BigQueryService:
             for field in fields_to_analyze:
                 col_name = field.name
                 col_type = field.field_type
+                col_mode = field.mode
 
                 null_count = getattr(row, f'{col_name}__null_count', 0) or 0
 
                 col_stats = {
-                    'type': col_type,
+                    'type': f'ARRAY<{col_type}>' if col_mode == 'REPEATED' else col_type,
                     'null_count': null_count,
                     'null_percent': round(null_count / total_rows * 100, 2) if total_rows > 0 else 0,
                 }
 
-                if col_type in ('STRING', 'BYTES'):
+                if col_mode == 'REPEATED':
+                    # ARRAY column stats
+                    avg_len = getattr(row, f'{col_name}__avg_length', None)
+                    min_len = getattr(row, f'{col_name}__min_length', None)
+                    max_len = getattr(row, f'{col_name}__max_length', None)
+                    col_stats['avg_length'] = round(float(avg_len), 1) if avg_len is not None else None
+                    col_stats['min_length'] = int(min_len) if min_len is not None else None
+                    col_stats['max_length'] = int(max_len) if max_len is not None else None
+
+                elif col_type in ('STRING', 'BYTES'):
                     col_stats['cardinality'] = getattr(row, f'{col_name}__cardinality', 0) or 0
                     col_stats['max_length'] = getattr(row, f'{col_name}__max_length', 0) or 0
                     # Calculate uniqueness ratio
@@ -4856,21 +4875,25 @@ class DatasetStatsService:
             columns_with_types = []
             for table, columns in selected_columns.items():
                 table_alias = table.replace('raw_data.', '')
-                # Get schema to know column types
+                # Get schema to know column types and modes
                 try:
                     schema = self.bq_service.get_table_schema(table)
                     schema_dict = {col['name']: col['type'] for col in schema}
+                    mode_dict = {col['name']: col.get('mode', 'NULLABLE') for col in schema}
                 except Exception:
                     schema_dict = {}
+                    mode_dict = {}
 
                 for col in columns:
                     col_alias = f"{table_alias}_{col}"
                     col_type = schema_dict.get(col, 'STRING')
+                    col_mode = mode_dict.get(col, 'NULLABLE')
                     columns_with_types.append({
                         'alias': col_alias,
                         'original': col,
                         'table': table_alias,
-                        'type': col_type
+                        'type': col_type,
+                        'mode': col_mode,
                     })
 
             if not columns_with_types:
@@ -4882,8 +4905,18 @@ class DatasetStatsService:
             for col_info in columns_with_types:
                 alias = col_info['alias']
                 col_type = col_info['type']
+                col_mode = col_info.get('mode', 'NULLABLE')
 
-                # Null count for all
+                # REPEATED (ARRAY) columns need special handling —
+                # standard aggregates (COUNTIF, COUNT DISTINCT, MIN, MAX) fail on arrays
+                if col_mode == 'REPEATED':
+                    stats_parts.append(f"COUNTIF(`{alias}` IS NULL) AS `{alias}__null_count`")
+                    stats_parts.append(f"AVG(ARRAY_LENGTH(`{alias}`)) AS `{alias}__avg_length`")
+                    stats_parts.append(f"MIN(ARRAY_LENGTH(`{alias}`)) AS `{alias}__min_length`")
+                    stats_parts.append(f"MAX(ARRAY_LENGTH(`{alias}`)) AS `{alias}__max_length`")
+                    continue
+
+                # Null count for all scalar columns
                 stats_parts.append(f"COUNTIF(`{alias}` IS NULL) AS `{alias}__null_count`")
 
                 if col_type in ('STRING', 'BYTES'):
@@ -4922,17 +4955,27 @@ class DatasetStatsService:
             for col_info in columns_with_types:
                 alias = col_info['alias']
                 col_type = col_info['type']
+                col_mode = col_info.get('mode', 'NULLABLE')
                 display_name = f"{col_info['table']}.{col_info['original']}"
 
                 null_count = getattr(row, f'{alias}__null_count', 0) or 0
 
                 stats = {
-                    'type': col_type,
+                    'type': f'ARRAY<{col_type}>' if col_mode == 'REPEATED' else col_type,
                     'null_count': null_count,
                     'null_percent': round(null_count / total_rows * 100, 2) if total_rows > 0 else 0
                 }
 
-                if col_type in ('STRING', 'BYTES'):
+                if col_mode == 'REPEATED':
+                    # ARRAY column stats
+                    avg_len = getattr(row, f'{alias}__avg_length', None)
+                    min_len = getattr(row, f'{alias}__min_length', None)
+                    max_len = getattr(row, f'{alias}__max_length', None)
+                    stats['avg_length'] = round(float(avg_len), 1) if avg_len is not None else None
+                    stats['min_length'] = int(min_len) if min_len is not None else None
+                    stats['max_length'] = int(max_len) if max_len is not None else None
+
+                elif col_type in ('STRING', 'BYTES'):
                     stats['unique_count'] = getattr(row, f'{alias}__unique_count', 0) or 0
 
                 elif col_type in ('INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'):

@@ -189,18 +189,22 @@
     /* Coverage Matrix Table */
     .configs-dashboard-matrix {
         width: 100%;
+        table-layout: fixed;
         border-collapse: separate;
         border-spacing: 2px;
         font-size: 12px;
     }
 
     .configs-dashboard-matrix th {
-        padding: 8px 12px;
+        padding: 8px 6px;
         text-align: center;
         font-weight: 500;
         color: #6b7280;
         background: #f9fafb;
         border-radius: 6px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .configs-dashboard-matrix th.row-header {
@@ -4417,6 +4421,12 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    .ds-detail-stat-info .stat-value.multiline {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
     }
 
     /* Filter detail breakdowns inside section — key-value grid */
@@ -14086,7 +14096,7 @@ function ds_renderDatasetDetail(summary) {
                         </div>
                         <div class="ds-detail-stat-info" style="flex: 2;">
                             <div class="stat-label">Description</div>
-                            <div class="stat-value">${summary.description ? ds_escapeHtml(summary.description) : '—'}</div>
+                            <div class="stat-value multiline">${summary.description ? ds_escapeHtml(summary.description) : '—'}</div>
                         </div>
                     </div>
                 </div>
@@ -15427,6 +15437,15 @@ function cfg_renderCoverageMatrix(matrix) {
     const numModelConfigs = matrix.model_configs.length;
     const numFeatureConfigs = matrix.feature_configs.length;
     let html = '<table class="configs-dashboard-matrix">';
+
+    // Define column widths: narrow vertical label, fixed row header, equal data columns
+    html += '<colgroup>';
+    html += '<col style="width: 28px;">';   // vertical label
+    html += '<col style="width: 130px;">';  // row header (feature config name)
+    for (let i = 0; i < numModelConfigs; i++) {
+        html += '<col>';  // equal-width data columns via table-layout: fixed
+    }
+    html += '</colgroup>';
 
     // Label row for "MODEL CONFIGS"
     html += '<thead>';
@@ -18515,7 +18534,7 @@ function renderViewModal(config) {
                         </div>
                         <div class="ds-detail-stat-info" style="flex: 2;">
                             <div class="stat-label">Description</div>
-                            <div class="stat-value">${config.description || '—'}</div>
+                            <div class="stat-value multiline">${config.description || '—'}</div>
                         </div>
                     </div>
                 </div>

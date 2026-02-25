@@ -50,12 +50,13 @@ products_with_id AS (
   WHERE rn = 1
 ),
 
--- Pre-aggregate daily totals per customer for efficient rolling sum
+-- Pre-aggregate daily stats per customer for efficient rolling calculations
 daily_customer_totals AS (
   SELECT
     cust_person_id,
     DATE(date_of_day) AS txn_date,
-    SUM(sell_val_nsp) AS daily_total
+    SUM(sell_val_nsp) AS daily_total,
+    COUNT(DISTINCT product_id) AS daily_unique_products
   FROM filtered_invoices
   GROUP BY cust_person_id, DATE(date_of_day)
 )
@@ -74,11 +75,50 @@ SELECT
       SELECT SUM(dct.daily_total)
       FROM daily_customer_totals dct
       WHERE dct.cust_person_id = i.cust_person_id
-        AND dct.txn_date >= DATE_SUB(DATE(i.date_of_day), INTERVAL 20 DAY)
+        AND dct.txn_date >= DATE_SUB(DATE(i.date_of_day), INTERVAL 60 DAY)
         AND dct.txn_date < DATE(i.date_of_day)
     ),
     0
   ) AS cust_value,
+
+  -- Days since customer's previous transaction (recency signal)
+  COALESCE(
+    DATE_DIFF(
+      DATE(i.date_of_day),
+      (
+        SELECT MAX(dct.txn_date)
+        FROM daily_customer_totals dct
+        WHERE dct.cust_person_id = i.cust_person_id
+          AND dct.txn_date < DATE(i.date_of_day)
+      ),
+      DAY
+    ),
+    0
+  ) AS days_since_last_purchase,
+
+  -- Rolling 60-day count of distinct order days (purchasing frequency)
+  COALESCE(
+    (
+      SELECT COUNT(DISTINCT dct.txn_date)
+      FROM daily_customer_totals dct
+      WHERE dct.cust_person_id = i.cust_person_id
+        AND dct.txn_date >= DATE_SUB(DATE(i.date_of_day), INTERVAL 60 DAY)
+        AND dct.txn_date < DATE(i.date_of_day)
+    ),
+    0
+  ) AS cust_order_days_60d,
+
+  -- Rolling 60-day count of distinct products purchased (breadth signal)
+  COALESCE(
+    (
+      SELECT SUM(dct.daily_unique_products)
+      FROM daily_customer_totals dct
+      WHERE dct.cust_person_id = i.cust_person_id
+        AND dct.txn_date >= DATE_SUB(DATE(i.date_of_day), INTERVAL 60 DAY)
+        AND dct.txn_date < DATE(i.date_of_day)
+    ),
+    0
+  ) AS cust_unique_products_60d,
 
   -- Store context
   s.city,

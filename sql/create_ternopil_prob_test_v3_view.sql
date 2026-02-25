@@ -57,7 +57,8 @@ product_catalog AS (
 positives AS (
   SELECT
     customer_id, target_group, date, store_id, product_id, sales,
-    cust_value, city, art_name, division_desc, stratbuy_domain_desc,
+    cust_value, days_since_last_purchase, cust_order_days_60d, cust_unique_products_60d,
+    city, art_name, division_desc, stratbuy_domain_desc,
     mge_main_cat_desc, mge_cat_desc, mge_sub_cat_desc, brand_name, segment,
     1 AS label
   FROM (
@@ -83,12 +84,19 @@ customer_pos_counts AS (
   GROUP BY customer_id
 ),
 
--- Customer context features from the test day (used for negative rows)
-customer_context AS (
-  SELECT customer_id, target_group, date, store_id, cust_value, city, segment
+-- Distinct customer dates with context features (for point-in-time negative sampling)
+customer_dates AS (
+  SELECT customer_id, target_group, date, store_id,
+         cust_value, days_since_last_purchase, cust_order_days_60d, cust_unique_products_60d,
+         city, segment
   FROM (
-    SELECT customer_id, target_group, date, store_id, cust_value, city, segment,
-           ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY date DESC) AS rn
+    SELECT customer_id, target_group, date, store_id,
+           cust_value, days_since_last_purchase, cust_order_days_60d, cust_unique_products_60d,
+           city, segment,
+           ROW_NUMBER() OVER (
+             PARTITION BY customer_id, DATE(date)
+             ORDER BY date DESC
+           ) AS rn
     FROM test_data
   )
   WHERE rn = 1
@@ -113,19 +121,29 @@ negative_ranked AS (
 ),
 
 -- Sampled negatives: 1:4 ratio (4 negatives per positive, per customer)
+-- Each negative is paired with a customer date via round-robin to get point-in-time cust_value
+-- This ensures negatives see the same cust_value distribution as positives (no leakage)
 negatives AS (
   SELECT
-    cc.customer_id, cc.target_group, cc.date, cc.store_id,
+    cd.customer_id, cd.target_group, cd.date, cd.store_id,
     nr.product_id,
     0.0 AS sales,
-    cc.cust_value, cc.city,
+    cd.cust_value, cd.days_since_last_purchase, cd.cust_order_days_60d, cd.cust_unique_products_60d,
+    cd.city,
     pc.art_name, pc.division_desc, pc.stratbuy_domain_desc,
     pc.mge_main_cat_desc, pc.mge_cat_desc, pc.mge_sub_cat_desc, pc.brand_name,
-    cc.segment,
+    cd.segment,
     0 AS label
   FROM negative_ranked nr
   JOIN customer_pos_counts cpc ON nr.customer_id = cpc.customer_id
-  JOIN customer_context cc ON nr.customer_id = cc.customer_id
+  -- Round-robin: distribute negatives across customer's actual transaction dates
+  JOIN (
+    SELECT *,
+      ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY date) AS date_rank,
+      COUNT(*) OVER (PARTITION BY customer_id) AS date_count
+    FROM customer_dates
+  ) cd ON nr.customer_id = cd.customer_id
+    AND cd.date_rank = 1 + MOD(nr.neg_rank - 1, cd.date_count)
   JOIN product_catalog pc ON nr.product_id = pc.product_id
   WHERE nr.neg_rank <= cpc.pos_count * 4
 )

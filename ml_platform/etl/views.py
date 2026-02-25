@@ -479,6 +479,26 @@ def etl_page(request):
     })
 
     # =========================================================================
+    # Header KPI: Yesterday's stats + counts
+    # =========================================================================
+    yesterday_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    yesterday_end = yesterday_start + timedelta(days=1)
+    yesterday_runs = all_etl_runs.filter(
+        started_at__gte=yesterday_start,
+        started_at__lt=yesterday_end,
+    )
+    yesterday_aggregates = yesterday_runs.aggregate(
+        successful=Count('id', filter=Q(status__in=['completed', 'partial'])),
+        failed=Count('id', filter=Q(status='failed')),
+    )
+    header_kpi = {
+        'yesterday_successful': yesterday_aggregates['successful'] or 0,
+        'yesterday_failed': yesterday_aggregates['failed'] or 0,
+        'total_connections': Connection.objects.count(),
+        'total_etl_jobs': data_sources.count(),
+    }
+
+    # =========================================================================
     # KPI Dashboard Aggregations (Last 30 Days)
     # =========================================================================
     # Get all runs from the last 30 days for KPI calculations
@@ -636,6 +656,7 @@ def etl_page(request):
         'showing_last_30_days': True,
         'diverging_chart_data': diverging_chart_json,
         'kpi_data': kpi_data,
+        'header_kpi': header_kpi,
         'scheduled_jobs': scheduled_jobs_page,
         'has_scheduled_jobs': len(scheduled_jobs_list) > 0,
         # Filter state for Recent Runs (client-side filtering)

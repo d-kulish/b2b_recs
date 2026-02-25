@@ -14,32 +14,87 @@
     <link rel="stylesheet" href="{% static 'css/model_dashboard.css' %}?v=17">
     <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=4">
     <link rel="stylesheet" href="{% static 'css/modals.css' %}?v=4">
+    <link rel="stylesheet" href="{% static 'css/backgrounds.css' %}">
     <link rel="stylesheet" href="{% static 'css/exp_view_modal.css' %}?v=12">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 </head>
-<body style="background-color: #ffffff; min-height: 100vh;">
-    <!-- Header -->
-    <div class="p-6 pb-0">
+<body class="bg-dotted" style="min-height: 100vh;">
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col relative" style="z-index: 10;">
+        <!-- Fixed Model Info Tablet -->
+        <div class="p-6 pb-0 overflow-y-auto" style="scrollbar-gutter: stable;">
         <div class="max-w-[88rem] mx-auto">
             <div class="bg-white border border-black rounded-xl px-6 py-3 shadow-lg">
+                <!-- Single Row: Logo | Page Name | KPIs | User Icon -->
                 <div class="flex items-center gap-6">
-                    <!-- Logo -->
+                    <!-- Logo with Recs Studio text beneath -->
                     <a href="{% url 'system_dashboard' %}" class="flex flex-col items-center hover:opacity-80 transition flex-shrink-0 mr-4">
                         <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-[70px] w-auto">
                         <span class="text-sm font-bold text-gray-700 mt-1">Recs Studio</span>
                     </a>
 
-                    <!-- Page Title -->
-                    <div class="flex-shrink-0">
-                        <h1 class="text-5xl font-bold text-green-900">ETL</h1>
-                        <p class="text-sm text-gray-600 mt-1">Extract, Transform, Load — Data ingestion pipelines</p>
+                    <!-- Page Name and Description (30% width) -->
+                    <div class="flex-shrink-0" style="width: 30%;">
+                        <h1 class="text-5xl font-bold truncate text-blue-900 lowercase">ETL</h1>
+                        <p class="text-sm text-gray-600 mt-1 truncate">Data ingestion pipelines</p>
+                    </div>
+
+                    <!-- Header KPI Section (after page name) -->
+                    <div class="flex items-center gap-3 flex-shrink-0 ml-6">
+                        <!-- KPI: Failed Yesterday -->
+                        <div class="header-kpi-card" style="width: 150px;">
+                            <div class="header-kpi-icon errors">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="header-kpi-content">
+                                <div class="header-kpi-value">{{ header_kpi.yesterday_failed }}</div>
+                                <div class="header-kpi-label">Failed</div>
+                                <div class="header-kpi-subtitle">last 24h</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI: Successful Yesterday -->
+                        <div class="header-kpi-card" style="width: 150px;">
+                            <div class="header-kpi-icon requests">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="header-kpi-content">
+                                <div class="header-kpi-value">{{ header_kpi.yesterday_successful }}</div>
+                                <div class="header-kpi-label">Successful</div>
+                                <div class="header-kpi-subtitle">last 24h</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI: Connections -->
+                        <div class="header-kpi-card" style="width: 150px;">
+                            <div class="header-kpi-icon models">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="header-kpi-content">
+                                <div class="header-kpi-value">{{ header_kpi.total_connections }}</div>
+                                <div class="header-kpi-label">Connections</div>
+                                <div class="header-kpi-subtitle">active sources</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI: ETL Jobs -->
+                        <div class="header-kpi-card" style="width: 150px;">
+                            <div class="header-kpi-icon latency">
+                                <i class="fas fa-stream"></i>
+                            </div>
+                            <div class="header-kpi-content">
+                                <div class="header-kpi-value">{{ header_kpi.total_etl_jobs }}</div>
+                                <div class="header-kpi-label">ETL Jobs</div>
+                                <div class="header-kpi-subtitle">configured</div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- User Profile Icon (pushed to far right) -->
                     <div class="ml-auto flex-shrink-0">
-                        <a href="#" class="flex items-center justify-content-center w-[44px] h-[44px] rounded-full overflow-hidden" title="User Profile">
-                            <img src="{% static 'images/person_icon.webp' %}" alt="User Profile" class="w-full h-full object-cover">
+                        <a href="#" class="header-user-icon" title="User Profile">
+                            <img src="{% static 'images/person_icon.webp' %}" alt="User Profile">
                         </a>
                     </div>
                 </div>
@@ -11092,5 +11147,6 @@ function closeConfirmation(confirmed) {
 </script>
         </div>
     </main>
+    </div>
 </body>
 </html>

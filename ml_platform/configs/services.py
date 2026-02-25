@@ -4291,7 +4291,8 @@ def _input_fn(
         output_has_sigmoid = False
         if self.rating_head_layers:
             last_layer = self.rating_head_layers[-1]
-            if last_layer.get('activation', '').lower() == 'sigmoid':
+            activation = last_layer.get('activation')
+            if activation and activation.lower() == 'sigmoid':
                 output_has_sigmoid = True
 
         # Get loss function
@@ -5500,7 +5501,8 @@ def _input_fn(
         output_has_sigmoid = False
         if self.rating_head_layers:
             last_layer = self.rating_head_layers[-1]
-            if last_layer.get('activation', '').lower() == 'sigmoid':
+            activation = last_layer.get('activation')
+            if activation and activation.lower() == 'sigmoid':
                 output_has_sigmoid = True
 
         # Get loss function

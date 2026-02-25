@@ -417,29 +417,164 @@ The v3 views serve as baselines — same data as v4 but without `purchase_histor
 | `sql/create_ternopil_train_v3_view.sql` | `ternopil_train_v3` (updated) |
 | `sql/create_ternopil_test_v3_view.sql` | `ternopil_test_v3` (updated) |
 
-### 8.2 Next: Manual Trainer Module (Validation Experiment)
+### 8.2 Next: Standalone Custom Job Experiment (Validation)
+
+**Date**: 2026-02-25
+**Status**: Planning
 
 The goal is to validate whether the taste vector improves model quality before investing in platform changes (Feature Config system, TrainerModuleGenerator).
 
-**Experiment plan:**
+#### Why Standalone (Not TFX Pipeline)
 
-1. **Write a manual `trainer_module.py`** that implements the shared embedding + masked averaging pattern. This module is NOT auto-generated — it hardcodes the feature list and architecture for this specific experiment.
+The current platform cannot include `purchase_history` in the training data. The pipeline chain drops it:
 
-2. **Run baseline experiment** on v3 data (no purchase_history) using the same architecture to establish a clean comparison point.
+```
+BigQuery (v4 view, ALL columns including purchase_history)
+  → ExampleGen query (only columns from Dataset/FeatureConfig — no ARRAY support)
+    → Transform (only features in preprocessing_fn)
+      → TFRecords: customer_id, product_id, category, brand, ...
+                   ❌ purchase_history dropped at ExampleGen query stage
+                   ❌ prod_* stats dropped (not in FeatureConfig)
+```
 
-3. **Run taste vector experiment** on v4 data (with purchase_history) using the manual trainer module with shared embedding + averaging in the buyer tower.
+The FeatureConfig system has no "History" (variable-length array) feature type, so `purchase_history` cannot be mapped to a tower. The Dataset's generated ExampleGen query only selects columns that appear in the FeatureConfig, so the array column is never materialized into TFRecords.
 
-4. **Compare**: RMSE and AUC-ROC between baseline and taste vector experiments. Both retrieval (Recall@K) and ranking (RMSE/AUC-ROC) models should be tested.
+**Approach: Standalone Custom Job** — bypass TFX ExampleGen/Transform entirely. Read `ternopil_train_v4` / `ternopil_test_v4` directly from BigQuery via `google-cloud-bigquery`, do all preprocessing in Python/TensorFlow, and train. This is the fastest path to validate the taste vector's impact.
 
-5. **If successful** (meaningful metric improvement): proceed with `co_purchase_history` on the product tower (Section 9), then generalize into the platform (Feature Config system + TrainerModuleGenerator).
+#### Baseline Experiments (Already Completed)
 
-6. **If not successful**: investigate whether the dataset is too small for the embedding to learn meaningful clusters, try reducing embedding_dim from 32 to 16/8, or try category-level history as a simpler alternative.
+| Exp | Data | Type | Feature Config | Model Config | Key Metric | Value |
+|---|---|---|---|---|---|---|
+| QT#25 (ID 159) | `ternopil_prob_train_v3` | Ranking | `feat_rank_prob_v3` (FC#34) | `mod_rank_prob_v1_v4` (MC#30) | RMSE / AUC-ROC | 0.288 / 0.837 |
+| QT#27 (ID 161) | `ternopil_train_v4` | Retrieval | `feat_retr_v4` (FC#35) | `retr_v4` (MC#31) | Recall@100 | Running (baseline on v4 standard features) |
+| QT#11 (ID 145) | `ternopil_train_v3` | Retrieval | `retr_v3` (FC#30) | `retr_v1_v1` (MC#23) | Recall@100 | 0.339 |
 
-### 8.3 Future Steps
+QT#27 is particularly important — it runs on v4 data with the same product catalog but **without** the taste vector (standard FeatureConfig). Once complete, comparing it against the taste vector experiment isolates the impact of `purchase_history` alone.
 
-- **Co-purchase vector**: Add `co_purchase_history` to product tower (Section 9)
+#### Experiment Plan
+
+**Step 1: Write `scripts/test_taste_vector.py`**
+
+A standalone Custom Job script that:
+
+1. **Reads directly from BigQuery** — queries `ternopil_train_v4` and `ternopil_test_v4` (or `prob_*` variants for ranking), gets ALL columns including `purchase_history` and `prod_*` stats
+2. **Builds vocabularies in Python** — computes product_id vocabulary (same as what TFX Transform would produce), maps `purchase_history` array elements using the same vocabulary
+3. **Preprocesses features** — normalizes numerics, applies vocabulary indices to categoricals, pads `purchase_history` arrays to fixed max_length (50)
+4. **Creates `tf.data.Dataset`** — from the preprocessed data, with proper batching and shuffling
+5. **Builds the TFRS model** with shared embedding + masked averaging:
+   - Shared `tf.keras.layers.Embedding(product_vocab_size, 32)` table
+   - Buyer tower: customer_id embed + averaged purchase_history (shared embed) + RFM features + segment/city/target_group
+   - Product tower: product_id embed (shared) + category hierarchy + brand + product aggregate stats (normalized)
+   - Same dense tower structure as existing model configs for fair comparison
+6. **Trains and evaluates** — saves `training_metrics.json` to GCS in the same format as the platform's MetricsCollector (compatible with the Experiments dashboard)
+7. **Submits as Vertex AI Custom Job** — GPU (T4) in `europe-west4`, same infrastructure as `test_services_trainer.py`
+
+**Step 2: Run experiments**
+
+| Exp | Data View | Model Type | Features | Compare To |
+|---|---|---|---|---|
+| **T1** | `ternopil_train_v4` | Retrieval | All standard + `purchase_history` (buyer tower) + `prod_*` stats (product tower) | QT#27 baseline |
+| **T2** | `ternopil_prob_train_v4` | Ranking | All standard + `purchase_history` + `prod_*` stats | QT#25 (RMSE 0.288, AUC 0.837) |
+
+Both experiments use 100 epochs, LR=0.001, batch_size=4096, 100% sample — same hyperparameters as baselines.
+
+**Step 3: Ablation (if T1/T2 show improvement)**
+
+| Exp | Ablation | Purpose |
+|---|---|---|
+| **A1** | Taste vector only (no `prod_*` stats) | Isolate purchase_history contribution |
+| **A2** | Product stats only (no taste vector) | Isolate product aggregate contribution |
+| **A3** | Embedding dim 16 instead of 32 | Test if smaller embedding works for 981-product vocab |
+
+**Step 4: Compare and decide**
+
+| Outcome | Next Step |
+|---|---|
+| Taste vector improves metrics meaningfully | Proceed to co-purchase vector (Section 9), then platform integration |
+| Product stats help but taste vector doesn't | Integrate `prod_*` stats only (simple — no platform changes needed, just add as numeric features) |
+| No improvement | Investigate: dataset too small? Try category-level history (Appendix A.1) as simpler alternative |
+
+#### Script Architecture
+
+```
+scripts/test_taste_vector.py
+├── read_from_bigquery()          # BQ → pandas DataFrame → tf.data.Dataset
+│   ├── Build product_id vocabulary from training data
+│   ├── Map purchase_history arrays using same vocabulary
+│   ├── Pad purchase_history to max_length=50
+│   ├── Normalize numerics (z-score)
+│   └── Map categoricals to vocabulary indices
+│
+├── build_retrieval_model()       # TFRS RetrievalModel with shared embedding
+│   ├── shared_product_embedding = Embedding(vocab_size, 32)
+│   ├── BuyerTower: customer_id + avg(purchase_history via shared embed) + categoricals + numerics
+│   ├── ProductTower: product_id (shared embed) + categoricals + prod_* stats
+│   └── tfrs.tasks.Retrieval(metrics=tfrs.metrics.FactorizedTopK(...))
+│
+├── build_ranking_model()         # TFRS RankingModel with shared embedding
+│   ├── Same tower structure as retrieval
+│   └── tfrs.tasks.Ranking(loss=BinaryCrossentropy(from_logits=True))
+│
+├── train_and_evaluate()          # Training loop with MetricsCollector-compatible output
+│   ├── Train for N epochs
+│   ├── Evaluate on test set
+│   └── Save training_metrics.json to GCS
+│
+└── submit_custom_job()           # Vertex AI Custom Job submission
+    ├── Upload script to GCS
+    ├── n1-standard-8 + T4 GPU in europe-west4
+    └── Monitor and fetch results
+```
+
+#### Key Design Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Read from BQ directly | Yes | Fastest path; avoids TFX ExampleGen/Transform dependency |
+| Shared embedding dim | 32 | Matches product_id embedding_dim in `feat_retr_v4`; 981 products × 32 = 31K params (negligible) |
+| Max purchase_history length | 50 | Matches view definition; avg is 24, max is 50 |
+| Cold-start handling | Zero vector (masked average of empty array) | 0% cold-start in train, 19% in test — model learns to rely on other features |
+| Product stats preprocessing | Z-score normalization | `prod_unique_buyers`, `prod_order_count`, `prod_total_sales`, `prod_avg_sale` vary in scale; `prod_cat_revenue_pctile` is already [0,1] |
+| Metrics format | Same as MetricsCollector | Allows results to be cached in QuickTest DB and viewed in Experiments dashboard |
+| GPU | T4 in europe-west4 | Consistent with existing experiment infrastructure |
+
+#### Recommendations
+
+1. **Start with retrieval (T1)** — simpler model, faster training, clearer signal from Recall@K metrics. The retrieval task's in-batch negatives make it sensitive to tower quality, so the taste vector should have an outsized effect.
+
+2. **Match architecture exactly** — use the same tower layer structure as `retr_v4` (MC#31) and `mod_rank_prob_v1_v4` (MC#30) so the only variable is the taste vector + product stats.
+
+3. **Log per-epoch metrics** — track not just final metrics but loss curves. If the taste vector model converges faster (lower loss at same epoch), that's a signal even if final metrics are similar — it means the model extracts information more efficiently.
+
+4. **Monitor cold-start separately** — after training, evaluate Recall@K / RMSE on cold-start buyers (null purchase_history in test set) vs warm buyers. The taste vector shouldn't hurt cold-start performance (zero vector fallback), but should significantly improve warm buyer performance.
+
+5. **Save the trained model** — if results are good, the SavedModel can be used for initial deployment while the platform integration is in progress.
+
+### 8.3 Platform Integration Path (After Validation)
+
+Once the standalone experiment validates the taste vector, integrate into the platform in three steps:
+
+**Step 1: Feature Config System** — add "History" feature type
+- New feature type in `FeatureConfig.buyer_model_features`: `data_type: "history"`
+- UI: drag `purchase_history` column to buyer tower, configure `shared_with` (links to product_id embedding), `max_length`, `embedding_dim`
+- `_calc_feature_dim()`: History feature adds +embedding_dim to buyer tower
+
+**Step 2: PreprocessingFnGenerator** — handle ARRAY features with shared vocabulary
+- Detect `data_type: "history"` features
+- Generate `tft.apply_vocabulary()` call referencing the product_id vocabulary (shared)
+- Output: variable-length int64 feature in transformed examples
+
+**Step 3: TrainerModuleGenerator** — shared embedding + masked averaging
+- Create shared `tf.keras.layers.Embedding` referenced by both towers
+- Generate masked averaging code in buyer tower `call()` method
+- Generate product_id lookup using the same shared embedding in product tower
+
+### 8.4 Future Steps
+
+- **Co-purchase vector**: Add `co_purchase_history` to product tower (Section 9) — same shared embedding, same averaging pattern, applied to product-side
 - **PMI evaluation**: If co-purchase results show popularity bias, switch from raw count to PMI-based ranking
-- **Platform integration**: Extend Feature Config system and TrainerModuleGenerator to support "History" feature type
+- **Platform integration**: Extend Feature Config system and TrainerModuleGenerator (Section 8.3)
+- **Serving**: Materialize buyer purchase histories to Firestore for real-time inference (Section 4.5)
 
 ---
 

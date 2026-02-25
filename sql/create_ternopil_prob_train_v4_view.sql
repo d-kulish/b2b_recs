@@ -8,7 +8,8 @@
 --
 -- v4 changes vs v3:
 --   - Added purchase_history ARRAY column: top-50 most recently purchased product IDs per buyer
---   - History is all-time (training period), deduplicated, ordered by recency, capped at 50
+--   - Added product aggregate features: prod_unique_buyers, prod_order_count, prod_total_sales,
+--     prod_avg_sale, prod_cat_revenue_pctile (within mge_main_cat_desc)
 --   - History restricted to top-80% products (consistent with model vocabulary)
 
 CREATE OR REPLACE VIEW `b2b-recs.raw_data.ternopil_prob_train_v4` AS
@@ -71,6 +72,24 @@ customer_purchase_history AS (
   GROUP BY customer_id
 ),
 
+-- Product aggregate stats from training period
+-- prod_cat_revenue_pctile is within the product's own mge_main_cat_desc
+product_stats AS (
+  SELECT
+    product_id,
+    COUNT(DISTINCT customer_id) AS prod_unique_buyers,
+    COUNT(*) AS prod_order_count,
+    ROUND(SUM(sales), 2) AS prod_total_sales,
+    ROUND(AVG(sales), 2) AS prod_avg_sale,
+    ROUND(PERCENT_RANK() OVER (
+      PARTITION BY mge_main_cat_desc
+      ORDER BY SUM(sales)
+    ), 4) AS prod_cat_revenue_pctile
+  FROM train_data
+  WHERE product_id IN (SELECT product_id FROM top_products)
+  GROUP BY product_id, mge_main_cat_desc
+),
+
 -- Positive examples: one row per (customer, product) pair, keeping the latest transaction's features
 -- Filtered to top 80% products only
 positives AS (
@@ -83,7 +102,12 @@ positives AS (
     deduped.mge_main_cat_desc, deduped.mge_cat_desc, deduped.mge_sub_cat_desc,
     deduped.brand_name, deduped.segment,
     1 AS label,
-    ch.purchase_history
+    ch.purchase_history,
+    ps.prod_unique_buyers,
+    ps.prod_order_count,
+    ps.prod_total_sales,
+    ps.prod_avg_sale,
+    ps.prod_cat_revenue_pctile
   FROM (
     SELECT *, ROW_NUMBER() OVER (
       PARTITION BY customer_id, product_id ORDER BY date DESC
@@ -92,6 +116,7 @@ positives AS (
     WHERE product_id IN (SELECT product_id FROM top_products)
   ) deduped
   LEFT JOIN customer_purchase_history ch ON deduped.customer_id = ch.customer_id
+  LEFT JOIN product_stats ps ON deduped.product_id = ps.product_id
   WHERE deduped.rn = 1
 ),
 
@@ -159,7 +184,12 @@ negatives AS (
     pc.mge_main_cat_desc, pc.mge_cat_desc, pc.mge_sub_cat_desc, pc.brand_name,
     cd.segment,
     0 AS label,
-    ch.purchase_history
+    ch.purchase_history,
+    ps.prod_unique_buyers,
+    ps.prod_order_count,
+    ps.prod_total_sales,
+    ps.prod_avg_sale,
+    ps.prod_cat_revenue_pctile
   FROM negative_ranked nr
   JOIN customer_pos_counts cpc ON nr.customer_id = cpc.customer_id
   JOIN (
@@ -171,6 +201,7 @@ negatives AS (
     AND cd.date_rank = 1 + MOD(nr.neg_rank - 1, cd.date_count)
   JOIN product_catalog pc ON nr.product_id = pc.product_id
   LEFT JOIN customer_purchase_history ch ON nr.customer_id = ch.customer_id
+  LEFT JOIN product_stats ps ON nr.product_id = ps.product_id
   WHERE nr.neg_rank <= cpc.pos_count * 4
 )
 

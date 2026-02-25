@@ -8,7 +8,7 @@ This document provides detailed specifications for implementing the **Configs** 
 3. **Feature Engineering** - Define HOW data is transformed (Feature Configs)
 4. **Model Structure** - Define neural network architecture (Model Configs)
 
-**Last Updated**: 2026-02-03 (Implemented Configs Dashboard chapter)
+**Last Updated**: 2026-02-25 (Added Data chapter with v4 views, taste vector, product stats)
 
 ---
 
@@ -3422,6 +3422,260 @@ See [Phase: Experiments](phase_experiments.md) for:
 - Vertex AI Pipelines integration
 - Quick Test UI (dialog, progress, results)
 - MLflow experiment tracking (future)
+
+---
+
+## Data: Training Views & Feature Engineering (Ternopil)
+
+This chapter documents the BigQuery training views that supply data to the TFRS models. All views are built from the base table `raw_data.tfrs_training_examples_v3_Ternopil` (excludes OTHERS FD / OTHERS NF product divisions).
+
+### View Inventory
+
+| View | Purpose | Rows | Products | Buyers |
+|---|---|---|---|---|
+| `ternopil_train_v3` | Retrieval training (baseline, no taste vector) | 122,828 | 981 | 8,334 |
+| `ternopil_test_v3` | Retrieval test (baseline) | 1,059 | 439 | 232 |
+| `ternopil_train_v4` | Retrieval training (with taste vector + product stats) | 122,828 | 981 | 8,334 |
+| `ternopil_test_v4` | Retrieval test (with taste vector + product stats) | 1,059 | 439 | 232 |
+| `ternopil_prob_train_v3` | Ranking training (baseline, with 1:4 negatives) | 440,850 | 981 | 8,334 |
+| `ternopil_prob_test_v3` | Ranking test (baseline, with 1:4 negatives) | 4,820 | 974 | 232 |
+| `ternopil_prob_train_v4` | Ranking training (with taste vector + product stats + negatives) | 440,850 | 981 | 8,334 |
+| `ternopil_prob_test_v4` | Ranking test (with taste vector + product stats + negatives) | 4,820 | 974 | 232 |
+
+**v3 = baseline** (no `purchase_history`, no product stats). Used for comparison experiments.
+**v4 = experimental** (adds `purchase_history` taste vector + 5 product aggregate features).
+
+All views (v3 and v4) are restricted to **top-80% products by cumulative revenue**. The top-80% filter is computed from the full table (all dates) and applied to both rows and the purchase history vocabulary.
+
+### Train / Test Split
+
+All views split on the last day in the dataset:
+
+| Split | Date filter | Purpose |
+|---|---|---|
+| **Train** | `DATE(date) < MAX(DATE(date))` | All dates except the last day |
+| **Test** | `DATE(date) = MAX(DATE(date))` | Only the last day (held-out evaluation) |
+
+For test views, all derived features (`purchase_history`, `product_stats`) are computed from the **training period only** (point-in-time correctness — we only use data that would be available at inference time).
+
+### Top-80% Product Filter
+
+Applied to all views. Keeps products that collectively account for 80% of total revenue, removing long-tail products with negligible sales:
+
+```sql
+top_products AS (
+  SELECT product_id
+  FROM (
+    SELECT
+      product_id,
+      SUM(sales) AS total_revenue,
+      SUM(SUM(sales)) OVER () AS grand_total,
+      SUM(SUM(sales)) OVER (ORDER BY SUM(sales) DESC) AS running_total
+    FROM `raw_data.tfrs_training_examples_v3_Ternopil`
+    GROUP BY product_id
+  )
+  WHERE running_total <= grand_total * 0.8
+     OR running_total - total_revenue < grand_total * 0.8
+)
+```
+
+This reduces the product catalog from ~3,186 to ~981 products, removing noisy tail products that the model cannot learn meaningful embeddings for.
+
+---
+
+### Negative Sampling (Ranking Views Only)
+
+The `prob_*` views generate negative examples for the binary ranking model (probability-to-buy). Retrieval views (`ternopil_train_v4`, `ternopil_test_v4`) do not use negatives — TFRS retrieval uses in-batch negatives.
+
+#### How Negatives Are Produced
+
+**Step 1: Identify positive pairs**
+
+Positives are deduplicated (customer, product) pairs with at least one transaction. When a customer bought the same product multiple times, only the most recent transaction's features are kept:
+
+```sql
+positives AS (
+  SELECT *, 1 AS label
+  FROM (
+    SELECT *, ROW_NUMBER() OVER (
+      PARTITION BY customer_id, product_id ORDER BY date DESC
+    ) AS rn
+    FROM train_data
+    WHERE product_id IN (SELECT product_id FROM top_products)
+  )
+  WHERE rn = 1
+)
+```
+
+**Step 2: Generate negative candidates**
+
+Every (customer, product) pair where the customer NEVER bought the product is a negative candidate. Only top-80% products are in the candidate pool:
+
+```sql
+negative_ranked AS (
+  SELECT
+    c.customer_id, p.product_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY c.customer_id
+      ORDER BY FARM_FINGERPRINT(CONCAT('train_', CAST(c.customer_id AS STRING),
+                                       '_', CAST(p.product_id AS STRING)))
+    ) AS neg_rank
+  FROM (SELECT DISTINCT customer_id FROM positive_pairs) c
+  CROSS JOIN product_catalog p
+  LEFT JOIN positive_pairs pp
+    ON c.customer_id = pp.customer_id AND p.product_id = pp.product_id
+  WHERE pp.customer_id IS NULL
+)
+```
+
+`FARM_FINGERPRINT` produces a deterministic pseudo-random ordering per customer. The `'train_'` / `'test_'` salt prefix ensures train and test views sample **different negatives** for the same customer.
+
+**Step 3: Sample at 1:4 ratio**
+
+For each customer, take 4 negatives per positive:
+
+```sql
+WHERE neg_rank <= pos_count * 4
+```
+
+This produces a 20% positive / 80% negative split across the dataset.
+
+**Step 4: Assign point-in-time customer features**
+
+Negatives need customer-level features (`cust_value`, `days_since_last_purchase`, etc.) but have no transaction. Each negative is paired with one of the customer's actual transaction dates via round-robin, ensuring negatives see the **same distribution** of customer feature values as positives:
+
+```sql
+JOIN customer_dates cd
+  ON nr.customer_id = cd.customer_id
+  AND cd.date_rank = 1 + MOD(nr.neg_rank - 1, cd.date_count)
+```
+
+This prevents a subtle leakage where all negatives would see the customer's "latest" feature values while positives see point-in-time values from various dates.
+
+**Step 5: Assign product metadata**
+
+Negatives get product features (`art_name`, `mge_main_cat_desc`, `brand_name`, etc.) from the `product_catalog` CTE, which contains the most recent metadata for each top-80% product.
+
+#### Negative Sampling Properties
+
+| Property | Value |
+|---|---|
+| **Ratio** | 1:4 (4 negatives per positive, per customer) |
+| **Pool** | Top-80% products only (same as positive candidates) |
+| **Deterministic** | FARM_FINGERPRINT — same negatives on repeated queries |
+| **Train/test isolation** | Different salt (`'train_'` vs `'test_'`) produces different negatives |
+| **Customer features** | Point-in-time via round-robin across customer's actual transaction dates |
+| **Sales value** | 0.0 for all negatives |
+| **Label** | 0 for negatives, 1 for positives |
+
+#### Known Limitation: Deterministic Negatives Enable Memorization
+
+Because FARM_FINGERPRINT produces the **same** negatives every epoch, the model can memorize specific (customer, product, label=0) tuples instead of learning generalizable patterns. Dynamic re-sampling (different negatives per epoch) would improve generalization but requires significant changes to the TFX pipeline (ExampleGen materializes data once as TFRecords before training).
+
+---
+
+### Column Reference (v4 Views)
+
+All v4 views share the same schema. The `prob_*` views add the `label` column.
+
+#### Base Columns (from `tfrs_training_examples_v3_Ternopil`)
+
+| Column | Type | Tower | Description |
+|---|---|---|---|
+| `customer_id` | INT64 | Buyer | Unique customer identifier |
+| `target_group` | STRING | Buyer | Customer business type (e.g., HoReCa, Retail) |
+| `date` | TIMESTAMP | — | Transaction timestamp |
+| `store_id` | INT64 | — | Store where transaction occurred |
+| `product_id` | INT64 | Product | Unique product identifier (12-digit code) |
+| `sales` | FLOAT64 | — | Transaction revenue (0.0 for negatives) |
+| `city` | STRING | Buyer | Customer city |
+| `segment` | STRING | Buyer | Customer segment classification |
+| `art_name` | STRING | Product | Product name |
+| `division_desc` | STRING | Product | Top-level product division |
+| `stratbuy_domain_desc` | STRING | Product | Strategic buying domain |
+| `mge_main_cat_desc` | STRING | Product | Main category (e.g., "МОЛОЧНІ ПРОДУКТИ") |
+| `mge_cat_desc` | STRING | Product | Sub-category |
+| `mge_sub_cat_desc` | STRING | Product | Sub-sub-category |
+| `brand_name` | STRING | Product | Brand name |
+
+#### Buyer RFM Features (pre-computed in base table)
+
+| Column | Type | Tower | Description |
+|---|---|---|---|
+| `cust_value` | FLOAT64 | Buyer | Customer lifetime value score |
+| `days_since_last_purchase` | INT64 | Buyer | Days since customer's most recent purchase |
+| `cust_order_days_60d` | INT64 | Buyer | Number of distinct order days in last 60 days |
+| `cust_unique_products_60d` | INT64 | Buyer | Number of unique products purchased in last 60 days |
+
+These are **point-in-time** features — each transaction row carries the customer's feature values as of that transaction date.
+
+#### Taste Vector (v4 only)
+
+| Column | Type | Tower | Description |
+|---|---|---|---|
+| `purchase_history` | ARRAY\<INT64\> | Buyer | Top-50 most recently purchased product IDs (deduplicated, recency-ordered) |
+
+**How it works:**
+
+1. For each buyer, collect all unique (customer, product) pairs from the training period, restricted to top-80% products
+2. Order by most recent purchase date (descending)
+3. Keep top 50 product IDs as an `ARRAY<INT64>`
+
+**At model level:** Each product ID in the array is looked up in a **shared product embedding table** (same table used by the product tower's `product_id` embedding), producing a `[batch, N, 32]` tensor. This is averaged (with zero-padding mask) into a single `[batch, 32]` vector — the buyer's "taste center" in product embedding space.
+
+**Properties:**
+
+| Property | Value |
+|---|---|
+| Max length | 50 product IDs |
+| Ordering | Most recent purchase first |
+| Deduplication | Unique product IDs only (repeated purchases don't increase weight) |
+| Scope | All-time within training period |
+| Product filter | Top-80% only (consistent with model vocabulary) |
+| Avg length | ~22.7 products per buyer |
+| Cold-start buyers | NULL → zero vector after padding/masking (~19% of test set) |
+| Point-in-time | Test views compute from training period only |
+
+**Why product IDs (not categories):** The shared embedding table is the mechanism — the buyer's averaged history lives in the same vector space as candidate products. Using categories would put the taste vector in a different space, losing the geometric property. Categories are already separate features in the product tower. See `docs/purchase_history.md` for full research and industry references (YouTube, Uber, Snapchat, Pinterest).
+
+#### Product Aggregate Features (v4 only)
+
+| Column | Type | Tower | Description |
+|---|---|---|---|
+| `prod_unique_buyers` | INT64 | Product | Number of distinct customers who purchased this product |
+| `prod_order_count` | INT64 | Product | Total number of transactions for this product |
+| `prod_total_sales` | FLOAT64 | Product | Total revenue for this product |
+| `prod_avg_sale` | FLOAT64 | Product | Average revenue per transaction |
+| `prod_cat_revenue_pctile` | FLOAT64 | Product | Revenue percentile within the product's own `mge_main_cat_desc` (0.0–1.0) |
+
+**These are product-level RFM features** — the product-side mirror of the buyer RFM features. They tell the model things that categorical features cannot:
+
+- Two products both in "Dairy" — one has 500 unique buyers (mass-market staple), the other has 12 (niche specialty). `prod_unique_buyers` captures this.
+- `prod_cat_revenue_pctile` captures relative position within the product's own category. A product at 0.95 is a category leader; at 0.05 is a tail item. Computed as `PERCENT_RANK() OVER (PARTITION BY mge_main_cat_desc ORDER BY SUM(sales))`.
+- `prod_avg_sale` distinguishes high-ticket vs low-ticket items within the same category.
+
+**Computed from:** Full training period (all-time), not windowed. Product market position is stable over time. Test views compute from training period only (point-in-time correctness).
+
+#### Label (Ranking Views Only)
+
+| Column | Type | Description |
+|---|---|---|
+| `label` | INT64 | 1 = customer purchased this product, 0 = customer did not purchase (sampled negative) |
+
+---
+
+### SQL File Reference
+
+| File | View | Key features |
+|---|---|---|
+| `sql/create_ternopil_train_v3_view.sql` | `ternopil_train_v3` | Baseline retrieval (top-80% filter) |
+| `sql/create_ternopil_test_v3_view.sql` | `ternopil_test_v3` | Baseline retrieval test |
+| `sql/create_ternopil_prob_train_v3_view.sql` | `ternopil_prob_train_v3` | Baseline ranking (1:4 negatives) |
+| `sql/create_ternopil_prob_test_v3_view.sql` | `ternopil_prob_test_v3` | Baseline ranking test |
+| `sql/create_ternopil_train_v4_view.sql` | `ternopil_train_v4` | + taste vector + product stats |
+| `sql/create_ternopil_test_v4_view.sql` | `ternopil_test_v4` | + taste vector + product stats (from train period) |
+| `sql/create_ternopil_prob_train_v4_view.sql` | `ternopil_prob_train_v4` | + taste vector + product stats + negatives |
+| `sql/create_ternopil_prob_test_v4_view.sql` | `ternopil_prob_test_v4` | + taste vector + product stats + negatives (from train period) |
 
 ---
 

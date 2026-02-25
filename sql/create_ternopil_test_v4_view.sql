@@ -2,7 +2,9 @@
 -- Purpose: Held-out evaluation set with data the model hasn't seen during training
 -- v4 changes vs v3:
 --   - Added purchase_history ARRAY column: top-50 most recently purchased product IDs per buyer
---   - History computed from TRAINING period (all dates except last day) for point-in-time correctness
+--   - Added product aggregate features: prod_unique_buyers, prod_order_count, prod_total_sales,
+--     prod_avg_sale, prod_cat_revenue_pctile (within mge_main_cat_desc)
+--   - All buyer/product features computed from TRAINING period for point-in-time correctness
 --   - Rows and history restricted to top-80% products by cumulative revenue
 
 CREATE OR REPLACE VIEW `b2b-recs.raw_data.ternopil_test_v4` AS
@@ -59,11 +61,35 @@ customer_purchase_history AS (
     ARRAY_AGG(product_id ORDER BY last_purchase_date DESC LIMIT 50) AS purchase_history
   FROM customer_products
   GROUP BY customer_id
+),
+
+-- Product aggregate stats from training period
+-- prod_cat_revenue_pctile is within the product's own mge_main_cat_desc
+product_stats AS (
+  SELECT
+    product_id,
+    COUNT(DISTINCT customer_id) AS prod_unique_buyers,
+    COUNT(*) AS prod_order_count,
+    ROUND(SUM(sales), 2) AS prod_total_sales,
+    ROUND(AVG(sales), 2) AS prod_avg_sale,
+    ROUND(PERCENT_RANK() OVER (
+      PARTITION BY mge_main_cat_desc
+      ORDER BY SUM(sales)
+    ), 4) AS prod_cat_revenue_pctile
+  FROM historical_data
+  WHERE product_id IN (SELECT product_id FROM top_products)
+  GROUP BY product_id, mge_main_cat_desc
 )
 
 SELECT
   t.*,
-  ch.purchase_history
+  ch.purchase_history,
+  ps.prod_unique_buyers,
+  ps.prod_order_count,
+  ps.prod_total_sales,
+  ps.prod_avg_sale,
+  ps.prod_cat_revenue_pctile
 FROM test_data t
 LEFT JOIN customer_purchase_history ch ON t.customer_id = ch.customer_id
+LEFT JOIN product_stats ps ON t.product_id = ps.product_id
 WHERE t.product_id IN (SELECT product_id FROM top_products);

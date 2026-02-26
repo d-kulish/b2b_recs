@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-24 (AUC-ROC metrics for binary label ranking models)
+**Last Updated**: 2026-02-26 (History feature type — purchase history taste vector)
 
 ---
 
@@ -801,6 +801,112 @@ python manage.py backfill_training_cache --force
 
 ---
 
+## Feature: History Feature Type — Purchase History Taste Vector (2026-02-26)
+
+### Background
+
+The standalone experiment (`scripts/test_taste_vector.py`) validated that an averaged purchase history embedding ("taste vector") improves retrieval Recall@5 by **+37%**. This feature integrates the taste vector into the platform as a 4th feature data type ("history") alongside text/numeric/temporal, so it works through the normal Experiments UI and Training pipeline workflow.
+
+A history feature is a variable-length `ARRAY<STRING>` column (e.g. product IDs a buyer has purchased) that gets embedded using a **shared embedding table** with the product tower's product_id, then averaged into a fixed-width dense vector.
+
+### How It Works
+
+**Feature Config setup:**
+1. User drags an ARRAY column (e.g. `purchase_history`) to the buyer tower
+2. UI auto-detects the `ARRAY<STRING>` BigQuery type and sets `data_type: "history"`
+3. User configures: `shared_with` (links to product_id feature), `embedding_dim` (16/32/64), `max_length` (padding cap, default 50)
+
+**Code generation pipeline:**
+
+```
+FeatureConfig (history feature)
+  → PreprocessingFnGenerator
+    → tft.apply_vocabulary(inputs['purchase_history'], vocab='product_id_vocab')
+  → TrainerModuleGenerator
+    → Shared Embedding: tf.keras.layers.Embedding(vocab_size, 32, name='shared_product_embedding')
+    → BuyerModel: masked average of history IDs through shared embedding → 32D vector
+    → ProductModel: product_id lookup through same shared embedding
+    → Input fn: SparseTensor → padded dense [batch, max_length]
+    → Serving: 2D input [None, max_length] in raw tensor signature
+```
+
+**Training flow:**
+- BigQuery ARRAY column flows through ExampleGen as VarLenFeature
+- Transform applies the product_id vocabulary to array elements (shared vocab)
+- Trainer input_fn pads SparseTensor to fixed-width dense tensor
+- BuyerModel embeds each history ID through shared embedding, masks padding, averages → taste vector
+- ProductModel uses same shared embedding for product_id lookup
+
+### Feature Config JSON
+
+```json
+{
+    "column": "purchase_history",
+    "display_name": "purchase_history",
+    "bq_type": "ARRAY<STRING>",
+    "data_type": "history",
+    "transforms": {
+        "history": {
+            "enabled": true,
+            "shared_with": "product_id",
+            "embedding_dim": 32,
+            "max_length": 50
+        }
+    }
+}
+```
+
+### Model Type Support
+
+All 3 model types (Retrieval, Ranking, Multitask) support history features. Parity is ensured by shared helper methods in `TrainerModuleGenerator`:
+
+| Component | Method |
+|-----------|--------|
+| Shared embedding creation | `_generate_shared_embedding_code()` |
+| Tower instantiation | `_generate_tower_instantiation_code()` |
+| Input padding | `_generate_history_padding_code()` |
+| Serving signature | `_generate_raw_tensor_signature()` |
+
+### UI Changes
+
+- **Data type selector**: Added "History" option with clock icon
+- **Config modal**: Shared_with dropdown (product tower primary ID features), embedding dimension presets (16/32/64), max_length input
+- **Feature display**: Shows `Shared(product_id): 32D`
+- **Experiments page**: DATA_TYPES constant includes history
+
+### Validation Results (Standalone Experiment)
+
+| Metric | Baseline #162 | With Taste Vector | Change |
+|--------|---------------|-------------------|--------|
+| Recall@5 | 0.0523 | **0.0718** | **+37.2%** |
+| Recall@10 | 0.0809 | **0.1010** | **+24.9%** |
+| Recall@50 | 0.2196 | 0.2040 | -7.1% |
+| Recall@100 | 0.3308 | 0.2965 | -10.4% |
+
+Top-K precision improved significantly. Recall@50/100 drop is due to overfitting after epoch ~13 — early stopping (separate feature) would resolve this.
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | `_calc_feature_dim()`: history → `+embedding_dim` |
+| `ml_platform/configs/services.py` | Dimension calc, preprocessing gen, trainer module gen, validation |
+| `ml_platform/datasets/services.py` | ARRAY columns bypass COALESCE/TIMESTAMP in query gen |
+| `templates/ml_platform/model_configs.html` | History data type UI, config modal, display |
+| `templates/ml_platform/model_experiments.html` | DATA_TYPES constant |
+
+### Backward Compatibility
+
+- No history features → all generated code identical to previous behavior
+- Existing numeric/text/temporal configs unchanged
+- History dimension calculators skip when `transforms.history` absent
+
+### Related Documentation
+
+- [purchase_history.md](purchase_history.md) — Full research, standalone experiment results, and platform integration details
+
+---
+
 ## Implementation Status
 
 ### Completed Features
@@ -821,9 +927,11 @@ python manage.py backfill_training_cache --force
 - [x] ScaNN support for retrieval models
 - [x] Multitask model support
 - [x] **GPU T4 support** (1x T4 via GenericExecutor in europe-west4) (2026-02-13)
+- [x] **History feature type** (purchase history taste vector, shared embedding + masked averaging) (2026-02-26)
 
 ### Future Enhancements
 
+- [ ] Early stopping support (critical for taste vector models that overfit after ~13 epochs)
 - [ ] GPU V100 support (locked in wizard)
 - [ ] Full Training Pipeline (extended epochs, checkpointing)
 - [ ] Model Deployment (candidate index, serving endpoints)

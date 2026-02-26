@@ -949,14 +949,165 @@ Integrate the taste vector into the TFX pipeline so it can be used through the n
 
 Steps 2-4 can be developed bottom-up (Dataset → Transform → Trainer) and tested incrementally. Step 1 (UI) can be built last since the backend changes can be validated with manual FeatureConfig JSON edits.
 
-**Step 3: TrainerModuleGenerator** — shared embedding + masked averaging
-- Create shared `tf.keras.layers.Embedding` referenced by both towers
-- Generate masked averaging code in buyer tower `call()` method
-- Generate product_id lookup using the same shared embedding in product tower
+### 8.3 Platform Integration (2026-02-26)
+
+**Status**: Implemented
+**Commit**: See git log for the implementation commit
+
+The taste vector is now fully integrated into the platform as a 4th feature data type ("history") alongside text/numeric/temporal. A history feature is a variable-length ARRAY of IDs (e.g. product IDs a buyer has purchased) that gets embedded using a **shared embedding table** with the product tower's product_id, then averaged into a fixed-width dense vector.
+
+#### Feature JSON Schema
+
+A history feature in `buyer_model_features`:
+
+```json
+{
+    "column": "purchase_history",
+    "display_name": "purchase_history",
+    "bq_type": "ARRAY<STRING>",
+    "data_type": "history",
+    "stats": {"avg_length": 22.6, "min_length": 0, "max_length": 50},
+    "transforms": {
+        "history": {
+            "enabled": true,
+            "shared_with": "product_id",
+            "embedding_dim": 32,
+            "max_length": 50
+        }
+    }
+}
+```
+
+- `shared_with` references the `display_name` of the primary product_id text feature in the opposite tower
+- `embedding_dim` should match that feature's embedding dimension
+- `max_length` caps variable-length input for padding (default 50)
+
+#### Files Modified
+
+| File | Changes |
+|------|---------|
+| `ml_platform/models.py` | `_calc_feature_dim()`: history transform → `+embedding_dim` |
+| `ml_platform/configs/services.py` | Core: dimension calculator, preprocessing generator, trainer module generator, validation |
+| `ml_platform/datasets/services.py` | `generate_query()`: ARRAY columns bypass COALESCE and TIMESTAMP conversion |
+| `templates/ml_platform/model_configs.html` | UI: history data type, config modal with shared_with/dim/max_length, display |
+| `templates/ml_platform/model_experiments.html` | UI: DATA_TYPES constant |
+
+#### Implementation Phases
+
+**Phase 1 — Dataset Layer: ARRAY Column Flow-Through**
+
+The SQL query generator wraps columns with COALESCE for LEFT JOINs and converts TIMESTAMPs to UNIX_SECONDS for TFX. ARRAY columns must bypass both (COALESCE doesn't work on ARRAYs). Added `is_array = col_type.upper().startswith('ARRAY')` check in both the main SELECT clause and the `filtered_data` CTE SELECT clause of `generate_query()`.
+
+**Phase 2 — Dimension Calculators**
+
+Added history type handling to both `FeatureConfig._calc_feature_dim()` (models.py) and `TensorDimensionCalculator._feature_dims()` (configs/services.py). When `transforms.history.enabled` is true, the feature contributes `embedding_dim` (default 32) to the tower dimension.
+
+**Phase 3 — PreprocessingFnGenerator: Shared Vocabulary for ARRAY**
+
+Extended `_collect_all_features()` to include a `'history'` bucket. Added `_generate_history_transforms()` method that generates `tft.apply_vocabulary()` calls referencing the shared vocabulary created by the primary text feature's `tft.compute_and_apply_vocabulary(..., vocab_filename='{col}_vocab')`. History transforms are placed after text transforms (which create the vocabulary) in the generated code.
+
+Generated code pattern:
+```python
+outputs['purchase_history'] = tft.apply_vocabulary(
+    inputs['purchase_history'],
+    deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab'),
+    num_oov_buckets=NUM_OOV_BUCKETS
+)
+```
+
+**Phase 4 — TrainerModuleGenerator: Shared Embedding + Masked Averaging**
+
+This is the largest phase with changes across all 3 model types (retrieval, ranking, multitask).
+
+*Feature classification:* Extended `_collect_features_by_type()` to include `'history'` bucket. Added `_find_shared_embedding_pairs()` helper that scans features to link history features with their `shared_with` primary text features.
+
+*Shared embedding creation:* Added `_generate_shared_embedding_code()` and `_generate_tower_instantiation_code()` helper methods. When history features are present, the model class creates a shared embedding layer and passes it to both towers. When no history features exist, code generation is identical to the previous behavior.
+
+```python
+# Generated code (inside model __init__):
+product_id_vocab_size = tf_transform_output.vocabulary_size_by_name('product_id_vocab')
+self.shared_product_embedding = tf.keras.layers.Embedding(
+    product_id_vocab_size + NUM_OOV_BUCKETS, 32, name='shared_product_embedding'
+)
+self.buyer_model = BuyerModel(tf_transform_output, shared_product_embedding=self.shared_product_embedding)
+self.product_model = ProductModel(tf_transform_output, shared_product_embedding=self.shared_product_embedding)
+```
+
+*BuyerModel / ProductModel:* Modified `_generate_buyer_model()` and `_generate_product_model()` to:
+- Accept optional `shared_product_embedding` parameter in `__init__`
+- Skip creating own embedding for the primary text feature when shared embedding is available
+- Use `self.shared_product_embedding(inputs['{col}'])` for linked text features
+- Add masked averaging block for history features in `call()`:
+
+```python
+# Generated code (inside BuyerModel.call):
+purchase_history_ids = inputs['purchase_history']
+purchase_history_embs = self.shared_product_embedding(purchase_history_ids)
+purchase_history_mask = tf.cast(purchase_history_ids != 0, tf.float32)
+purchase_history_mask = tf.expand_dims(purchase_history_mask, -1)
+purchase_history_avg = tf.reduce_sum(purchase_history_embs * purchase_history_mask, axis=1)
+purchase_history_avg = purchase_history_avg / (tf.reduce_sum(purchase_history_mask, axis=1) + 1e-8)
+features.append(purchase_history_avg)
+```
+
+*Input functions:* Added `_generate_history_padding_code()` that generates a `.map()` function converting SparseTensors (from TFRecords VarLenFeature) to dense padded tensors of fixed `max_length`. Modified all 3 input_fn generators. For ranking/multitask, the map function handles `(features, label)` tuples.
+
+*Serving signatures:* Modified `_generate_raw_tensor_signature()` and `_generate_raw_tensor_signature_ranking()` so history features get `[None, max_length]` shape (2D) instead of `[None]` (1D), and skip `tf.expand_dims`. All 4 serve function generators (brute_force, scann, ranking, multitask) inherit these changes automatically.
+
+**Phase 5 — UI + API Validation**
+
+Updated `model_configs.html`:
+- Added `history: { label: 'History', icon: 'history' }` to DATA_TYPES
+- Added ARRAY detection in `getDataTypeFromBqType()`
+- History config modal with: shared_with dropdown (product tower primary ID features), embedding_dim preset buttons (16/32/64), max_length input
+- Display shows `Shared(product_id): 32D`
+
+Updated `model_experiments.html` with history type constant.
+
+Added validation in `validate_feature_config()`:
+- `shared_with` must reference a feature that exists in any tower
+- `embedding_dim` and `max_length` must be positive integers
+
+#### Parity Across Model Types
+
+Every component handles history features across all 3 model types:
+
+| Component | Retrieval | Ranking | Multitask |
+|-----------|-----------|---------|-----------|
+| Feature classification | Shared `_collect_features_by_type` | Same | Same |
+| BuyerModel / ProductModel | Shared `_generate_buyer/product_model` | Same | Same |
+| Shared embedding creation | `_generate_shared_embedding_code` | Same | Same |
+| Input fn padding | `_generate_history_padding_code(label=False)` | `(label=True)` | `(label=True)` |
+| Serving signature | `_generate_raw_tensor_signature` | `_ranking` variant | Both |
+| Serve functions | brute_force + scann | ranking | multitask |
+
+The parity bug pattern from 2026-02-07 (where `_load_original_product_ids` was only in ScaNN path) is prevented by construction: shared helper methods (`_generate_shared_embedding_code`, `_generate_tower_instantiation_code`, `_generate_history_padding_code`) are called by all model type generators.
+
+#### Backward Compatibility
+
+- When no history features are present, all generated code is identical to the previous behavior
+- `shared_product_embedding=None` default parameter means no changes to existing model classes
+- Dimension calculators skip the history block when `transforms.history` is absent
+- UI adds history to the data type selector but existing numeric/text/temporal configs are unchanged
+
+#### Expected Behavior
+
+1. **Create FeatureConfig**: Drag `purchase_history` (ARRAY<STRING>) column to buyer tower → UI auto-detects as "history" type → configure shared_with=product_id, embedding_dim=32, max_length=50
+2. **Generate code**: Transform code applies product_id vocabulary to the array; Trainer code creates shared embedding, passes to both towers, masked averaging in buyer tower
+3. **Run experiment**: QuickTest or Training Run processes the ARRAY column through the full pipeline
+4. **Expected metrics**: Recall@5 improvement of ~37% based on standalone experiment validation
+
+#### Verification Plan
+
+1. **Code compilation**: Generate code for all 3 model types with a history feature and run `compile(code, '<test>', 'exec')` to verify syntax
+2. **Regression**: Generate code WITHOUT history features, verify output is identical to current behavior
+3. **End-to-end**: Run a QuickTest experiment with `ternopil_train_v4` dataset (which has `purchase_history` ARRAY column) and compare Recall@K against standalone results (Recall@5 = 0.0718, Recall@100 = 0.2965)
 
 ### 8.4 Future Steps
 
-- **Co-purchase vector**: Add `co_purchase_history` to product tower (Section 9) — same shared embedding, same averaging pattern, applied to product-side
+- **Early stopping**: Implement as a separate feature (out of scope for history integration). Critical for taste vector models which overfit after epoch ~13
+- **Co-purchase vector**: Add `co_purchase_history` to product tower — same shared embedding, same averaging pattern, applied to product-side. Zero additional code needed in the product tower (already supports history features)
+- **Ranking model taste vector**: Run taste vector ranking experiment on `ternopil_prob_train_v4` comparing to QT#25 (RMSE 0.288, AUC 0.837)
 - **PMI evaluation**: If co-purchase results show popularity bias, switch from raw count to PMI-based ranking
 - **Platform integration**: Extend Feature Config system and TrainerModuleGenerator (Section 8.3)
 - **Serving**: Materialize buyer purchase histories to Firestore for real-time inference (Section 4.5)

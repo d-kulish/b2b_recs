@@ -1199,11 +1199,15 @@ class BigQueryService:
                     # Check if this column needs TIMESTAMP conversion for TFX
                     col_key = f"{table_alias}.{col}"
                     col_type = column_types.get(col_key, 'STRING')
+                    is_array = col_type.upper().startswith('ARRAY')
                     needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
                     # Build column expression, wrapping with COALESCE for LEFT-JOINed
                     # tables or columns with intrinsic NULLs in source data
-                    if needs_conversion:
+                    if is_array:
+                        # ARRAY columns pass through without COALESCE or TIMESTAMP conversion
+                        col_expr = f"{table_alias}.`{col}`"
+                    elif needs_conversion:
                         raw = f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP))"
                         if table_alias in left_join_tables or col_key in nullable_columns:
                             col_expr = f"COALESCE({raw}, 0)"
@@ -1266,11 +1270,15 @@ class BigQueryService:
                         # Check if this column needs TIMESTAMP conversion for TFX
                         col_key = f"{table_alias}.{col}"
                         col_type = column_types.get(col_key, 'STRING')
+                        is_array = col_type.upper().startswith('ARRAY')
                         needs_conversion = for_tfx and col_type in ('TIMESTAMP', 'DATE', 'DATETIME')
 
                         # Build column expression with COALESCE for LEFT-JOINed
                         # tables or columns with intrinsic NULLs in source data
-                        if needs_conversion:
+                        if is_array:
+                            # ARRAY columns pass through without COALESCE or TIMESTAMP conversion
+                            col_expr = f"{table_alias}.`{col}`"
+                        elif needs_conversion:
                             raw = f"UNIX_SECONDS(CAST({table_alias}.`{col}` AS TIMESTAMP))"
                             if table_alias in left_join_tables or col_key in nullable_columns:
                                 col_expr = f"COALESCE({raw}, 0)"

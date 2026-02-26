@@ -1566,6 +1566,11 @@ class FeatureConfig(models.Model):
             if cyclical.get(cycle):
                 dim += 2
 
+        # History features (averaged purchase history → fixed-width vector)
+        history = transforms.get('history', {})
+        if history.get('enabled'):
+            dim += history.get('embedding_dim', 32)
+
         return dim
 
     def get_columns_in_both_models(self):

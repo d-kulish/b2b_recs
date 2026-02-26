@@ -447,6 +447,11 @@ class TensorDimensionCalculator:
                 if cyclical_dims > 0:
                     result[f'{col}_cyclical'] = cyclical_dims
 
+        elif data_type == 'history':
+            history = transforms.get('history', {})
+            if history.get('enabled'):
+                result[col] = history.get('embedding_dim', 32)
+
         return result
 
 
@@ -572,6 +577,36 @@ def validate_feature_config(data: Dict, dataset, exclude_config_id: Optional[int
             for i, c in enumerate(crosses):
                 if not c.get('features') or len(c['features']) < 2:
                     errors[f'{cross_list_key}[{i}]'] = 'Cross feature must have at least 2 features'
+
+    # Validate history features
+    all_features = {}
+    for key in ['buyer_model_features', 'product_model_features']:
+        for f in data.get(key, []):
+            col = f.get('display_name') or f.get('column')
+            if col:
+                all_features[col] = f
+
+    for feature_list_key in ['buyer_model_features', 'product_model_features']:
+        features = data.get(feature_list_key, [])
+        for i, f in enumerate(features):
+            if f.get('data_type') != 'history':
+                continue
+            history = f.get('transforms', {}).get('history', {})
+            if not history.get('enabled'):
+                continue
+            shared_with = history.get('shared_with')
+            if not shared_with:
+                errors[f'{feature_list_key}[{i}].history'] = 'History feature must specify shared_with'
+            elif shared_with not in all_features:
+                errors[f'{feature_list_key}[{i}].history'] = (
+                    f'shared_with references "{shared_with}" which is not in any tower'
+                )
+            embed_dim = history.get('embedding_dim')
+            if embed_dim is not None and (not isinstance(embed_dim, int) or embed_dim <= 0):
+                errors[f'{feature_list_key}[{i}].embedding_dim'] = 'embedding_dim must be a positive integer'
+            max_length = history.get('max_length')
+            if max_length is not None and (not isinstance(max_length, int) or max_length <= 0):
+                errors[f'{feature_list_key}[{i}].max_length'] = 'max_length must be a positive integer'
 
     return (len(errors) == 0, errors)
 
@@ -897,6 +932,8 @@ class PreprocessingFnGenerator:
         numeric_code = self._generate_numeric_transforms(all_features['numeric'])
         temporal_code = self._generate_temporal_transforms(all_features['temporal'])
         cross_code = self._generate_cross_transforms()
+        # History transforms must come AFTER text (which creates the vocabulary)
+        history_code = self._generate_history_transforms(all_features.get('history', []))
         target_code = self._generate_target_column_code()  # For ranking models
         fn_end = self._generate_function_end()
 
@@ -917,6 +954,8 @@ class PreprocessingFnGenerator:
             sections.append(temporal_code)
         if cross_code:
             sections.append(cross_code)
+        if history_code:
+            sections.append(history_code)
         if target_code:
             sections.append(target_code)
 
@@ -935,7 +974,7 @@ class PreprocessingFnGenerator:
         Returns:
             Dict with keys 'text', 'numeric', 'temporal', each containing list of features
         """
-        all_features = {'text': [], 'numeric': [], 'temporal': []}
+        all_features = {'text': [], 'numeric': [], 'temporal': [], 'history': []}
         seen_columns = set()
 
         for feature in self.buyer_features + self.product_features:
@@ -954,6 +993,8 @@ class PreprocessingFnGenerator:
                 all_features['numeric'].append(feature)
             elif data_type == 'temporal' or feature_type == 'timestamp':
                 all_features['temporal'].append(feature)
+            elif data_type == 'history':
+                all_features['history'].append(feature)
 
         return all_features
 
@@ -1522,6 +1563,46 @@ def preprocessing_fn(inputs):
 
         return '\n'.join(lines)
 
+    def _generate_history_transforms(self, features: List[Dict]) -> str:
+        """
+        Generate vocabulary application for history (ARRAY) features using shared vocab.
+
+        History features are ARRAY<STRING> columns whose elements share a vocabulary
+        with a primary text feature (e.g. product_id). Instead of computing a new
+        vocabulary, we apply the existing one created by the text feature's
+        compute_and_apply_vocabulary call.
+
+        Args:
+            features: List of history feature configurations
+
+        Returns:
+            Python code string for the history section of preprocessing_fn
+        """
+        if not features:
+            return ''
+
+        lines = []
+        lines.append('')
+        lines.append('    # ── History (ARRAY) features ──')
+
+        for feature in features:
+            col = feature.get('display_name') or feature.get('column')
+            history_cfg = feature.get('transforms', {}).get('history', {})
+            if not history_cfg.get('enabled'):
+                continue
+
+            shared_with = history_cfg.get('shared_with', '')
+
+            lines.append(f"    # {col}: ARRAY<STRING> → vocab indices using {shared_with} vocabulary")
+            lines.append(f"    outputs['{col}'] = tft.apply_vocabulary(")
+            lines.append(f"        inputs['{col}'],")
+            lines.append(f"        deferred_vocab_filename_tensor=tft.vocabulary('{shared_with}_vocab'),")
+            lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS")
+            lines.append(f"    )")
+            lines.append('')
+
+        return '\n'.join(lines)
+
     def generate_and_save(self) -> Tuple[str, bool, Optional[str]]:
         """
         Generate code, validate it, and save to the FeatureConfig model.
@@ -1692,7 +1773,7 @@ class TrainerModuleGenerator:
         Returns:
             Dict with keys 'text', 'numeric', 'temporal', each containing list of features
         """
-        result = {'text': [], 'numeric': [], 'temporal': []}
+        result = {'text': [], 'numeric': [], 'temporal': [], 'history': []}
 
         for feature in features:
             # Determine feature type (support both old and new format)
@@ -1705,8 +1786,56 @@ class TrainerModuleGenerator:
                 result['numeric'].append(feature)
             elif data_type == 'temporal' or feature_type == 'timestamp':
                 result['temporal'].append(feature)
+            elif data_type == 'history':
+                result['history'].append(feature)
 
         return result
+
+    def _find_shared_embedding_pairs(self) -> list:
+        """
+        Find (primary_id text feature, history feature) pairs linked by shared_with.
+
+        Scans buyer and product features to find history features whose
+        transforms.history.shared_with references a primary text feature
+        in the opposite tower.
+
+        Returns:
+            List of dicts with keys: history_col, primary_col, embedding_dim,
+            max_length, history_tower ('buyer' or 'product')
+        """
+        pairs = []
+
+        # Build lookup of all text features by display_name
+        all_text = {}
+        for f in self.buyer_features:
+            col = f.get('display_name') or f.get('column')
+            if f.get('data_type') == 'text' or f.get('type') == 'string_embedding':
+                all_text[col] = {'feature': f, 'tower': 'buyer'}
+        for f in self.product_features:
+            col = f.get('display_name') or f.get('column')
+            if f.get('data_type') == 'text' or f.get('type') == 'string_embedding':
+                all_text[col] = {'feature': f, 'tower': 'product'}
+
+        # Find history features and their linked primary features
+        for tower_name, features in [('buyer', self.buyer_features), ('product', self.product_features)]:
+            for f in features:
+                if f.get('data_type') != 'history':
+                    continue
+                history_cfg = f.get('transforms', {}).get('history', {})
+                if not history_cfg.get('enabled'):
+                    continue
+                shared_with = history_cfg.get('shared_with')
+                if shared_with and shared_with in all_text:
+                    pairs.append({
+                        'history_col': f.get('display_name') or f.get('column'),
+                        'primary_col': shared_with,
+                        'primary_tower': all_text[shared_with]['tower'],
+                        'embedding_dim': history_cfg.get('embedding_dim', 32),
+                        'max_length': history_cfg.get('max_length', 50),
+                        'history_tower': tower_name,
+                    })
+
+        return pairs
 
     def _generate_header(self) -> str:
         """Generate file header with metadata from both configs."""
@@ -2038,9 +2167,87 @@ SCANN_LEAVES_TO_SEARCH = {self.scann_leaves_to_search}
 NUM_OOV_BUCKETS = 1
 '''
 
+    def _generate_history_padding_code(self, has_label: bool = False) -> str:
+        """
+        Generate the .map() function for padding history (ARRAY) features.
+
+        History features come as SparseTensors from TFRecords VarLenFeature.
+        This converts them to dense padded tensors of fixed max_length.
+
+        Args:
+            has_label: True for ranking/multitask (features, label) tuples
+
+        Returns:
+            Python code string for the padding map, or empty string if no history features
+        """
+        shared_pairs = self._find_shared_embedding_pairs()
+        if not shared_pairs:
+            return ''
+
+        lines = []
+        if has_label:
+            lines.append('    def _pad_history_features(features, label):')
+        else:
+            lines.append('    def _pad_history_features(features):')
+
+        for pair in shared_pairs:
+            col = pair['history_col']
+            max_len = pair['max_length']
+            lines.append(f"        # Pad {col} to fixed length {max_len}")
+            lines.append(f"        if isinstance(features.get('{col}'), tf.SparseTensor):")
+            lines.append(f"            dense = tf.sparse.to_dense(features['{col}'], default_value=0)")
+            lines.append(f"            dense = dense[:, :{max_len}]")
+            lines.append(f"            pad_size = tf.maximum({max_len} - tf.shape(dense)[1], 0)")
+            lines.append(f"            features['{col}'] = tf.pad(dense, [[0, 0], [0, pad_size]])")
+
+        if has_label:
+            lines.append('        return features, label')
+        else:
+            lines.append('        return features')
+        lines.append('')
+
+        return '\n'.join(lines)
+
     def _generate_input_fn(self) -> str:
         """Generate _input_fn for loading transformed data."""
-        return '''
+        history_padding = self._generate_history_padding_code(has_label=False)
+
+        if history_padding:
+            return f'''
+# =============================================================================
+# DATA LOADING
+# =============================================================================
+
+def _input_fn(
+    file_pattern: List[Text],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Load transformed data from TFRecords.
+
+    Args:
+        file_pattern: List of paths to TFRecord files
+        data_accessor: TFX DataAccessor for reading data
+        tf_transform_output: Transform output with schema
+        batch_size: Batch size for training
+
+    Returns:
+        tf.data.Dataset with transformed features
+    """
+    dataset = data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(batch_size=batch_size, num_epochs=1),
+        tf_transform_output.transformed_metadata.schema
+    )
+
+    # Pad history (ARRAY) features from SparseTensor to fixed-width dense tensor
+{history_padding}
+    return dataset.map(_pad_history_features)
+'''
+        else:
+            return '''
 # =============================================================================
 # DATA LOADING
 # =============================================================================
@@ -2075,11 +2282,19 @@ def _input_fn(
         Generate BuyerModel class (Query Tower).
 
         Args:
-            features_by_type: Features organized by type (text, numeric, temporal)
+            features_by_type: Features organized by type (text, numeric, temporal, history)
 
         Returns:
             Python code string for BuyerModel class
         """
+        # Find shared embedding pairs for this tower
+        shared_pairs = self._find_shared_embedding_pairs()
+        buyer_history = [p for p in shared_pairs if p['history_tower'] == 'buyer']
+        # Columns that use shared embedding instead of their own
+        shared_primary_cols = {p['primary_col'] for p in buyer_history}
+
+        has_shared = len(buyer_history) > 0
+
         lines = [
             '',
             '# =============================================================================',
@@ -2094,11 +2309,17 @@ def _input_fn(
             '    Concatenates all feature representations into a single vector.',
             '    """',
             '',
-            '    def __init__(self, tf_transform_output: tft.TFTransformOutput):',
-            '        super().__init__()',
-            '        self.tf_transform_output = tf_transform_output',
-            '',
         ]
+
+        if has_shared:
+            lines.append('    def __init__(self, tf_transform_output: tft.TFTransformOutput, shared_product_embedding=None):')
+        else:
+            lines.append('    def __init__(self, tf_transform_output: tft.TFTransformOutput):')
+        lines.append('        super().__init__()')
+        lines.append('        self.tf_transform_output = tf_transform_output')
+        if has_shared:
+            lines.append('        self.shared_product_embedding = shared_product_embedding')
+        lines.append('')
 
         # Generate embedding layers for text features
         for feature in features_by_type['text']:
@@ -2109,11 +2330,16 @@ def _input_fn(
             else:
                 embed_dim = feature.get('embedding_dim', 32)
 
-            lines.append(f"        # {col}: vocab index → embedding ({embed_dim}D)")
-            lines.append(f"        # Transform already converted text to indices via tft.compute_and_apply_vocabulary")
-            lines.append(f"        {col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{col}_vocab')")
-            lines.append(f"        self.{col}_embedding = tf.keras.layers.Embedding({col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim})")
-            lines.append('')
+            if col in shared_primary_cols:
+                # This text feature shares its embedding with history features — skip own embedding
+                lines.append(f"        # {col}: uses shared_product_embedding ({embed_dim}D)")
+                lines.append('')
+            else:
+                lines.append(f"        # {col}: vocab index → embedding ({embed_dim}D)")
+                lines.append(f"        # Transform already converted text to indices via tft.compute_and_apply_vocabulary")
+                lines.append(f"        {col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{col}_vocab')")
+                lines.append(f"        self.{col}_embedding = tf.keras.layers.Embedding({col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim})")
+                lines.append('')
 
         # Generate embedding layers for numeric bucket features
         for feature in features_by_type['numeric']:
@@ -2167,8 +2393,12 @@ def _input_fn(
         # Text features - use vocab index from transform
         for feature in features_by_type['text']:
             col = feature.get('display_name') or feature.get('column')
-            lines.append(f"        # {col}: lookup embedding from vocab index")
-            lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
+            if col in shared_primary_cols:
+                lines.append(f"        # {col}: lookup embedding from vocab index (shared embedding)")
+                lines.append(f"        features.append(self.shared_product_embedding(inputs['{col}']))")
+            else:
+                lines.append(f"        # {col}: lookup embedding from vocab index")
+                lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
             lines.append('')
 
         # Numeric features - normalized value + optional bucket embedding
@@ -2218,6 +2448,22 @@ def _input_fn(
                 lines.append(f"        features.append(self.{col}_bucket_embedding(inputs['{col}_bucket']))")
             lines.append('')
 
+        # History features - shared embedding + masked averaging (taste vector)
+        for feature in features_by_type.get('history', []):
+            col = feature.get('display_name') or feature.get('column')
+            history_cfg = feature.get('transforms', {}).get('history', {})
+            if not history_cfg.get('enabled'):
+                continue
+            lines.append(f"        # {col}: taste vector (shared embedding + masked average)")
+            lines.append(f"        {col}_ids = inputs['{col}']")
+            lines.append(f"        {col}_embs = self.shared_product_embedding({col}_ids)")
+            lines.append(f"        {col}_mask = tf.cast({col}_ids != 0, tf.float32)")
+            lines.append(f"        {col}_mask = tf.expand_dims({col}_mask, -1)")
+            lines.append(f"        {col}_avg = tf.reduce_sum({col}_embs * {col}_mask, axis=1)")
+            lines.append(f"        {col}_avg = {col}_avg / (tf.reduce_sum({col}_mask, axis=1) + 1e-8)")
+            lines.append(f"        features.append({col}_avg)")
+            lines.append('')
+
         # Cross features
         for cross in self.buyer_crosses:
             features = cross.get('features', [])
@@ -2245,11 +2491,19 @@ def _input_fn(
         Generate ProductModel class (Candidate Tower).
 
         Args:
-            features_by_type: Features organized by type (text, numeric, temporal)
+            features_by_type: Features organized by type (text, numeric, temporal, history)
 
         Returns:
             Python code string for ProductModel class
         """
+        # Find shared embedding pairs for this tower
+        shared_pairs = self._find_shared_embedding_pairs()
+        product_history = [p for p in shared_pairs if p['history_tower'] == 'product']
+        # Primary cols that appear in the product tower and are linked to a history feature
+        shared_primary_cols = {p['primary_col'] for p in shared_pairs}
+
+        has_shared = len(shared_pairs) > 0
+
         lines = [
             '',
             '# =============================================================================',
@@ -2264,11 +2518,17 @@ def _input_fn(
             '    Concatenates all feature representations into a single vector.',
             '    """',
             '',
-            '    def __init__(self, tf_transform_output: tft.TFTransformOutput):',
-            '        super().__init__()',
-            '        self.tf_transform_output = tf_transform_output',
-            '',
         ]
+
+        if has_shared:
+            lines.append('    def __init__(self, tf_transform_output: tft.TFTransformOutput, shared_product_embedding=None):')
+        else:
+            lines.append('    def __init__(self, tf_transform_output: tft.TFTransformOutput):')
+        lines.append('        super().__init__()')
+        lines.append('        self.tf_transform_output = tf_transform_output')
+        if has_shared:
+            lines.append('        self.shared_product_embedding = shared_product_embedding')
+        lines.append('')
 
         # Generate embedding layers for text features
         for feature in features_by_type['text']:
@@ -2279,11 +2539,15 @@ def _input_fn(
             else:
                 embed_dim = feature.get('embedding_dim', 32)
 
-            lines.append(f"        # {col}: vocab index → embedding ({embed_dim}D)")
-            lines.append(f"        # Transform already converted text to indices via tft.compute_and_apply_vocabulary")
-            lines.append(f"        {col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{col}_vocab')")
-            lines.append(f"        self.{col}_embedding = tf.keras.layers.Embedding({col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim})")
-            lines.append('')
+            if col in shared_primary_cols:
+                lines.append(f"        # {col}: uses shared_product_embedding ({embed_dim}D)")
+                lines.append('')
+            else:
+                lines.append(f"        # {col}: vocab index → embedding ({embed_dim}D)")
+                lines.append(f"        # Transform already converted text to indices via tft.compute_and_apply_vocabulary")
+                lines.append(f"        {col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{col}_vocab')")
+                lines.append(f"        self.{col}_embedding = tf.keras.layers.Embedding({col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim})")
+                lines.append('')
 
         # Generate embedding layers for numeric bucket features
         for feature in features_by_type['numeric']:
@@ -2336,8 +2600,12 @@ def _input_fn(
         # Text features
         for feature in features_by_type['text']:
             col = feature.get('display_name') or feature.get('column')
-            lines.append(f"        # {col}: lookup embedding from vocab index")
-            lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
+            if col in shared_primary_cols:
+                lines.append(f"        # {col}: lookup embedding from vocab index (shared embedding)")
+                lines.append(f"        features.append(self.shared_product_embedding(inputs['{col}']))")
+            else:
+                lines.append(f"        # {col}: lookup embedding from vocab index")
+                lines.append(f"        features.append(self.{col}_embedding(inputs['{col}']))")
             lines.append('')
 
         # Numeric features
@@ -2386,6 +2654,22 @@ def _input_fn(
                 lines.append(f"        features.append(self.{col}_bucket_embedding(inputs['{col}_bucket']))")
             lines.append('')
 
+        # History features - shared embedding + masked averaging (taste vector)
+        for feature in features_by_type.get('history', []):
+            col = feature.get('display_name') or feature.get('column')
+            history_cfg = feature.get('transforms', {}).get('history', {})
+            if not history_cfg.get('enabled'):
+                continue
+            lines.append(f"        # {col}: taste vector (shared embedding + masked average)")
+            lines.append(f"        {col}_ids = inputs['{col}']")
+            lines.append(f"        {col}_embs = self.shared_product_embedding({col}_ids)")
+            lines.append(f"        {col}_mask = tf.cast({col}_ids != 0, tf.float32)")
+            lines.append(f"        {col}_mask = tf.expand_dims({col}_mask, -1)")
+            lines.append(f"        {col}_avg = tf.reduce_sum({col}_embs * {col}_mask, axis=1)")
+            lines.append(f"        {col}_avg = {col}_avg / (tf.reduce_sum({col}_mask, axis=1) + 1e-8)")
+            lines.append(f"        features.append({col}_avg)")
+            lines.append('')
+
         # Cross features
         for cross in self.product_crosses:
             features = cross.get('features', [])
@@ -2408,11 +2692,66 @@ def _input_fn(
 
         return '\n'.join(lines)
 
+    def _generate_shared_embedding_code(self) -> str:
+        """
+        Generate code to create the shared product embedding layer.
+
+        When history features are present, both towers share a single embedding
+        layer for the primary product_id vocabulary.
+
+        Returns:
+            Python code string for shared embedding creation, or empty string
+        """
+        shared_pairs = self._find_shared_embedding_pairs()
+        if not shared_pairs:
+            return ''
+
+        # Use the first pair's primary col (typically there's only one shared embedding)
+        pair = shared_pairs[0]
+        primary_col = pair['primary_col']
+        embed_dim = pair['embedding_dim']
+
+        lines = []
+        lines.append(f"        # Create shared product embedding (used by both towers for {primary_col})")
+        lines.append(f"        {primary_col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{primary_col}_vocab')")
+        lines.append(f"        self.shared_product_embedding = tf.keras.layers.Embedding(")
+        lines.append(f"            {primary_col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim},")
+        lines.append(f"            name='shared_product_embedding'")
+        lines.append(f"        )")
+        lines.append('')
+        return '\n'.join(lines)
+
+    def _generate_tower_instantiation_code(self) -> str:
+        """
+        Generate code to instantiate BuyerModel and ProductModel.
+
+        When shared embedding exists, passes it to both towers.
+
+        Returns:
+            Python code string for tower instantiation
+        """
+        shared_pairs = self._find_shared_embedding_pairs()
+        if shared_pairs:
+            return (
+                "        # Feature extraction models (with shared embedding)\n"
+                "        self.buyer_model = BuyerModel(tf_transform_output, shared_product_embedding=self.shared_product_embedding)\n"
+                "        self.product_model = ProductModel(tf_transform_output, shared_product_embedding=self.shared_product_embedding)"
+            )
+        else:
+            return (
+                "        # Feature extraction models\n"
+                "        self.buyer_model = BuyerModel(tf_transform_output)\n"
+                "        self.product_model = ProductModel(tf_transform_output)"
+            )
+
     def _generate_retrieval_model(self) -> str:
         """Generate RetrievalModel class with configurable tower architecture."""
         # Generate layer code for each tower
         buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
         product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+
+        shared_embedding_code = self._generate_shared_embedding_code()
+        tower_instantiation_code = self._generate_tower_instantiation_code()
 
         return f'''
 # =============================================================================
@@ -2449,9 +2788,8 @@ class RetrievalModel(tfrs.Model):
                 'hist_counts': tf.Variable(tf.zeros(25, dtype=tf.int32), trainable=False, name=f'{{tower}}_grad_hist'),
             }}
 
-        # Feature extraction models
-        self.buyer_model = BuyerModel(tf_transform_output)
-        self.product_model = ProductModel(tf_transform_output)
+{shared_embedding_code}
+{tower_instantiation_code}
 
         # Query tower: BuyerModel → Configurable layers
         query_layers = [self.buyer_model]
@@ -2632,17 +2970,30 @@ class RetrievalModel(tfrs.Model):
         for feature in self.buyer_features:
             col_name = feature.get('display_name') or feature.get('column')
             bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
+            data_type = feature.get('data_type', '')
 
-            # Get TF dtype
-            tf_dtype = type_mapping.get(bq_type, 'tf.string')
+            if data_type == 'history':
+                # History features: 2D input [batch, max_length] of strings
+                max_length = feature.get('transforms', {}).get('history', {}).get('max_length', 50)
+                bq_type_inner = bq_type.replace('ARRAY<', '').replace('>', '')
+                tf_dtype = type_mapping.get(bq_type_inner, 'tf.string')
+                signature_specs.append(
+                    f"        tf.TensorSpec(shape=[None, {max_length}], dtype={tf_dtype}, name='{col_name}'),"
+                )
+                param_names.append(col_name)
+                # Already 2D — no expand_dims needed
+                raw_features_lines.append(f"            '{col_name}': {col_name},")
+            else:
+                # Get TF dtype
+                tf_dtype = type_mapping.get(bq_type, 'tf.string')
 
-            # Generate signature spec
-            signature_specs.append(
-                f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
-            )
-            param_names.append(col_name)
-            # Expand dims to [batch, 1] as TFT expects 2D tensors
-            raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
+                # Generate signature spec
+                signature_specs.append(
+                    f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
+                )
+                param_names.append(col_name)
+                # Expand dims to [batch, 1] as TFT expects 2D tensors
+                raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
 
         return signature_specs, param_names, raw_features_lines
 
@@ -2672,31 +3023,29 @@ class RetrievalModel(tfrs.Model):
             'DATE': 'tf.string',
         }
 
-        # Add buyer features
-        for feature in self.buyer_features:
+        # Add buyer features + product features
+        for feature in self.buyer_features + self.product_features:
             col_name = feature.get('display_name') or feature.get('column')
             bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
+            data_type = feature.get('data_type', '')
 
-            tf_dtype = type_mapping.get(bq_type, 'tf.string')
+            if data_type == 'history':
+                max_length = feature.get('transforms', {}).get('history', {}).get('max_length', 50)
+                bq_type_inner = bq_type.replace('ARRAY<', '').replace('>', '')
+                tf_dtype = type_mapping.get(bq_type_inner, 'tf.string')
+                signature_specs.append(
+                    f"        tf.TensorSpec(shape=[None, {max_length}], dtype={tf_dtype}, name='{col_name}'),"
+                )
+                param_names.append(col_name)
+                raw_features_lines.append(f"            '{col_name}': {col_name},")
+            else:
+                tf_dtype = type_mapping.get(bq_type, 'tf.string')
 
-            signature_specs.append(
-                f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
-            )
-            param_names.append(col_name)
-            raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
-
-        # Add product features (for ranking models)
-        for feature in self.product_features:
-            col_name = feature.get('display_name') or feature.get('column')
-            bq_type = (feature.get('bq_type') or feature.get('data_type') or 'STRING').upper()
-
-            tf_dtype = type_mapping.get(bq_type, 'tf.string')
-
-            signature_specs.append(
-                f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
-            )
-            param_names.append(col_name)
-            raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
+                signature_specs.append(
+                    f"        tf.TensorSpec(shape=[None], dtype={tf_dtype}, name='{col_name}'),"
+                )
+                param_names.append(col_name)
+                raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
 
         return signature_specs, param_names, raw_features_lines
 
@@ -4250,7 +4599,42 @@ USE_CLASS_WEIGHTS = {self.loss_function == 'binary_crossentropy'}
 
     def _generate_input_fn_ranking(self) -> str:
         """Generate input function with label_key for ranking models."""
-        return '''
+        history_padding = self._generate_history_padding_code(has_label=True)
+
+        if history_padding:
+            return f'''
+# =============================================================================
+# INPUT FUNCTION (Ranking - with label)
+# =============================================================================
+
+def _input_fn(
+    file_pattern: List[str],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Generate dataset for ranking model training.
+
+    Returns tuples of (features_dict, label) for supervised learning.
+    The label is extracted from features using label_key.
+    """
+    dataset = data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(
+            batch_size=batch_size,
+            label_key=LABEL_KEY,  # Extract label from features
+            num_epochs=1  # CRITICAL: Must be 1 for finite dataset, otherwise TFX creates infinite dataset
+        ),
+        tf_transform_output.transformed_metadata.schema
+    )
+
+    # Pad history (ARRAY) features from SparseTensor to fixed-width dense tensor
+{history_padding}
+    return dataset.map(_pad_history_features)
+'''
+        else:
+            return '''
 # =============================================================================
 # INPUT FUNCTION (Ranking - with label)
 # =============================================================================
@@ -4283,6 +4667,10 @@ def _input_fn(
         # Generate tower layer code for buyer and product (same as retrieval)
         buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
         product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+
+        # Shared embedding for history features
+        shared_embedding_code = self._generate_shared_embedding_code()
+        tower_instantiation_code = self._generate_tower_instantiation_code()
 
         # Generate rating head layers code
         rating_head_code = self._generate_rating_head_code()
@@ -4354,9 +4742,8 @@ class RankingModel(tfrs.Model):
         # Class weight for binary classification (set by run_fn if USE_CLASS_WEIGHTS)
         self.pos_class_weight = 1.0
 
-        # Feature extraction models
-        self.buyer_model = BuyerModel(tf_transform_output)
-        self.product_model = ProductModel(tf_transform_output)
+{shared_embedding_code}
+{tower_instantiation_code}
 
         # Query tower: BuyerModel → Dense layers (with L2 regularization)
         # Compresses high-dimensional feature embeddings to output_embedding_dim
@@ -5460,7 +5847,42 @@ USE_CLASS_WEIGHTS = {self.loss_function == 'binary_crossentropy'}
 
     def _generate_input_fn_multitask(self) -> str:
         """Generate input function with label_key for multitask models (same as ranking)."""
-        return '''
+        history_padding = self._generate_history_padding_code(has_label=True)
+
+        if history_padding:
+            return f'''
+# =============================================================================
+# INPUT FUNCTION (Multitask - with label)
+# =============================================================================
+
+def _input_fn(
+    file_pattern: List[str],
+    data_accessor: tfx.components.DataAccessor,
+    tf_transform_output: tft.TFTransformOutput,
+    batch_size: int = BATCH_SIZE
+) -> tf.data.Dataset:
+    """
+    Generate dataset for multitask model training.
+
+    Returns tuples of (features_dict, label) for supervised learning.
+    The label is extracted from features using label_key for the ranking task.
+    """
+    dataset = data_accessor.tf_dataset_factory(
+        file_pattern,
+        tfxio.TensorFlowDatasetOptions(
+            batch_size=batch_size,
+            label_key=LABEL_KEY,
+            num_epochs=1  # CRITICAL: Must be 1 for finite dataset
+        ),
+        tf_transform_output.transformed_metadata.schema
+    )
+
+    # Pad history (ARRAY) features from SparseTensor to fixed-width dense tensor
+{history_padding}
+    return dataset.map(_pad_history_features)
+'''
+        else:
+            return '''
 # =============================================================================
 # INPUT FUNCTION (Multitask - with label)
 # =============================================================================
@@ -5493,6 +5915,10 @@ def _input_fn(
         # Generate tower layer code for buyer and product
         buyer_layers_code = self._generate_tower_layers_code(self.buyer_tower_layers, 'query')
         product_layers_code = self._generate_tower_layers_code(self.product_tower_layers, 'candidate')
+
+        # Shared embedding for history features
+        shared_embedding_code = self._generate_shared_embedding_code()
+        tower_instantiation_code = self._generate_tower_instantiation_code()
 
         # Generate rating head layers code
         rating_head_code = self._generate_rating_head_code()
@@ -5561,9 +5987,8 @@ class MultitaskModel(tfrs.Model):
         # Class weight for binary classification (set by run_fn if USE_CLASS_WEIGHTS)
         self.pos_class_weight = 1.0
 
-        # Feature extraction models (shared between both tasks)
-        self.buyer_model = BuyerModel(tf_transform_output)
-        self.product_model = ProductModel(tf_transform_output)
+{shared_embedding_code}
+{tower_instantiation_code}
 
         # Query tower: BuyerModel → Dense layers → OUTPUT_EMBEDDING_DIM
         query_layers = [self.buyer_model]

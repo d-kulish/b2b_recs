@@ -16720,7 +16720,8 @@ function formatBqType(bqType) {
 const DATA_TYPES = {
     numeric: { label: 'Numeric', icon: 'hashtag' },
     text: { label: 'Text', icon: 'font' },
-    temporal: { label: 'Temporal', icon: 'calendar' }
+    temporal: { label: 'Temporal', icon: 'calendar' },
+    history: { label: 'History', icon: 'history' }
 };
 
 function getDataTypeLabel(dataType) {
@@ -16731,7 +16732,9 @@ function getDataTypeFromBqType(bqType) {
     // Map BigQuery type to our data type system
     const type = (bqType || 'STRING').toUpperCase();
 
-    if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+    if (type.startsWith('ARRAY')) {
+        return 'history';
+    } else if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
         return 'numeric';
     } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
         return 'temporal';
@@ -16758,6 +16761,10 @@ function getTransformOptionsForDataType(dataType) {
                 { key: 'normalize', label: 'Normalize', desc: 'Scale timestamp to [-1, 1]', outputDim: 1 },
                 { key: 'cyclical', label: 'Cyclical', desc: 'Extract periodic patterns (month, week, etc.)', outputDim: 'varies' },
                 { key: 'bucketize', label: 'Bucketize', desc: 'Discretize into time buckets + embed', outputDim: 'configurable' }
+            ];
+        case 'history':
+            return [
+                { key: 'history', label: 'Shared Embedding', desc: 'Average over shared product embedding', outputDim: 'configurable' }
             ];
         default:
             return [];
@@ -16821,6 +16828,13 @@ function getFeatureDisplayInfo(feature) {
         if (transforms.bucketize?.enabled) {
             const dim = transforms.bucketize.embedding_dim || 32;
             outputParts.push(`Bucket: ${dim}D`);
+            totalDim += dim;
+        }
+    } else if (dataType === 'history') {
+        if (transforms.history?.enabled) {
+            const dim = transforms.history.embedding_dim || 32;
+            const sharedWith = transforms.history.shared_with || '?';
+            outputParts.push(`Shared(${sharedWith}): ${dim}D`);
             totalDim += dim;
         }
     }
@@ -17860,7 +17874,7 @@ function renderFeatureConfigForm() {
     const t = editingFeature.transforms || {};
 
     // Build data type selector
-    const dataTypeOptions = ['numeric', 'text', 'temporal'].map(dt =>
+    const dataTypeOptions = ['numeric', 'text', 'temporal', 'history'].map(dt =>
         `<option value="${dt}" ${dataType === dt ? 'selected' : ''}>${getDataTypeLabel(dt)}</option>`
     ).join('');
 
@@ -18066,6 +18080,76 @@ function renderFeatureConfigForm() {
                 </div>
             </div>
         `;
+    } else if (dataType === 'history') {
+        const h = t.history || {};
+        const embedDim = h.embedding_dim || 32;
+        const maxLength = h.max_length || 50;
+        const sharedWith = h.shared_with || '';
+
+        // Collect product tower text features with is_primary_id for the shared_with dropdown
+        const productTextFeatures = (configState.productFeatures || [])
+            .filter(f => (f.data_type === 'text' || f.type === 'string_embedding') && f.is_primary_id)
+            .map(f => f.display_name || f.column);
+
+        // Fallback: if no primary_id features, show all product text features
+        const sharedOptions = productTextFeatures.length > 0
+            ? productTextFeatures
+            : (configState.productFeatures || [])
+                .filter(f => f.data_type === 'text' || f.type === 'string_embedding')
+                .map(f => f.display_name || f.column);
+
+        transformsHtml = `
+            <div class="fc-config-section" style="margin-bottom: 0;">
+                <div class="fc-config-section-header">
+                    <div>
+                        <span class="fc-config-section-title">Shared Embedding</span>
+                        <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Average over product ID embedding to create a taste vector</div>
+                    </div>
+                    <span class="fc-config-dim-badge" id="historyDimLabel">+${embedDim}D</span>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; font-weight: 500; color: #6b7280; display: block; margin-bottom: 4px;">Shared With (Product ID Feature)</label>
+                    <select id="historySharedWith" class="fc-config-select">
+                        <option value="">Select a product ID feature...</option>
+                        ${sharedOptions.map(name =>
+                            `<option value="${name}" ${sharedWith === name ? 'selected' : ''}>${name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; font-weight: 500; color: #6b7280; display: block; margin-bottom: 8px;">Embedding Dimension</label>
+                    <div class="fc-config-dim-grid">
+                        ${[16, 32, 64].map(dim => `
+                            <button type="button"
+                                    class="fc-config-dim-btn ${embedDim === dim ? 'active' : ''}"
+                                    onclick="selectHistoryEmbedDim(${dim})">
+                                ${dim}D
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 11px; font-weight: 500; color: #6b7280; display: block; margin-bottom: 4px;">Max Length (padding)</label>
+                    <input type="number" id="historyMaxLength" class="fc-config-custom-input"
+                           min="1" max="200" value="${maxLength}" style="width: 80px;">
+                </div>
+
+                <div class="fc-config-notes" style="margin-top: 0;">
+                    <div class="fc-config-note">
+                        <i class="fas fa-link" style="color: #3b82f6;"></i>
+                        <span><strong>Shared:</strong> Uses the same embedding table as the linked product ID feature</span>
+                    </div>
+                    <div class="fc-config-note">
+                        <i class="fas fa-calculator" style="color: #10b981;"></i>
+                        <span><strong>Averaging:</strong> Variable-length IDs are embedded and averaged into a fixed-width vector</span>
+                    </div>
+                </div>
+            </div>
+            <input type="hidden" id="historyEmbedDim" value="${embedDim}">
+        `;
     }
 
     body.innerHTML = `
@@ -18086,6 +18170,15 @@ function renderFeatureConfigForm() {
             ${transformsHtml}
         </div>
     `;
+}
+
+function selectHistoryEmbedDim(dim) {
+    document.getElementById('historyEmbedDim').value = dim;
+    document.getElementById('historyDimLabel').textContent = `+${dim}D`;
+    // Update button active states
+    document.querySelectorAll('.fc-config-dim-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.trim() === `${dim}D`);
+    });
 }
 
 function onModalDataTypeChange(newDataType) {
@@ -18164,6 +18257,19 @@ function applyFeatureConfig() {
                 enabled: true,
                 buckets: parseInt(document.getElementById('featureBuckets').value) || 100,
                 embedding_dim: parseInt(document.getElementById('featureBucketDim').value) || 32
+            };
+        }
+    } else if (dataType === 'history') {
+        const sharedWith = document.getElementById('historySharedWith')?.value || '';
+        const embedDim = parseInt(document.getElementById('historyEmbedDim')?.value) || 32;
+        const maxLength = parseInt(document.getElementById('historyMaxLength')?.value) || 50;
+
+        if (sharedWith) {
+            transforms.history = {
+                enabled: true,
+                shared_with: sharedWith,
+                embedding_dim: embedDim,
+                max_length: maxLength
             };
         }
     }

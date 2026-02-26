@@ -3336,7 +3336,9 @@ function getDataTypeLabel(dataType) {
 
 function getDataTypeFromBqType(bqType) {
     const type = (bqType || 'STRING').toUpperCase();
-    if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+    if (type.startsWith('ARRAY')) {
+        return 'history';
+    } else if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
         return 'numeric';
     } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
         return 'temporal';

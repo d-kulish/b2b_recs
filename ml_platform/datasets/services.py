@@ -305,7 +305,7 @@ class BigQueryService:
             for field in table.schema:
                 col_info = {
                     'name': field.name,
-                    'type': field.field_type,
+                    'type': f'ARRAY<{field.field_type}>' if field.mode == 'REPEATED' else field.field_type,
                     'mode': field.mode,
                     'description': field.description or '',
                 }
@@ -4915,13 +4915,9 @@ class DatasetStatsService:
                 col_type = col_info['type']
                 col_mode = col_info.get('mode', 'NULLABLE')
 
-                # REPEATED (ARRAY) columns need special handling —
-                # standard aggregates (COUNTIF, COUNT DISTINCT, MIN, MAX) fail on arrays
+                # REPEATED (ARRAY) columns — skip from stats query entirely,
+                # they'll get a type-only entry in the results loop below
                 if col_mode == 'REPEATED':
-                    stats_parts.append(f"COUNTIF(`{alias}` IS NULL) AS `{alias}__null_count`")
-                    stats_parts.append(f"AVG(ARRAY_LENGTH(`{alias}`)) AS `{alias}__avg_length`")
-                    stats_parts.append(f"MIN(ARRAY_LENGTH(`{alias}`)) AS `{alias}__min_length`")
-                    stats_parts.append(f"MAX(ARRAY_LENGTH(`{alias}`)) AS `{alias}__max_length`")
                     continue
 
                 # Null count for all scalar columns
@@ -4966,24 +4962,21 @@ class DatasetStatsService:
                 col_mode = col_info.get('mode', 'NULLABLE')
                 display_name = f"{col_info['table']}.{col_info['original']}"
 
+                if col_mode == 'REPEATED':
+                    column_stats[display_name] = {
+                        'type': f'ARRAY<{col_type}>',
+                    }
+                    continue
+
                 null_count = getattr(row, f'{alias}__null_count', 0) or 0
 
                 stats = {
-                    'type': f'ARRAY<{col_type}>' if col_mode == 'REPEATED' else col_type,
+                    'type': col_type,
                     'null_count': null_count,
                     'null_percent': round(null_count / total_rows * 100, 2) if total_rows > 0 else 0
                 }
 
-                if col_mode == 'REPEATED':
-                    # ARRAY column stats
-                    avg_len = getattr(row, f'{alias}__avg_length', None)
-                    min_len = getattr(row, f'{alias}__min_length', None)
-                    max_len = getattr(row, f'{alias}__max_length', None)
-                    stats['avg_length'] = round(float(avg_len), 1) if avg_len is not None else None
-                    stats['min_length'] = int(min_len) if min_len is not None else None
-                    stats['max_length'] = int(max_len) if max_len is not None else None
-
-                elif col_type in ('STRING', 'BYTES'):
+                if col_type in ('STRING', 'BYTES'):
                     stats['unique_count'] = getattr(row, f'{alias}__unique_count', 0) or 0
 
                 elif col_type in ('INT64', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC', 'INTEGER', 'FLOAT'):

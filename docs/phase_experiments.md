@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-26 (History feature type — purchase history taste vector)
+**Last Updated**: 2026-02-26 (Fix ARRAY column type detection in dataset wizard & feature config)
 
 ---
 
@@ -904,6 +904,43 @@ Top-K precision improved significantly. Recall@50/100 drop is due to overfitting
 ### Related Documentation
 
 - [purchase_history.md](purchase_history.md) — Full research, standalone experiment results, and platform integration details
+
+---
+
+## Bug Fix: ARRAY Column Type Detection Broken in Dataset Wizard & Feature Config (2026-02-26)
+
+### Problem
+
+BigQuery ARRAY columns (e.g., `purchase_history` which is `ARRAY<INT64>`) were displayed with just their element type (`int`) in the schema builder and passed as bare `INT64` to the feature config step. This broke the "history" feature type auto-detection (which expects `bq_type` starting with `ARRAY`), making it impossible to create a taste vector feature through the UI.
+
+### Root Cause
+
+BigQuery's Python client returns `field.field_type = "INT64"` and `field.mode = "REPEATED"` as **separate attributes**, but multiple code paths only read `field_type` and ignored `mode`. This affected:
+
+1. **`get_table_schema()`** — the root backend source for schema data, propagating bare types to the dataset wizard schema builder, preview service, and training pipeline fallback
+2. **`get_schema_with_sample()`** — the feature config endpoint, which reads from `result.schema` independently and also missed REPEATED mode
+3. **`SemanticTypeService`** — had no `'history'` semantic type, so ARRAY columns couldn't be classified even if the type was correct
+4. **Snapshot stats query** — ran `COUNTIF`, `AVG(ARRAY_LENGTH(...))` on ARRAY columns, which could fail or produce misleading stats
+5. **`formatBqType()` (model_configs.html)** — no ARRAY handling, fell through to default
+6. **`getDataTypeFromBqType()` (model_experiments.html)** — missing the ARRAY → history mapping that `model_configs.html` already had
+
+### Fix Applied
+
+| File | Change |
+|------|--------|
+| `ml_platform/datasets/services.py:308` | `get_table_schema()` now emits `ARRAY<{field_type}>` for REPEATED fields |
+| `ml_platform/datasets/services.py:4918-4984` | Snapshot stats: skip ARRAY columns from BQ query entirely, emit type-only entry in results |
+| `ml_platform/configs/api.py:821` | Exclude ARRAY columns from integer cardinality computation (`COUNT(DISTINCT ...)` fails on arrays) |
+| `ml_platform/configs/api.py:859` | `get_schema_with_sample()` emits `ARRAY<{field_type}>` for REPEATED fields |
+| `ml_platform/configs/services.py` | Added `'history'` to `SEMANTIC_TYPES` dict; `get_type_options()` and `infer_semantic_type()` return history for ARRAY types |
+| `templates/ml_platform/model_configs.html` | `formatBqType()` returns `'ARRAY'` for types starting with `ARRAY` |
+| `templates/ml_platform/model_experiments.html` | `getDataTypeFromBqType()` returns `'history'` for ARRAY types |
+
+The fix pattern (`f'ARRAY<{field_type}>' if mode == 'REPEATED' else field_type`) already existed at `services.py:489` in the snapshot stats results loop — it just wasn't applied at the source.
+
+### Impact
+
+Without this fix, the history feature type added in the previous commit was effectively unusable through the UI — the ARRAY type information was lost before reaching the feature config step, so auto-detection never triggered. Non-ARRAY columns are completely unaffected.
 
 ---
 

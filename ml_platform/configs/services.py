@@ -653,7 +653,13 @@ class SemanticTypeService:
             'description': 'Periodic numeric values (hour, day, month)',
             'transforms': ['cyclical_encoding'],
             'feature_type': 'cyclical',
-        }
+        },
+        'history': {
+            'label': 'History',
+            'description': 'Variable-length array of IDs (purchase history)',
+            'transforms': ['history'],
+            'feature_type': 'history',
+        },
     }
 
     # Patterns that indicate ID columns
@@ -681,6 +687,9 @@ class SemanticTypeService:
             List of valid semantic type keys
         """
         bq_type_upper = bq_type.upper() if bq_type else 'STRING'
+
+        if bq_type_upper.startswith('ARRAY'):
+            return ['history']
 
         if bq_type_upper in cls.BQ_NUMERIC_TYPES:
             return ['number', 'id', 'cyclical']
@@ -714,6 +723,10 @@ class SemanticTypeService:
         stats = stats or {}
         bq_type_upper = bq_type.upper() if bq_type else 'STRING'
         col_lower = col_name.lower()
+
+        # ARRAY types
+        if bq_type_upper.startswith('ARRAY'):
+            return 'history'
 
         # String types
         if bq_type_upper in cls.BQ_STRING_TYPES:

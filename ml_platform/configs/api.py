@@ -818,7 +818,7 @@ def get_schema_with_sample(request, dataset_id):
         # Check which INTEGER columns are missing cardinality and compute on-the-fly
         int_cols_missing_cardinality = []
         for field in schema_fields:
-            if field.field_type in ('INT64', 'INTEGER', 'FLOAT64', 'NUMERIC'):
+            if field.field_type in ('INT64', 'INTEGER', 'FLOAT64', 'NUMERIC') and field.mode != 'REPEATED':
                 col_name = field.name
                 # Check if cardinality is in any stats source
                 has_cardinality = False
@@ -856,7 +856,7 @@ def get_schema_with_sample(request, dataset_id):
         columns = []
         for field in schema_fields:
             col_name = field.name
-            bq_type = field.field_type
+            bq_type = f'ARRAY<{field.field_type}>' if field.mode == 'REPEATED' else field.field_type
 
             # Try to find stats - could be under different keys
             stats = {}

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-26 (Fix `tft.vocabulary()` misuse in history transform code generation)
+**Last Updated**: 2026-02-26 (Fix dense-to-sparse conversion for history features in serve functions)
 
 ---
 
@@ -1005,6 +1005,77 @@ outputs['purchase_history'] = tft.apply_vocabulary(
 ### Impact
 
 All experiments using history features (purchase history taste vectors) failed at the Transform step. Non-history experiments were unaffected. After the fix, the preprocessing code for experiment `quick-tests/166` must be regenerated and the experiment rerun.
+
+---
+
+## Bug Fix: Dense-to-Sparse Conversion for History Features in Serve Functions (2026-02-26)
+
+### Problem
+
+Experiment `quick-tests/167` (with the previous `tft.vocabulary()` bug fixed) passes Transform but fails at the **Trainer** step during `tf.saved_model.save()` with:
+```
+ValueError: Tensor("history:0", shape=(None, 50), dtype=int64): Shapes (None, 2) and (None, 50) are incompatible
+```
+
+Training completes successfully (all epochs run). The failure happens when TensorFlow traces the `serve()` function for export.
+
+### Root Cause
+
+The TFT saved transform model is traced during the Transform step with **SparseTensor** inputs (BigQueryExampleGen encodes ARRAY/REPEATED columns as VarLenFeature → SparseTensor). The serve function passes `history` as a dense `[None, 50]` tensor into `self.tft_layer(raw_features)`, causing a shape mismatch. The shape `(None, 2)` in the error is the SparseTensor's internal `indices` shape, not `(None, 50)`.
+
+The data flow during **training** is:
+```
+BigQueryExampleGen → SparseTensor → Transform(SparseTensor) → SparseTensor → _input_fn pads to dense [batch, max_len] → model
+```
+
+The data flow during **serving** must match:
+```
+JSON dense [batch, max_len] → convert to SparseTensor → tft_layer(SparseTensor) → SparseTensor → pad to dense [batch, max_len] → model
+```
+
+Additionally, after `tft_layer` returns, the history column is still a SparseTensor but the model's tower expects a dense `[batch, max_len]` tensor (same as during training, where `_input_fn` pads SparseTensors to dense).
+
+### Fix Applied
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` `_generate_serve_history_padding()` | New static method: generates post-`tft_layer` padding code (SparseTensor → dense via `tf.sparse.to_dense()` + slice + `tf.pad()`) for a list of history features |
+| `ml_platform/configs/services.py` `_generate_raw_tensor_signature()` | Returns 4th tuple element `history_features` (list of `(col_name, max_length)` pairs); history columns emit `tf.sparse.from_dense(col)` instead of bare `col` |
+| `ml_platform/configs/services.py` `_generate_raw_tensor_signature_ranking()` | Same 4th return value change |
+| `ml_platform/configs/services.py` `_generate_brute_force_serve_fn()` | Injects history padding block after `tft_layer` |
+| `ml_platform/configs/services.py` `_generate_scann_serve_fn()` | Injects history padding block after `tft_layer` (both ScaNN and brute-force fallback) |
+| `ml_platform/configs/services.py` `_generate_serve_fn_ranking()` | Injects history padding block after `tft_layer` |
+| `ml_platform/configs/services.py` `_generate_serve_fn_multitask()` | Injects history padding block after `tft_layer` in both `serve()` and `serve_ranking()` |
+
+**Generated code before (buggy):**
+```python
+    raw_features = {
+        'customer_id': tf.expand_dims(customer_id, -1),
+        'history': history,                          # dense [batch, 50] — SHAPE MISMATCH
+    }
+    transformed_features = self.tft_layer(raw_features)
+    query_embeddings = self.retrieval_model.query_tower(transformed_features)
+```
+
+**Generated code after (fixed):**
+```python
+    raw_features = {
+        'customer_id': tf.expand_dims(customer_id, -1),
+        'history': tf.sparse.from_dense(history),    # convert to SparseTensor for TFT
+    }
+    transformed_features = self.tft_layer(raw_features)
+    # Pad history feature back to dense [batch, 50]
+    if isinstance(transformed_features['history'], tf.SparseTensor):
+        _dense = tf.sparse.to_dense(transformed_features['history'], default_value=0)
+        _dense = _dense[:, :50]
+        _pad = tf.maximum(50 - tf.shape(_dense)[1], 0)
+        transformed_features['history'] = tf.pad(_dense, [[0, 0], [0, _pad]])
+    query_embeddings = self.retrieval_model.query_tower(transformed_features)
+```
+
+### Impact
+
+All experiments using history features failed at the Trainer step during model export (`tf.saved_model.save()`). Training itself completed successfully — only the serve function tracing failed. Non-history experiments were unaffected. After the fix, experiment `quick-tests/167` must be rerun.
 
 ---
 

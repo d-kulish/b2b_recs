@@ -2990,16 +2990,43 @@ class RetrievalModel(tfrs.Model):
 
         return '\n'.join(lines)
 
+    @staticmethod
+    def _generate_serve_history_padding(history_features: list, indent: str = '        ') -> str:
+        """
+        Generate code to pad SparseTensor history outputs back to dense after tft_layer.
+
+        Args:
+            history_features: list of (col_name, max_length) tuples
+            indent: indentation string for the generated code
+
+        Returns:
+            Code string to inject after `transformed_features = self.tft_layer(raw_features)`,
+            or empty string if no history features.
+        """
+        if not history_features:
+            return ''
+        lines = []
+        for col_name, max_length in history_features:
+            lines.append(f"{indent}# Pad history feature back to dense [batch, {max_length}]")
+            lines.append(f"{indent}if isinstance(transformed_features['{col_name}'], tf.SparseTensor):")
+            lines.append(f"{indent}    _dense = tf.sparse.to_dense(transformed_features['{col_name}'], default_value=0)")
+            lines.append(f"{indent}    _dense = _dense[:, :{max_length}]")
+            lines.append(f"{indent}    _pad = tf.maximum({max_length} - tf.shape(_dense)[1], 0)")
+            lines.append(f"{indent}    transformed_features['{col_name}'] = tf.pad(_dense, [[0, 0], [0, _pad]])")
+        return '\n'.join(lines)
+
     def _generate_raw_tensor_signature(self) -> tuple:
         """
         Generate raw tensor input signature based on buyer features.
 
         Returns:
-            tuple: (signature_specs, param_names, raw_features_dict_lines)
+            tuple: (signature_specs, param_names, raw_features_dict_lines, history_features)
+                   history_features is a list of (col_name, max_length) for post-tft_layer padding
         """
         signature_specs = []
         param_names = []
         raw_features_lines = []
+        history_features = []
 
         # Type mapping: BigQuery type → TensorFlow dtype
         type_mapping = {
@@ -3029,8 +3056,9 @@ class RetrievalModel(tfrs.Model):
                     f"        tf.TensorSpec(shape=[None, {max_length}], dtype={tf_dtype}, name='{col_name}'),"
                 )
                 param_names.append(col_name)
-                # Already 2D — no expand_dims needed
-                raw_features_lines.append(f"            '{col_name}': {col_name},")
+                # Convert dense input to SparseTensor for TFT compatibility
+                raw_features_lines.append(f"            '{col_name}': tf.sparse.from_dense({col_name}),")
+                history_features.append((col_name, max_length))
             else:
                 # Get TF dtype
                 tf_dtype = type_mapping.get(bq_type, 'tf.string')
@@ -3043,7 +3071,7 @@ class RetrievalModel(tfrs.Model):
                 # Expand dims to [batch, 1] as TFT expects 2D tensors
                 raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
 
-        return signature_specs, param_names, raw_features_lines
+        return signature_specs, param_names, raw_features_lines, history_features
 
     def _generate_raw_tensor_signature_ranking(self) -> tuple:
         """
@@ -3051,11 +3079,13 @@ class RetrievalModel(tfrs.Model):
         Includes BOTH buyer AND product features.
 
         Returns:
-            tuple: (signature_specs, param_names, raw_features_dict_lines)
+            tuple: (signature_specs, param_names, raw_features_dict_lines, history_features)
+                   history_features is a list of (col_name, max_length) for post-tft_layer padding
         """
         signature_specs = []
         param_names = []
         raw_features_lines = []
+        history_features = []
 
         # Type mapping: BigQuery type → TensorFlow dtype
         type_mapping = {
@@ -3085,7 +3115,9 @@ class RetrievalModel(tfrs.Model):
                     f"        tf.TensorSpec(shape=[None, {max_length}], dtype={tf_dtype}, name='{col_name}'),"
                 )
                 param_names.append(col_name)
-                raw_features_lines.append(f"            '{col_name}': {col_name},")
+                # Convert dense input to SparseTensor for TFT compatibility
+                raw_features_lines.append(f"            '{col_name}': tf.sparse.from_dense({col_name}),")
+                history_features.append((col_name, max_length))
             else:
                 tf_dtype = type_mapping.get(bq_type, 'tf.string')
 
@@ -3095,7 +3127,7 @@ class RetrievalModel(tfrs.Model):
                 param_names.append(col_name)
                 raw_features_lines.append(f"            '{col_name}': tf.expand_dims({col_name}, -1),")
 
-        return signature_specs, param_names, raw_features_lines
+        return signature_specs, param_names, raw_features_lines, history_features
 
     def _generate_serve_fn(self) -> str:
         """Generate serving function for inference (dispatches to ScaNN or brute-force)."""
@@ -3137,7 +3169,7 @@ class RetrievalModel(tfrs.Model):
             logger.warning(f"Falling back to first product feature as ID: {product_id_col} (type: {product_id_bq_type})")
 
         # Generate dynamic signature from buyer features
-        signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature()
+        signature_specs, param_names, raw_features_lines, history_features = self._generate_raw_tensor_signature()
 
         # Build parameter list for serve method
         params_str = ', '.join(param_names)
@@ -3147,6 +3179,9 @@ class RetrievalModel(tfrs.Model):
 
         # Build raw_features dict
         raw_features_str = '\n'.join(raw_features_lines)
+
+        # Generate post-tft_layer history padding code
+        history_padding_str = self._generate_serve_history_padding(history_features)
 
         return f'''
 # =============================================================================
@@ -3196,6 +3231,7 @@ class ServingModel(tf.keras.Model):
 
         # Apply TFT preprocessing (vocabularies, normalization, etc.)
         transformed_features = self.tft_layer(raw_features)
+{history_padding_str}
 
         # Get query embeddings from buyer tower
         query_embeddings = self.retrieval_model.query_tower(transformed_features)
@@ -3459,10 +3495,13 @@ def _load_original_product_ids(tf_transform_output, product_id_col, product_id_b
             logger.warning(f"Falling back to first product feature as ID: {product_id_col} (type: {product_id_bq_type})")
 
         # Generate dynamic signature from buyer features (same as brute-force)
-        signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature()
+        signature_specs, param_names, raw_features_lines, history_features = self._generate_raw_tensor_signature()
         params_str = ', '.join(param_names)
         signature_str = '\n'.join(signature_specs)
         raw_features_str = '\n'.join(raw_features_lines)
+
+        # Generate post-tft_layer history padding code
+        history_padding_str = self._generate_serve_history_padding(history_features)
 
         return f'''
 # =============================================================================
@@ -3507,6 +3546,7 @@ class ScaNNServingModel(tf.keras.Model):
 
         # Apply TFT preprocessing
         transformed_features = self.tft_layer(raw_features)
+{history_padding_str}
 
         # ScaNN index is callable - returns (scores, vocab_indices)
         # The index was built with the query tower, so it handles embedding computation
@@ -3543,6 +3583,7 @@ class BruteForceServingModel(tf.keras.Model):
         """Brute-force serving function."""
         parsed_features = tf.io.parse_example(serialized_examples, self._raw_feature_spec)
         transformed_features = self.tft_layer(parsed_features)
+{history_padding_str}
         query_embeddings = self.retrieval_model.query_tower(transformed_features)
 
         similarities = tf.linalg.matmul(
@@ -4971,7 +5012,7 @@ class RankingModel(tfrs.Model):
     def _generate_serve_fn_ranking(self) -> str:
         """Generate serving function for ranking model with raw tensor inputs and inverse transform."""
         # Generate dynamic signature from buyer AND product features
-        signature_specs, param_names, raw_features_lines = self._generate_raw_tensor_signature_ranking()
+        signature_specs, param_names, raw_features_lines, history_features = self._generate_raw_tensor_signature_ranking()
 
         # Build parameter list for serve method
         params_str = ', '.join(param_names)
@@ -4981,6 +5022,9 @@ class RankingModel(tfrs.Model):
 
         # Build raw_features dict
         raw_features_str = '\n'.join(raw_features_lines)
+
+        # Generate post-tft_layer history padding code
+        history_padding_str = self._generate_serve_history_padding(history_features)
 
         return f'''
 # =============================================================================
@@ -5063,6 +5107,7 @@ class RankingServingModel(tf.keras.Model):
 
         # Apply TFT preprocessing (vocabularies, normalization, etc.)
         transformed_features = self.tft_layer(raw_features)
+{history_padding_str}
 
         # Get predictions (in transformed/normalized space)
         predictions_normalized = self.ranking_model(transformed_features)
@@ -6204,16 +6249,20 @@ class MultitaskModel(tfrs.Model):
             product_id_col = self.product_features[0].get('display_name') or self.product_features[0].get('column', 'product_id')
 
         # Generate signatures for retrieval (buyer features only)
-        retrieval_sig_specs, retrieval_params, retrieval_features = self._generate_raw_tensor_signature()
+        retrieval_sig_specs, retrieval_params, retrieval_features, retrieval_history = self._generate_raw_tensor_signature()
         retrieval_params_str = ', '.join(retrieval_params)
         retrieval_sig_str = '\n'.join(retrieval_sig_specs)
         retrieval_features_str = '\n'.join(retrieval_features)
 
         # Generate signatures for ranking (buyer + product features)
-        ranking_sig_specs, ranking_params, ranking_features = self._generate_raw_tensor_signature_ranking()
+        ranking_sig_specs, ranking_params, ranking_features, ranking_history = self._generate_raw_tensor_signature_ranking()
         ranking_params_str = ', '.join(ranking_params)
         ranking_sig_str = '\n'.join(ranking_sig_specs)
         ranking_features_str = '\n'.join(ranking_features)
+
+        # Generate post-tft_layer history padding code for both serve functions
+        retrieval_history_padding_str = self._generate_serve_history_padding(retrieval_history)
+        ranking_history_padding_str = self._generate_serve_history_padding(ranking_history)
 
         return f'''
 # =============================================================================
@@ -6274,6 +6323,7 @@ class MultitaskServingModel(tf.keras.Model):
 
         # Apply TFT preprocessing
         transformed_features = self.tft_layer(raw_features)
+{retrieval_history_padding_str}
 
         # Get query embeddings
         query_embeddings = self.multitask_model.query_tower(transformed_features)
@@ -6315,6 +6365,7 @@ class MultitaskServingModel(tf.keras.Model):
 
         # Apply TFT preprocessing
         transformed_features = self.tft_layer(raw_features)
+{ranking_history_padding_str}
 
         # Get rating predictions through the model's call() - uses rating head
         predictions_normalized = self.multitask_model(transformed_features)

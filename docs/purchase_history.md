@@ -1068,6 +1068,14 @@ features.append(purchase_history_avg)
 
 *Serving signatures:* Modified `_generate_raw_tensor_signature()` and `_generate_raw_tensor_signature_ranking()` so history features get `[None, max_length]` shape (2D) instead of `[None]` (1D), and skip `tf.expand_dims`. All 4 serve function generators (brute_force, scann, ranking, multitask) inherit these changes automatically.
 
+*Serving dense-to-sparse conversion:* The TFT saved transform model is traced during the Transform step with **SparseTensor** inputs (BigQueryExampleGen encodes ARRAY/REPEATED columns as VarLenFeature → SparseTensor). The serve functions receive dense `[batch, max_length]` tensors from JSON. Without conversion, `tft_layer(raw_features)` fails with a shape mismatch (`(None, 2)` vs `(None, max_length)` — the `(None, 2)` is the SparseTensor's internal indices shape). After `tft_layer` returns, the history column is still a SparseTensor but the model's tower expects dense `[batch, max_len]` (same as during training, where `_input_fn` pads SparseTensors to dense).
+
+**Bug fix (2026-02-26):** Added dense→sparse→dense conversion around `tft_layer` in all serve functions:
+1. **Before `tft_layer`**: `tf.sparse.from_dense(history)` converts the dense input to SparseTensor
+2. **After `tft_layer`**: `tf.sparse.to_dense()` + slice + `tf.pad()` converts back to dense `[batch, max_length]`
+
+Both `_generate_raw_tensor_signature()` and `_generate_raw_tensor_signature_ranking()` now return a 4th tuple element: `history_features` — a list of `(col_name, max_length)` pairs. A new static method `_generate_serve_history_padding()` generates the post-transform padding block. All 6 serve function templates (brute_force, scann, scann's brute_force fallback, ranking, multitask retrieval, multitask ranking) inject this code. When no history features are present, no conversion code is emitted — output is identical to the previous behavior.
+
 **Phase 5 — UI + API Validation**
 
 Updated `model_configs.html`:

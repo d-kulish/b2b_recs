@@ -18087,17 +18087,16 @@ function renderFeatureConfigForm() {
         const maxLength = h.max_length || 50;
         const sharedWith = h.shared_with || '';
 
-        // Collect product tower text features with is_primary_id for the shared_with dropdown
-        const productTextFeatures = (configState.productFeatures || [])
-            .filter(f => (f.data_type === 'text' || f.type === 'string_embedding') && f.is_primary_id)
-            .map(f => f.display_name || f.column);
-
-        // Fallback: if no primary_id features, show all product text features
-        const sharedOptions = productTextFeatures.length > 0
-            ? productTextFeatures
-            : (configState.productFeatures || [])
-                .filter(f => f.data_type === 'text' || f.type === 'string_embedding')
-                .map(f => f.display_name || f.column);
+        // Collect product tower ID features for the shared_with dropdown
+        // Primary ID is stored separately in configState.productIdFeature, so include it first
+        const sharedOptions = [];
+        if (configState.productIdFeature) {
+            sharedOptions.push(configState.productIdFeature.display_name || configState.productIdFeature.column);
+        }
+        // Also include any additional product text/embedding features
+        (configState.productFeatures || [])
+            .filter(f => f.data_type === 'text' || f.type === 'string_embedding')
+            .forEach(f => sharedOptions.push(f.display_name || f.column));
 
         transformsHtml = `
             <div class="fc-config-section" style="margin-bottom: 0;">

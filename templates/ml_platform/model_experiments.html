@@ -3392,6 +3392,12 @@ function getFeatureDisplayInfo(feature) {
             outputParts.push(`Bucket: ${dim}D`);
             totalDim += dim;
         }
+    } else if (dataType === 'history') {
+        if (transforms.history?.enabled) {
+            const dim = transforms.history.embedding_dim || 32;
+            outputParts.push(`History: ${dim}D`);
+            totalDim += dim;
+        }
     }
 
     return {

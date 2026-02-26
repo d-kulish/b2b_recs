@@ -4964,7 +4964,7 @@ class DatasetStatsService:
 
                 if col_mode == 'REPEATED':
                     column_stats[display_name] = {
-                        'type': f'ARRAY<{col_type}>',
+                        'type': col_type,
                     }
                     continue
 

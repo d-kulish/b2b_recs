@@ -1004,13 +1004,27 @@ Added history type handling to both `FeatureConfig._calc_feature_dim()` (models.
 
 **Phase 3 — PreprocessingFnGenerator: Shared Vocabulary for ARRAY**
 
-Extended `_collect_all_features()` to include a `'history'` bucket. Added `_generate_history_transforms()` method that generates `tft.apply_vocabulary()` calls referencing the shared vocabulary created by the primary text feature's `tft.compute_and_apply_vocabulary(..., vocab_filename='{col}_vocab')`. History transforms are placed after text transforms (which create the vocabulary) in the generated code.
+Extended `_collect_all_features()` to include a `'history'` bucket. Added `_generate_history_transforms()` method that generates `tft.apply_vocabulary()` calls referencing the shared vocabulary created by the primary text feature. History transforms are placed after text transforms (which create the vocabulary) in the generated code.
 
-Generated code pattern:
+**Bug fix (2026-02-26):** The original implementation passed a string to `tft.vocabulary()` (e.g. `tft.vocabulary('product_id_vocab')`), but `tft.vocabulary()` expects a **tensor** as its first argument — there is no "lookup by name" API. The fix splits text features that are shared with history features into two steps: `tft.vocabulary()` (captures the deferred vocab tensor into a variable) + `tft.apply_vocabulary()`. History features then reference that variable directly. Non-shared text features keep the one-liner `tft.compute_and_apply_vocabulary()`. See `generate()` → `shared_cols` computation and the `shared_cols` parameter on both `_generate_text_transforms()` and `_generate_history_transforms()`.
+
+Generated code pattern (after fix):
 ```python
+# Text feature (shared with history) — split into vocabulary + apply
+product_id_vocab = tft.vocabulary(
+    _densify(inputs['product_id'], b''),
+    vocab_filename='product_id_vocab'
+)
+outputs['product_id'] = tft.apply_vocabulary(
+    _densify(inputs['product_id'], b''),
+    deferred_vocab_filename_tensor=product_id_vocab,
+    num_oov_buckets=NUM_OOV_BUCKETS
+)
+
+# History feature — references the variable from above
 outputs['purchase_history'] = tft.apply_vocabulary(
     inputs['purchase_history'],
-    deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab'),
+    deferred_vocab_filename_tensor=product_id_vocab,
     num_oov_buckets=NUM_OOV_BUCKETS
 )
 ```
@@ -1296,33 +1310,47 @@ Products with no purchase history (new products) get a zero co-purchase vector. 
 
 ### 9.11 Transform Changes
 
-The `preprocessing_fn` applies the same product vocabulary to all three fields:
+The `preprocessing_fn` applies the same product vocabulary to all three fields.
+The text feature uses `tft.vocabulary()` to capture the deferred vocab tensor,
+then `tft.apply_vocabulary()` applies it to the text column and each history column:
 
 ```python
 def preprocessing_fn(inputs):
     outputs = {}
 
-    # 1. Single product_id → vocab index
-    outputs['product_id'] = tft.compute_and_apply_vocabulary(
+    # 1. Single product_id → build vocab, then apply
+    product_id_vocab = tft.vocabulary(
         inputs['product_id'],
         vocab_filename='product_id_vocab'
+    )
+    outputs['product_id'] = tft.apply_vocabulary(
+        inputs['product_id'],
+        deferred_vocab_filename_tensor=product_id_vocab,
+        num_oov_buckets=NUM_OOV_BUCKETS
     )
 
     # 2. Buyer's purchase history → same vocab
     outputs['purchase_history'] = tft.apply_vocabulary(
         inputs['purchase_history'],
-        deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab')
+        deferred_vocab_filename_tensor=product_id_vocab,
+        num_oov_buckets=NUM_OOV_BUCKETS
     )
 
     # 3. Product's co-purchase history → same vocab
     outputs['co_purchase_history'] = tft.apply_vocabulary(
         inputs['co_purchase_history'],
-        deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab')
+        deferred_vocab_filename_tensor=product_id_vocab,
+        num_oov_buckets=NUM_OOV_BUCKETS
     )
 
     # ... other features unchanged
     return outputs
 ```
+
+> **Note**: `tft.vocabulary()` takes a **tensor** as its first argument and returns a
+> deferred vocab filename tensor. It does *not* accept a string vocab name — that was
+> a bug in the original implementation (see Phase 3 below and `phase_experiments.md`
+> bug fix section for details).
 
 ---
 

@@ -934,6 +934,17 @@ class PreprocessingFnGenerator:
         # Collect all features organized by type
         all_features = self._collect_all_features()
 
+        # Determine which text columns are shared with history features
+        # so we can split compute_and_apply_vocabulary into separate
+        # tft.vocabulary() + tft.apply_vocabulary() calls.
+        shared_cols = set()
+        for hf in all_features.get('history', []):
+            hcfg = hf.get('transforms', {}).get('history', {})
+            if hcfg.get('enabled'):
+                sw = hcfg.get('shared_with', '')
+                if sw:
+                    shared_cols.add(sw)
+
         # Build code sections
         header = self._generate_header()
         imports = self._generate_imports()
@@ -941,12 +952,12 @@ class PreprocessingFnGenerator:
         helpers = self._generate_helpers()
 
         fn_start = self._generate_function_start()
-        text_code = self._generate_text_transforms(all_features['text'])
+        text_code = self._generate_text_transforms(all_features['text'], shared_cols=shared_cols)
         numeric_code = self._generate_numeric_transforms(all_features['numeric'])
         temporal_code = self._generate_temporal_transforms(all_features['temporal'])
         cross_code = self._generate_cross_transforms()
         # History transforms must come AFTER text (which creates the vocabulary)
-        history_code = self._generate_history_transforms(all_features.get('history', []))
+        history_code = self._generate_history_transforms(all_features.get('history', []), shared_cols=shared_cols)
         target_code = self._generate_target_column_code()  # For ranking models
         fn_end = self._generate_function_end()
 
@@ -1255,18 +1266,27 @@ def preprocessing_fn(inputs):
         lines.append('')
         return '\n'.join(lines)
 
-    def _generate_text_transforms(self, features: List[Dict]) -> str:
+    def _generate_text_transforms(self, features: List[Dict], shared_cols: set = None) -> str:
         """
         Generate tft.compute_and_apply_vocabulary() calls for text features.
 
+        For features whose column is in shared_cols (i.e. a history feature
+        shares its vocabulary), we split into tft.vocabulary() +
+        tft.apply_vocabulary() so the deferred vocab tensor can be referenced
+        by the history transform.
+
         Args:
             features: List of text feature configurations
+            shared_cols: Set of column names shared with history features
 
         Returns:
             Python code string for text transforms
         """
         if not features:
             return ''
+
+        if shared_cols is None:
+            shared_cols = set()
 
         lines = [
             '    # =========================================================================',
@@ -1287,11 +1307,25 @@ def preprocessing_fn(inputs):
                 embed_dim = feature.get('embedding_dim', 32)
 
             lines.append(f"    # {col}: {bq_type} → vocab index (embedding_dim={embed_dim} in Trainer)")
-            lines.append(f"    outputs['{col}'] = tft.compute_and_apply_vocabulary(")
-            lines.append(f"        _densify(inputs['{col}'], b''),")
-            lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS,")
-            lines.append(f"        vocab_filename='{col}_vocab'")
-            lines.append(f"    )")
+
+            if col in shared_cols:
+                # Split into tft.vocabulary() + tft.apply_vocabulary() so the
+                # deferred vocab tensor can be reused by history features.
+                lines.append(f"    {col}_vocab = tft.vocabulary(")
+                lines.append(f"        _densify(inputs['{col}'], b''),")
+                lines.append(f"        vocab_filename='{col}_vocab'")
+                lines.append(f"    )")
+                lines.append(f"    outputs['{col}'] = tft.apply_vocabulary(")
+                lines.append(f"        _densify(inputs['{col}'], b''),")
+                lines.append(f"        deferred_vocab_filename_tensor={col}_vocab,")
+                lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS")
+                lines.append(f"    )")
+            else:
+                lines.append(f"    outputs['{col}'] = tft.compute_and_apply_vocabulary(")
+                lines.append(f"        _densify(inputs['{col}'], b''),")
+                lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS,")
+                lines.append(f"        vocab_filename='{col}_vocab'")
+                lines.append(f"    )")
             lines.append('')
 
         return '\n'.join(lines)
@@ -1576,17 +1610,18 @@ def preprocessing_fn(inputs):
 
         return '\n'.join(lines)
 
-    def _generate_history_transforms(self, features: List[Dict]) -> str:
+    def _generate_history_transforms(self, features: List[Dict], shared_cols: set = None) -> str:
         """
         Generate vocabulary application for history (ARRAY) features using shared vocab.
 
         History features are ARRAY<STRING> columns whose elements share a vocabulary
         with a primary text feature (e.g. product_id). Instead of computing a new
-        vocabulary, we apply the existing one created by the text feature's
-        compute_and_apply_vocabulary call.
+        vocabulary, we reference the deferred vocab tensor variable created by
+        _generate_text_transforms for that shared column.
 
         Args:
             features: List of history feature configurations
+            shared_cols: Set of column names shared with history features
 
         Returns:
             Python code string for the history section of preprocessing_fn
@@ -1609,7 +1644,7 @@ def preprocessing_fn(inputs):
             lines.append(f"    # {col}: ARRAY<STRING> → vocab indices using {shared_with} vocabulary")
             lines.append(f"    outputs['{col}'] = tft.apply_vocabulary(")
             lines.append(f"        inputs['{col}'],")
-            lines.append(f"        deferred_vocab_filename_tensor=tft.vocabulary('{shared_with}_vocab'),")
+            lines.append(f"        deferred_vocab_filename_tensor={shared_with}_vocab,")
             lines.append(f"        num_oov_buckets=NUM_OOV_BUCKETS")
             lines.append(f"    )")
             lines.append('')

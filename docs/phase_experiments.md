@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-26 (Fix ARRAY column type detection in dataset wizard & feature config)
+**Last Updated**: 2026-02-26 (Fix `tft.vocabulary()` misuse in history transform code generation)
 
 ---
 
@@ -941,6 +941,70 @@ The fix pattern (`f'ARRAY<{field_type}>' if mode == 'REPEATED' else field_type`)
 ### Impact
 
 Without this fix, the history feature type added in the previous commit was effectively unusable through the UI — the ARRAY type information was lost before reaching the feature config step, so auto-detection never triggered. Non-ARRAY columns are completely unaffected.
+
+---
+
+## Bug Fix: `tft.vocabulary()` Misuse in History Transform Code Generation (2026-02-26)
+
+### Problem
+
+Experiment `quick-tests/166` fails at the Transform step with:
+```
+AttributeError: 'str' object has no attribute 'dtype'
+```
+The generated `transform_module.py` passes a **string** to `tft.vocabulary()`:
+```python
+deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab'),  # BUG
+```
+`tft.vocabulary(x, ...)` expects a **tensor** as its first argument. There is no "lookup vocab by name" API — the string `'product_id_vocab'` is not a valid input.
+
+### Root Cause
+
+The text feature used `tft.compute_and_apply_vocabulary()` which creates the vocabulary internally and never exposes the deferred vocab filename tensor. The history feature had no way to reference it with the original code pattern. The `_generate_history_transforms()` method incorrectly assumed `tft.vocabulary(name_string)` would return a handle to an existing vocab.
+
+### Fix Applied
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` `generate()` | Compute `shared_cols` — the set of text column names referenced by enabled history features via `shared_with` |
+| `ml_platform/configs/services.py` `_generate_text_transforms()` | For columns in `shared_cols`, split `compute_and_apply_vocabulary` into `tft.vocabulary()` (captures deferred vocab tensor into a variable) + `tft.apply_vocabulary()`. Non-shared text features keep the one-liner |
+| `ml_platform/configs/services.py` `_generate_history_transforms()` | Replace `tft.vocabulary('{shared_with}_vocab')` with a direct variable reference `{shared_with}_vocab` |
+
+**Generated code before (buggy):**
+```python
+outputs['product_id'] = tft.compute_and_apply_vocabulary(
+    _densify(inputs['product_id'], b''),
+    num_oov_buckets=NUM_OOV_BUCKETS,
+    vocab_filename='product_id_vocab'
+)
+outputs['purchase_history'] = tft.apply_vocabulary(
+    inputs['purchase_history'],
+    deferred_vocab_filename_tensor=tft.vocabulary('product_id_vocab'),  # BUG: string arg
+    num_oov_buckets=NUM_OOV_BUCKETS
+)
+```
+
+**Generated code after (fixed):**
+```python
+product_id_vocab = tft.vocabulary(
+    _densify(inputs['product_id'], b''),
+    vocab_filename='product_id_vocab'
+)
+outputs['product_id'] = tft.apply_vocabulary(
+    _densify(inputs['product_id'], b''),
+    deferred_vocab_filename_tensor=product_id_vocab,
+    num_oov_buckets=NUM_OOV_BUCKETS
+)
+outputs['purchase_history'] = tft.apply_vocabulary(
+    inputs['purchase_history'],
+    deferred_vocab_filename_tensor=product_id_vocab,  # FIXED: variable reference
+    num_oov_buckets=NUM_OOV_BUCKETS
+)
+```
+
+### Impact
+
+All experiments using history features (purchase history taste vectors) failed at the Transform step. Non-history experiments were unaffected. After the fix, the preprocessing code for experiment `quick-tests/166` must be regenerated and the experiment rerun.
 
 ---
 

@@ -102,7 +102,7 @@ positives AS (
     deduped.mge_main_cat_desc, deduped.mge_cat_desc, deduped.mge_sub_cat_desc,
     deduped.brand_name, deduped.segment,
     1 AS label,
-    ch.purchase_history,
+    ARRAY(SELECT p FROM UNNEST(ch.purchase_history) AS p WHERE p != deduped.product_id) AS purchase_history,
     ps.prod_unique_buyers,
     ps.prod_order_count,
     ps.prod_total_sales,

@@ -2619,7 +2619,7 @@ class TrainingService:
             # 1. Generate transform code from FeatureConfig
             logger.info(f"Generating transform code for FeatureConfig {feature_config.id}")
             transform_generator = PreprocessingFnGenerator(feature_config)
-            transform_code = transform_generator.generate()
+            transform_code, _, _ = transform_generator.generate_and_save()
 
             # 2. Generate trainer code from FeatureConfig + ModelConfig
             # Training uses full epochs, batch size, and learning rate from training_params

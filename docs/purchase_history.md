@@ -402,7 +402,7 @@ The v3 views serve as baselines — same data as v4 but without `purchase_histor
 - Content: Top 50 most recently purchased product IDs per buyer, deduplicated
 - Ordering: By most recent purchase date (descending), capped at 50
 - Scope: All-time (within training period), restricted to top-80% products by revenue
-- No leakage exclusion: The current row's product_id is NOT excluded — in an averaged embedding of ~23 products mapped to 32D, a single product's contribution (~4%) is noise, not a learnable shortcut
+- Leakage exclusion (fixed 2026-02-27): Training views now exclude the target product_id from history. See Section 11 for details
 - Point-in-time correctness: Test views compute history from training period only (all dates except last day)
 - Cold-start: Buyers with no training-period history get NULL (→ zero vector after padding/masking). Test set has ~19% cold-start buyers
 
@@ -1371,6 +1371,106 @@ def preprocessing_fn(inputs):
 | All existing features | Both | IDs, categories, brands, scalars | Existing transforms | unchanged |
 
 Both new features use one shared `tf.keras.layers.Embedding(vocab_size, 32)` table, referenced in three places: buyer history averaging, product co-purchase averaging, and product ID lookup in the product tower.
+
+---
+
+## 11. Bug Investigation: Near-Zero Impact (2026-02-27)
+
+### 11.1 Problem
+
+Experiment 168 (`feat_retr_v6` + `mod_retr_v6`) added the 32D taste vector to the retrieval model. Compared to the scalar-only baseline (exp 162), the improvement was negligible:
+
+| Experiment | ID | Config | R@5 | R@10 | R@50 | R@100 |
+|---|---|---|---|---|---|---|
+| `retr_v3` | 147 | Baseline (no scalars, no history) | 3.8% | 6.7% | 21.9% | 32.8% |
+| `retv_v5` | 162 | + scalar context features | 5.2% | 8.1% | 22.0% | 33.1% |
+| `exp_retv_v6` | 168 | + scalar context + history vector | 5.4% | 9.3% | 23.3% | 34.2% |
+
+Scalar features alone added +1.4% to R@5. The 32D history taste vector (derived from up to 50 product IDs per buyer) added only +0.2% on top — far below expectations for a feature that encodes the buyer's entire purchase behavior.
+
+### 11.2 Investigation Methodology
+
+End-to-end audit of experiment 168's data pipeline:
+
+1. **Django DB query** — retrieved FeatureConfig 39, ModelConfig 34, Dataset 43 configs
+2. **GCS artifact inspection** — examined `transform_module.py`, `trainer_module.py`, `training_metrics.json`, TFRecords, vocabulary files, and schema from `gs://b2b-recs-quicktest-artifacts/qt-168-20260226-180750/`
+3. **Raw TFRecord scan** — parsed 74,346 training and 4,511 test examples to check for leakage
+4. **Transformed TFRecord scan** — analyzed post-Transform vocab indices for padding/masking issues
+5. **Code comparison** — diffed DB-stored vs GCS-deployed transform code
+6. **Feature details audit** — compared `buyer_feature_count` (7) vs `buyer_feature_details` entries (6)
+
+### 11.3 Bugs Found
+
+#### Bug 1: Label Leakage in SQL View (Primary Cause)
+
+**Severity**: Critical — renders the taste vector nearly useless as a learning signal.
+
+The `customer_purchase_history` CTE in `create_ternopil_train_v4_view.sql` aggregated history at the customer level, then joined it back to the same `train_data`. For every training row (customer_id, product_id), the `purchase_history` array already contained that product_id.
+
+**Measurement** (raw TFRecord scan):
+```
+Total training examples:     74,346
+Target product in history:   73,369 / 74,346 = 98.7%
+Test examples:                4,511
+Target product in history:    4,444 /  4,511 = 98.5%
+```
+
+**Why this kills the signal**: The taste vector averages ~24 product embeddings. The target product contributes ~1/24 = 4.2% of the average. After 4 dense layers (256→128→64→32), this weak signal is compressed further. Meanwhile, the `customer_id` embedding (64D, per-customer learned vector) already encodes per-customer preferences more directly. Gradient descent allocates capacity to the stronger signal.
+
+**Fix**: Changed `customer_purchase_history` CTE to produce per-(customer, target_product) history excluding the target:
+- **Retrieval views** (`train_v4`): Self-join `customer_products cp1 JOIN customer_products cp2 ON cp1.customer_id = cp2.customer_id AND cp1.product_id != cp2.product_id`, join on both `customer_id` and `target_product_id`
+- **Ranking views** (`prob_train_v4`): Positives use `ARRAY(SELECT p FROM UNNEST(ch.purchase_history) AS p WHERE p != deduped.product_id)` to filter inline. Negatives left unchanged (customer never bought the target product, so no leakage)
+- **Test views** (`test_v4`, `prob_test_v4`): No fix needed — history comes from `historical_data` (training period only), so a test-day target product appearing in training-period history is legitimate signal, not leakage
+
+#### Bug 2: Padding/Masking Collision
+
+**Severity**: Medium — silently drops the most popular product from 42% of examples.
+
+The generated trainer code used `default_value=0` for sparse-to-dense padding and `history_ids != 0` for masking. But TFT vocabulary assigns index 0 to the most frequent product (`378243001001`). This means the most popular product's embedding is zeroed out in the taste vector whenever it appears in a buyer's history.
+
+**Measurement** (transformed TFRecord scan):
+```
+Total history values:             1,804,301
+Values at vocab index 0:             31,371 (1.74% of all values)
+Examples containing vocab idx 0:     31,371 / 74,346 = 42.2% of examples
+Vocab index 0 maps to:              378243001001 (most popular product)
+```
+
+**Fix** (5 changes in `ml_platform/configs/services.py`):
+- `tf.sparse.to_dense` default_value: `0` → `-1` (training padding + serving padding)
+- `tf.pad` constant_values: `0` (implicit) → `-1` (training padding + serving padding)
+- Mask condition: `history_ids != 0` → `history_ids >= 0` (BuyerModel + ProductModel)
+
+#### Bug 3: Stale Transform Code in Database
+
+**Severity**: Low (no impact on experiment 168, but would cause failures if DB code reused).
+
+Pipeline submission calls `PreprocessingFnGenerator.generate()` to produce transform code for GCS, but doesn't call `generate_and_save()`, so the DB `generated_transform_code` field retains stale code from an earlier save. The DB version had `tft.vocabulary('product_id_vocab')` (string argument — incorrect) while the GCS version correctly used `tft.vocabulary(inputs['product_id'], vocab_filename='product_id_vocab')`.
+
+**Fix**: Changed both QuickTest (`experiments/services.py`) and TrainingRun (`training/services.py`) submission paths from `generate()` to `generate_and_save()`.
+
+#### Bug 4: buyer_feature_details Skips History Features
+
+**Severity**: Low (display-only).
+
+The `_extract_feature_details()` method handles text embeddings, bucketization, normalization, and cyclical encoding, but has no code path for `transforms.history`. The feature count was correct (7) but feature details had only 6 entries — history (32D) was missing.
+
+**Fix**: Added history feature handling (`transforms.get('history', {})`) in both `experiments/services.py` and `backfill_hyperparameter_fields.py`, before the `if dim > 0` guard.
+
+### 11.4 Files Changed
+
+| File | Bug | Change |
+|---|---|---|
+| `sql/create_ternopil_train_v4_view.sql` | 1 | Per-target history CTE excluding target product |
+| `sql/create_ternopil_prob_train_v4_view.sql` | 1 | Inline array filter for positives |
+| `ml_platform/configs/services.py` | 2 | Padding default_value=-1, mask condition >= 0 (5 edits) |
+| `ml_platform/experiments/services.py` | 3, 4 | generate_and_save() + history feature details |
+| `ml_platform/training/services.py` | 3 | generate_and_save() |
+| `ml_platform/management/commands/backfill_hyperparameter_fields.py` | 4 | History feature details |
+
+### 11.5 Next Steps
+
+Re-run experiment with same config as exp 168 (`feat_retr_v6` + `mod_retr_v6`) to measure actual impact of the fixes.
 
 ---
 

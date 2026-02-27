@@ -457,6 +457,11 @@ class ExperimentService:
             if cycle_dim > 0:
                 dim = cycle_dim
 
+            # History features (averaged purchase history → fixed-width vector)
+            history = transforms.get('history', {})
+            if history.get('enabled'):
+                dim = history.get('embedding_dim', 32)
+
             if dim > 0:
                 details.append({'name': name, 'dim': dim})
 
@@ -658,7 +663,7 @@ class ExperimentService:
         # 1. Generate transform code from FeatureConfig
         logger.info(f"Generating transform code for FeatureConfig {feature_config.id}")
         transform_generator = PreprocessingFnGenerator(feature_config)
-        transform_code = transform_generator.generate()
+        transform_code, _, _ = transform_generator.generate_and_save()
 
         # 2. Generate trainer code from FeatureConfig + ModelConfig
         logger.info(f"Generating trainer code for ModelConfig {model_config.id}")

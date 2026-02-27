@@ -383,6 +383,11 @@ def extract_feature_details(features):
         if cycle_dim > 0:
             dim = cycle_dim
 
+        # History features (averaged purchase history → fixed-width vector)
+        history = transforms.get('history', {})
+        if history.get('enabled'):
+            dim = history.get('embedding_dim', 32)
+
         if dim > 0:
             details.append({'name': name, 'dim': dim})
 

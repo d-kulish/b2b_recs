@@ -2243,10 +2243,10 @@ NUM_OOV_BUCKETS = 1
             max_len = pair['max_length']
             lines.append(f"        # Pad {col} to fixed length {max_len}")
             lines.append(f"        if isinstance(features.get('{col}'), tf.SparseTensor):")
-            lines.append(f"            dense = tf.sparse.to_dense(features['{col}'], default_value=0)")
+            lines.append(f"            dense = tf.sparse.to_dense(features['{col}'], default_value=-1)")
             lines.append(f"            dense = dense[:, :{max_len}]")
             lines.append(f"            pad_size = tf.maximum({max_len} - tf.shape(dense)[1], 0)")
-            lines.append(f"            features['{col}'] = tf.pad(dense, [[0, 0], [0, pad_size]])")
+            lines.append(f"            features['{col}'] = tf.pad(dense, [[0, 0], [0, pad_size]], constant_values=-1)")
 
         if has_label:
             lines.append('        return features, label')
@@ -2505,7 +2505,7 @@ def _input_fn(
             lines.append(f"        # {col}: taste vector (shared embedding + masked average)")
             lines.append(f"        {col}_ids = inputs['{col}']")
             lines.append(f"        {col}_embs = self.shared_product_embedding({col}_ids)")
-            lines.append(f"        {col}_mask = tf.cast({col}_ids != 0, tf.float32)")
+            lines.append(f"        {col}_mask = tf.cast({col}_ids >= 0, tf.float32)")
             lines.append(f"        {col}_mask = tf.expand_dims({col}_mask, -1)")
             lines.append(f"        {col}_avg = tf.reduce_sum({col}_embs * {col}_mask, axis=1)")
             lines.append(f"        {col}_avg = {col}_avg / (tf.reduce_sum({col}_mask, axis=1) + 1e-8)")
@@ -2711,7 +2711,7 @@ def _input_fn(
             lines.append(f"        # {col}: taste vector (shared embedding + masked average)")
             lines.append(f"        {col}_ids = inputs['{col}']")
             lines.append(f"        {col}_embs = self.shared_product_embedding({col}_ids)")
-            lines.append(f"        {col}_mask = tf.cast({col}_ids != 0, tf.float32)")
+            lines.append(f"        {col}_mask = tf.cast({col}_ids >= 0, tf.float32)")
             lines.append(f"        {col}_mask = tf.expand_dims({col}_mask, -1)")
             lines.append(f"        {col}_avg = tf.reduce_sum({col}_embs * {col}_mask, axis=1)")
             lines.append(f"        {col}_avg = {col}_avg / (tf.reduce_sum({col}_mask, axis=1) + 1e-8)")
@@ -3009,10 +3009,10 @@ class RetrievalModel(tfrs.Model):
         for col_name, max_length in history_features:
             lines.append(f"{indent}# Pad history feature back to dense [batch, {max_length}]")
             lines.append(f"{indent}if isinstance(transformed_features['{col_name}'], tf.SparseTensor):")
-            lines.append(f"{indent}    _dense = tf.sparse.to_dense(transformed_features['{col_name}'], default_value=0)")
+            lines.append(f"{indent}    _dense = tf.sparse.to_dense(transformed_features['{col_name}'], default_value=-1)")
             lines.append(f"{indent}    _dense = _dense[:, :{max_length}]")
             lines.append(f"{indent}    _pad = tf.maximum({max_length} - tf.shape(_dense)[1], 0)")
-            lines.append(f"{indent}    transformed_features['{col_name}'] = tf.pad(_dense, [[0, 0], [0, _pad]])")
+            lines.append(f"{indent}    transformed_features['{col_name}'] = tf.pad(_dense, [[0, 0], [0, _pad]], constant_values=-1)")
         return '\n'.join(lines)
 
     def _generate_raw_tensor_signature(self) -> tuple:

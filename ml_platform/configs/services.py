@@ -2232,7 +2232,12 @@ NUM_OOV_BUCKETS = 1
         if not shared_pairs:
             return ''
 
+        # Use the first pair's primary col to compute the padding index
+        primary_col = shared_pairs[0]['primary_col']
+
         lines = []
+        lines.append(f"    _history_pad_index = tf_transform_output.vocabulary_size_by_name('{primary_col}_vocab') + NUM_OOV_BUCKETS")
+        lines.append('')
         if has_label:
             lines.append('    def _pad_history_features(features, label):')
         else:
@@ -2243,10 +2248,10 @@ NUM_OOV_BUCKETS = 1
             max_len = pair['max_length']
             lines.append(f"        # Pad {col} to fixed length {max_len}")
             lines.append(f"        if isinstance(features.get('{col}'), tf.SparseTensor):")
-            lines.append(f"            dense = tf.sparse.to_dense(features['{col}'], default_value=-1)")
+            lines.append(f"            dense = tf.sparse.to_dense(features['{col}'], default_value=_history_pad_index)")
             lines.append(f"            dense = dense[:, :{max_len}]")
             lines.append(f"            pad_size = tf.maximum({max_len} - tf.shape(dense)[1], 0)")
-            lines.append(f"            features['{col}'] = tf.pad(dense, [[0, 0], [0, pad_size]], constant_values=-1)")
+            lines.append(f"            features['{col}'] = tf.pad(dense, [[0, 0], [0, pad_size]], constant_values=_history_pad_index)")
 
         if has_label:
             lines.append('        return features, label')
@@ -2367,6 +2372,7 @@ def _input_fn(
         lines.append('        self.tf_transform_output = tf_transform_output')
         if has_shared:
             lines.append('        self.shared_product_embedding = shared_product_embedding')
+            lines.append('        self.history_pad_index = shared_product_embedding.input_dim - 1')
         lines.append('')
 
         # Generate embedding layers for text features
@@ -2505,7 +2511,7 @@ def _input_fn(
             lines.append(f"        # {col}: taste vector (shared embedding + masked average)")
             lines.append(f"        {col}_ids = inputs['{col}']")
             lines.append(f"        {col}_embs = self.shared_product_embedding({col}_ids)")
-            lines.append(f"        {col}_mask = tf.cast({col}_ids >= 0, tf.float32)")
+            lines.append(f"        {col}_mask = tf.cast({col}_ids != self.history_pad_index, tf.float32)")
             lines.append(f"        {col}_mask = tf.expand_dims({col}_mask, -1)")
             lines.append(f"        {col}_avg = tf.reduce_sum({col}_embs * {col}_mask, axis=1)")
             lines.append(f"        {col}_avg = {col}_avg / (tf.reduce_sum({col}_mask, axis=1) + 1e-8)")
@@ -2576,6 +2582,7 @@ def _input_fn(
         lines.append('        self.tf_transform_output = tf_transform_output')
         if has_shared:
             lines.append('        self.shared_product_embedding = shared_product_embedding')
+            lines.append('        self.history_pad_index = shared_product_embedding.input_dim - 1')
         lines.append('')
 
         # Generate embedding layers for text features
@@ -2711,7 +2718,7 @@ def _input_fn(
             lines.append(f"        # {col}: taste vector (shared embedding + masked average)")
             lines.append(f"        {col}_ids = inputs['{col}']")
             lines.append(f"        {col}_embs = self.shared_product_embedding({col}_ids)")
-            lines.append(f"        {col}_mask = tf.cast({col}_ids >= 0, tf.float32)")
+            lines.append(f"        {col}_mask = tf.cast({col}_ids != self.history_pad_index, tf.float32)")
             lines.append(f"        {col}_mask = tf.expand_dims({col}_mask, -1)")
             lines.append(f"        {col}_avg = tf.reduce_sum({col}_embs * {col}_mask, axis=1)")
             lines.append(f"        {col}_avg = {col}_avg / (tf.reduce_sum({col}_mask, axis=1) + 1e-8)")
@@ -2763,9 +2770,11 @@ def _input_fn(
         lines.append(f"        # Create shared product embedding (used by both towers for {primary_col})")
         lines.append(f"        {primary_col}_vocab_size = tf_transform_output.vocabulary_size_by_name('{primary_col}_vocab')")
         lines.append(f"        self.shared_product_embedding = tf.keras.layers.Embedding(")
-        lines.append(f"            {primary_col}_vocab_size + NUM_OOV_BUCKETS, {embed_dim},")
+        lines.append(f"            {primary_col}_vocab_size + NUM_OOV_BUCKETS + 1, {embed_dim},")
         lines.append(f"            name='shared_product_embedding'")
         lines.append(f"        )")
+        lines.append(f"        # Padding index for history features (beyond all valid vocab + OOV indices)")
+        lines.append(f"        self.history_pad_index = {primary_col}_vocab_size + NUM_OOV_BUCKETS")
         lines.append('')
         return '\n'.join(lines)
 
@@ -3009,10 +3018,10 @@ class RetrievalModel(tfrs.Model):
         for col_name, max_length in history_features:
             lines.append(f"{indent}# Pad history feature back to dense [batch, {max_length}]")
             lines.append(f"{indent}if isinstance(transformed_features['{col_name}'], tf.SparseTensor):")
-            lines.append(f"{indent}    _dense = tf.sparse.to_dense(transformed_features['{col_name}'], default_value=-1)")
+            lines.append(f"{indent}    _dense = tf.sparse.to_dense(transformed_features['{col_name}'], default_value=self.history_pad_index)")
             lines.append(f"{indent}    _dense = _dense[:, :{max_length}]")
             lines.append(f"{indent}    _pad = tf.maximum({max_length} - tf.shape(_dense)[1], 0)")
-            lines.append(f"{indent}    transformed_features['{col_name}'] = tf.pad(_dense, [[0, 0], [0, _pad]], constant_values=-1)")
+            lines.append(f"{indent}    transformed_features['{col_name}'] = tf.pad(_dense, [[0, 0], [0, _pad]], constant_values=self.history_pad_index)")
         return '\n'.join(lines)
 
     def _generate_raw_tensor_signature(self) -> tuple:
@@ -3183,6 +3192,14 @@ class RetrievalModel(tfrs.Model):
         # Generate post-tft_layer history padding code
         history_padding_str = self._generate_serve_history_padding(history_features)
 
+        # Generate history_pad_index init line for serving model (only when history features exist)
+        history_pad_index_init = ''
+        if history_features:
+            shared_pairs = self._find_shared_embedding_pairs()
+            if shared_pairs:
+                _primary_col = shared_pairs[0]['primary_col']
+                history_pad_index_init = f"\n        self.history_pad_index = tf_transform_output.vocabulary_size_by_name('{_primary_col}_vocab') + NUM_OOV_BUCKETS"
+
         return f'''
 # =============================================================================
 # SERVING FUNCTION
@@ -3203,7 +3220,7 @@ class ServingModel(tf.keras.Model):
         self.retrieval_model = retrieval_model
 
         # Track the TFT layer (contains vocabulary hash tables)
-        self.tft_layer = tf_transform_output.transform_features_layer()
+        self.tft_layer = tf_transform_output.transform_features_layer(){history_pad_index_init}
 
         # Track product data as model variables
         self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')
@@ -3503,6 +3520,14 @@ def _load_original_product_ids(tf_transform_output, product_id_col, product_id_b
         # Generate post-tft_layer history padding code
         history_padding_str = self._generate_serve_history_padding(history_features)
 
+        # Generate history_pad_index init line for serving model (only when history features exist)
+        history_pad_index_init = ''
+        if history_features:
+            shared_pairs = self._find_shared_embedding_pairs()
+            if shared_pairs:
+                _primary_col = shared_pairs[0]['primary_col']
+                history_pad_index_init = f"\n        self.history_pad_index = tf_transform_output.vocabulary_size_by_name('{_primary_col}_vocab') + NUM_OOV_BUCKETS"
+
         return f'''
 # =============================================================================
 # SERVING FUNCTION (ScaNN - Approximate Nearest Neighbor)
@@ -3523,7 +3548,7 @@ class ScaNNServingModel(tf.keras.Model):
         self.scann_index = scann_index
 
         # Track the TFT layer (contains vocabulary hash tables)
-        self.tft_layer = tf_transform_output.transform_features_layer()
+        self.tft_layer = tf_transform_output.transform_features_layer(){history_pad_index_init}
 
         # Store original product IDs for mapping vocab indices back to real IDs
         self.original_product_ids = tf.Variable(
@@ -5024,6 +5049,14 @@ class RankingModel(tfrs.Model):
         # Generate post-tft_layer history padding code
         history_padding_str = self._generate_serve_history_padding(history_features)
 
+        # Generate history_pad_index init line for serving model (only when history features exist)
+        history_pad_index_init = ''
+        if history_features:
+            shared_pairs = self._find_shared_embedding_pairs()
+            if shared_pairs:
+                _primary_col = shared_pairs[0]['primary_col']
+                history_pad_index_init = f"\n        self.history_pad_index = tf_transform_output.vocabulary_size_by_name('{_primary_col}_vocab') + NUM_OOV_BUCKETS"
+
         return f'''
 # =============================================================================
 # SERVING FUNCTION (Ranking) with Raw Tensor Inputs and Inverse Transform
@@ -5044,7 +5077,7 @@ class RankingServingModel(tf.keras.Model):
     def __init__(self, ranking_model, tf_transform_output, transform_params=None):
         super().__init__()
         self.ranking_model = ranking_model
-        self.tft_layer = tf_transform_output.transform_features_layer()
+        self.tft_layer = tf_transform_output.transform_features_layer(){history_pad_index_init}
 
         # Transform parameters for inverse transform
         self.transform_params = transform_params or {{}}
@@ -6262,6 +6295,14 @@ class MultitaskModel(tfrs.Model):
         retrieval_history_padding_str = self._generate_serve_history_padding(retrieval_history)
         ranking_history_padding_str = self._generate_serve_history_padding(ranking_history)
 
+        # Generate history_pad_index init line for serving model (only when history features exist)
+        history_pad_index_init = ''
+        if retrieval_history or ranking_history:
+            shared_pairs = self._find_shared_embedding_pairs()
+            if shared_pairs:
+                _primary_col = shared_pairs[0]['primary_col']
+                history_pad_index_init = f"\n        self.history_pad_index = tf_transform_output.vocabulary_size_by_name('{_primary_col}_vocab') + NUM_OOV_BUCKETS"
+
         return f'''
 # =============================================================================
 # SERVING FUNCTIONS (MULTITASK - Dual Signatures with Raw Tensor Inputs)
@@ -6285,7 +6326,7 @@ class MultitaskServingModel(tf.keras.Model):
     def __init__(self, multitask_model, tf_transform_output, product_ids, product_embeddings, transform_params=None):
         super().__init__()
         self.multitask_model = multitask_model
-        self.tft_layer = tf_transform_output.transform_features_layer()
+        self.tft_layer = tf_transform_output.transform_features_layer(){history_pad_index_init}
 
         # Pre-computed candidate data for retrieval
         self.product_ids = tf.Variable(product_ids, trainable=False, name='product_ids')

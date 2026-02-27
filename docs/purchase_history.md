@@ -1474,6 +1474,69 @@ Re-run experiment with same config as exp 168 (`feat_retr_v6` + `mod_retr_v6`) t
 
 ---
 
+## 12. Bug Fix: History Padding Index Out of Range (2026-02-27)
+
+### 12.1 Problem
+
+The Bug 2 fix in section 11.3 changed history feature padding from `0` to `-1` to avoid masking out vocab index 0 (the most popular product). However, `tf.keras.layers.Embedding` does not accept negative indices — it raises:
+
+```
+InvalidArgumentError: indices[...] = -1 is not in [0, vocab_size)
+```
+
+This crashed the Trainer step in experiment `quick-tests/169` (QT ID 169, `feat_retr_v6` + `mod_retr_v6`).
+
+### 12.2 Root Cause
+
+The padding value `-1` is used in three places in the generated trainer code:
+
+1. **`_pad_history_features()`** in `_input_fn` — pads SparseTensor history to fixed-width dense (both `tf.sparse.to_dense` default_value and `tf.pad` constant_values)
+2. **BuyerModel/ProductModel `call()`** — mask condition `history_ids >= 0` correctly excluded `-1`, but the embedding layer sees `-1` *before* masking and crashes
+3. **Serving models** — same padding in `_generate_serve_history_padding()`
+
+The embedding layer's valid index range is `[0, vocab_size + NUM_OOV_BUCKETS)`. Any index outside this range raises an error during the forward pass, before the mask has a chance to zero it out.
+
+### 12.3 Fix
+
+Use a dedicated padding index = `vocab_size + NUM_OOV_BUCKETS` (one beyond the last valid OOV index). Increase the embedding `input_dim` by 1 to accommodate it. The padding row's embedding exists in the weight matrix but gets zeroed out by the mask, so it doesn't affect model quality.
+
+**6 change groups in `ml_platform/configs/services.py`:**
+
+| # | Location | Change |
+|---|----------|--------|
+| 1 | `_generate_shared_embedding_code()` | `input_dim`: `vocab_size + NUM_OOV_BUCKETS` → `vocab_size + NUM_OOV_BUCKETS + 1`; store `self.history_pad_index = vocab_size + NUM_OOV_BUCKETS` on the model |
+| 2 | `_generate_buyer_model()` | Add `self.history_pad_index = shared_product_embedding.input_dim - 1` in `__init__`; mask: `>= 0` → `!= self.history_pad_index` |
+| 3 | `_generate_product_model()` | Same as BuyerModel |
+| 4 | `_generate_history_padding_code()` | Compute `_history_pad_index` from `tf_transform_output` before `_pad_history_features` def; use it instead of `-1` |
+| 5 | `_generate_serve_history_padding()` | `-1` → `self.history_pad_index` |
+| 6 | All 4 serving model `__init__` methods | Add `self.history_pad_index = tf_transform_output.vocabulary_size_by_name('{col}_vocab') + NUM_OOV_BUCKETS` (conditionally, only when history features exist) |
+
+### 12.4 Verification
+
+Re-ran experiment with same config as QT #169 (`feat_retr_v6` FC#39 + `mod_retr_v6` MC#34) using `test_services_trainer.py` with the same Transform artifacts from QT #169.
+
+**QT #169 (before fix):** `JOB_STATE_FAILED` — `InvalidArgumentError: indices[...] = -1`
+**QT #170 (after fix):** `JOB_STATE_SUCCEEDED`
+
+```
+Test Recall@5:   0.0208
+Test Recall@10:  0.0330
+Test Recall@50:  0.1270
+Test Recall@100: 0.2218
+```
+
+### 12.5 Corrected Bug 2 Fix Chain
+
+The full fix chain for the padding/masking collision (Bug 2 from section 11.3):
+
+| Step | Padding Value | Mask Condition | Embedding input_dim | Status |
+|---|---|---|---|---|
+| Original | `0` | `!= 0` | `vocab_size + NUM_OOV_BUCKETS` | Masks out vocab index 0 (most popular product) |
+| Bug 2 fix (11.3) | `-1` | `>= 0` | `vocab_size + NUM_OOV_BUCKETS` | Crashes: `-1` not in `[0, input_dim)` |
+| Final fix (this section) | `vocab_size + NUM_OOV_BUCKETS` | `!= self.history_pad_index` | `vocab_size + NUM_OOV_BUCKETS + 1` | Correct: valid index, dedicated padding row, masked out |
+
+---
+
 ## Appendix A: Alternative Approaches Considered
 
 ### A.1 Per-Category Distribution Vector (+26D)

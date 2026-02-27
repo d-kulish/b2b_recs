@@ -1562,7 +1562,7 @@ class FeatureConfig(models.Model):
 
         # Cyclical features (2D each for sin/cos)
         cyclical = transforms.get('cyclical', {})
-        for cycle in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']:
+        for cycle in ['annual', 'yearly', 'quarterly', 'monthly', 'weekly', 'daily']:
             if cyclical.get(cycle):
                 dim += 2
 

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-26 (Fix dense-to-sparse conversion for history features in serve functions)
+**Last Updated**: 2026-02-27 (Fix missing 'yearly' cyclical dimension in 4 dimension calculators)
 
 ---
 
@@ -1076,6 +1076,51 @@ Additionally, after `tft_layer` returns, the history column is still a SparseTen
 ### Impact
 
 All experiments using history features failed at the Trainer step during model export (`tf.saved_model.save()`). Training itself completed successfully — only the serve function tracing failed. Non-history experiments were unaffected. After the fix, experiment `quick-tests/167` must be rerun.
+
+---
+
+## Bug Fix: Missing 'yearly' Cyclical Dimension in Dimension Calculators (2026-02-27)
+
+### Problem
+
+When a user enables the "Yearly" cyclical encoding checkbox in the Feature Engineering UI, the dimension calculation in 4 locations **undercounts by 2** (the sin/cos pair for yearly). The UI displays an incorrect tensor dimension preview, and downstream architecture sizing may be wrong.
+
+The actual TFX code generation is correct — yearly sin/cos encoding IS generated properly. Only the dimension calculators are affected.
+
+### Root Cause
+
+The system has two config formats for cyclical encoding that evolved over time:
+
+| Format | Key | Origin |
+|--------|-----|--------|
+| Old | `cyclical.annual` | Default config templates, early features |
+| New | `cyclical.enabled` + `cyclical.yearly` | UI (model_configs.html) saves this format |
+
+The code generation in `PreprocessingFnGenerator._generate_timestamp_transforms()` handles both keys correctly (checks `yearly` then falls back to `annual`). However, four dimension calculation paths were inconsistent:
+
+| File | Line | Checked keys | Bug |
+|------|------|-------------|-----|
+| `configs/services.py` `_get_feature_dims()` (new format branch) | 439 | `['quarterly', 'monthly', 'weekly', 'daily']` | Missing `'yearly'` |
+| `models.py` `FeatureConfig.get_feature_dim()` | 1565 | `['annual', ...]` | Missing `'yearly'` |
+| `experiments/services.py` `ExperimentService` dimension calc | 454 | `['annual', ...]` | Missing `'yearly'` |
+| `management/commands/backfill_hyperparameter_fields.py` | 380 | `['annual', ...]` | Missing `'yearly'` |
+
+Since the UI saves configs with key `'yearly'` (not `'annual'`), any UI-created config with yearly enabled would have its cyclical dimensions undercounted by 2 in all four calculators.
+
+### Fix Applied
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py:439` | Added `'yearly'` to new-format list: `['yearly', 'quarterly', 'monthly', 'weekly', 'daily']` |
+| `ml_platform/models.py:1565` | Added `'yearly'` alongside `'annual'`: `['annual', 'yearly', 'quarterly', ...]` |
+| `ml_platform/experiments/services.py:454` | Added `'yearly'` alongside `'annual'`: `['annual', 'yearly', 'quarterly', ...]` |
+| `ml_platform/management/commands/backfill_hyperparameter_fields.py:380` | Added `'yearly'` alongside `'annual'`: `['annual', 'yearly', 'quarterly', ...]` |
+
+Both `'annual'` and `'yearly'` are now recognized in all paths, ensuring backward compatibility with old configs while correctly handling new UI configs.
+
+### Impact
+
+Any feature config with yearly cyclical encoding enabled (created via the UI) would show 2 fewer dimensions in the tensor preview and hyperparameter extraction. The actual generated TFX code was unaffected — training produced correct results. After the fix, dimension displays are accurate for all cyclical combinations.
 
 ---
 

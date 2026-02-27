@@ -436,7 +436,7 @@ class TensorDimensionCalculator:
             if data_type == 'temporal':
                 # New format: cyclical.enabled + sub-options
                 if cyclical.get('enabled'):
-                    cyclical_dims = sum(2 for c in ['quarterly', 'monthly', 'weekly', 'daily']
+                    cyclical_dims = sum(2 for c in ['yearly', 'quarterly', 'monthly', 'weekly', 'daily']
                                        if cyclical.get(c))
                     if cyclical_dims > 0:
                         result[f'{col}_cyclical'] = cyclical_dims

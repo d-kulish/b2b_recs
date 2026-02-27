@@ -451,7 +451,7 @@ class ExperimentService:
             # Cyclical encoding (count 2D per cycle)
             cyclical = transforms.get('cyclical', {})
             cycle_dim = 0
-            for cycle in ['annual', 'quarterly', 'monthly', 'weekly', 'daily']:
+            for cycle in ['annual', 'yearly', 'quarterly', 'monthly', 'weekly', 'daily']:
                 if cyclical.get(cycle):
                     cycle_dim += 2
             if cycle_dim > 0:

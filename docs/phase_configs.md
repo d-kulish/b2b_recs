@@ -3660,7 +3660,7 @@ These are **point-in-time** features — each transaction row carries the custom
 | Cold-start buyers | NULL → zero vector after padding/masking (~19% of test set) |
 | Point-in-time | Test views compute from training period only |
 
-**Why product IDs (not categories):** The shared embedding table is the mechanism — the buyer's averaged history lives in the same vector space as candidate products. Using categories would put the taste vector in a different space, losing the geometric property. Categories are already separate features in the product tower. See `docs/purchase_history.md` for full research and industry references (YouTube, Uber, Snapchat, Pinterest).
+**Why product IDs (not categories):** The shared embedding table is the mechanism — the buyer's averaged history lives in the same vector space as candidate products. Using categories would put the taste vector in a different space, losing the geometric property. Categories are already separate features in the product tower. See `docs/phase_experiments.md` (History Feature Type section) for full research, industry references (YouTube, Uber, Snapchat, Pinterest), and platform integration details.
 
 #### Product Aggregate Features (v4 only)
 

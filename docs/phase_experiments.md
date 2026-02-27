@@ -805,7 +805,30 @@ python manage.py backfill_training_cache --force
 
 ### Background
 
-The standalone experiment (`scripts/test_taste_vector.py`) validated that an averaged purchase history embedding ("taste vector") improves retrieval Recall@5 by **+37%**. This feature integrates the taste vector into the platform as a 4th feature data type ("history") alongside text/numeric/temporal, so it works through the normal Experiments UI and Training pipeline workflow.
+The averaged purchase history embedding ("taste vector") encodes a buyer's entire purchase behavior into a single fixed-width dense vector by embedding each purchased product ID through a shared embedding table and averaging. This pattern is proven at scale across major recommendation systems:
+
+- **YouTube (Google, 2016)** — [Deep Neural Networks for YouTube Recommendations](https://research.google/pubs/deep-neural-networks-for-youtube-recommendations/): watch history IDs averaged into a fixed-width vector; averaging outperformed sum and component-wise max
+- **Uber Eats (2022)** — [Two-Tower Embeddings](https://www.uber.com/blog/innovative-recommendation-applications-using-two-tower-embeddings/): ordered store IDs embedded and averaged ("BOW features"), reducing model size 20x vs raw eater_uuid embeddings
+- **Snapchat (2023)** — [Embedding-Based Retrieval](https://eng.snap.com/embedding-based-retrieval): past engagement sequences processed with average pooling into fixed-width vectors
+
+#### Standalone Validation Experiment
+
+Before platform integration, the taste vector was validated via a standalone Vertex AI Custom Job (`scripts/test_taste_vector.py`) that bypassed the TFX pipeline — reading v4 BigQuery views directly, preprocessing in Python, and training a TFRS retrieval model with shared product embedding + masked averaging. The script has a local orchestrator (submits to Vertex AI) and an inner GPU runner (T4 in europe-west4). Results after 100 epochs:
+
+| Metric | Baseline #162 (100 ep) | Taste Vector (100 ep) | Change |
+|--------|------------------------|-----------------------|--------|
+| Recall@5 | 0.0523 | **0.0718** | **+37.2%** |
+| Recall@10 | 0.0809 | **0.1010** | **+24.9%** |
+
+Top-K precision improved dramatically. Overfitting started around epoch 13 (best val loss), causing Recall@50/100 to degrade — early stopping would resolve this. **Verdict: taste vector validated, proceed with platform integration.**
+
+#### Why Platform Integration Was Needed
+
+Before the history feature type was added, the platform's code generators had a hard-coded three-type system (text, numeric, temporal) that silently ignored ARRAY columns. When experiment #168 attempted to include `purchase_history`, it was dropped at three points: `SmartDefaultsService` skipped ARRAY types, `PreprocessingFnGenerator._collect_all_features()` had no history bucket, and `TrainerModuleGenerator._collect_features_by_type()` had no history handling. The taste vector never reached the model — the pipeline analysis (see "Bug Fix: Taste Vector Near-Zero Impact Investigation" below) confirmed that exp 168's metrics were indistinguishable from the scalar-only baseline.
+
+#### Integration
+
+This feature integrates the taste vector into the platform as a 4th feature data type ("history") alongside text/numeric/temporal, so it works through the normal Experiments UI and Training pipeline workflow.
 
 A history feature is a variable-length `ARRAY<STRING>` column (e.g. product IDs a buyer has purchased) that gets embedded using a **shared embedding table** with the product tower's product_id, then averaged into a fixed-width dense vector.
 
@@ -900,10 +923,6 @@ Top-K precision improved significantly. Recall@50/100 drop is due to overfitting
 - No history features → all generated code identical to previous behavior
 - Existing numeric/text/temporal configs unchanged
 - History dimension calculators skip when `transforms.history` absent
-
-### Related Documentation
-
-- [purchase_history.md](purchase_history.md) — Full research, standalone experiment results, and platform integration details
 
 ---
 
@@ -1079,6 +1098,107 @@ All experiments using history features failed at the Trainer step during model e
 
 ---
 
+## Bug Fix: Taste Vector Near-Zero Impact Investigation (2026-02-27)
+
+### Problem
+
+Experiment 168 (`feat_retr_v6` + `mod_retr_v6`) added the 32D taste vector to the retrieval model. Compared to the scalar-only baseline (exp 162), the improvement was negligible:
+
+| Experiment | ID | Config | R@5 | R@10 | R@50 | R@100 |
+|---|---|---|---|---|---|---|
+| `retr_v3` | 147 | Baseline (no scalars, no history) | 3.8% | 6.7% | 21.9% | 32.8% |
+| `retv_v5` | 162 | + scalar context features | 5.2% | 8.1% | 22.0% | 33.1% |
+| `exp_retv_v6` | 168 | + scalar context + history vector | 5.4% | 9.3% | 23.3% | 34.2% |
+
+The standalone taste vector experiment showed +37% R@5. The pipeline version showed +0.2pp — something was wrong.
+
+### Investigation
+
+End-to-end audit of exp 168's data pipeline: Django DB configs → GCS artifacts (transform/trainer modules, TFRecords, schema, vocabulary) → raw and transformed TFRecord scans (74,346 train + 4,511 test examples) → code comparison (DB vs GCS).
+
+### Bugs Found
+
+**Bug 1: Label Leakage in SQL View (Primary Cause)**
+
+The `customer_purchase_history` CTE in `create_ternopil_train_v4_view.sql` aggregated history at the customer level, then joined back to the same `train_data`. For 98.7% of training rows, the `purchase_history` array already contained the target product_id. With ~24 products in the average, the target contributed only ~4.2% of the taste vector — a signal too diluted for the model to learn from when the 64D customer_id embedding already encodes per-customer preferences directly. Gradient descent allocated capacity to the stronger signal.
+
+- **Fix (retrieval views)**: Per-(customer, target_product) history via self-join excluding target
+- **Fix (ranking views)**: Inline `ARRAY(SELECT p FROM UNNEST(ch.purchase_history) AS p WHERE p != deduped.product_id)` for positives; negatives unchanged (no leakage by definition)
+- **Test views**: No fix needed — history from training period appearing for test-day targets is legitimate signal
+
+**Bug 2: Padding/Masking Collision at Vocab Index 0**
+
+Generated trainer code used `default_value=0` for padding and `history_ids != 0` for masking. But vocab index 0 is the most popular product (`378243001001`). In 42% of training examples (31,371/74,346), this product's embedding was silently zeroed out in the taste vector.
+
+**Bug 3: Stale Transform Code in Database**
+
+Pipeline submission called `generate()` instead of `generate_and_save()`, so the DB `generated_transform_code` field retained stale code with `tft.vocabulary('product_id_vocab')` (string arg — incorrect). The GCS-deployed code was correct. No impact on exp 168 results but would fail if DB code reused.
+
+**Bug 4: buyer_feature_details Skips History Features**
+
+`_extract_feature_details()` had no code path for `transforms.history`. Feature count was correct (7) but details showed only 6 entries — history (32D) was missing. Display-only.
+
+### Files Changed
+
+| File | Bug | Change |
+|---|---|---|
+| `sql/create_ternopil_train_v4_view.sql` | 1 | Per-target history CTE excluding target product |
+| `sql/create_ternopil_prob_train_v4_view.sql` | 1 | Inline array filter for positives |
+| `ml_platform/configs/services.py` | 2 | Padding default_value, mask condition (5 edits) — see padding fix chain below |
+| `ml_platform/experiments/services.py` | 3, 4 | `generate_and_save()` + history feature details |
+| `ml_platform/training/services.py` | 3 | `generate_and_save()` |
+| `ml_platform/management/commands/backfill_hyperparameter_fields.py` | 4 | History feature details |
+
+### Cross-References
+
+- Bug 2 padding fix chain: see "Bug Fix: History Padding Index Out of Range" below
+- Existing individual bug fix sections above cover the code generation bugs (ARRAY detection, `tft.vocabulary()` misuse, dense-to-sparse conversion)
+- Label leakage fix verified by commit `9be194f` (Exclude target product from purchase_history in test v4 views)
+
+---
+
+## Bug Fix: History Padding Index Out of Range (2026-02-27)
+
+### Problem
+
+The Bug 2 fix (above) changed history padding from `0` to `-1` to avoid masking out vocab index 0. However, `tf.keras.layers.Embedding` does not accept negative indices:
+
+```
+InvalidArgumentError: indices[...] = -1 is not in [0, vocab_size)
+```
+
+This crashed the Trainer step in QT #169 (`feat_retr_v6` + `mod_retr_v6`).
+
+### Fix
+
+Use a **dedicated padding index** = `vocab_size + NUM_OOV_BUCKETS` (one beyond the last valid OOV index). Increase the embedding `input_dim` by 1 to accommodate it. The padding row's embedding exists in the weight matrix but gets zeroed out by the mask.
+
+**6 change locations in `ml_platform/configs/services.py`:**
+
+| # | Location | Change |
+|---|----------|--------|
+| 1 | `_generate_shared_embedding_code()` | `input_dim` +1; store `self.history_pad_index` on model |
+| 2 | `_generate_buyer_model()` | `self.history_pad_index = shared_product_embedding.input_dim - 1`; mask: `!= self.history_pad_index` |
+| 3 | `_generate_product_model()` | Same as BuyerModel |
+| 4 | `_generate_history_padding_code()` | Compute `_history_pad_index` from `tf_transform_output`; use instead of `-1` |
+| 5 | `_generate_serve_history_padding()` | `-1` → `self.history_pad_index` |
+| 6 | All 4 serving model `__init__` methods | Add `self.history_pad_index` conditional on history features |
+
+### Padding Fix Chain (Full History)
+
+| Step | Padding Value | Mask Condition | Embedding input_dim | Status |
+|---|---|---|---|---|
+| Original | `0` | `!= 0` | `vocab_size + NUM_OOV_BUCKETS` | Masks out vocab index 0 (most popular product) |
+| First fix | `-1` | `>= 0` | `vocab_size + NUM_OOV_BUCKETS` | Crashes: `-1` not in `[0, input_dim)` |
+| **Final fix** | `vocab_size + NUM_OOV_BUCKETS` | `!= self.history_pad_index` | `vocab_size + NUM_OOV_BUCKETS + 1` | **Correct**: valid index, dedicated padding row, masked out |
+
+### Verification
+
+QT #169 (before fix): `JOB_STATE_FAILED` — `InvalidArgumentError: indices[...] = -1`
+QT #170 (after fix): `JOB_STATE_SUCCEEDED` — R@5=0.0208, R@10=0.0330, R@50=0.1270, R@100=0.2218
+
+---
+
 ## Bug Fix: Missing 'yearly' Cyclical Dimension in Dimension Calculators (2026-02-27)
 
 ### Problem
@@ -1149,6 +1269,7 @@ Any feature config with yearly cyclical encoding enabled (created via the UI) wo
 ### Future Enhancements
 
 - [ ] Early stopping support (critical for taste vector models that overfit after ~13 epochs)
+- [ ] Co-purchase vector — product-side analog of the buyer taste vector. For each product, collect the top-N most frequently co-purchased products, embed through the same shared product embedding table, and average into a fixed-width vector encoding the product's "purchase context" (e.g. daily staples vs premium basket). Same ARRAY column pattern, same shared embedding, same averaging — zero new code patterns needed. Adds +32D to the product tower
 - [ ] GPU V100 support (locked in wizard)
 - [ ] Full Training Pipeline (extended epochs, checkpointing)
 - [ ] Model Deployment (candidate index, serving endpoints)
@@ -1164,3 +1285,4 @@ Any feature config with yearly cyclical encoding enabled (created via the UI) wo
 - [multi_task.md](multi_task.md) - Multitask model implementation
 - [ranking_implementation.md](ranking_implementation.md) - Ranking model implementation
 - [phase_configs.md](phase_configs.md) - Datasets & Configs page specification
+- [improve_model.md](improve_model.md) - Retrieval model quality improvement guide

@@ -3548,12 +3548,12 @@ class ScaNNServingModel(tf.keras.Model):
         transformed_features = self.tft_layer(raw_features)
 {history_padding_str}
 
-        # ScaNN index is callable - returns (scores, vocab_indices)
+        # ScaNN index is callable - returns (scores, positional_indices)
         # The index was built with the query tower, so it handles embedding computation
-        top_scores, top_vocab_indices = self.scann_index(transformed_features)
+        top_scores, top_indices = self.scann_index(transformed_features)
 
-        # Map vocabulary indices to original product IDs
-        recommended_products = tf.gather(self.original_product_ids, top_vocab_indices)
+        # Map positional indices to original product IDs
+        recommended_products = tf.gather(self.original_product_ids, top_indices)
 
         return {{
             'product_ids': recommended_products,
@@ -3600,22 +3600,22 @@ class BruteForceServingModel(tf.keras.Model):
         }}
 
 
-def _build_scann_index(query_tower, product_ids, product_embeddings):
+def _build_scann_index(query_tower, product_embeddings):
     """
     Build ScaNN index for fast approximate nearest neighbor retrieval.
 
     Args:
         query_tower: The trained query tower model
-        product_ids: List/array of product identifiers
         product_embeddings: Tensor of product embeddings [num_products, embedding_dim]
 
     Returns:
-        ScaNN index layer that can be called with query embeddings
+        ScaNN index layer that can be called with query embeddings.
+        Returns positional indices (not identifiers) matching the order of product_embeddings.
     """
     logging.info("=" * 60)
     logging.info("BUILDING SCANN INDEX")
     logging.info("=" * 60)
-    logging.info(f"  Products: {{len(product_ids)}}")
+    logging.info(f"  Products: {{product_embeddings.shape[0]}}")
     logging.info(f"  Embedding dim: {{product_embeddings.shape[1] if len(product_embeddings.shape) > 1 else 'unknown'}}")
     logging.info(f"  num_leaves: {{SCANN_NUM_LEAVES}}")
     logging.info(f"  leaves_to_search: {{SCANN_LEAVES_TO_SEARCH}}")
@@ -3629,12 +3629,10 @@ def _build_scann_index(query_tower, product_ids, product_embeddings):
         num_leaves_to_search=SCANN_LEAVES_TO_SEARCH,
     )
 
-    # Index the candidates
-    # ScaNN expects dataset of (identifier, embedding) tuples
-    candidates_dataset = tf.data.Dataset.from_tensor_slices((
-        tf.constant(product_ids),
+    # Index the candidates (embeddings only — ScaNN returns positional indices)
+    candidates_dataset = tf.data.Dataset.from_tensor_slices(
         product_embeddings
-    )).batch(100)
+    ).batch(100)
 
     scann_index.index_from_dataset(candidates_dataset)
 
@@ -4489,7 +4487,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         if RETRIEVAL_ALGORITHM == 'scann':
             if SCANN_AVAILABLE:
                 logging.info("Building ScaNN index for fast approximate nearest neighbor search...")
-                scann_index = _build_scann_index(model.query_tower, product_ids, product_embeddings)
+                scann_index = _build_scann_index(model.query_tower, product_embeddings)
                 use_scann = True
             else:
                 logging.warning("=" * 60)

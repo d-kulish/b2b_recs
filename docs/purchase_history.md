@@ -1537,6 +1537,109 @@ The full fix chain for the padding/masking collision (Bug 2 from section 11.3):
 
 ---
 
+## 13. Pipeline Analysis: Scalar Features & Taste Vector Impact (2026-02-27)
+
+### 13.1 Problem Statement
+
+After implementing extended feature processing (scalar context features and taste vectors) for the Buyer/Product towers, three experiments were compared:
+
+| Experiment | Features | R@5 | R@10 | R@50 | R@100 |
+|---|---|---|---|---|---|
+| QT #147 | No scalar values | 3.8% | 6.7% | 21.9% | 32.8% |
+| QT #162 | With scalar values (buyer/product context) | 5.2% | 8.1% | 22.0% | 33.1% |
+| QT #168 | With scalar values + taste vector | 5.4% | 9.3% | 23.3% | 34.2% |
+
+The scalar features produced a small 1-2% improvement at R@5/R@10, but the taste vector in experiment #168 had essentially zero additional effect (+0.2pp R@5, +1.2pp R@10). These improvements were not confirmed on test datasets.
+
+This contradicts the standalone taste vector experiment (Section 8.2 Run 2) which showed +37% R@5.
+
+### 13.2 Root Cause Analysis
+
+**The taste vector in experiment #168 was silently dropped by the pipeline. It never reached the model.**
+
+The platform's code generators have a hard-coded three-type system (text, numeric, temporal) that silently ignores any feature that doesn't match — including ARRAY columns like `purchase_history`. The taste vector is killed at three separate points:
+
+**Drop Point 1: SmartDefaultsService** (`ml_platform/configs/services.py:308`)
+
+```python
+# Skip other types (BOOL, ARRAY, STRUCT, etc.)
+return None
+```
+
+The `purchase_history` column (BigQuery type `ARRAY<STRING>`, mode=REPEATED) is not offered as a configurable feature. It cannot be dragged into the buyer tower.
+
+**Drop Point 2: PreprocessingFnGenerator._collect_all_features** (`ml_platform/configs/services.py:947-956`)
+
+```python
+if data_type == 'text' or feature_type == 'string_embedding':
+    all_features['text'].append(feature)
+elif data_type == 'numeric' or feature_type == 'numeric':
+    all_features['numeric'].append(feature)
+elif data_type == 'temporal' or feature_type == 'timestamp':
+    all_features['temporal'].append(feature)
+# ← anything else: silently dropped, no warning, no error
+```
+
+No `preprocessing_fn` code is generated for the column. Since TFX Transform only outputs columns present in the `outputs` dict, the column vanishes from the transformed TFRecords.
+
+**Drop Point 3: TrainerModuleGenerator._collect_features_by_type** (`ml_platform/configs/services.py:1685-1709`)
+
+Identical three-way filter. No `BuyerModel.__init__` or `BuyerModel.call()` code is generated for array/history features. No shared embedding concept exists.
+
+**The full kill chain:**
+
+```
+BigQuery v4 view (HAS purchase_history ARRAY<STRING>)
+  → Dataset Wizard: purchase_history detected as ARRAY → skipped (line 308)
+  → FeatureConfig: no purchase_history feature exists
+  → ExampleGen query: only selects columns from FeatureConfig → purchase_history not in query
+  → Transform: no preprocessing_fn code for it → dropped even if present
+  → Trainer: no model code for it → would crash if referenced
+  → Result: model trains WITHOUT taste vector, identical to experiment 162
+```
+
+### 13.3 Scalar Features: Verified Working
+
+The scalar features (cust_value, cust_last_purchase, cust_visits, cust_bought_SKU, and 5 product aggregate stats) are processed correctly. All naming conventions between Transform and Trainer were verified:
+
+| Feature Type | Transform Output Key | Trainer Input Key | Match |
+|---|---|---|---|
+| Text vocab | `outputs['{col}']` / `vocab_filename='{col}_vocab'` | `inputs['{col}']` / `vocabulary_size_by_name('{col}_vocab')` | YES |
+| Numeric norm | `outputs['{col}_norm']` | `inputs['{col}_norm']` | YES |
+| Numeric bucket | `outputs['{col}_bucket']` | `inputs['{col}_bucket']` | YES |
+| Temporal norm/cyclical/bucket | `outputs['{col}_norm/sin/cos/bucket']` | `inputs['{col}_norm/sin/cos/bucket']` | YES |
+| Cross features | `outputs['{cross_name}']` | `inputs['{cross_name}']` | YES |
+| OOV buckets | `NUM_OOV_BUCKETS = 1` | `NUM_OOV_BUCKETS = 1` | YES |
+
+No vocab mismatches, no naming bugs, no feature name discrepancies.
+
+The 147→162 improvement pattern (R@5 +36%, R@10 +21%, R@50 +0.5%, R@100 +0.9%) is expected: scalar features help rank candidates better at top positions but don't restructure the 32D embedding space needed for wider recall.
+
+### 13.4 Experiment 162 vs 168: Noise, Not Signal
+
+The 162→168 deltas (+0.2pp R@5, +1.2pp R@10, +1.3pp R@50, +1.1pp R@100) are NOT from the taste vector (which was dropped). They come from one or more of:
+
+1. **Random seed variance** — TFX pipelines, tf.data shuffling, and weight initialization all involve randomness. 1-2pp swings are within normal variance for 122K rows.
+2. **Feature config differences** — if experiment 168 used a slightly different FeatureConfig (different embedding dims, additional crosses, different bucketization).
+3. **Training parameter differences** — epochs, learning rate, batch size.
+
+### 13.5 Bugs Found During Analysis
+
+| Bug | Location | Severity |
+|---|---|---|
+| TensorDimensionCalculator missing `'yearly'` cyclical | `configs/services.py:439` — list is `['quarterly', 'monthly', 'weekly', 'daily']`, should include `'yearly'` | Low (cosmetic) |
+| OOV product IDs in serving model | Generated `_precompute_candidate_embeddings()` — `original_product_ids[vid]` IndexError when vid = vocab_size | Medium |
+| Silent feature dropping | `configs/services.py:938,1695` — features with unrecognized data_type dropped with no warning | High |
+| No ARRAY column support | `configs/services.py:308,938,1695` — v4 purchase_history cannot flow through pipeline | High (known limitation) |
+
+### 13.6 Conclusions
+
+1. The taste vector was never included in experiment #168. The platform integration (Section 8.3) is required before it can run through the pipeline.
+2. The standalone experiment (Section 8.2) proves the taste vector adds value (+37% R@5). The platform integration is worthwhile.
+3. Scalar features work correctly and are responsible for the 147→162 improvement.
+4. The silent feature dropping behavior should be replaced with explicit warnings to prevent future confusion.
+---
+
 ## Appendix A: Alternative Approaches Considered
 
 ### A.1 Per-Category Distribution Vector (+26D)

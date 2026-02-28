@@ -3,7 +3,7 @@
 **Date**: 2026-02-27 (analysis) · 2026-02-28 (experiments completed)
 **Context**: QT-172 (`feat_retr_v6` + `mod_retr_v6`, `ternopil_train_v4`, `strict_time` split)
 **Related**: `docs/phase_experiments.md` (History Feature Type section — taste vector design, validation, bug fixes)
-**Status**: Experiments completed. L2-norm and early stopping disproved. See Section 5 for results, Section 6 for revised next steps.
+**Status**: Smaller tower [128,64,32] achieved R@5=26.0%, R@100=60.6% (+53%/+17% vs baseline). See Section 5 for all results, Section 6 for next steps.
 
 ---
 
@@ -328,7 +328,26 @@ Experiments were run using `scripts/test_model_improvements.py`, which downloads
 
 **Exp B2**: EarlyStopping on train loss never triggered (train loss monotonically decreases across all experiments). The run completed all 100 epochs. Results are slightly below baseline, likely due to the `restore_best_weights=True` parameter restoring to a suboptimal checkpoint.
 
+#### Round 3: Smaller Architecture
+
+| Experiment | Change | Epochs | R@5 | R@10 | R@50 | R@100 | Val Loss |
+|---|---|---|---|---|---|---|---|
+| **QT-172** (baseline) | [256,128,64,32], emb 64/32 | 100 | 17.0% | 24.5% | 42.2% | 51.6% | 392,065 |
+| **F**: Smaller towers | **[128,64,32]**, emb 64/32 | 100 | **26.0%** | **35.1%** | **52.2%** | **60.6%** | 2,083,308 |
+| **G**: Smaller embeddings | [256,128,64,32], emb 32/16 | 100 | 13.4% | 18.5% | 38.1% | 51.1% | 1,319,959 |
+| **H**: Both combined | [128,64,32], emb 32/16 | 100 | 19.5% | 27.5% | 49.2% | 57.5% | 2,966,725 |
+
+**Exp F is the clear winner** — R@5 +53% relative improvement (17.0% → 26.0%), R@100 +17% (51.6% → 60.6%). Removing the Dense(256) layer reduced model capacity just enough to prevent the worst memorization while keeping the expressive 64D/32D embeddings.
+
+**Exp G** (smaller embeddings only) hurt recall — the 64D customer and 32D product embeddings carry important signal that shouldn't be compressed.
+
+**Exp H** (combined) improved over baseline but underperformed F — the smaller embeddings partially offset the tower improvement.
+
 ### 5.3 Key Findings
+
+#### Smaller Tower Is Best Improvement Found (Exp F)
+
+Removing the Dense(256) layer from both towers yielded the largest improvement across all 10 experiments. The [256, 128, 64, 32] architecture was over-parameterized for 976 products — the first Dense(256) layer alone has 256×(input_dim) parameters, providing excess capacity for memorizing individual transactions. The [128, 64, 32] architecture forces the model to learn more generalizable patterns while still having enough capacity for the task.
 
 #### L2 Normalization Hurts Recall (Disproven Hypothesis)
 
@@ -339,6 +358,10 @@ The theoretical analysis in Section 4.1 predicted L2 normalization would be the 
 **Why CLIP/SimCLR are different**: Those systems operate on millions of unique items (images, text) where magnitude-based memorization is impossible. The normalization constraint helps them learn generalizable semantic features. With 976 products, our model can and should memorize product-level patterns.
 
 The val_loss reduction (392K → 32-42K) looks like an improvement but is misleading — it reflects the model being **less confident**, not more accurate. Lower confidence produces lower loss but worse rankings.
+
+#### Embedding Dimensions Should Stay Large
+
+Exp G (customer 64→32, product 32→16) degraded recall, while Exp F kept embeddings at 64/32 and improved. The embeddings are the model's primary information carriers — compressing them loses signal. This is consistent with the small-catalog regime: with only 976 products, the model needs expressive per-product embeddings to capture nuanced relationships.
 
 #### Early Stopping Has No Valid Signal
 
@@ -351,72 +374,63 @@ A proper early stopping signal would be `val_recall_at_K`, but this requires Fac
 
 #### Val Loss Is Decoupled From Recall
 
-Across all experiments, the model with the **worst** val_loss (QT-172: 392K) has the **best** recall. The model with the **best** val_loss (A3: 31.5K) has some of the worst recall. This confirms the TFRS Issue #263 observation: val_loss measures softmax confidence, recall measures ranking order. For retrieval, **ranking order is what matters**.
+Across all experiments, the models with the **worst** val_loss (F: 2.1M, H: 3.0M) have the **best** recall. The models with the **best** val_loss (A3: 31.5K) have the worst recall. This confirms the TFRS Issue #263 observation: val_loss measures softmax confidence, recall measures ranking order. For retrieval, **ranking order is what matters**.
 
-### 5.4 What The Baseline Is Actually Doing Right
+### 5.4 Summary: What Works and What Doesn't
 
-The QT-172 baseline, despite its "overfitting" optics, is doing several things well:
-
-1. **Memorizing customer preferences** via the 64D `customer_id` embedding — this is desirable for personalized retrieval
-2. **Encoding product popularity/affinity** in embedding magnitudes — the dot-product score naturally ranks frequently-purchased products higher
-3. **Learning from 100 full epochs** — the model needs extended training to learn meaningful co-occurrence patterns from ~90K examples
-4. **Using unbounded scores** — allows the model to express strong preferences, which translates to correct top-K rankings
+| Change | Effect on Recall | Verdict |
+|---|---|---|
+| **Smaller towers [128,64,32]** | **+53% R@5, +17% R@100** | **Best improvement found** |
+| Smaller towers + smaller embeddings | +15% R@5, +11% R@100 | Good, but smaller embeddings dilute the gain |
+| Smaller embeddings only | -21% R@5, -1% R@100 | Hurts — embeddings carry important signal |
+| L2 normalization (any temperature) | -49% to -81% R@5 | Destroys magnitude-based patterns |
+| EarlyStopping (val_loss) | -97% R@5 | Stops before learning |
+| EarlyStopping (train loss) | -16% R@5 | Never triggers; restore_best_weights hurts |
 
 ---
 
-## 6. Revised Approach: Next Steps
+## 6. Next Steps
 
-The "drastic" architectural changes (L2-norm, temperature, early stopping) all degraded performance. The path forward is **incremental improvements within the current architecture** and **data-centric approaches**.
+### 6.1 Adopt Smaller Tower as New Default
 
-### 6.1 High Priority: More/Better Data
+Exp F's [128, 64, 32] tower architecture should become the new baseline. This can be done immediately via ModelConfig UI — create a new `mod_retr_v7` with:
 
-With only ~90K examples and 976 products, the model is data-limited, not architecture-limited.
-
-| Approach | Expected Impact | Effort |
+| Parameter | v6 (current) | v7 (proposed) |
 |---|---|---|
-| **Increase training data volume** — more transaction history, longer time window | High | Low (SQL change) |
-| **Add more generalizable features** — product category co-purchase rates, seasonal signals, price sensitivity | High | Medium |
-| **Negative sampling strategy** — curated hard negatives instead of in-batch random | Medium | Medium |
+| Tower layers | [256, 128, 64, 32] | **[128, 64, 32]** |
+| Embedding dims | customer=64, product=32 | customer=64, product=32 (keep) |
+| L2 regularization | 0.02 on first 2 layers | 0.02 on first layer |
+| Everything else | Same | Same |
 
-### 6.2 Medium Priority: Hyperparameter Tuning (Already Supported in UI)
+Run a full Quick Test with `strict_time` split to confirm the improvement holds through the full pipeline (not just patched Custom Jobs).
 
-These are configurable via ModelConfig without code changes:
+### 6.2 Further Tuning on Top of Exp F
 
-| Parameter | Current | Experiments to Try |
+The Exp F result (R@5=26.0%, R@100=60.6%) is a strong new baseline. Next experiments should stack on top of it:
+
+| Parameter | Current (Exp F) | Experiments to Try |
 |---|---|---|
-| **Dropout** | 0.0 | 0.1, 0.2, 0.3 between dense layers |
-| **L2 regularization** | 0.02 on first 2 layers | 0.01, 0.05 across all layers |
-| **Layer architecture** | [256, 128, 64, 32] | [128, 64, 32], [256, 128, 64] |
+| **Dropout** | 0.0 | 0.1, 0.2 between the 3 dense layers |
+| **L2 regularization** | 0.02 on Dense(128) only | 0.01, 0.02 on all layers |
 | **Learning rate** | 0.001 | 0.0005, 0.002 |
-| **Batch size** | 4096 | 2048, 8192 |
-| **Embedding dimensions** | customer=64, product=32 | Try smaller (32, 16) for regularization |
+| **Batch size** | 4096 | 2048 (more epochs per data pass, different in-batch negatives) |
+| **Epochs** | 100 | 150, 200 (the smaller model may benefit from longer training) |
 
-### 6.3 Low Priority: Architecture Changes (Deferred)
+These are all configurable via ModelConfig UI or via the experiment script.
 
-These should only be revisited after data improvements are exhausted:
+### 6.3 Deferred (Disproven or Low Priority)
 
-| Change | Status | Reason to Defer |
+| Change | Status | Notes |
 |---|---|---|
-| L2 normalization | **Tested, hurts recall** | Only revisit with >10x more data |
-| Temperature scaling | **Tested, hurts recall** | Coupled with L2-norm; ineffective without it |
-| Label smoothing | Not yet tested standalone | May help, but data improvements are higher ROI |
-| Hard negatives | Not yet tested standalone | Requires more diverse catalog to be meaningful |
-| FactorizedTopK metrics | Not implemented | Would enable val_recall early stopping, but adds training overhead |
-| `remove_accidental_hits` | Not tested | Addresses a real issue (4x product duplication per batch) but complex interaction with loss |
+| L2 normalization | **Tested, hurts recall** | Destroys magnitude-based patterns for small catalogs |
+| Temperature scaling | **Tested, hurts recall** | Only meaningful with L2-norm |
+| Smaller embeddings | **Tested, hurts recall** | Embeddings carry important signal at 64/32D |
+| EarlyStopping | **Tested, no valid signal** | val_loss and loss both fail as monitors |
+| Label smoothing | Not tested standalone | Lower priority after Exp F success |
+| Hard negatives | Not tested standalone | Lower priority after Exp F success |
+| FactorizedTopK metrics | Not implemented | Would enable val_recall early stopping |
 
-### 6.4 Implementation Scope (Revised)
-
-Given experiment results, the ModelConfig UI changes from Section 6.2 (original) are **deprioritized**. Instead:
-
-**Do now**:
-- Run hyperparameter tuning experiments using existing UI controls (dropout, L2, layer sizes)
-- Investigate expanding the training dataset (longer time window, more customers)
-
-**Do later** (if data improvements plateau):
-- Add `temperature`, `l2_normalize_output`, `label_smoothing`, `num_hard_negatives` to ModelConfig UI
-- Implement FactorizedTopK for val_recall-based early stopping
-
-### 6.5 Experiment Tooling
+### 6.4 Experiment Tooling
 
 The `scripts/test_model_improvements.py` script proved valuable for fast iteration (~15 min/experiment vs ~1.5 hr for full pipeline). It can be reused for future experiments by:
 - Adding new patch functions for whatever changes need testing
@@ -429,30 +443,34 @@ The `scripts/test_model_improvements.py` script proved valuable for fast iterati
 
 ### 7.1 GCS Paths
 
-| Experiment | Artifacts |
-|---|---|
-| QT-172 (baseline) | `gs://b2b-recs-quicktest-artifacts/qt-172-20260227-153721/` |
-| A: L2+temp=0.05 | `gs://b2b-recs-quicktest-artifacts/improvement-A-l2-norm-temp-20260228-124031/` |
-| B: EarlyStopping val_loss | `gs://b2b-recs-quicktest-artifacts/improvement-B-early-stopping-20260228-124107/` |
-| A2: L2+temp=0.2 | `gs://b2b-recs-quicktest-artifacts/improvement-A2-l2-norm-temp02-20260228-132152/` |
-| A3: L2+temp=0.5 | `gs://b2b-recs-quicktest-artifacts/improvement-A3-l2-norm-temp05-20260228-132157/` |
-| A4: L2+temp=1.0 | `gs://b2b-recs-quicktest-artifacts/improvement-A4-l2-norm-temp10-20260228-132159/` |
-| B2: EarlyStopping train loss | `gs://b2b-recs-quicktest-artifacts/improvement-B2-earlystop-trainloss-20260228-132232/` |
+| Experiment | Result | Artifacts |
+|---|---|---|
+| QT-172 (baseline) | R@5=17.0% | `gs://b2b-recs-quicktest-artifacts/qt-172-20260227-153721/` |
+| A: L2+temp=0.05 | R@5=8.6% | `gs://b2b-recs-quicktest-artifacts/improvement-A-l2-norm-temp-20260228-124031/` |
+| B: EarlyStopping val_loss | R@5=0.5% | `gs://b2b-recs-quicktest-artifacts/improvement-B-early-stopping-20260228-124107/` |
+| A2: L2+temp=0.2 | R@5=8.9% | `gs://b2b-recs-quicktest-artifacts/improvement-A2-l2-norm-temp02-20260228-132152/` |
+| A3: L2+temp=0.5 | R@5=6.1% | `gs://b2b-recs-quicktest-artifacts/improvement-A3-l2-norm-temp05-20260228-132157/` |
+| A4: L2+temp=1.0 | R@5=3.3% | `gs://b2b-recs-quicktest-artifacts/improvement-A4-l2-norm-temp10-20260228-132159/` |
+| B2: EarlyStopping train loss | R@5=14.2% | `gs://b2b-recs-quicktest-artifacts/improvement-B2-earlystop-trainloss-20260228-132232/` |
+| **F: Smaller towers** | **R@5=26.0%** | `gs://b2b-recs-quicktest-artifacts/improvement-F-smaller-towers-20260228-141314/` |
+| G: Smaller embeddings | R@5=13.4% | `gs://b2b-recs-quicktest-artifacts/improvement-G-smaller-embeddings-20260228-141318/` |
+| H: Both combined | R@5=19.5% | `gs://b2b-recs-quicktest-artifacts/improvement-H-smaller-all-20260228-141319/` |
 
 ### 7.2 Vertex AI Job IDs
 
 | Experiment | Job ID | Region |
 |---|---|---|
-| A | (round 1, see GCS path above) | europe-central2 |
-| B | (round 1, see GCS path above) | europe-central2 |
 | A2 | `122137050148241408` | europe-central2 |
 | A3 | `5383467314823823360` | europe-central2 |
 | A4 | `2323552843002281984` | europe-central2 |
 | B2 | `6501485922318548992` | europe-central2 |
+| F | `778818170814201856` | europe-central2 |
+| G | `7727872395846877184` | europe-central2 |
+| H | `5944446943408160768` | europe-central2 |
 
 ### 7.3 Script
 
-`scripts/test_model_improvements.py` — downloads QT-172's trainer, applies patches, submits Custom Jobs. Supports `--experiment A/B/C/D/E/A2/A3/A4/B2`, `--dry-run`, `--gpu`, `--epochs`, `--lr`.
+`scripts/test_model_improvements.py` — downloads QT-172's trainer, applies patches, submits Custom Jobs. Supports `--experiment A/B/.../F/G/H`, `--dry-run`, `--gpu`, `--epochs`, `--lr`.
 
 ---
 

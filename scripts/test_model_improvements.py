@@ -123,6 +123,97 @@ def patch_hard_negatives(code: str, num: int = 10, temperature: float = None) ->
     return code
 
 
+def patch_smaller_towers(code: str) -> str:
+    """
+    Patch F: Replace [256, 128, 64, 32] towers with [128, 64, 32].
+
+    Removes the Dense(256) layer from both query and candidate towers.
+    """
+    # Remove Dense(256) from query tower
+    old_query = (
+        "        query_layers.append(tf.keras.layers.Dense(256, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        query_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))"
+    )
+    new_query = (
+        "        query_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))"
+    )
+    if old_query not in code:
+        raise ValueError("Could not find query tower Dense(256)+Dense(128) pattern")
+    code = code.replace(old_query, new_query)
+
+    # Remove Dense(256) from candidate tower
+    old_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(256, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))"
+    )
+    new_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))"
+    )
+    if old_candidate not in code:
+        raise ValueError("Could not find candidate tower Dense(256)+Dense(128) pattern")
+    code = code.replace(old_candidate, new_candidate)
+
+    # Update the comment header
+    code = code.replace(
+        "# Buyer tower: Dense(256) → Dense(128) → Dense(64) → Dense(32)",
+        "# Buyer tower: Dense(128) → Dense(64) → Dense(32)"
+    )
+    code = code.replace(
+        "# Product tower: Dense(256) → Dense(128) → Dense(64) → Dense(32)",
+        "# Product tower: Dense(128) → Dense(64) → Dense(32)"
+    )
+
+    return code
+
+
+def patch_smaller_embeddings(code: str) -> str:
+    """
+    Patch G: Reduce embedding dimensions.
+
+    - customer_id: 64 → 32
+    - shared_product_embedding: 32 → 16
+    - OUTPUT_EMBEDDING_DIM: 32 → 16
+    - Last Dense layer in each tower: 32 → 16
+    """
+    # customer_id embedding: 64 → 32
+    old_cust = "self.customer_id_embedding = tf.keras.layers.Embedding(customer_id_vocab_size + NUM_OOV_BUCKETS, 64)"
+    new_cust = "self.customer_id_embedding = tf.keras.layers.Embedding(customer_id_vocab_size + NUM_OOV_BUCKETS, 32)"
+    if old_cust not in code:
+        raise ValueError("Could not find customer_id_embedding with dim=64")
+    code = code.replace(old_cust, new_cust)
+
+    # shared_product_embedding: 32 → 16
+    old_prod = re.search(
+        r"self\.shared_product_embedding = tf\.keras\.layers\.Embedding\(\s*"
+        r"product_id_vocab_size \+ NUM_OOV_BUCKETS \+ 1, 32,",
+        code
+    )
+    if not old_prod:
+        raise ValueError("Could not find shared_product_embedding with dim=32")
+    code = code.replace(old_prod.group(), old_prod.group().replace(", 32,", ", 16,"))
+
+    # OUTPUT_EMBEDDING_DIM: 32 → 16
+    code = code.replace("OUTPUT_EMBEDDING_DIM = 32", "OUTPUT_EMBEDDING_DIM = 16")
+
+    # Last Dense layer in each tower: Dense(32) → Dense(16)
+    code = code.replace(
+        "query_layers.append(tf.keras.layers.Dense(32, activation='relu'))",
+        "query_layers.append(tf.keras.layers.Dense(16, activation='relu'))"
+    )
+    code = code.replace(
+        "candidate_layers.append(tf.keras.layers.Dense(32, activation='relu'))",
+        "candidate_layers.append(tf.keras.layers.Dense(16, activation='relu'))"
+    )
+
+    return code
+
+
 def _set_retrieval_task(code: str, temperature: float = None, label_smoothing: float = None,
                         num_hard_negatives: int = None) -> str:
     """
@@ -237,6 +328,29 @@ EXPERIMENTS = {
         'patches': [
             ('Early stopping on train loss',
              lambda code: patch_early_stopping(code, patience=15, monitor='loss')),
+        ],
+    },
+    # ─── Round 3: smaller architecture ───────────────────────────────────────
+    'F': {
+        'name': 'smaller-towers',
+        'description': 'Tower layers [128, 64, 32] instead of [256, 128, 64, 32]',
+        'patches': [
+            ('Smaller towers', lambda code: patch_smaller_towers(code)),
+        ],
+    },
+    'G': {
+        'name': 'smaller-embeddings',
+        'description': 'Lower embedding dims: customer 64→32, product 32→16, output 32→16',
+        'patches': [
+            ('Smaller embeddings', lambda code: patch_smaller_embeddings(code)),
+        ],
+    },
+    'H': {
+        'name': 'smaller-all',
+        'description': 'Smaller towers [128, 64, 32] + lower embedding dims (32/16/16)',
+        'patches': [
+            ('Smaller towers', lambda code: patch_smaller_towers(code)),
+            ('Smaller embeddings', lambda code: patch_smaller_embeddings(code)),
         ],
     },
 }
@@ -576,10 +690,15 @@ Experiments (round 2 — tuning):
   A4  L2-normalize + temperature=1.0      (normalize only, no sharpening)
   B2  EarlyStopping on train loss, patience=15
 
+Experiments (round 3 — smaller architecture):
+  F   Towers [128, 64, 32] instead of [256, 128, 64, 32]
+  G   Embedding dims: customer 64→32, product 32→16, output 32→16
+  H   F + G combined
+
 Examples:
-  %(prog)s --experiment A2 --epochs 100
-  %(prog)s --experiment A2,A3,A4 --dry-run
-  %(prog)s --experiment B2 --epochs 100
+  %(prog)s --experiment F --epochs 100
+  %(prog)s --experiment F,G,H --dry-run
+  %(prog)s --experiment H --epochs 100
         """
     )
     parser.add_argument('--experiment', required=True,

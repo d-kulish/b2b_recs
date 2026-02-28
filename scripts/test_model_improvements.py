@@ -7,18 +7,20 @@ and submitting as Vertex AI Custom Jobs. Reuses QT-172's Transform/Schema artifa
 to skip the ~1 hour data processing step.
 
 Experiment matrix:
-  A: L2-normalize embeddings + temperature=0.05
-  B: EarlyStopping (patience=10, restore_best_weights=True)
-  C: A + B combined
-  D: C + label_smoothing=0.1
-  E: C + num_hard_negatives=10
+  Rounds 1-4 (completed): L2-norm, temperature, early stopping, tower sweeps
+  Round 5 (current — tuning on F2 [64, 32] optimal baseline):
+    I1: F2 + Dropout(0.1)
+    I2: F2 + Dropout(0.2)
+    J:  F2 + batch_size=2048
+    K:  F2 + remove_accidental_hits=True
 
 Baseline (QT-172): R@5=17.0%, R@10=24.5%, R@50=42.2%, R@100=51.6%
+Best (F2 [64, 32]): R@5=35.6%, R@10=44.3%, R@50=60.8%, R@100=66.8%
 
 Usage:
-    python scripts/test_model_improvements.py --experiment A --epochs 100
-    python scripts/test_model_improvements.py --experiment all --dry-run
-    python scripts/test_model_improvements.py --experiment C --epochs 50 --lr 0.001
+    python scripts/test_model_improvements.py --experiment I1,I2,J,K --epochs 100
+    python scripts/test_model_improvements.py --experiment I1 --dry-run
+    python scripts/test_model_improvements.py --experiment J --epochs 100
 """
 
 import argparse
@@ -313,8 +315,69 @@ def patch_smaller_embeddings(code: str) -> str:
     return code
 
 
+def patch_dropout(code: str, rate: float = 0.2) -> str:
+    """
+    Insert Dropout between Dense(64) and Dense(32) in both towers.
+
+    Must be applied AFTER patch_tiny_towers (F2) which produces the [64, 32] layout.
+    """
+    # Query tower: insert Dropout after Dense(64)
+    old_query = (
+        "        query_layers.append(tf.keras.layers.Dense(64, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        query_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    new_query = (
+        "        query_layers.append(tf.keras.layers.Dense(64, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        f"        query_layers.append(tf.keras.layers.Dropout({rate}))\n"
+        "        query_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    if old_query not in code:
+        raise ValueError("Could not find query tower Dense(64)+Dense(32) pattern (apply after F2 patch)")
+    code = code.replace(old_query, new_query)
+
+    # Candidate tower: insert Dropout after Dense(64)
+    old_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(64, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    new_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(64, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        f"        candidate_layers.append(tf.keras.layers.Dropout({rate}))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    if old_candidate not in code:
+        raise ValueError("Could not find candidate tower Dense(64)+Dense(32) pattern (apply after F2 patch)")
+    code = code.replace(old_candidate, new_candidate)
+
+    return code
+
+
+def patch_remove_accidental_hits(code: str) -> str:
+    """
+    Patch K: Enable remove_accidental_hits and pass candidate_ids.
+
+    1. Set Retrieval(remove_accidental_hits=True)
+    2. Pass candidate_ids=features['product_id'] in compute_loss
+    """
+    # 1. Configure Retrieval task
+    code = _set_retrieval_task(code, remove_accidental_hits=True)
+
+    # 2. Pass candidate_ids in the task call
+    old_call = "        return self.task(query_embeddings, candidate_embeddings)"
+    new_call = "        return self.task(query_embeddings, candidate_embeddings, candidate_ids=tf.squeeze(features['product_id']))"
+    if old_call not in code:
+        raise ValueError("Could not find self.task(query_embeddings, candidate_embeddings) to add candidate_ids")
+    code = code.replace(old_call, new_call)
+
+    return code
+
+
 def _set_retrieval_task(code: str, temperature: float = None, label_smoothing: float = None,
-                        num_hard_negatives: int = None) -> str:
+                        num_hard_negatives: int = None, remove_accidental_hits: bool = False) -> str:
     """
     Replace `self.task = tfrs.tasks.Retrieval(...)` with a configured version.
 
@@ -331,6 +394,8 @@ def _set_retrieval_task(code: str, temperature: float = None, label_smoothing: f
         kwargs.append(f"temperature={temperature}")
     if num_hard_negatives is not None:
         kwargs.append(f"num_hard_negatives={num_hard_negatives}")
+    if remove_accidental_hits:
+        kwargs.append("remove_accidental_hits=True")
 
     if label_smoothing is not None:
         # Use custom loss with label smoothing
@@ -467,6 +532,39 @@ EXPERIMENTS = {
             ('Minimal towers', lambda code: patch_minimal_towers(code)),
         ],
     },
+    # ─── Round 5: tuning on F2 [64, 32] baseline ────────────────────────────
+    'I1': {
+        'name': 'f2-dropout01',
+        'description': 'F2 [64, 32] + Dropout(0.1) between layers',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.1', lambda code: patch_dropout(code, rate=0.1)),
+        ],
+    },
+    'I2': {
+        'name': 'f2-dropout02',
+        'description': 'F2 [64, 32] + Dropout(0.2) between layers',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.2', lambda code: patch_dropout(code, rate=0.2)),
+        ],
+    },
+    'J': {
+        'name': 'f2-batch2048',
+        'description': 'F2 [64, 32] + batch_size=2048 (fewer in-batch negatives)',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+        ],
+        'batch_size': 2048,
+    },
+    'K': {
+        'name': 'f2-accidental-hits',
+        'description': 'F2 [64, 32] + remove_accidental_hits=True',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Remove accidental hits', lambda code: patch_remove_accidental_hits(code)),
+        ],
+    },
 }
 
 
@@ -511,7 +609,7 @@ def find_artifacts(source_exp: str) -> dict:
 
 def create_runner_script(artifacts: dict, trainer_gcs_path: str, output_path: str,
                          gcs_output_path: str, epochs: int, learning_rate: float,
-                         gpu: bool = False) -> str:
+                         batch_size: int = 4096, gpu: bool = False) -> str:
     """Create the script that runs inside the Custom Job container."""
     return f'''#!/usr/bin/env python3
 """Runner script for model improvement experiment."""
@@ -571,7 +669,7 @@ def main():
     fn_args.eval_steps = None
     fn_args.custom_config = {{
         'epochs': {epochs},
-        'batch_size': 4096,
+        'batch_size': {batch_size},
         'learning_rate': {learning_rate},
         'gcs_output_path': '{gcs_output_path}',
         'gpu_enabled': {gpu},
@@ -647,7 +745,7 @@ if __name__ == '__main__':
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
 def run_experiment(experiment_key: str, code: str, epochs: int, learning_rate: float,
-                   dry_run: bool = False, gpu: bool = False) -> dict:
+                   batch_size: int = 4096, dry_run: bool = False, gpu: bool = False) -> dict:
     """Apply patches, upload, and submit a single experiment."""
     from google.cloud import storage
 
@@ -665,9 +763,13 @@ def run_experiment(experiment_key: str, code: str, epochs: int, learning_rate: f
         logger.info(f"  Applying patch: {patch_name}")
         patched_code = patch_fn(patched_code)
 
-    # Override epochs and learning rate
+    # Per-experiment batch_size override
+    effective_batch_size = exp.get('batch_size', batch_size)
+
+    # Override epochs, learning rate, and batch size
     patched_code = re.sub(r'EPOCHS = \d+', f'EPOCHS = {epochs}', patched_code)
     patched_code = re.sub(r'LEARNING_RATE = [\d.eE+-]+', f'LEARNING_RATE = {learning_rate}', patched_code)
+    patched_code = re.sub(r'BATCH_SIZE = \d+', f'BATCH_SIZE = {effective_batch_size}', patched_code)
 
     # Validate syntax
     try:
@@ -697,7 +799,7 @@ def run_experiment(experiment_key: str, code: str, epochs: int, learning_rate: f
     output_path = f'{gcs_output_path}/model'
     runner_script = create_runner_script(
         artifacts, trainer_gcs_path, output_path, gcs_output_path, epochs, learning_rate,
-        gpu=gpu
+        batch_size=effective_batch_size, gpu=gpu
     )
 
     # Upload runner script
@@ -757,7 +859,7 @@ EXPERIMENT {experiment_key} SUBMITTED: {exp['description']}
 ================================================================================
 Run ID: {run_id}
 Job:    {job.resource_name}
-Epochs: {epochs}, LR: {learning_rate}
+Epochs: {epochs}, LR: {learning_rate}, Batch: {effective_batch_size}
 Mode:   {'GPU (T4)' if gpu else 'CPU'} in {region}
 
 Monitor:
@@ -809,10 +911,20 @@ Experiments (round 3 — smaller architecture):
   G   Embedding dims: customer 64→32, product 32→16, output 32→16
   H   F + G combined
 
+Experiments (round 4 — tower size sweep):
+  F2  Towers [64, 32] — 2 layers              (BEST: R@5=35.6%, R@100=66.8%)
+  F3  Towers [32] — single projection layer
+
+Experiments (round 5 — tuning on F2 [64, 32] baseline):
+  I1  F2 + Dropout(0.1) between Dense(64) and Dense(32)
+  I2  F2 + Dropout(0.2) between Dense(64) and Dense(32)
+  J   F2 + batch_size=2048 (fewer in-batch negatives)
+  K   F2 + remove_accidental_hits=True
+
 Examples:
-  %(prog)s --experiment F --epochs 100
-  %(prog)s --experiment F,G,H --dry-run
-  %(prog)s --experiment H --epochs 100
+  %(prog)s --experiment I1,I2,J,K --epochs 100
+  %(prog)s --experiment J --epochs 100
+  %(prog)s --experiment I1,I2,J,K --dry-run
         """
     )
     parser.add_argument('--experiment', required=True,
@@ -821,6 +933,8 @@ Examples:
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate (default: 0.001)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Upload patched code but do not submit job')
+    parser.add_argument('--batch-size', type=int, default=4096,
+                        help='Batch size (default: 4096, experiment J overrides to 2048)')
     parser.add_argument('--gpu', action='store_true',
                         help='Use GPU (T4) in europe-west4 instead of CPU in europe-central2')
     parser.add_argument('--source-trainer', default=SOURCE_TRAINER,
@@ -856,7 +970,8 @@ Examples:
     # Run experiments
     results = []
     for key in experiment_keys:
-        result = run_experiment(key, source_code, args.epochs, args.lr, dry_run=args.dry_run, gpu=args.gpu)
+        result = run_experiment(key, source_code, args.epochs, args.lr,
+                                batch_size=args.batch_size, dry_run=args.dry_run, gpu=args.gpu)
         results.append(result)
 
     # Summary

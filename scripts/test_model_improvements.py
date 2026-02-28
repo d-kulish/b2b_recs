@@ -376,6 +376,20 @@ def patch_remove_accidental_hits(code: str) -> str:
     return code
 
 
+def patch_l2_weight(code: str, weight: float = 0.02) -> str:
+    """
+    Change L2 regularization weight on tower Dense layers.
+
+    After F2, the only l2(0.02) occurrences are on Dense(64) in both towers.
+    """
+    old = "kernel_regularizer=tf.keras.regularizers.l2(0.02)"
+    new = f"kernel_regularizer=tf.keras.regularizers.l2({weight})"
+    if old not in code:
+        raise ValueError("Could not find l2(0.02) to patch")
+    code = code.replace(old, new)
+    return code
+
+
 def _set_retrieval_task(code: str, temperature: float = None, label_smoothing: float = None,
                         num_hard_negatives: int = None, remove_accidental_hits: bool = False) -> str:
     """
@@ -563,6 +577,51 @@ EXPERIMENTS = {
         'patches': [
             ('Tiny towers', lambda code: patch_tiny_towers(code)),
             ('Remove accidental hits', lambda code: patch_remove_accidental_hits(code)),
+        ],
+    },
+    # ─── Round 6: tuning on I2 [64, 32] + Dropout(0.2) baseline ─────────────
+    'I3': {
+        'name': 'f2-dropout03',
+        'description': 'F2 [64, 32] + Dropout(0.3) between layers',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.3', lambda code: patch_dropout(code, rate=0.3)),
+        ],
+    },
+    'N1': {
+        'name': 'i2-lr0005',
+        'description': 'I2 [64, 32] + Dropout(0.2) + LR=0.0005',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.2', lambda code: patch_dropout(code, rate=0.2)),
+        ],
+        'learning_rate': 0.0005,
+    },
+    'N2': {
+        'name': 'i2-lr002',
+        'description': 'I2 [64, 32] + Dropout(0.2) + LR=0.002',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.2', lambda code: patch_dropout(code, rate=0.2)),
+        ],
+        'learning_rate': 0.002,
+    },
+    'M1': {
+        'name': 'i2-l2reg001',
+        'description': 'I2 [64, 32] + Dropout(0.2) + L2=0.01 on Dense(64)',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.2', lambda code: patch_dropout(code, rate=0.2)),
+            ('L2 weight 0.01', lambda code: patch_l2_weight(code, weight=0.01)),
+        ],
+    },
+    'M2': {
+        'name': 'i2-l2reg005',
+        'description': 'I2 [64, 32] + Dropout(0.2) + L2=0.05 on Dense(64)',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+            ('Dropout 0.2', lambda code: patch_dropout(code, rate=0.2)),
+            ('L2 weight 0.05', lambda code: patch_l2_weight(code, weight=0.05)),
         ],
     },
 }
@@ -763,12 +822,13 @@ def run_experiment(experiment_key: str, code: str, epochs: int, learning_rate: f
         logger.info(f"  Applying patch: {patch_name}")
         patched_code = patch_fn(patched_code)
 
-    # Per-experiment batch_size override
+    # Per-experiment overrides
     effective_batch_size = exp.get('batch_size', batch_size)
+    effective_lr = exp.get('learning_rate', learning_rate)
 
     # Override epochs, learning rate, and batch size
     patched_code = re.sub(r'EPOCHS = \d+', f'EPOCHS = {epochs}', patched_code)
-    patched_code = re.sub(r'LEARNING_RATE = [\d.eE+-]+', f'LEARNING_RATE = {learning_rate}', patched_code)
+    patched_code = re.sub(r'LEARNING_RATE = [\d.eE+-]+', f'LEARNING_RATE = {effective_lr}', patched_code)
     patched_code = re.sub(r'BATCH_SIZE = \d+', f'BATCH_SIZE = {effective_batch_size}', patched_code)
 
     # Validate syntax
@@ -798,7 +858,7 @@ def run_experiment(experiment_key: str, code: str, epochs: int, learning_rate: f
     gcs_output_path = f'gs://{ARTIFACTS_BUCKET}/{run_id}'
     output_path = f'{gcs_output_path}/model'
     runner_script = create_runner_script(
-        artifacts, trainer_gcs_path, output_path, gcs_output_path, epochs, learning_rate,
+        artifacts, trainer_gcs_path, output_path, gcs_output_path, epochs, effective_lr,
         batch_size=effective_batch_size, gpu=gpu
     )
 
@@ -859,7 +919,7 @@ EXPERIMENT {experiment_key} SUBMITTED: {exp['description']}
 ================================================================================
 Run ID: {run_id}
 Job:    {job.resource_name}
-Epochs: {epochs}, LR: {learning_rate}, Batch: {effective_batch_size}
+Epochs: {epochs}, LR: {effective_lr}, Batch: {effective_batch_size}
 Mode:   {'GPU (T4)' if gpu else 'CPU'} in {region}
 
 Monitor:
@@ -916,15 +976,21 @@ Experiments (round 4 — tower size sweep):
   F3  Towers [32] — single projection layer
 
 Experiments (round 5 — tuning on F2 [64, 32] baseline):
-  I1  F2 + Dropout(0.1) between Dense(64) and Dense(32)
-  I2  F2 + Dropout(0.2) between Dense(64) and Dense(32)
-  J   F2 + batch_size=2048 (fewer in-batch negatives)
-  K   F2 + remove_accidental_hits=True
+  I1  F2 + Dropout(0.1)                        (marginal: R@5=36.3%)
+  I2  F2 + Dropout(0.2)                        (BEST: R@5=41.1%, R@100=66.1%)
+  J   F2 + batch_size=2048                     (hurt: R@5=25.2%)
+  K   F2 + remove_accidental_hits=True          (hurt: R@5=24.9%)
+
+Experiments (round 6 — tuning on I2 [64, 32] + Dropout(0.2) baseline):
+  I3  Dropout(0.3)                              (higher dropout)
+  N1  I2 + LR=0.0005                            (slower learning)
+  N2  I2 + LR=0.002                             (faster learning)
+  M1  I2 + L2=0.01 on Dense(64)                 (less L2 reg)
+  M2  I2 + L2=0.05 on Dense(64)                 (more L2 reg)
 
 Examples:
-  %(prog)s --experiment I1,I2,J,K --epochs 100
-  %(prog)s --experiment J --epochs 100
-  %(prog)s --experiment I1,I2,J,K --dry-run
+  %(prog)s --experiment I3,N1,N2,M1,M2 --epochs 100
+  %(prog)s --experiment I3,N1,N2,M1,M2 --dry-run
         """
     )
     parser.add_argument('--experiment', required=True,

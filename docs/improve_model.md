@@ -1,9 +1,9 @@
 # Improving Retrieval Model Quality
 
-**Date**: 2026-02-27 (analysis) · 2026-02-28 (rounds 1-6 completed)
-**Context**: QT-172 (`feat_retr_v6` + `mod_retr_v6`, `ternopil_train_v4`, `strict_time` split)
+**Date**: 2026-02-27 (analysis) · 2026-02-28 (rounds 1-7 completed)
+**Context**: QT-172 (`feat_retr_v6` + `mod_retr_v6`, `ternopil_train_v4`, `strict_time` split), QT-174 (`mod_retr_v6_v2`, validated N2 config)
 **Related**: `docs/phase_experiments.md` (History Feature Type section — taste vector design, validation, bug fixes)
-**Status**: 21 experiments complete. **[64, 32] + Dropout(0.2) + LR=0.002 is optimal** — R@5=50.1%, R@100=68.1% (2.9x vs baseline). See Section 5 for all results, Section 6 for next steps.
+**Status**: 23 experiments complete. **[64, 32] + Dropout(0.2) + LR=0.002 @ 200 epochs is optimal** — R@5=56.8%, R@100=69.9% (3.3x vs baseline). See Section 5 for all results, Section 6 for next steps.
 
 ---
 
@@ -422,7 +422,36 @@ R@5 cumulative progress:
   F  [128,64,32]:                   26.0%  █████████████
   F2 [64,32]:                       35.6%  █████████████████▊
   I2 [64,32]+Dropout(0.2):          41.1%  ████████████████████▌
-  N2 [64,32]+Dropout(0.2)+LR=0.002: 50.1%  █████████████████████████  ← new best
+  N2 [64,32]+Dropout(0.2)+LR=0.002: 50.1%  █████████████████████████
+```
+
+#### Round 7: More Epochs on N2 (QT-174 Baseline)
+
+N2's config was validated via QT-174 full pipeline (R@5=49.1%, confirming the custom job result). Round 7 tested whether additional training time improves recall, using QT-174's trainer_module.py directly (no patching):
+
+| Experiment | Epochs | R@5 | R@10 | R@50 | R@100 | Val Loss |
+|---|---|---|---|---|---|---|
+| **N2 / QT-174** (baseline) | 100 | 50.1% | 56.1% | 65.0% | 68.1% | 1,507,207 |
+| **O1**: 150 epochs | 150 | 54.3% | 59.1% | 67.3% | **70.8%** | 1,603,047 |
+| **O2**: 200 epochs | 200 | **56.8%** | **60.5%** | 67.1% | 69.9% | 1,699,753 |
+
+**More epochs clearly help — R@5 is still climbing at 200 epochs.** The gains are monotonic at the top of the ranking (R@5: 50.1% → 54.3% → 56.8%), but deeper recall peaks at 150 epochs and slightly regresses at 200 (R@100: 68.1% → 70.8% → 69.9%).
+
+This creates a precision/coverage trade-off:
+- **O2 (200ep) is best for top-of-list precision**: R@5=56.8% (+13.3% vs N2). Longer training with LR=0.002 makes the model increasingly confident on its top picks.
+- **O1 (150ep) is best for broad recall**: R@100=70.8% (+4.0% vs N2). The model maintains better diversity at the tail of the ranking.
+
+The val_loss spike pattern observed in QT-174's training chart (see Section 5.3) continues and intensifies with more epochs — LR=0.002 is near the stability boundary. The spikes don't affect recall (they reflect confidence magnitude, not ranking order) but signal that the model is exploring volatile regions of the loss landscape.
+
+```
+R@5 cumulative progress:
+  QT-172 [256,128,64,32]:           17.0%  ████████▌
+  F  [128,64,32]:                   26.0%  █████████████
+  F2 [64,32]:                       35.6%  █████████████████▊
+  I2 [64,32]+Dropout(0.2):          41.1%  ████████████████████▌
+  N2 [64,32]+D(0.2)+LR=0.002 100ep: 50.1%  █████████████████████████
+  O1 150ep:                         54.3%  ███████████████████████████▏
+  O2 200ep:                         56.8%  ████████████████████████████▍  ← new best
 ```
 
 ### 5.3 Key Findings
@@ -484,60 +513,75 @@ With Dropout(0.2) present, L2=0.01 (halved) caused catastrophic overfitting (R@5
 
 Both batch_size=2048 (Exp J) and remove_accidental_hits (Exp K) degraded recall by ~30%. Both effectively reduce the number of negatives per query — J by halving the batch, K by removing duplicate products from the negative pool. With 976 products and batch_size=4096, the model benefits from near-complete catalog coverage in every batch. Any reduction in negative diversity hurts because the model loses information about the full product landscape in each gradient step.
 
+#### More Epochs Improve Top-of-List but Saturate Deeper Recall (Exp O1, O2)
+
+Extending training from 100 → 150 → 200 epochs with the N2 config (LR=0.002) shows a clear pattern: **R@5 improves monotonically** (50.1% → 54.3% → 56.8%) while **R@100 peaks at 150 epochs** (68.1% → 70.8% → 69.9%). Longer training with LR=0.002 makes the model increasingly confident on its top picks — this sharpens the top of the list (good for R@5) but slightly hurts diversity deeper in the ranking (R@100 regresses from O1 to O2).
+
+The R@5 curve shows no sign of saturating at 200 epochs, suggesting even longer training (300+) could push R@5 further, though R@100 may continue to plateau or degrade.
+
+#### Val Loss Spikes at LR=0.002 (QT-174 Training Chart)
+
+QT-174's training chart shows a distinctive sawtooth pattern in val_loss — periodic spikes up to ~1.8M that immediately snap back to ~350K. This is caused by the higher learning rate (2x default) landing the weights in temporary regions where a few validation pairs get very wrong but very confident scores. With `reduction=SUM`, a single wrong-but-confident prediction can spike the epoch total.
+
+The spikes don't affect recall — ranking order is stable across epochs. The trough values (the "real" underlying val_loss) rise smoothly: 32K → 127K → 350K. This pattern intensifies with more epochs (O1, O2) but recall continues to improve regardless, confirming that val_loss magnitude is decoupled from ranking quality.
+
 ### 5.4 Summary: What Works and What Doesn't
 
-| Change | R@5 | vs Baseline | Verdict |
-|---|---|---|---|
-| **[64, 32] + Dropout(0.2) + LR=0.002** | **50.1%** | **+195%** | **Best — optimal architecture + regularization + LR** |
-| [64, 32] + Dropout(0.2) | 41.1% | +142% | Previous best; LR=0.002 pushes further |
-| [64, 32] + Dropout(0.1) | 36.3% | +114% | Dropout too low to help much |
-| Tiny towers [64, 32] | 35.6% | +109% | Optimal tower depth |
-| [64, 32] + Dropout(0.2) + L2=0.05 | 35.6% | +109% | Stronger L2 over-constrains with dropout |
-| Minimal towers [32] | 35.1% | +106% | Near-optimal, but Dense(64) mixing helps |
-| [64, 32] + Dropout(0.3) | 33.7% | +98% | Dropout too high — starves small towers |
-| Smaller towers [128, 64, 32] | 26.0% | +53% | Good, but not deep enough cut |
-| [64, 32] + batch=2048 | 25.2% | +48% | Fewer negatives hurts small-catalog models |
-| [64, 32] + remove_accidental_hits | 24.9% | +46% | Removes useful popularity signal |
-| [64, 32] + Dropout(0.2) + LR=0.0005 | 24.5% | +44% | LR too low — not converged in 100 epochs |
-| [64, 32] + Dropout(0.2) + L2=0.01 | 21.5% | +26% | Weaker L2 allows overfitting with dropout |
-| Smaller towers + smaller embeddings | 19.5% | +15% | Smaller embeddings dilute the gain |
-| Baseline [256, 128, 64, 32] | 17.0% | — | Over-parameterized |
-| EarlyStopping (train loss) | 14.2% | -16% | Never triggers; restore_best_weights hurts |
-| Smaller embeddings only | 13.4% | -21% | Hurts — embeddings carry important signal |
-| L2-norm + temp=0.2 | 8.9% | -48% | L2-norm destroys magnitude-based patterns |
-| L2-norm + temp=0.05 | 8.6% | -49% | Same — temperature doesn't help |
-| L2-norm + temp=0.5 | 6.1% | -64% | Worse with warmer temperature |
-| L2-norm + temp=1.0 | 3.3% | -81% | Worst — no sharpening + no magnitudes |
-| EarlyStopping (val_loss) | 0.5% | -97% | Stops at epoch 11 before learning |
+| Change | R@5 | R@100 | vs Baseline (R@5) | Verdict |
+|---|---|---|---|---|
+| **[64,32]+D(0.2)+LR=0.002, 200ep** | **56.8%** | 69.9% | **+234%** | **Best R@5 — top-of-list champion** |
+| [64,32]+D(0.2)+LR=0.002, 150ep | 54.3% | **70.8%** | +219% | **Best R@100 — broad recall champion** |
+| [64,32]+D(0.2)+LR=0.002, 100ep | 50.1% | 68.1% | +195% | Validated via QT-174 full pipeline |
+| [64, 32] + Dropout(0.2) | 41.1% | 66.1% | +142% | LR=0.002 pushes further |
+| [64, 32] + Dropout(0.1) | 36.3% | 65.3% | +114% | Dropout too low to help much |
+| Tiny towers [64, 32] | 35.6% | 66.8% | +109% | Optimal tower depth |
+| [64, 32] + Dropout(0.2) + L2=0.05 | 35.6% | 64.6% | +109% | Stronger L2 over-constrains with dropout |
+| Minimal towers [32] | 35.1% | 65.3% | +106% | Near-optimal, but Dense(64) mixing helps |
+| [64, 32] + Dropout(0.3) | 33.7% | 62.9% | +98% | Dropout too high — starves small towers |
+| Smaller towers [128, 64, 32] | 26.0% | 60.6% | +53% | Good, but not deep enough cut |
+| [64, 32] + batch=2048 | 25.2% | 61.2% | +48% | Fewer negatives hurts small-catalog models |
+| [64, 32] + remove_accidental_hits | 24.9% | 58.2% | +46% | Removes useful popularity signal |
+| [64, 32] + Dropout(0.2) + LR=0.0005 | 24.5% | 59.0% | +44% | LR too low — not converged in 100 epochs |
+| [64, 32] + Dropout(0.2) + L2=0.01 | 21.5% | 54.9% | +26% | Weaker L2 allows overfitting with dropout |
+| Smaller towers + smaller embeddings | 19.5% | 57.5% | +15% | Smaller embeddings dilute the gain |
+| Baseline [256, 128, 64, 32] | 17.0% | 51.6% | — | Over-parameterized |
+| EarlyStopping (train loss) | 14.2% | 48.7% | -16% | Never triggers; restore_best_weights hurts |
+| Smaller embeddings only | 13.4% | 51.1% | -21% | Hurts — embeddings carry important signal |
+| L2-norm + temp=0.2 | 8.9% | 33.6% | -48% | L2-norm destroys magnitude-based patterns |
+| L2-norm + temp=0.05 | 8.6% | 40.6% | -49% | Same — temperature doesn't help |
+| L2-norm + temp=0.5 | 6.1% | 25.0% | -64% | Worse with warmer temperature |
+| L2-norm + temp=1.0 | 3.3% | 22.3% | -81% | Worst — no sharpening + no magnitudes |
+| EarlyStopping (val_loss) | 0.5% | 12.1% | -97% | Stops at epoch 11 before learning |
 
 ---
 
 ## 6. Next Steps
 
-### 6.1 Adopt [64, 32] + Dropout(0.2) + LR=0.002 as New Default
+### 6.1 Adopt [64, 32] + Dropout(0.2) + LR=0.002 + 200 Epochs as New Default
 
-Exp N2's configuration should become the new baseline. Create a new `mod_retr_v7` via ModelConfig UI:
+The N2 config has been validated via QT-174 full pipeline and improved further with more epochs. ModelConfig 35 (`mod_retr_v6_v2`) already captures the architecture and LR; update `epochs` to 200.
 
-| Parameter | v6 (current) | v7 (proposed) |
+| Parameter | v6 (config 34) | v7 (config 35, update epochs) |
 |---|---|---|
 | Tower layers | [256, 128, 64, 32] | **[64, Dropout(0.2), 32]** |
 | Embedding dims | customer=64, product=32 | customer=64, product=32 (keep) |
 | L2 regularization | 0.02 on first 2 layers | 0.02 on Dense(64) |
 | Learning rate | 0.001 | **0.002** |
+| Epochs | 5 | **200** |
 | Everything else | Same | Same |
 
-Run a full Quick Test with `strict_time` split to confirm the improvement holds through the full pipeline (not just patched Custom Jobs).
+**Note**: If broad recall (R@100) matters more than top-of-list precision (R@5), use 150 epochs instead (O1: R@100=70.8% vs O2: R@100=69.9%).
 
-### 6.2 Further Tuning on Top of N2
+### 6.2 Further Tuning
 
-The N2 result (R@5=50.1%, R@100=68.1%) is the new baseline. Next experiments should tune on top of it:
+The O2 result (R@5=56.8%, R@100=69.9%) is the current best. Remaining experiments:
 
-| Parameter | Current (N2) | Experiments to Try | Rationale |
+| Parameter | Current (O2) | Experiments to Try | Rationale |
 |---|---|---|---|
-| **Learning rate** | 0.002 | 0.003, 0.005 | LR curve still climbing at 0.002 — more headroom likely |
-| **More epochs** | 100 | 150, 200 | Higher LR + dropout may benefit from longer training |
+| **More epochs** | 200 | 300 | R@5 curve not saturated; may push further |
+| **Learning rate** | 0.002 | 0.003, 0.005 | LR curve was climbing at 0.002; higher may help with 200ep |
+| **LR schedule** | Constant | Cosine decay 0.002→0.0005 | Fast early convergence + stable late training; may reduce val_loss spikes |
 | **Label smoothing** | None | 0.05, 0.1 | Softens targets — may complement dropout regularization |
-| **Temperature** | None | 0.5, 1.0 | On unnormalized embeddings — controls softmax sharpness |
 
 These are all configurable via ModelConfig UI or via the experiment script.
 
@@ -596,6 +640,9 @@ The `scripts/test_model_improvements.py` script proved valuable for fast iterati
 | **N2: I2 + LR=0.002** | **R@5=50.1%** | `gs://b2b-recs-quicktest-artifacts/improvement-N2-i2-lr002-20260228-174835/` |
 | M1: I2 + L2=0.01 | R@5=21.5% | `gs://b2b-recs-quicktest-artifacts/improvement-M1-i2-l2reg001-20260228-174837/` |
 | M2: I2 + L2=0.05 | R@5=35.6% | `gs://b2b-recs-quicktest-artifacts/improvement-M2-i2-l2reg005-20260228-174838/` |
+| QT-174 (N2 validated) | R@5=49.1% | `gs://b2b-recs-quicktest-artifacts/qt-174-20260228-173331/` |
+| O1: N2 @ 150ep | R@5=54.3% | `gs://b2b-recs-quicktest-artifacts/improvement-O1-n2-150ep-20260228-204001/` |
+| **O2: N2 @ 200ep** | **R@5=56.8%** | `gs://b2b-recs-quicktest-artifacts/improvement-O2-n2-200ep-20260228-204004/` |
 
 ### 7.2 Vertex AI Job IDs
 
@@ -619,10 +666,12 @@ The `scripts/test_model_improvements.py` script proved valuable for fast iterati
 | N2 | `868608688384901120` | europe-central2 |
 | M1 | `1742307016094777344` | europe-central2 |
 | M2 | `1106173568728694784` | europe-central2 |
+| O1 | `1809861010505334784` | europe-central2 |
+| O2 | `3048350908032221184` | europe-central2 |
 
 ### 7.3 Script
 
-`scripts/test_model_improvements.py` — downloads QT-172's trainer, applies patches, submits Custom Jobs. Supports `--experiment A/B/.../I3/N1/N2/M1/M2`, `--dry-run`, `--gpu`, `--epochs`, `--lr`, `--batch-size`. Per-experiment overrides for `batch_size` and `learning_rate`.
+`scripts/test_model_improvements.py` — downloads trainer from QT-172 or QT-174, applies patches, submits Custom Jobs. Supports `--experiment A/B/.../O1/O2`, `--dry-run`, `--gpu`, `--epochs`, `--lr`, `--batch-size`. Per-experiment overrides for `batch_size`, `learning_rate`, `epochs`, and `source` (qt-172 or qt-174).
 
 ---
 

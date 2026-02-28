@@ -47,6 +47,10 @@ GPU_STAGING_BUCKET = 'b2b-recs-gpu-staging'
 SOURCE_EXP = 'qt-172-20260227-153721'
 SOURCE_TRAINER = f'gs://{ARTIFACTS_BUCKET}/{SOURCE_EXP}/trainer_module.py'
 
+# QT-174: [64, 32] + Dropout(0.2) + LR=0.002 (validated N2 config)
+SOURCE_EXP_174 = 'qt-174-20260228-173331'
+SOURCE_TRAINER_174 = f'gs://{ARTIFACTS_BUCKET}/{SOURCE_EXP_174}/trainer_module.py'
+
 
 # ─── Patch Functions ────────────────────────────────────────────────────────────
 
@@ -624,6 +628,23 @@ EXPERIMENTS = {
             ('L2 weight 0.05', lambda code: patch_l2_weight(code, weight=0.05)),
         ],
     },
+    # ─── Round 7: more epochs on N2 (QT-174 baseline, no patches) ────────────
+    'O1': {
+        'name': 'n2-150ep',
+        'description': 'N2 config ([64,32]+Dropout(0.2)+LR=0.002) at 150 epochs',
+        'patches': [],
+        'source': 'qt-174',
+        'epochs': 150,
+        'learning_rate': 0.002,
+    },
+    'O2': {
+        'name': 'n2-200ep',
+        'description': 'N2 config ([64,32]+Dropout(0.2)+LR=0.002) at 200 epochs',
+        'patches': [],
+        'source': 'qt-174',
+        'epochs': 200,
+        'learning_rate': 0.002,
+    },
 }
 
 
@@ -988,7 +1009,12 @@ Experiments (round 6 — tuning on I2 [64, 32] + Dropout(0.2) baseline):
   M1  I2 + L2=0.01 on Dense(64)                 (less L2 reg)
   M2  I2 + L2=0.05 on Dense(64)                 (more L2 reg)
 
+Experiments (round 7 — more epochs on N2/QT-174 baseline):
+  O1  N2 at 150 epochs                          (uses QT-174 trainer directly)
+  O2  N2 at 200 epochs                          (uses QT-174 trainer directly)
+
 Examples:
+  %(prog)s --experiment O1,O2
   %(prog)s --experiment I3,N1,N2,M1,M2 --epochs 100
   %(prog)s --experiment I3,N1,N2,M1,M2 --dry-run
         """
@@ -1017,26 +1043,41 @@ Examples:
                 logger.error(f"Unknown experiment: {k}. Valid: {', '.join(EXPERIMENTS.keys())}")
                 sys.exit(1)
 
-    # Download source trainer
-    logger.info(f"Downloading source trainer from {args.source_trainer}...")
+    # Download source trainers
     from google.cloud import storage
     import tempfile
 
-    # Parse GCS path
-    path = args.source_trainer.replace('gs://', '')
-    bucket_name = path.split('/')[0]
-    blob_path = '/'.join(path.split('/')[1:])
-
     client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_path)
-    source_code = blob.download_as_text()
-    logger.info(f"Downloaded source trainer ({len(source_code)} chars)")
+
+    # Determine which source trainers we need
+    sources_needed = set()
+    for key in experiment_keys:
+        exp = EXPERIMENTS[key]
+        sources_needed.add(exp.get('source', 'qt-172'))
+
+    source_codes = {}
+    source_map = {
+        'qt-172': args.source_trainer,
+        'qt-174': SOURCE_TRAINER_174,
+    }
+    for source_key in sources_needed:
+        trainer_path = source_map[source_key]
+        logger.info(f"Downloading source trainer from {trainer_path}...")
+        path = trainer_path.replace('gs://', '')
+        bucket_name = path.split('/')[0]
+        blob_path = '/'.join(path.split('/')[1:])
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        source_codes[source_key] = blob.download_as_text()
+        logger.info(f"Downloaded {source_key} trainer ({len(source_codes[source_key])} chars)")
 
     # Run experiments
     results = []
     for key in experiment_keys:
-        result = run_experiment(key, source_code, args.epochs, args.lr,
+        exp = EXPERIMENTS[key]
+        source_key = exp.get('source', 'qt-172')
+        effective_epochs = exp.get('epochs', args.epochs)
+        result = run_experiment(key, source_codes[source_key], effective_epochs, args.lr,
                                 batch_size=args.batch_size, dry_run=args.dry_run, gpu=args.gpu)
         results.append(result)
 

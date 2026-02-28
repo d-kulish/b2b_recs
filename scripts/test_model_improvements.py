@@ -123,6 +123,105 @@ def patch_hard_negatives(code: str, num: int = 10, temperature: float = None) ->
     return code
 
 
+def patch_minimal_towers(code: str) -> str:
+    """
+    Patch F3: Replace [256, 128, 64, 32] towers with [32].
+
+    Single Dense(32) projection layer per tower.
+    """
+    old_query = (
+        "        query_layers.append(tf.keras.layers.Dense(256, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        query_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        query_layers.append(tf.keras.layers.Dense(64, activation='relu'))\n"
+        "        query_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    new_query = (
+        "        query_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    if old_query not in code:
+        raise ValueError("Could not find query tower Dense(256)+Dense(128)+Dense(64)+Dense(32) pattern")
+    code = code.replace(old_query, new_query)
+
+    old_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(256, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(64, activation='relu'))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    new_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(32, activation='relu'))"
+    )
+    if old_candidate not in code:
+        raise ValueError("Could not find candidate tower Dense(256)+Dense(128)+Dense(64)+Dense(32) pattern")
+    code = code.replace(old_candidate, new_candidate)
+
+    code = code.replace(
+        "# Buyer tower: Dense(256) → Dense(128) → Dense(64) → Dense(32)",
+        "# Buyer tower: Dense(32)"
+    )
+    code = code.replace(
+        "# Product tower: Dense(256) → Dense(128) → Dense(64) → Dense(32)",
+        "# Product tower: Dense(32)"
+    )
+
+    return code
+
+
+def patch_tiny_towers(code: str) -> str:
+    """
+    Patch F2: Replace [256, 128, 64, 32] towers with [64, 32].
+
+    Removes Dense(256) and Dense(128) layers from both towers.
+    """
+    # Replace Dense(256)+Dense(128)+Dense(64) with just Dense(64) in query tower
+    old_query = (
+        "        query_layers.append(tf.keras.layers.Dense(256, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        query_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        query_layers.append(tf.keras.layers.Dense(64, activation='relu'))"
+    )
+    new_query = (
+        "        query_layers.append(tf.keras.layers.Dense(64, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))"
+    )
+    if old_query not in code:
+        raise ValueError("Could not find query tower Dense(256)+Dense(128)+Dense(64) pattern")
+    code = code.replace(old_query, new_query)
+
+    # Same for candidate tower
+    old_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(256, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(128, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))\n"
+        "        candidate_layers.append(tf.keras.layers.Dense(64, activation='relu'))"
+    )
+    new_candidate = (
+        "        candidate_layers.append(tf.keras.layers.Dense(64, activation='relu', "
+        "kernel_regularizer=tf.keras.regularizers.l2(0.02)))"
+    )
+    if old_candidate not in code:
+        raise ValueError("Could not find candidate tower Dense(256)+Dense(128)+Dense(64) pattern")
+    code = code.replace(old_candidate, new_candidate)
+
+    # Update comment headers
+    code = code.replace(
+        "# Buyer tower: Dense(256) → Dense(128) → Dense(64) → Dense(32)",
+        "# Buyer tower: Dense(64) → Dense(32)"
+    )
+    code = code.replace(
+        "# Product tower: Dense(256) → Dense(128) → Dense(64) → Dense(32)",
+        "# Product tower: Dense(64) → Dense(32)"
+    )
+
+    return code
+
+
 def patch_smaller_towers(code: str) -> str:
     """
     Patch F: Replace [256, 128, 64, 32] towers with [128, 64, 32].
@@ -351,6 +450,21 @@ EXPERIMENTS = {
         'patches': [
             ('Smaller towers', lambda code: patch_smaller_towers(code)),
             ('Smaller embeddings', lambda code: patch_smaller_embeddings(code)),
+        ],
+    },
+    # ─── Round 4: tower size sweep ───────────────────────────────────────────
+    'F2': {
+        'name': 'tiny-towers',
+        'description': 'Tower layers [64, 32] — 2 layers only',
+        'patches': [
+            ('Tiny towers', lambda code: patch_tiny_towers(code)),
+        ],
+    },
+    'F3': {
+        'name': 'minimal-towers',
+        'description': 'Tower layers [32] — single projection layer',
+        'patches': [
+            ('Minimal towers', lambda code: patch_minimal_towers(code)),
         ],
     },
 }

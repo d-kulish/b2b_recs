@@ -3,7 +3,7 @@
 **Date**: 2026-02-27 (analysis) · 2026-02-28 (experiments completed)
 **Context**: QT-172 (`feat_retr_v6` + `mod_retr_v6`, `ternopil_train_v4`, `strict_time` split)
 **Related**: `docs/phase_experiments.md` (History Feature Type section — taste vector design, validation, bug fixes)
-**Status**: Smaller tower [128,64,32] achieved R@5=26.0%, R@100=60.6% (+53%/+17% vs baseline). See Section 5 for all results, Section 6 for next steps.
+**Status**: Tower sweep complete. **[64, 32] is optimal** — R@5=35.6%, R@100=66.8% (2.1x / 1.3x vs baseline). See Section 5 for all results, Section 6 for next steps.
 
 ---
 
@@ -333,21 +333,50 @@ Experiments were run using `scripts/test_model_improvements.py`, which downloads
 | Experiment | Change | Epochs | R@5 | R@10 | R@50 | R@100 | Val Loss |
 |---|---|---|---|---|---|---|---|
 | **QT-172** (baseline) | [256,128,64,32], emb 64/32 | 100 | 17.0% | 24.5% | 42.2% | 51.6% | 392,065 |
-| **F**: Smaller towers | **[128,64,32]**, emb 64/32 | 100 | **26.0%** | **35.1%** | **52.2%** | **60.6%** | 2,083,308 |
+| **F**: Smaller towers | [128,64,32], emb 64/32 | 100 | 26.0% | 35.1% | 52.2% | 60.6% | 2,083,308 |
 | **G**: Smaller embeddings | [256,128,64,32], emb 32/16 | 100 | 13.4% | 18.5% | 38.1% | 51.1% | 1,319,959 |
 | **H**: Both combined | [128,64,32], emb 32/16 | 100 | 19.5% | 27.5% | 49.2% | 57.5% | 2,966,725 |
 
-**Exp F is the clear winner** — R@5 +53% relative improvement (17.0% → 26.0%), R@100 +17% (51.6% → 60.6%). Removing the Dense(256) layer reduced model capacity just enough to prevent the worst memorization while keeping the expressive 64D/32D embeddings.
+**Exp F** — R@5 +53% relative improvement (17.0% → 26.0%), R@100 +17% (51.6% → 60.6%). Removing the Dense(256) layer reduced model capacity just enough to prevent the worst memorization while keeping the expressive 64D/32D embeddings.
 
 **Exp G** (smaller embeddings only) hurt recall — the 64D customer and 32D product embeddings carry important signal that shouldn't be compressed.
 
 **Exp H** (combined) improved over baseline but underperformed F — the smaller embeddings partially offset the tower improvement.
 
+#### Round 4: Tower Size Sweep
+
+Exp F's success prompted a full tower depth sweep to find the optimal architecture:
+
+| Experiment | Tower | Layers | R@5 | R@10 | R@50 | R@100 | Val Loss |
+|---|---|---|---|---|---|---|---|
+| **QT-172** (baseline) | [256, 128, 64, 32] | 4 | 17.0% | 24.5% | 42.2% | 51.6% | 392,065 |
+| **F** | [128, 64, 32] | 3 | 26.0% | 35.1% | 52.2% | 60.6% | 2,083,308 |
+| **F2** | **[64, 32]** | **2** | **35.6%** | **44.3%** | **60.8%** | **66.8%** | 2,584,987 |
+| **F3** | [32] | 1 | 35.1% | 42.5% | 59.7% | 65.3% | 1,108,010 |
+
+**Exp F2 [64, 32] is the optimal architecture.** Each layer removed improved recall until the single-layer F3, which was marginally worse. The Dense(64) layer provides essential non-linear mixing of the raw feature embeddings before projecting to 32D — removing it (F3) loses this transformation capacity.
+
+The full tower sweep shows a clear trend — recall improves monotonically as tower depth decreases from 4 → 3 → 2 layers, then plateaus/slightly drops at 1 layer:
+
+```
+R@5 by tower depth:
+  4 layers [256,128,64,32]: 17.0%  ████████▌
+  3 layers [128,64,32]:     26.0%  █████████████
+  2 layers [64,32]:         35.6%  █████████████████▊  ← optimal
+  1 layer  [32]:            35.1%  █████████████████▌
+```
+
 ### 5.3 Key Findings
 
-#### Smaller Tower Is Best Improvement Found (Exp F)
+#### Tower Depth Is the Dominant Factor (Exp F → F2 → F3)
 
-Removing the Dense(256) layer from both towers yielded the largest improvement across all 10 experiments. The [256, 128, 64, 32] architecture was over-parameterized for 976 products — the first Dense(256) layer alone has 256×(input_dim) parameters, providing excess capacity for memorizing individual transactions. The [128, 64, 32] architecture forces the model to learn more generalizable patterns while still having enough capacity for the task.
+The tower size sweep across 12 experiments revealed that **tower depth is the single most impactful parameter** for this model. The original [256, 128, 64, 32] architecture was massively over-parameterized for 976 products. Each Dense layer adds a multiplicative number of parameters that provide excess capacity for memorizing individual transactions rather than learning generalizable patterns.
+
+The optimal architecture is **[64, 32]** — two Dense layers per tower. This provides:
+- Dense(64): Non-linear mixing of raw feature embeddings (essential — removing it in F3 slightly hurt recall)
+- Dense(32): Final projection to the 32D embedding space for dot-product scoring
+
+The improvement from baseline to F2 is dramatic: **R@5 more than doubled** (17.0% → 35.6%), **R@100 up 29%** (51.6% → 66.8%). This was achieved purely by removing layers — no new techniques, no hyperparameter changes, no additional data.
 
 #### L2 Normalization Hurts Recall (Disproven Hypothesis)
 
@@ -374,47 +403,53 @@ A proper early stopping signal would be `val_recall_at_K`, but this requires Fac
 
 #### Val Loss Is Decoupled From Recall
 
-Across all experiments, the models with the **worst** val_loss (F: 2.1M, H: 3.0M) have the **best** recall. The models with the **best** val_loss (A3: 31.5K) have the worst recall. This confirms the TFRS Issue #263 observation: val_loss measures softmax confidence, recall measures ranking order. For retrieval, **ranking order is what matters**.
+Across all 12 experiments, the models with the **worst** val_loss (H: 3.0M, F2: 2.6M) have the **best** recall. The models with the **best** val_loss (A3: 31.5K) have the worst recall. This confirms the TFRS Issue #263 observation: val_loss measures softmax confidence, recall measures ranking order. For retrieval, **ranking order is what matters**. Val loss should not be used to compare models or guide architecture decisions.
 
 ### 5.4 Summary: What Works and What Doesn't
 
-| Change | Effect on Recall | Verdict |
-|---|---|---|
-| **Smaller towers [128,64,32]** | **+53% R@5, +17% R@100** | **Best improvement found** |
-| Smaller towers + smaller embeddings | +15% R@5, +11% R@100 | Good, but smaller embeddings dilute the gain |
-| Smaller embeddings only | -21% R@5, -1% R@100 | Hurts — embeddings carry important signal |
-| L2 normalization (any temperature) | -49% to -81% R@5 | Destroys magnitude-based patterns |
-| EarlyStopping (val_loss) | -97% R@5 | Stops before learning |
-| EarlyStopping (train loss) | -16% R@5 | Never triggers; restore_best_weights hurts |
+| Change | R@5 | vs Baseline | Verdict |
+|---|---|---|---|
+| **Tiny towers [64, 32]** | **35.6%** | **+109%** | **Best — optimal tower depth** |
+| Minimal towers [32] | 35.1% | +106% | Near-optimal, but Dense(64) mixing helps |
+| Smaller towers [128, 64, 32] | 26.0% | +53% | Good, but not deep enough cut |
+| Smaller towers + smaller embeddings | 19.5% | +15% | Smaller embeddings dilute the gain |
+| Baseline [256, 128, 64, 32] | 17.0% | — | Over-parameterized |
+| EarlyStopping (train loss) | 14.2% | -16% | Never triggers; restore_best_weights hurts |
+| Smaller embeddings only | 13.4% | -21% | Hurts — embeddings carry important signal |
+| L2-norm + temp=0.2 | 8.9% | -48% | L2-norm destroys magnitude-based patterns |
+| L2-norm + temp=0.05 | 8.6% | -49% | Same — temperature doesn't help |
+| L2-norm + temp=0.5 | 6.1% | -64% | Worse with warmer temperature |
+| L2-norm + temp=1.0 | 3.3% | -81% | Worst — no sharpening + no magnitudes |
+| EarlyStopping (val_loss) | 0.5% | -97% | Stops at epoch 11 before learning |
 
 ---
 
 ## 6. Next Steps
 
-### 6.1 Adopt Smaller Tower as New Default
+### 6.1 Adopt [64, 32] Tower as New Default
 
-Exp F's [128, 64, 32] tower architecture should become the new baseline. This can be done immediately via ModelConfig UI — create a new `mod_retr_v7` with:
+Exp F2's [64, 32] tower architecture should become the new baseline. Create a new `mod_retr_v7` via ModelConfig UI:
 
 | Parameter | v6 (current) | v7 (proposed) |
 |---|---|---|
-| Tower layers | [256, 128, 64, 32] | **[128, 64, 32]** |
+| Tower layers | [256, 128, 64, 32] | **[64, 32]** |
 | Embedding dims | customer=64, product=32 | customer=64, product=32 (keep) |
-| L2 regularization | 0.02 on first 2 layers | 0.02 on first layer |
+| L2 regularization | 0.02 on first 2 layers | 0.02 on Dense(64) |
 | Everything else | Same | Same |
 
 Run a full Quick Test with `strict_time` split to confirm the improvement holds through the full pipeline (not just patched Custom Jobs).
 
-### 6.2 Further Tuning on Top of Exp F
+### 6.2 Further Tuning on Top of F2
 
-The Exp F result (R@5=26.0%, R@100=60.6%) is a strong new baseline. Next experiments should stack on top of it:
+The F2 result (R@5=35.6%, R@100=66.8%) is the new baseline. Next experiments should tune on top of it:
 
-| Parameter | Current (Exp F) | Experiments to Try |
-|---|---|---|
-| **Dropout** | 0.0 | 0.1, 0.2 between the 3 dense layers |
-| **L2 regularization** | 0.02 on Dense(128) only | 0.01, 0.02 on all layers |
-| **Learning rate** | 0.001 | 0.0005, 0.002 |
-| **Batch size** | 4096 | 2048 (more epochs per data pass, different in-batch negatives) |
-| **Epochs** | 100 | 150, 200 (the smaller model may benefit from longer training) |
+| Parameter | Current (F2) | Experiments to Try | Rationale |
+|---|---|---|---|
+| **Dropout** | 0.0 | 0.1, 0.2 between Dense(64) and Dense(32) | Additional regularization on the 2-layer tower |
+| **L2 regularization** | 0.02 on Dense(64) | 0.01, 0.05; also try on Dense(32) | May need less/more reg with fewer layers |
+| **Learning rate** | 0.001 | 0.0005, 0.002 | Smaller model may tolerate different LR |
+| **Batch size** | 4096 | 2048 | Different in-batch negative distribution |
+| **Epochs** | 100 | 150, 200 | Smaller model may need longer to converge |
 
 These are all configurable via ModelConfig UI or via the experiment script.
 
@@ -426,8 +461,8 @@ These are all configurable via ModelConfig UI or via the experiment script.
 | Temperature scaling | **Tested, hurts recall** | Only meaningful with L2-norm |
 | Smaller embeddings | **Tested, hurts recall** | Embeddings carry important signal at 64/32D |
 | EarlyStopping | **Tested, no valid signal** | val_loss and loss both fail as monitors |
-| Label smoothing | Not tested standalone | Lower priority after Exp F success |
-| Hard negatives | Not tested standalone | Lower priority after Exp F success |
+| Label smoothing | Not tested standalone | Lower priority given F2 success |
+| Hard negatives | Not tested standalone | Lower priority given F2 success |
 | FactorizedTopK metrics | Not implemented | Would enable val_recall early stopping |
 
 ### 6.4 Experiment Tooling
@@ -452,9 +487,11 @@ The `scripts/test_model_improvements.py` script proved valuable for fast iterati
 | A3: L2+temp=0.5 | R@5=6.1% | `gs://b2b-recs-quicktest-artifacts/improvement-A3-l2-norm-temp05-20260228-132157/` |
 | A4: L2+temp=1.0 | R@5=3.3% | `gs://b2b-recs-quicktest-artifacts/improvement-A4-l2-norm-temp10-20260228-132159/` |
 | B2: EarlyStopping train loss | R@5=14.2% | `gs://b2b-recs-quicktest-artifacts/improvement-B2-earlystop-trainloss-20260228-132232/` |
-| **F: Smaller towers** | **R@5=26.0%** | `gs://b2b-recs-quicktest-artifacts/improvement-F-smaller-towers-20260228-141314/` |
+| F: 3-layer towers | R@5=26.0% | `gs://b2b-recs-quicktest-artifacts/improvement-F-smaller-towers-20260228-141314/` |
 | G: Smaller embeddings | R@5=13.4% | `gs://b2b-recs-quicktest-artifacts/improvement-G-smaller-embeddings-20260228-141318/` |
 | H: Both combined | R@5=19.5% | `gs://b2b-recs-quicktest-artifacts/improvement-H-smaller-all-20260228-141319/` |
+| **F2: 2-layer towers** | **R@5=35.6%** | `gs://b2b-recs-quicktest-artifacts/improvement-F2-tiny-towers-20260228-151314/` |
+| F3: 1-layer tower | R@5=35.1% | `gs://b2b-recs-quicktest-artifacts/improvement-F3-minimal-towers-20260228-154405/` |
 
 ### 7.2 Vertex AI Job IDs
 
@@ -467,10 +504,12 @@ The `scripts/test_model_improvements.py` script proved valuable for fast iterati
 | F | `778818170814201856` | europe-central2 |
 | G | `7727872395846877184` | europe-central2 |
 | H | `5944446943408160768` | europe-central2 |
+| F2 | `2391951262342971392` | europe-central2 |
+| F3 | `4963506649571524608` | europe-central2 |
 
 ### 7.3 Script
 
-`scripts/test_model_improvements.py` — downloads QT-172's trainer, applies patches, submits Custom Jobs. Supports `--experiment A/B/.../F/G/H`, `--dry-run`, `--gpu`, `--epochs`, `--lr`.
+`scripts/test_model_improvements.py` — downloads QT-172's trainer, applies patches, submits Custom Jobs. Supports `--experiment A/B/.../F/F2/F3/G/H`, `--dry-run`, `--gpu`, `--epochs`, `--lr`.
 
 ---
 

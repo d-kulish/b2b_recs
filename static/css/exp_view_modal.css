@@ -1701,35 +1701,6 @@
 /* ==========================================================================
    Pipeline Tab Styles
    ========================================================================== */
-.exp-view-progress-section {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-}
-
-.exp-view-progress-bar-container {
-    flex: 1;
-    height: 8px;
-    background: #e5e7eb;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.exp-view-progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-    border-radius: 4px;
-    transition: width 0.3s ease;
-}
-
-.exp-view-progress-text {
-    font-size: 13px;
-    font-weight: 600;
-    color: #374151;
-    min-width: 40px;
-}
-
 /* ==========================================================================
    Error Section
    ========================================================================== */

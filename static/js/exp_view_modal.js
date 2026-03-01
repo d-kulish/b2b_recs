@@ -1032,18 +1032,6 @@ const ExpViewModal = (function() {
             stageStatusMap[stage.name?.toLowerCase()] = stage.status;
         });
 
-        // Progress section for running runs
-        const isRunning = run.status === 'running' || run.status === 'submitting';
-        const progressSection = document.getElementById('expViewProgressSection');
-        if (progressSection) {
-            progressSection.style.display = isRunning ? 'flex' : 'none';
-            if (isRunning) {
-                const percent = run.progress_percent || 0;
-                document.getElementById('expViewProgressBar').style.width = `${percent}%`;
-                document.getElementById('expViewProgressText').textContent = `${percent}%`;
-            }
-        }
-
         // Render 8-stage DAG using pipeline_dag.js if available
         if (typeof renderPipelineStages === 'function') {
             const stages = TRAINING_PIPELINE_STAGES.map(stage => {
@@ -3105,18 +3093,6 @@ const ExpViewModal = (function() {
             trainingSetupContainer.innerHTML = renderSamplingCard(exp) + renderTrainingParamsCard(exp);
         }
 
-        // Pipeline Tab
-        const isRunning = exp.status === 'running' || exp.status === 'submitting';
-        const progressSection = document.getElementById('expViewProgressSection');
-        if (progressSection) {
-            progressSection.style.display = isRunning ? 'flex' : 'none';
-            if (isRunning) {
-                const percent = exp.progress_percent || 0;
-                document.getElementById('expViewProgressBar').style.width = `${percent}%`;
-                document.getElementById('expViewProgressText').textContent = `${percent}%`;
-            }
-        }
-
         // Render pipeline stages if pipeline_dag.js is loaded
         if (typeof renderPipelineStages === 'function') {
             renderPipelineStages(exp.stage_details || getDefaultStages());
@@ -3707,6 +3683,8 @@ const ExpViewModal = (function() {
                 if (c.daily) totalDim += 2;
             }
             if (transforms.bucketize?.enabled) totalDim += (transforms.bucketize.embedding_dim || 32);
+        } else if (dataType === 'history') {
+            if (transforms.history?.enabled) totalDim += (transforms.history.embedding_dim || 32);
         }
 
         return totalDim;
@@ -3714,7 +3692,9 @@ const ExpViewModal = (function() {
 
     function getDataTypeFromBqType(bqType) {
         const type = (bqType || 'STRING').toUpperCase();
-        if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
+        if (type.startsWith('ARRAY')) {
+            return 'history';
+        } else if (['INTEGER', 'INT64', 'FLOAT', 'FLOAT64', 'NUMERIC', 'BIGNUMERIC'].includes(type)) {
             return 'numeric';
         } else if (['TIMESTAMP', 'DATETIME', 'DATE', 'TIME'].includes(type)) {
             return 'temporal';

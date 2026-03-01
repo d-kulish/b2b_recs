@@ -720,8 +720,8 @@
 /* Wizard-specific container - fixed height for consistency */
 .modal-container-wizard {
     max-width: 634px;
-    height: 580px;
-    max-height: 80vh;
+    height: 667px;
+    max-height: 92vh;
 }
 
 /* Connection wizard - wider, fixed height to prevent jumping between steps */
@@ -751,8 +751,8 @@
 /* Dataset wizard - larger size for schema builder */
 .modal-container-wizard.modal-dataset-wizard {
     max-width: 1000px;
-    height: 700px;
-    max-height: 85vh;
+    height: 805px;
+    max-height: 92vh;
 }
 
 /* Wizard Header - includes step counter and progress bar */

@@ -33,16 +33,17 @@ const DAG_LAYOUT = {
 // TFX Pipeline Structure with 2D Positions
 const TFX_PIPELINE = {
     // Components with absolute positions (x is left edge of node)
+    // Centered for ~800px available width (880px modal - 48px tab padding - 32px DAG padding)
     components: [
-        { id: 'Compile', name: 'Pipeline Compile', icon: 'fa-cogs', x: 150, y: 15 },
-        { id: 'Examples', name: 'Examples Gen', icon: 'fa-database', x: 150, y: 189 },
-        { id: 'Stats', name: 'Stats Gen', icon: 'fa-chart-bar', x: 20, y: 363 },
-        { id: 'Schema', name: 'Schema Gen', icon: 'fa-sitemap', x: 20, y: 537 },
-        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 335, y: 711 },
-        { id: 'Train', name: 'Trainer', icon: 'fa-microchip', x: 20, y: 885 },
-        { id: 'Evaluator', name: 'Evaluator', icon: 'fa-check-double', x: 290, y: 1059 },
-        { id: 'Register', name: 'Register', icon: 'fa-box-archive', x: 150, y: 1233 },
-        { id: 'Deploy', name: 'Deploy', icon: 'fa-rocket', x: 150, y: 1407 }
+        { id: 'Compile', name: 'Pipeline Compile', icon: 'fa-cogs', x: 218, y: 15 },
+        { id: 'Examples', name: 'Examples Gen', icon: 'fa-database', x: 218, y: 189 },
+        { id: 'Stats', name: 'Stats Gen', icon: 'fa-chart-bar', x: 88, y: 363 },
+        { id: 'Schema', name: 'Schema Gen', icon: 'fa-sitemap', x: 88, y: 537 },
+        { id: 'Transform', name: 'Transform', icon: 'fa-exchange-alt', x: 403, y: 711 },
+        { id: 'Train', name: 'Trainer', icon: 'fa-microchip', x: 88, y: 885 },
+        { id: 'Evaluator', name: 'Evaluator', icon: 'fa-check-double', x: 358, y: 1059 },
+        { id: 'Register', name: 'Register', icon: 'fa-box-archive', x: 218, y: 1233 },
+        { id: 'Deploy', name: 'Deploy', icon: 'fa-rocket', x: 218, y: 1407 }
     ],
 
     // Artifacts with absolute positions (centered between source component and next component)
@@ -50,24 +51,24 @@ const TFX_PIPELINE = {
     //                y = component_bottom + (gap - artifactSize) / 2 = component_bottom + 36
     // Types: examples (purple grid), statistics (teal bars), schema (amber shapes), document (purple doc)
     artifacts: [
-        { id: 'config', name: 'Config', icon: 'fa-file-alt', type: 'document', componentId: 'Compile', x: 262, y: 113 },
-        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'examples', componentId: 'Examples', x: 262, y: 287 },
-        { id: 'statistics', name: 'Statistics', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Stats', x: 132, y: 461 },
-        { id: 'schema', name: 'Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Schema', x: 132, y: 635 },
-        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-file-alt', type: 'document', componentId: 'Transform', x: 290, y: 809 },
-        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-th', type: 'examples', componentId: 'Transform', x: 335, y: 809 },
-        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Transform', x: 380, y: 809 },
-        { id: 'pre_transform_stats', name: 'Pre-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 425, y: 809 },
-        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Transform', x: 470, y: 809 },
-        { id: 'post_transform_stats', name: 'Post-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 515, y: 809 },
-        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-file-alt', type: 'document', componentId: 'Transform', x: 560, y: 809 },
-        { id: 'updated_analyzer_cache', name: 'Analyzer Cache', icon: 'fa-database', type: 'statistics', componentId: 'Transform', x: 605, y: 809 },
-        { id: 'model', name: 'Model', icon: 'fa-lightbulb', type: 'model', componentId: 'Train', x: 110, y: 983 },
-        { id: 'model_run', name: 'Model Run', icon: 'fa-file-alt', type: 'document', componentId: 'Train', x: 155, y: 983 },
-        { id: 'model_blessing', name: 'Model Blessing', icon: 'fa-certificate', type: 'blessing', componentId: 'Evaluator', x: 380, y: 1157 },
-        { id: 'evaluation', name: 'Evaluation', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Evaluator', x: 425, y: 1157 },
-        { id: 'registered_model', name: 'Registered Model', icon: 'fa-box-archive', type: 'model', componentId: 'Register', x: 262, y: 1331 },
-        { id: 'deployed_endpoint', name: 'Cloud Run Endpoint', icon: 'fa-rocket', type: 'endpoint', componentId: 'Deploy', x: 262, y: 1505 }
+        { id: 'config', name: 'Config', icon: 'fa-file-alt', type: 'document', componentId: 'Compile', x: 330, y: 113 },
+        { id: 'examples', name: 'Examples', icon: 'fa-th', type: 'examples', componentId: 'Examples', x: 330, y: 287 },
+        { id: 'statistics', name: 'Statistics', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Stats', x: 200, y: 461 },
+        { id: 'schema', name: 'Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Schema', x: 200, y: 635 },
+        { id: 'transform_graph', name: 'Transform Graph', icon: 'fa-file-alt', type: 'document', componentId: 'Transform', x: 358, y: 809 },
+        { id: 'transformed_examples', name: 'Transformed Examples', icon: 'fa-th', type: 'examples', componentId: 'Transform', x: 403, y: 809 },
+        { id: 'pre_transform_schema', name: 'Pre-Transform Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Transform', x: 448, y: 809 },
+        { id: 'pre_transform_stats', name: 'Pre-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 493, y: 809 },
+        { id: 'post_transform_schema', name: 'Post-Transform Schema', icon: 'fa-shapes', type: 'schema', componentId: 'Transform', x: 538, y: 809 },
+        { id: 'post_transform_stats', name: 'Post-Transform Stats', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Transform', x: 583, y: 809 },
+        { id: 'post_transform_anomalies', name: 'Anomalies', icon: 'fa-file-alt', type: 'document', componentId: 'Transform', x: 628, y: 809 },
+        { id: 'updated_analyzer_cache', name: 'Analyzer Cache', icon: 'fa-database', type: 'statistics', componentId: 'Transform', x: 673, y: 809 },
+        { id: 'model', name: 'Model', icon: 'fa-lightbulb', type: 'model', componentId: 'Train', x: 178, y: 983 },
+        { id: 'model_run', name: 'Model Run', icon: 'fa-file-alt', type: 'document', componentId: 'Train', x: 223, y: 983 },
+        { id: 'model_blessing', name: 'Model Blessing', icon: 'fa-certificate', type: 'blessing', componentId: 'Evaluator', x: 448, y: 1157 },
+        { id: 'evaluation', name: 'Evaluation', icon: 'fa-chart-bar', type: 'statistics', componentId: 'Evaluator', x: 493, y: 1157 },
+        { id: 'registered_model', name: 'Registered Model', icon: 'fa-box-archive', type: 'model', componentId: 'Register', x: 330, y: 1331 },
+        { id: 'deployed_endpoint', name: 'Cloud Run Endpoint', icon: 'fa-rocket', type: 'endpoint', componentId: 'Deploy', x: 330, y: 1505 }
     ],
 
     // Edges: connections between nodes (components and artifacts)

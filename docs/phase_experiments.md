@@ -386,11 +386,11 @@ class QuickTest(models.Model):
 |----------|--------|-----------|
 | Pipeline Framework | Native TFX SDK | Full TFX component support |
 | Data Flow | BigQuery → TFRecords → TFX | Standard TFX pattern |
-| Dataflow Region | `europe-west1` (Belgium) | Hardcoded. Largest EU region with best worker capacity. `europe-central2` (Warsaw) is prone to `ZONE_RESOURCE_POOL_EXHAUSTED` |
+| Dataflow Region | `europe-west4` (Netherlands) | Co-located with pipeline orchestration. Cross-region reads from `europe-central2` BigQuery/GCS proven working |
 | Dataflow Machine Type | User-selected via wizard | Flows from wizard → DB → Cloud Build CLI arg → compile script → `beam_pipeline_args`. Defaults to `e2-standard-4` |
-| Pipeline Orchestration Region | `europe-central2` (Warsaw) | Co-located with BigQuery data and GCS buckets |
+| Pipeline Orchestration Region | `europe-west4` (Netherlands) | Moved from `europe-central2` (2026-03-02) due to recurring `ZONE_RESOURCE_POOL_EXHAUSTED` in Warsaw |
 | Hardware Tiers (Wizard) | `e2-standard-4/8/16` (CPU) + `n1-standard-4 + T4` (GPU) | e2-series for CPU (better availability); n1 required for GPU (GCP constraint — GPUs cannot attach to e2 VMs) |
-| GPU Training Region | `europe-west4` (Netherlands) | GPU capacity; `europe-central2` doesn't support GPU training. Pipeline orchestrates from `europe-central2`, Trainer Custom Job runs in `europe-west4` |
+| GPU Training Region | `europe-west4` (Netherlands) | GPU capacity; `europe-central2` doesn't support GPU training. All pipeline components now run in `europe-west4` |
 | Metrics Storage | GCS JSON files | Simple, no extra infrastructure |
 | Training Cache | Django JSONField | Instant UI loading (<1s) |
 | Histogram Data | On-demand fetch | Large data, rarely needed |
@@ -545,7 +545,7 @@ After the fix, the wizard selection controls Dataflow workers end-to-end:
 | Medium | `e2-standard-8` | `--machine-type=e2-standard-8` | 8 vCPU, 32 GB |
 | Large | `e2-standard-16` | `--machine-type=e2-standard-16` | 16 vCPU, 64 GB |
 
-The Dataflow **region** stays hardcoded to `europe-west1` (Belgium) — this is intentional to avoid `ZONE_RESOURCE_POOL_EXHAUSTED` errors in `europe-central2` (Warsaw).
+The Dataflow **region** is `europe-west4` (Netherlands) — co-located with pipeline orchestration. Previously `europe-west1` (Belgium), consolidated to `europe-west4` with all Vertex AI workloads (2026-03-02).
 
 ### Out of Scope
 
@@ -622,23 +622,23 @@ The experiment wizard now supports GPU-accelerated training with a single NVIDIA
 
 | Wizard Card | Dataflow Workers | Trainer Execution | Region |
 |-------------|-----------------|-------------------|--------|
-| Small | `e2-standard-4` (4 vCPU, 16 GB) | Standard Trainer (CPU) | `europe-central2` |
-| Medium | `e2-standard-8` (8 vCPU, 32 GB) | Standard Trainer (CPU) | `europe-central2` |
-| Large | `e2-standard-16` (16 vCPU, 64 GB) | Standard Trainer (CPU) | `europe-central2` |
+| Small | `e2-standard-4` (4 vCPU, 16 GB) | Standard Trainer (CPU) | `europe-west4` |
+| Medium | `e2-standard-8` (8 vCPU, 32 GB) | Standard Trainer (CPU) | `europe-west4` |
+| Large | `e2-standard-16` (16 vCPU, 64 GB) | Standard Trainer (CPU) | `europe-west4` |
 | **GPU T4** | `e2-standard-4` (4 vCPU, 16 GB) | **GenericExecutor Custom Job** (1x T4) | **`europe-west4`** |
 
 ### Architecture
 
 When GPU T4 is selected, the pipeline uses two separate compute configurations:
 
-1. **Dataflow workers** (BigQueryExampleGen, StatisticsGen, Transform) — `e2-standard-4` in `europe-west1`, same as CPU path
+1. **Dataflow workers** (BigQueryExampleGen, StatisticsGen, Transform) — `e2-standard-4` in `europe-west4`
 2. **Trainer** — Vertex AI Custom Job via `GenericExecutor` with `n1-standard-4` + 1x T4 GPU in `europe-west4`
 
 This mirrors the Training pipeline's GPU pattern (`ml_platform/training/services.py` lines 2966-3091).
 
 **Why n1-standard-4 for GPU?** GCP requires N1 (or N2D) VMs for GPU attachment — e2-series VMs do not support accelerators. The `n1-standard-4` (4 vCPU, 15 GB RAM) is the smallest N1 VM, sufficient for a single T4.
 
-**Why europe-west4?** `europe-central2` (Warsaw) does not support GPU training. `europe-west4` (Netherlands) has good GPU capacity. The pipeline still orchestrates from `europe-central2` — only the Trainer's Custom Job runs in `europe-west4`.
+**Why europe-west4?** `europe-central2` (Warsaw) does not support GPU training and suffers from recurring `ZONE_RESOURCE_POOL_EXHAUSTED`. All pipeline components (orchestration, Dataflow, Trainer) now run in `europe-west4` (Netherlands). Data is read cross-region from `europe-central2` BigQuery/GCS.
 
 ### Data Model
 

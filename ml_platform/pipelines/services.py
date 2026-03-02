@@ -36,7 +36,7 @@ class PipelineService:
 
     def __init__(self):
         self.project = getattr(settings, 'VERTEX_AI_PROJECT', 'b2b-recs')
-        self.location = getattr(settings, 'VERTEX_AI_LOCATION', 'europe-central2')
+        self.location = getattr(settings, 'VERTEX_AI_LOCATION', 'europe-west4')
         self.quicktest_bucket = getattr(settings, 'GCS_QUICKTEST_BUCKET', 'b2b-recs-quicktest-artifacts')
         self.staging_bucket = getattr(settings, 'GCS_PIPELINE_STAGING_BUCKET', 'b2b-recs-pipeline-staging')
 

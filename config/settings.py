@@ -181,7 +181,7 @@ SKIP_CLOUD_SCHEDULER = os.environ.get('SKIP_CLOUD_SCHEDULER', str(DEBUG)).lower(
 # =============================================================================
 
 VERTEX_AI_PROJECT = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')
-VERTEX_AI_LOCATION = os.environ.get('VERTEX_AI_LOCATION', 'europe-central2')
+VERTEX_AI_LOCATION = os.environ.get('VERTEX_AI_LOCATION', 'europe-west4')
 
 # GCS Buckets for ML Pipelines
 GCS_QUICKTEST_BUCKET = os.environ.get('GCS_QUICKTEST_BUCKET', 'b2b-recs-quicktest-artifacts')

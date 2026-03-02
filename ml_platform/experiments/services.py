@@ -116,7 +116,7 @@ class ExperimentService:
     STAGING_BUCKET = 'b2b-recs-pipeline-staging'
 
     # Vertex AI configuration
-    REGION = 'europe-central2'
+    REGION = 'europe-west4'
     GPU_TRAINING_REGION = 'europe-west4'
     PIPELINE_DISPLAY_NAME_PREFIX = 'quicktest'
 
@@ -1101,7 +1101,7 @@ def create_tfx_pipeline(
     trainer_module_path: str,
     output_path: str,
     project_id: str,
-    region: str = 'europe-central2',
+    region: str = 'europe-west4',
     epochs: int = 10,
     batch_size: int = 4096,
     learning_rate: float = 0.001,
@@ -1251,10 +1251,10 @@ def create_tfx_pipeline(
 
     # Configure Dataflow for StatisticsGen and Transform components
     # This ensures scalable processing for large datasets
-    # Dataflow runs in europe-west1 (Belgium) - largest EU region with best capacity.
-    # europe-central2 (Warsaw) is a small region prone to ZONE_RESOURCE_POOL_EXHAUSTED.
+    # Dataflow runs in europe-west4 (Netherlands) alongside pipeline orchestration.
+    # Previously europe-west1, consolidated to europe-west4 with all Vertex AI workloads.
     # e2-standard-4 uses dynamic resource pool with better availability than n1.
-    dataflow_region = 'europe-west1'
+    dataflow_region = 'europe-west4'
     dataflow_machine_type = machine_type
     staging_bucket = f'{project_id}-pipeline-staging'
     beam_pipeline_args = [
@@ -1349,7 +1349,7 @@ def main():
     parser.add_argument("--gpu-machine-type", default="", help="Machine type for GPU Trainer")
     parser.add_argument("--gpu-training-region", default="europe-west4", help="Region for GPU training")
     parser.add_argument("--project-id", required=True)
-    parser.add_argument("--region", default="europe-central2")
+    parser.add_argument("--region", default="europe-west4")
     args = parser.parse_args()
 
     # Decode the base64 query

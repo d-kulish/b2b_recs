@@ -3224,20 +3224,20 @@ This is an undocumented limitation. Always verify GPU availability before reques
 
 Request via GCP Console: Quotas → `Vertex AI API` → `custom_model_training_nvidia_t4` in `europe-west4`.
 
-### Split-Region Pipeline Architecture (2026-01-24)
+### Pipeline Region Architecture
+
+**Updated 2026-03-02:** All pipeline components moved to `europe-west4` due to recurring `ZONE_RESOURCE_POOL_EXHAUSTED` in `europe-central2` (Warsaw). Data infrastructure (BigQuery, GCS, Cloud SQL) stays in `europe-central2` — cross-region reads are proven working.
 
 | Region | Components |
 |--------|------------|
-| `europe-central2` | Pipeline orchestration, ExampleGen, StatisticsGen, Transform, Evaluator, Pusher |
-| `europe-west4` | Trainer (GPU Custom Job) |
-
-This prevents Dataflow from competing with GPU workloads.
+| `europe-west4` | Pipeline orchestration, Dataflow (ExampleGen, StatisticsGen, Transform), Trainer (GPU), Evaluator, Pusher |
+| `europe-central2` | Data infrastructure (BigQuery, GCS, Cloud SQL, Artifact Registry) |
 
 ### TrainingService Configuration
 
 **File:** `ml_platform/training/services.py`
 
-Region constants: `REGION = 'europe-central2'`, `GPU_TRAINING_REGION = 'europe-west4'`
+Region constants: `REGION = 'europe-west4'`, `GPU_TRAINING_REGION = 'europe-west4'`, `DATAFLOW_REGION = 'europe-west4'`
 
 ---
 

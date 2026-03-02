@@ -1423,6 +1423,10 @@
         border-left: 2px solid #ef4444;
         background: #fef2f2;
     }
+    .column-card.assigned-target {
+        border-left: 2px solid #f59e0b;
+        background: #fef3c7;
+    }
 
     /* Primary ID Drop Zone Styles */
     .primary-id-zone {
@@ -16674,17 +16678,27 @@ function renderAvailableColumns() {
         // Check both name and display_name to handle renamed columns
         const inBuyer = buyerCols.has(col.name) || buyerCols.has(col.display_name);
         const inProduct = productCols.has(col.name) || productCols.has(col.display_name);
+        const inTarget = configState.targetColumn && (
+            configState.targetColumn.column === col.name ||
+            configState.targetColumn.column === col.display_name ||
+            configState.targetColumn.display_name === col.name ||
+            configState.targetColumn.display_name === col.display_name
+        );
 
         const card = document.createElement('div');
         card.className = 'column-card';
 
         // Add assignment state classes
-        if (inBuyer && inProduct) {
+        // Count how many zones this column appears in
+        const assignmentCount = (inBuyer ? 1 : 0) + (inProduct ? 1 : 0) + (inTarget ? 1 : 0);
+        if (assignmentCount > 1) {
             card.classList.add('assigned-both');
         } else if (inBuyer) {
             card.classList.add('assigned-buyer');
         } else if (inProduct) {
             card.classList.add('assigned-product');
+        } else if (inTarget) {
+            card.classList.add('assigned-target');
         }
 
         // Only allow dragging if not assigned to both models

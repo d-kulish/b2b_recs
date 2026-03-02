@@ -94,7 +94,5 @@ media/
 __pycache__/
 *.pyc
 
-backups/
-
 # Saved ML models (too large for git — download from GCS)
-models/
+dev/models/

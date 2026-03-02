@@ -204,6 +204,22 @@ class IntegrationService:
                         f"Ranking/multitask model {self.model_type} has no product features configured"
                     )
 
+            # Build map of history columns → max_length for padding
+            # TF Serving requires all instances in a batch to have identical tensor shapes,
+            # so variable-length history arrays must be padded to a fixed length.
+            history_max_lengths = {}
+            all_feature_lists = [buyer_features]
+            if self._requires_product_features():
+                all_feature_lists.append(self.feature_config.product_model_features or [])
+            for feature_list in all_feature_lists:
+                for f in feature_list:
+                    if f.get('data_type') != 'history':
+                        continue
+                    col = f.get('display_name') or f.get('column')
+                    if col:
+                        max_len = f.get('transforms', {}).get('history', {}).get('max_length', 50)
+                        history_max_lengths[col] = max_len
+
             # Get the model endpoint from the registered model
             model_endpoint = self.endpoint.registered_model.ml_model
 
@@ -239,6 +255,22 @@ class IntegrationService:
                         continue
 
                     value = getattr(row, field.name, None)
+
+                    # Pad/truncate history arrays to fixed max_length so all
+                    # instances in a batch have identical tensor shapes.
+                    if field.name in history_max_lengths:
+                        max_len = history_max_lengths[field.name]
+                        if value is None:
+                            value = [0] * max_len
+                        else:
+                            value = list(value)
+                            if len(value) < max_len:
+                                value = value + [0] * (max_len - len(value))
+                            elif len(value) > max_len:
+                                value = value[:max_len]
+                        instance[field.name] = value
+                        continue
+
                     # Convert to JSON-serializable format
                     if value is not None:
                         if hasattr(value, 'isoformat'):

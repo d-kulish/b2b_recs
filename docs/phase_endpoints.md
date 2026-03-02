@@ -2690,3 +2690,39 @@ For multitask models, the toggle is hidden (`display: none`) and only single mod
 4. **Code Examples**: Automatically update to show batch payload when in batch mode
 5. **Switch back to Single**: Reverts to single instance behavior
 6. **Modal re-open**: Always resets to single mode
+
+## Bug Fix: Batch Prediction Fails for History Features (2026-03-02)
+
+### Problem
+
+Batch prediction on deployed endpoints returned `Status 400` from TF Serving:
+```
+"Failed to process element: 1 key: history of 'instances' list.
+ Error: INVALID_ARGUMENT: Expecting tensor size: 5 but got: 3"
+```
+
+Single prediction worked fine, but batch requests with 2+ instances failed.
+
+### Root Cause
+
+TF Serving's `instances` JSON format requires all instances in a batch to have **identical tensor shapes** for each input key. The `history` input is a variable-length `ARRAY` from BigQuery (1–50 items per customer), so different instances have different lengths, causing TF Serving to reject the batch.
+
+Single prediction works because TF Serving infers shape from the one instance and the model's `serve()` function internally pads via `tf.sparse.from_dense()`.
+
+### Fix
+
+**File**: `ml_platform/training/integration_service.py` — `get_sample_data()`
+
+1. **Build history column map** (before the BigQuery query): Scan `buyer_model_features` (and `product_model_features` for ranking/multitask) for features with `data_type == 'history'`, extract `transforms.history.max_length` (default 50) into a lookup dict.
+
+2. **Pad/truncate in row loop** (after getting each BigQuery value): If the field is a history column:
+   - `None` (NULL array) → `[0] * max_length`
+   - Shorter than `max_length` → right-pad with `0`
+   - Longer than `max_length` → truncate to `max_length`
+
+Padding with `0` is correct because the model's `serve()` function calls `tf.sparse.from_dense(history)` which treats `0` as the empty/sentinel value for integer tensors, matching the training pipeline.
+
+### Result
+
+- Batch prediction with history features returns `200` (all arrays padded to same length)
+- Single prediction unaffected (padding is applied uniformly)

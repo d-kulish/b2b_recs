@@ -4483,7 +4483,7 @@ def run_fn(fn_args: tfx.components.FnArgs):
         # Pre-compute candidate embeddings (needed for both test eval and serving)
         logging.info("Pre-computing candidate embeddings...")
         candidates_for_serving = _input_fn(
-            fn_args.eval_files,
+            fn_args.train_files + fn_args.eval_files,
             fn_args.data_accessor,
             tf_transform_output,
             batch_size
@@ -7186,8 +7186,8 @@ def run_fn(fn_args: tfx.components.FnArgs):
         logging.info("PRE-COMPUTING CANDIDATE EMBEDDINGS")
         logging.info("=" * 60)
 
-        # Reload eval dataset for candidate embedding computation
-        candidates_dataset = _input_fn(eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
+        # Reload train + eval dataset for candidate embedding computation (full product coverage)
+        candidates_dataset = _input_fn(train_files + eval_files, fn_args.data_accessor, tf_transform_output, batch_size)
         product_ids, product_embeddings = _precompute_candidate_embeddings(model, candidates_dataset)
         logging.info(f"Pre-computed embeddings for {{len(product_ids)}} unique products")
 

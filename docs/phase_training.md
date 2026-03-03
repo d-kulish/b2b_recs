@@ -4240,6 +4240,62 @@ See [docs/rank_gpu_bug.md](rank_gpu_bug.md) for full root cause analysis, code c
 
 ---
 
+## Bug Fix: Training Data Leakage and Pipeline Accuracy (2026-03-03)
+
+### Context
+
+Training run 66 (retrieval model `tern_retr_v1`) reported R@5=59.6% during pipeline evaluation but dropped to R@5=39.6% at inference on the test view. Root cause analysis identified three concrete issues causing inflated training metrics and degraded serving accuracy.
+
+### Bug 1: Purchase History Data Leakage in Training View
+
+**Problem:** In `ternopil_train_v4`, the `customer_products` CTE computed purchase history from ALL training data regardless of date. A row from day 10 would get history that includes purchases from day 50+, leaking future information into features. The test view (`ternopil_test_v4`) was already correct — it uses `historical_data`.
+
+**Fix:** Replaced `customer_products` → `customer_purchase_history` CTEs with a point-in-time correct version using three new CTEs:
+- `all_customer_purchases` — deduplicated (customer, product, date) purchase events
+- `row_keys` — unique (customer, target_product, date) triples
+- `customer_purchase_history` — only includes purchases **before** each row's date (`acp.purchase_date < rk.row_date`)
+
+Added `DATE(t.date) = ch.row_date` to the final JOIN to match on the date dimension.
+
+Same fix applied to `ternopil_prob_train_v4` (per-customer history variant).
+
+**Files:** `dev/sql/create_ternopil_train_v4_view.sql`, `dev/sql/create_ternopil_prob_train_v4_view.sql`
+
+### Bug 2: Candidate Pool Built from Eval Split Only
+
+**Problem:** `candidates_for_serving = _input_fn(fn_args.eval_files, ...)` only used the eval split (20% of data) to build the candidate index. Products appearing only in the train split were excluded and could never be recommended.
+
+**Fix:** Changed to `fn_args.train_files + fn_args.eval_files` so the candidate index covers the full product vocabulary. The `_precompute_candidate_embeddings()` function already deduplicates by product_id.
+
+**Files:** `ml_platform/configs/services.py` (retrieval template line ~4486, hybrid template line ~7190)
+
+### Bug 3: time_holdout Boundary Off-by-One
+
+**Problem:** `DATE_SUB(ref_date, INTERVAL {holdout_days} DAY)` with `>=` captured holdout_days + 1 calendar days. Example with holdout_days=1, ref_date=March 15: `DATE_SUB(March 15, 1 DAY)` = March 14, so test includes both March 14 AND March 15 (2 days instead of 1).
+
+**Fix:** Changed to `INTERVAL {holdout_days - 1} DAY` in all 5 locations within `_generate_holdout_ctes` (time_holdout and strict_time strategies).
+
+**Files:** `ml_platform/datasets/services.py`
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `dev/sql/create_ternopil_train_v4_view.sql` | Point-in-time purchase_history (3 new CTEs + date JOIN) |
+| `dev/sql/create_ternopil_prob_train_v4_view.sql` | Point-in-time purchase_history (per-customer variant) |
+| `ml_platform/configs/services.py` | Candidate pool uses train + eval files (2 locations) |
+| `ml_platform/datasets/services.py` | Off-by-one fix in `_generate_holdout_ctes` (5 locations) |
+| `dev/tests/test_proposed_split_fix.py` | Updated expected intervals for off-by-one fix |
+
+### Expected Impact After Retraining
+
+- Training metrics will be **lower** (more honest — no leakage signal)
+- Gap between pipeline eval and notebook inference metrics should **close significantly**
+- `Pre-computed embeddings for N products` should show N ~975 (full vocab) vs smaller eval-only count
+- `holdout_days=1` will correctly hold out exactly 1 calendar day
+
+---
+
 ## Related Documentation
 
 - [Implementation Overview](../implementation.md)

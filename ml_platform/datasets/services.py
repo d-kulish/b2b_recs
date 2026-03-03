@@ -1671,7 +1671,7 @@ class BigQueryService:
         base.*,
         CASE
             -- Last {holdout_days} days = test (temporal)
-            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days} DAY)))
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days - 1} DAY)))
                 THEN 'test'
             -- Remaining days: 80% train, 20% eval (deterministic random via hash)
             WHEN MOD(ABS(FARM_FINGERPRINT(CAST(base.{date_column} AS STRING))), 100) < 80
@@ -1695,19 +1695,19 @@ class BigQueryService:
         base.*,
         CASE
             -- Last {test_days} days = test
-            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days} DAY)))
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days - 1} DAY)))
                 THEN 'test'
             -- Next {val_days} days (before test) = eval
-            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {val_test_days} DAY)))
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {val_test_days - 1} DAY)))
                 THEN 'eval'
             -- Remaining days in window = train
-            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))
+            WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window - 1} DAY)))
                 THEN 'train'
             -- Data outside window (older than total_window days) - exclude
             ELSE NULL
         END AS split
     FROM {source_table} base, max_date_ref
-    WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))"""
+    WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window - 1} DAY)))"""
             ctes.append(('holdout_filtered', holdout_cte))
 
         else:

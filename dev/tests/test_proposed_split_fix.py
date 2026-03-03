@@ -41,7 +41,7 @@ holdout_filtered AS (
     SELECT
         base.*,
         CASE
-            WHEN base.date >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL 1 DAY)))
+            WHEN base.date >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL 0 DAY)))
                 THEN 'test'
             WHEN MOD(ABS(FARM_FINGERPRINT(CAST(base.date AS STRING))), 100) < 80
                 THEN 'train'
@@ -105,7 +105,7 @@ SELECT * EXCEPT(split) FROM base WHERE split = '{split_name}'"""
                 return f"""SELECT
     base.*,
     CASE
-        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days} DAY)))
+        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {holdout_days - 1} DAY)))
             THEN 'test'
         WHEN MOD(ABS(FARM_FINGERPRINT(CAST(base.{date_column} AS STRING))), 100) < 80
             THEN 'train'
@@ -118,24 +118,24 @@ FROM {source_table} base, max_date_ref"""
                 return f"""SELECT
     base.*,
     CASE
-        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days} DAY)))
+        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {test_days - 1} DAY)))
             THEN 'test'
-        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {val_test_days} DAY)))
+        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {val_test_days - 1} DAY)))
             THEN 'eval'
-        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))
+        WHEN base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window - 1} DAY)))
             THEN 'train'
         ELSE NULL
     END AS split
 FROM {source_table} base, max_date_ref
-WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window} DAY)))"""
+WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL {total_window - 1} DAY)))"""
 
         # Test time_holdout with custom holdout_days
         cte_5_days = generate_holdout_cte('base_data', 'trans_date', 5, 'time_holdout')
         cte_3_days = generate_holdout_cte('base_data', 'trans_date', 3, 'time_holdout')
 
-        self.assertIn("INTERVAL 5 DAY", cte_5_days)
-        self.assertIn("INTERVAL 3 DAY", cte_3_days)
-        self.assertNotIn("INTERVAL 5 DAY", cte_3_days)
+        self.assertIn("INTERVAL 4 DAY", cte_5_days)   # 5 - 1 = 4
+        self.assertIn("INTERVAL 2 DAY", cte_3_days)   # 3 - 1 = 2
+        self.assertNotIn("INTERVAL 4 DAY", cte_3_days)
 
         # Test strict_time with custom days
         cte_strict = generate_holdout_cte(
@@ -143,13 +143,13 @@ WHERE base.{date_column} >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_dat
             train_days=48, val_days=9, test_days=3
         )
 
-        self.assertIn("INTERVAL 3 DAY", cte_strict)  # test_days
-        self.assertIn("INTERVAL 12 DAY", cte_strict)  # val_days + test_days = 9+3
-        self.assertIn("INTERVAL 60 DAY", cte_strict)  # total = 48+9+3
+        self.assertIn("INTERVAL 2 DAY", cte_strict)   # test_days - 1 = 3 - 1
+        self.assertIn("INTERVAL 11 DAY", cte_strict)   # val_test_days - 1 = 12 - 1
+        self.assertIn("INTERVAL 59 DAY", cte_strict)   # total - 1 = 60 - 1
 
         print("\n=== PARAMETER PASS-THROUGH VERIFIED ===")
-        print(f"time_holdout with 5 days: 'INTERVAL 5 DAY' in query: {True}")
-        print(f"strict_time with train=48, val=9, test=3: 'INTERVAL 60 DAY' in query: {True}")
+        print(f"time_holdout with 5 days: 'INTERVAL 4 DAY' in query: {True}")
+        print(f"strict_time with train=48, val=9, test=3: 'INTERVAL 59 DAY' in query: {True}")
 
 
 class TestTFXMultipleInputSplits(unittest.TestCase):
@@ -320,7 +320,7 @@ max_date_ref AS (
 ),
 holdout_filtered AS (
     SELECT base.*, CASE
-        WHEN base.date >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL 1 DAY)))
+        WHEN base.date >= UNIX_SECONDS(TIMESTAMP(DATE_SUB(max_date_ref.ref_date, INTERVAL 0 DAY)))
             THEN 'test'
         WHEN MOD(ABS(FARM_FINGERPRINT(CAST(base.date AS STRING))), 100) < 80
             THEN 'train'

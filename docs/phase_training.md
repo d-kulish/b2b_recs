@@ -4131,6 +4131,115 @@ See [phase_experiments.md](phase_experiments.md) for full feature documentation 
 
 ---
 
+## Critical Bug Fix: Ranking Model Multi-GPU Training — Reduction.SUM Revert (2026-03-03)
+
+### Problem Description
+
+| Run | Type | Model Type | Result |
+|-----|------|------------|--------|
+| quick-tests/177 | Experiment | Retrieval | **Succeeded** |
+| training-runs/67 | Training | Retrieval | **Succeeded** |
+| quick-tests/178 | Experiment | Ranking | **Succeeded** |
+| training-runs/69 | Training | Ranking | **Failed** |
+
+The ranking model validated successfully as an experiment (CPU) but failed when promoted to a full training run (2x T4 GPU). Same `ValueError` as the 2026-01-28 bug — the original fix had been **reverted**.
+
+### Root Cause
+
+The original `Reduction.SUM` fix (2026-01-28) was reverted because `Reduction.SUM` alone caused gradient instability: gradients were ~batch_size times too large, and `clipnorm=1.0` created a fixed-step dynamic that prevented convergence. The revert comment (line 4799-4803) incorrectly claimed that `AUTO/SUM_OVER_BATCH_SIZE` works with MirroredStrategy — it does NOT when loss is computed in a custom `train_step` rather than via `model.compile(loss=...)`.
+
+**Why experiments succeed:** Experiments run on CPU by default — no `MirroredStrategy`, no reduction validation.
+
+**Why retrieval is unaffected:** `tfrs.tasks.Retrieval()` computes contrastive loss internally without a Keras loss function.
+
+**Why ranking fails:** `tfrs.tasks.Ranking(loss=MeanSquaredError())` wraps a standard Keras loss. The custom `train_step` calls `self.compute_loss()` → `self.task()` → the Keras loss. MirroredStrategy rejects `AUTO` reduction in this path.
+
+### The Fix
+
+The proper fix requires **both** `Reduction.SUM` for GPU compatibility **and** manual batch-size division to restore mean-scaled gradients.
+
+**File:** `ml_platform/configs/services.py`
+
+**A. Loss mapping — ranking model (`_generate_ranking_model`, ~line 4809) and multitask model (`_generate_multitask_model`, ~line 6066):**
+
+```python
+# Use Reduction.SUM for MirroredStrategy compatibility in custom train_step.
+# AUTO/SUM_OVER_BATCH_SIZE raises ValueError with tf.distribute.Strategy
+# when loss is computed in a custom train_step (not via model.compile).
+# We manually divide by batch size in compute_loss to restore mean-scaled gradients.
+loss_mapping = {
+    'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
+    'binary_crossentropy': bce_str,  # also with Reduction.SUM
+    'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
+}
+```
+
+**B. Generated `compute_loss` — divide by per-replica batch size:**
+
+```python
+def compute_loss(self, features, training=False):
+    feature_dict, labels = features
+    predictions = self(feature_dict)
+    loss = self.task(labels=labels, predictions=predictions)
+    # Scale loss: Reduction.SUM returns sum over batch.
+    # Divide by per-replica batch size to restore mean-scaled gradients.
+    loss = loss / tf.cast(tf.shape(labels)[0], tf.float32)
+    return loss
+```
+
+This gives:
+- `Reduction.SUM` → MirroredStrategy compatible (no ValueError)
+- Division by batch size → gradients identical to `SUM_OVER_BATCH_SIZE` → no instability
+- `clipnorm=1.0` behaves correctly
+
+### Verification
+
+Custom Job test using Transform artifacts from the failed `training-runs/69`, with the fix applied via `TrainerModuleGenerator`:
+
+```bash
+./venv/bin/python dev/scripts/test_services_trainer.py \
+    --feature-config-id 42 \
+    --model-config-id 36 \
+    --source-training-run tr-69-20260302-185051 \
+    --epochs 3 \
+    --gpu-count 2
+```
+
+**Result:** `JOB_STATE_SUCCEEDED` (Job ID: `8583422596945543168`)
+
+GPU setup confirmed:
+```
+Physical GPUs detected: 2
+  GPU 0: Tesla T4 (13775 MB)
+  GPU 1: Tesla T4 (13775 MB)
+DISTRIBUTION STRATEGY: MirroredStrategy with 2 replicas
+```
+
+Training metrics (3 epochs, batch_size=8192, lr=0.002):
+
+| Epoch | Loss | Val Loss | Val RMSE | Val MAE | Val AUC-ROC |
+|-------|------|----------|----------|---------|-------------|
+| 1 | 0.2744 | 0.2973 | 0.3829 | 0.2779 | 0.7279 |
+| 2 | 0.2714 | 0.2933 | 0.3804 | 0.2877 | 0.7315 |
+| 3 | 0.2699 | 0.2936 | 0.3807 | 0.2788 | 0.7307 |
+
+Test set: RMSE=0.3945, MAE=0.2978, AUC-ROC=0.7220
+
+Loss decreases steadily with no divergence — gradient scaling is correct.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/configs/services.py` | Restored `Reduction.SUM` in ranking + multitask loss_mapping; added batch-size division in generated `compute_loss` for both model types |
+| `dev/scripts/test_services_trainer.py` | New GPU fix test script (replaced old version); uses `TrainerModuleGenerator` to test actual code generation path |
+
+### Detailed Analysis
+
+See [docs/rank_gpu_bug.md](rank_gpu_bug.md) for full root cause analysis, code comparison between retrieval (qt-177) and ranking (qt-178) experiments, and secondary bug findings (hardcoded `blessing_metric`, TFMA `label_key` mismatch).
+
+---
+
 ## Related Documentation
 
 - [Implementation Overview](../implementation.md)

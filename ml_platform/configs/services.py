@@ -4796,22 +4796,21 @@ def _input_fn(
                 output_has_sigmoid = True
 
         # Get loss function
-        # Use default reduction (SUM_OVER_BATCH_SIZE) for properly scaled gradients.
-        # Reduction.SUM was causing training instability: gradients were ~batch_size
-        # times too large, and clipnorm=1.0 created a fixed-step dynamic that
-        # prevented convergence (val loss diverged, predictions went far out of range).
-        # Default AUTO/SUM_OVER_BATCH_SIZE works correctly with MirroredStrategy in TF 2.x.
+        # Use Reduction.SUM for MirroredStrategy compatibility in custom train_step.
+        # AUTO/SUM_OVER_BATCH_SIZE raises ValueError with tf.distribute.Strategy
+        # when loss is computed in a custom train_step (not via model.compile).
+        # We manually divide by batch size in compute_loss to restore mean-scaled gradients.
         if output_has_sigmoid:
-            bce_str = 'tf.keras.losses.BinaryCrossentropy()'
+            bce_str = 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)'
         else:
-            bce_str = 'tf.keras.losses.BinaryCrossentropy(from_logits=True)'
+            bce_str = 'tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction=tf.keras.losses.Reduction.SUM)'
 
         loss_mapping = {
-            'mse': 'tf.keras.losses.MeanSquaredError()',
+            'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
             'binary_crossentropy': bce_str,
-            'huber': 'tf.keras.losses.Huber()',
+            'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
         }
-        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)')
 
         return f'''
 # =============================================================================
@@ -4913,11 +4912,16 @@ class RankingModel(tfrs.Model):
                 self.pos_class_weight,
                 1.0
             )
-            return self.task(labels=labels, predictions=predictions,
+            loss = self.task(labels=labels, predictions=predictions,
                              sample_weight=sample_weight)
+        else:
+            # Compute loss using TFRS Ranking task
+            loss = self.task(labels=labels, predictions=predictions)
 
-        # Compute loss using TFRS Ranking task
-        return self.task(labels=labels, predictions=predictions)
+        # Scale loss: Reduction.SUM returns sum over batch.
+        # Divide by per-replica batch size to restore mean-scaled gradients.
+        loss = loss / tf.cast(tf.shape(labels)[0], tf.float32)
+        return loss
 
     def train_step(self, data):
         """
@@ -6056,19 +6060,19 @@ def _input_fn(
                 output_has_sigmoid = True
 
         # Get loss function
-        # Use default reduction (SUM_OVER_BATCH_SIZE) for properly scaled gradients.
-        # See ranking model comment for details on why Reduction.SUM was removed.
+        # Use Reduction.SUM for MirroredStrategy compatibility in custom train_step.
+        # See ranking model comment for details. We divide by batch size in compute_loss.
         if output_has_sigmoid:
-            bce_str = 'tf.keras.losses.BinaryCrossentropy()'
+            bce_str = 'tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.SUM)'
         else:
-            bce_str = 'tf.keras.losses.BinaryCrossentropy(from_logits=True)'
+            bce_str = 'tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction=tf.keras.losses.Reduction.SUM)'
 
         loss_mapping = {
-            'mse': 'tf.keras.losses.MeanSquaredError()',
+            'mse': 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)',
             'binary_crossentropy': bce_str,
-            'huber': 'tf.keras.losses.Huber()',
+            'huber': 'tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)',
         }
-        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError()')
+        loss_class = loss_mapping.get(self.loss_function, 'tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.SUM)')
 
         return f'''
 # =============================================================================
@@ -6193,6 +6197,10 @@ class MultitaskModel(tfrs.Model):
                                               sample_weight=sample_weight)
         else:
             ranking_loss = self.ranking_task(labels=labels, predictions=rating_predictions)
+
+        # Scale ranking loss: Reduction.SUM returns sum over batch.
+        # Divide by per-replica batch size to restore mean-scaled gradients.
+        ranking_loss = ranking_loss / tf.cast(tf.shape(labels)[0], tf.float32)
 
         # WEIGHTED COMBINATION
         total_loss = (

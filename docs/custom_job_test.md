@@ -20,7 +20,7 @@ This reduces test iteration time from ~1 hour to ~5 minutes.
 
 ## Scripts
 
-### 1. `scripts/test_services_trainer.py`
+### 1. `dev/scripts/test_services_trainer.py`
 
 Tests the **actual code generation** from `services.py` by:
 1. Loading FeatureConfig and ModelConfig from the database
@@ -31,17 +31,17 @@ Tests the **actual code generation** from `services.py` by:
 **Usage:**
 ```bash
 # Default: uses FeatureConfig ID 5, ModelConfig ID 6, 2 epochs
-./venv/bin/python scripts/test_services_trainer.py
+./venv/bin/python dev/scripts/test_services_trainer.py
 
 # Custom configs and epochs
-./venv/bin/python scripts/test_services_trainer.py \
+./venv/bin/python dev/scripts/test_services_trainer.py \
     --feature-config-id 5 \
     --model-config-id 6 \
     --source-exp qt-62-20251231-154907 \
     --epochs 2
 
 # Dry run (generate code but don't submit job)
-./venv/bin/python scripts/test_services_trainer.py --dry-run
+./venv/bin/python dev/scripts/test_services_trainer.py --dry-run
 ```
 
 **Arguments:**
@@ -53,13 +53,13 @@ Tests the **actual code generation** from `services.py` by:
 | `--epochs` | 2 | Number of training epochs |
 | `--dry-run` | false | Generate code without submitting job |
 
-### 2. `scripts/run_trainer_only.py`
+### 2. `dev/scripts/run_trainer_only.py`
 
 Tests trainer code with **regex patching** on existing trainer artifacts. Useful for testing specific fixes without regenerating the entire trainer module.
 
 **Usage:**
 ```bash
-./venv/bin/python scripts/run_trainer_only.py \
+./venv/bin/python dev/scripts/run_trainer_only.py \
     --source qt-62-20251231-154907 \
     --epochs 5
 ```
@@ -194,7 +194,7 @@ This section describes how to run Custom Job tests with GPU acceleration. GPU te
 **CRITICAL**: The job staging bucket must be in the **same region** as the Custom Job.
 
 ```python
-# In scripts/test_services_trainer.py
+# In dev/scripts/test_services_trainer.py
 
 # Job runs in europe-west4
 REGION = 'europe-west4'
@@ -284,7 +284,7 @@ Check: 1) GPU quota in region, 2) Container image has CUDA drivers,
 
 **Full Command:**
 ```bash
-./venv/bin/python scripts/test_services_trainer.py \
+./venv/bin/python dev/scripts/test_services_trainer.py \
     --feature-config-id 8 \
     --model-config-id 14 \
     --source-training-run 7 \

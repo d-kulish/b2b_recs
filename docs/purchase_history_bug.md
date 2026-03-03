@@ -238,6 +238,99 @@ Training and serving now see the same distribution.
 
 ## Future Improvements
 
+### Category-Level Taste Vectors
+
+The current product-level taste vector (32D) captures item-level co-purchase patterns. Adding category-level taste vectors captures broader, denser preference signals using the **same shared-embedding mechanism** already in the platform.
+
+The product tower already has embeddings for each hierarchy level. Each can become a buyer-side taste vector by sharing the same embedding table:
+
+| Taste Vector | Shared With | Column | Dim | Signal |
+|---|---|---|---|---|
+| Product (exists) | `product_id` | `purchase_history` | 32D | Item-level co-purchase patterns |
+| **Brand** | `brand` | `brand_history` | 32D | Brand loyalty — strongest new signal for grocery |
+| **Subcategory** | `sub_cat_v1` (`mge_main_cat_desc`) | `subcat_history` | 16D | Mid-level category preferences |
+| **Category** | `category` (`stratbuy_domain_desc`) | `category_history` | 8D | Broad lifestyle/diet patterns |
+
+**Why this adds signal beyond product history:**
+
+1. **Dilution problem.** The ACM RecSys 2023 paper measured 2–14% consistency for average embeddings on real data. A customer with 30 products across 5 categories produces one 32D vector that tries to represent all 5 interests. A separate 8D category vector says "60% dairy, 20% bakery, 20% cleaning" directly.
+
+2. **Frequency encoding.** The product history is capped at 50 unique products. A customer who bought dairy 200 times and cleaning 5 times looks similar to one who bought dairy 10 times and cleaning 10 times if they bought the same unique products. A category history with **repeated** values (one per purchase, not deduplicated) encodes purchase intensity naturally.
+
+3. **Direct buyer-candidate matching.** Shared embedding means the model learns a single "category space" where the buyer's category taste vector and a candidate product's category embedding are directly comparable via dot product.
+
+**SQL construction** — arrays should NOT be deduplicated (repetition encodes frequency):
+
+```sql
+-- Brand taste: top 50 brand values by recency (with repeats for frequency)
+customer_brand_history AS (
+  SELECT customer_id,
+    ARRAY_AGG(brand_name ORDER BY date DESC LIMIT 50) AS brand_history
+  FROM train_data
+  WHERE product_id IN (SELECT product_id FROM top_products)
+  GROUP BY customer_id
+),
+
+-- Subcategory taste: top 50 sub_cat values by recency (with repeats)
+customer_subcat_history AS (
+  SELECT customer_id,
+    ARRAY_AGG(mge_main_cat_desc ORDER BY date DESC LIMIT 50) AS subcat_history
+  FROM train_data
+  WHERE product_id IN (SELECT product_id FROM top_products)
+  GROUP BY customer_id
+),
+
+-- Category taste: top 50 category values by recency (with repeats)
+customer_category_history AS (
+  SELECT customer_id,
+    ARRAY_AGG(stratbuy_domain_desc ORDER BY date DESC LIMIT 50) AS category_history
+  FROM train_data
+  WHERE product_id IN (SELECT product_id FROM top_products)
+  GROUP BY customer_id
+)
+```
+
+**Feature config** — uses existing `shared_with` infrastructure:
+
+```json
+{"column": "brand_history", "data_type": "history",
+ "transforms": {"history": {"shared_with": "brand", "embedding_dim": 32, "max_length": 50}}}
+
+{"column": "subcat_history", "data_type": "history",
+ "transforms": {"history": {"shared_with": "sub_cat_v1", "embedding_dim": 16, "max_length": 50}}}
+
+{"column": "category_history", "data_type": "history",
+ "transforms": {"history": {"shared_with": "category", "embedding_dim": 8, "max_length": 50}}}
+```
+
+**Recommended rollout order:**
+
+1. **Brand** (32D) — brand loyalty is one of the strongest predictors of repeat purchase in grocery retail
+2. **Subcategory** (16D, `mge_main_cat_desc`) — mid-level category preference without being too broad
+3. **Category** (8D, `stratbuy_domain_desc`) — broadest level, least discriminative
+
+Total addition: +56D to the buyer tower. The first dense layer should be widened (e.g., Dense(64) → Dense(128)) to accommodate the richer input.
+
+### Recency-Weighted Mean Pooling
+
+Instead of uniform averaging, weight recent purchases higher using exponential time decay:
+
+```
+weight_i = exp(-λ * (t_now - t_i))
+taste_vector = Σ(weight_i * embedding_i) / Σ(weight_i)
+```
+
+The decay rate λ controls how fast old purchases lose influence. For a food retailer with weekly shopping cycles, a half-life of 2–4 weeks captures the most actionable preferences: a customer who bought Yogurt yesterday is more likely to buy it again than one who bought it 3 months ago.
+
+**Implementation options:**
+
+- **SQL-side:** Add a `purchase_recency_days` array column alongside the history array. The model computes weights from days-since-purchase at training time.
+- **Model-side:** Add a small weight-computation layer in `BuyerModel.call()` that takes recency as input and produces per-item attention weights before averaging.
+
+This applies to all taste vectors (product, brand, subcategory, category) — any mean-pooled history benefits from recency weighting.
+
+### Other Improvements
+
 | Priority | Action | Rationale |
 |----------|--------|-----------|
 | 1 | Early stopping (patience ~5 on val loss) | Overfitting starts at ~epoch 13 for taste vector models |

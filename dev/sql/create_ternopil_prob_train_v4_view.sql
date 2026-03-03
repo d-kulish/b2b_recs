@@ -11,6 +11,10 @@
 --   - Added product aggregate features: prod_unique_buyers, prod_order_count, prod_total_sales,
 --     prod_avg_sale, prod_cat_revenue_pctile (within mge_main_cat_desc)
 --   - History restricted to top-80% products (consistent with model vocabulary)
+--
+-- History: global aggregation (full training period)
+-- Matches serving-time behavior where the customer's complete history is available.
+-- See docs/purchase_history_bug.md for rationale.
 
 CREATE OR REPLACE VIEW `b2b-recs.raw_data.ternopil_prob_train_v4` AS
 
@@ -54,41 +58,22 @@ product_catalog AS (
   WHERE rn = 1
 ),
 
--- All (customer, product, date) purchase events deduplicated to date level
--- Only top-80% products, training period only
-all_customer_purchases AS (
-  SELECT customer_id, product_id, DATE(date) AS purchase_date
+-- Unique (customer, product) pairs with most recent purchase date
+-- Only top-80% products
+customer_products AS (
+  SELECT customer_id, product_id, MAX(date) AS last_purchase_date
   FROM train_data
   WHERE product_id IN (SELECT product_id FROM top_products)
-  GROUP BY customer_id, product_id, DATE(date)
+  GROUP BY customer_id, product_id
 ),
 
--- Unique row dates per customer for history computation
-customer_row_dates AS (
-  SELECT DISTINCT customer_id, DATE(date) AS row_date
-  FROM train_data
-),
-
--- Point-in-time purchase history per (customer, date):
--- top 50 products the customer bought BEFORE that date
+-- Purchase history per customer: top 50 products by recency
 customer_purchase_history AS (
   SELECT
     customer_id,
-    row_date,
-    ARRAY_AGG(past_product_id ORDER BY max_past_date DESC LIMIT 50) AS purchase_history
-  FROM (
-    SELECT
-      crd.customer_id,
-      crd.row_date,
-      acp.product_id AS past_product_id,
-      MAX(acp.purchase_date) AS max_past_date
-    FROM customer_row_dates crd
-    JOIN all_customer_purchases acp
-      ON acp.customer_id = crd.customer_id
-      AND acp.purchase_date < crd.row_date
-    GROUP BY crd.customer_id, crd.row_date, acp.product_id
-  )
-  GROUP BY customer_id, row_date
+    ARRAY_AGG(product_id ORDER BY last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products
+  GROUP BY customer_id
 ),
 
 -- Product aggregate stats from training period
@@ -134,9 +119,7 @@ positives AS (
     FROM train_data
     WHERE product_id IN (SELECT product_id FROM top_products)
   ) deduped
-  LEFT JOIN customer_purchase_history ch
-    ON deduped.customer_id = ch.customer_id
-    AND DATE(deduped.date) = ch.row_date
+  LEFT JOIN customer_purchase_history ch ON deduped.customer_id = ch.customer_id
   LEFT JOIN product_stats ps ON deduped.product_id = ps.product_id
   WHERE deduped.rn = 1
 ),
@@ -221,9 +204,7 @@ negatives AS (
   ) cd ON nr.customer_id = cd.customer_id
     AND cd.date_rank = 1 + MOD(nr.neg_rank - 1, cd.date_count)
   JOIN product_catalog pc ON nr.product_id = pc.product_id
-  LEFT JOIN customer_purchase_history ch
-    ON nr.customer_id = ch.customer_id
-    AND DATE(cd.date) = ch.row_date
+  LEFT JOIN customer_purchase_history ch ON nr.customer_id = ch.customer_id
   LEFT JOIN product_stats ps ON nr.product_id = ps.product_id
   WHERE nr.neg_rank <= cpc.pos_count * 4
 )

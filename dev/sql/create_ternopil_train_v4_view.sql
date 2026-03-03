@@ -5,6 +5,10 @@
 --   - Added product aggregate features: prod_unique_buyers, prod_order_count, prod_total_sales,
 --     prod_avg_sale, prod_cat_revenue_pctile (within mge_main_cat_desc)
 --   - Rows and history restricted to top-80% products by cumulative revenue
+--
+-- History: global aggregation (full training period, target product excluded)
+-- Matches serving-time behavior where the customer's complete history is available.
+-- See docs/purchase_history_bug.md for rationale.
 
 CREATE OR REPLACE VIEW `b2b-recs.raw_data.ternopil_train_v4` AS
 
@@ -33,45 +37,26 @@ top_products AS (
      OR running_total - total_revenue < grand_total * 0.8
 ),
 
--- All (customer, product, date) purchase events deduplicated to date level
+-- Unique (customer, product) pairs with most recent purchase date
 -- Only top-80% products
-all_customer_purchases AS (
-  SELECT customer_id, product_id, DATE(date) AS purchase_date
+customer_products AS (
+  SELECT customer_id, product_id, MAX(date) AS last_purchase_date
   FROM train_data
   WHERE product_id IN (SELECT product_id FROM top_products)
-  GROUP BY customer_id, product_id, DATE(date)
+  GROUP BY customer_id, product_id
 ),
 
--- Unique row keys (customer, target_product, date) for history computation
-row_keys AS (
-  SELECT DISTINCT customer_id, product_id, DATE(date) AS row_date
-  FROM train_data
-  WHERE product_id IN (SELECT product_id FROM top_products)
-),
-
--- Point-in-time purchase history per (customer, target_product, date):
--- top 50 OTHER products the customer bought BEFORE that date
+-- Purchase history per (customer, target_product): top 50 products by recency, excluding target
 customer_purchase_history AS (
   SELECT
-    customer_id,
-    target_product_id,
-    row_date,
-    ARRAY_AGG(past_product_id ORDER BY max_past_date DESC LIMIT 50) AS purchase_history
-  FROM (
-    SELECT
-      rk.customer_id,
-      rk.product_id AS target_product_id,
-      rk.row_date,
-      acp.product_id AS past_product_id,
-      MAX(acp.purchase_date) AS max_past_date
-    FROM row_keys rk
-    JOIN all_customer_purchases acp
-      ON acp.customer_id = rk.customer_id
-      AND acp.product_id != rk.product_id
-      AND acp.purchase_date < rk.row_date
-    GROUP BY rk.customer_id, rk.product_id, rk.row_date, acp.product_id
-  )
-  GROUP BY customer_id, target_product_id, row_date
+    cp1.customer_id,
+    cp1.product_id AS target_product_id,
+    ARRAY_AGG(cp2.product_id ORDER BY cp2.last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products cp1
+  JOIN customer_products cp2
+    ON cp1.customer_id = cp2.customer_id
+    AND cp1.product_id != cp2.product_id
+  GROUP BY cp1.customer_id, cp1.product_id
 ),
 
 -- Product aggregate stats from training period
@@ -102,8 +87,6 @@ SELECT
   ps.prod_cat_revenue_pctile
 FROM train_data t
 LEFT JOIN customer_purchase_history ch
-  ON t.customer_id = ch.customer_id
-  AND t.product_id = ch.target_product_id
-  AND DATE(t.date) = ch.row_date
+  ON t.customer_id = ch.customer_id AND t.product_id = ch.target_product_id
 LEFT JOIN product_stats ps ON t.product_id = ps.product_id
 WHERE t.product_id IN (SELECT product_id FROM top_products);

@@ -4246,18 +4246,15 @@ See [docs/rank_gpu_bug.md](rank_gpu_bug.md) for full root cause analysis, code c
 
 Training run 66 (retrieval model `tern_retr_v1`) reported R@5=59.6% during pipeline evaluation but dropped to R@5=39.6% at inference on the test view. Root cause analysis identified three concrete issues causing inflated training metrics and degraded serving accuracy.
 
-### Bug 1: Purchase History Data Leakage in Training View
+### Bug 1: Purchase History — Point-in-Time Fix Applied Then Reverted
 
-**Problem:** In `ternopil_train_v4`, the `customer_products` CTE computed purchase history from ALL training data regardless of date. A row from day 10 would get history that includes purchases from day 50+, leaking future information into features. The test view (`ternopil_test_v4`) was already correct — it uses `historical_data`.
+**Original problem:** In `ternopil_train_v4`, the `customer_products` CTE computed purchase history from ALL training data regardless of date. This was initially identified as temporal data leakage.
 
-**Fix:** Replaced `customer_products` → `customer_purchase_history` CTEs with a point-in-time correct version using three new CTEs:
-- `all_customer_purchases` — deduplicated (customer, product, date) purchase events
-- `row_keys` — unique (customer, target_product, date) triples
-- `customer_purchase_history` — only includes purchases **before** each row's date (`acp.purchase_date < rk.row_date`)
+**Fix applied (commit `530be73`):** Replaced global aggregation with point-in-time CTEs using `acp.purchase_date < rk.row_date`. This produced 29.1% empty history rows and caused the model to ignore the taste vector entirely (qt-179: R@5=7.4%, same as baseline without history).
 
-Added `DATE(t.date) = ch.row_date` to the final JOIN to match on the date dimension.
+**Fix reverted:** Analysis showed the point-in-time restriction was wrong for a mean-pooled taste vector. The taste vector is a bag-of-items embedding — temporal ordering is irrelevant. Global aggregation matches serving-time behavior (at inference, the customer's full history is available). The qt-174 model trained on global history achieved R@5=32.8% on completely unseen test data, proving the learned patterns are genuine. See `docs/purchase_history_bug.md` for full analysis including industry references (YouTube, Pinterest, Google).
 
-Same fix applied to `ternopil_prob_train_v4` (per-customer history variant).
+**Current state:** Training views use global aggregation with target product excluded — matching the test views. All 4 views are now structurally consistent.
 
 **Files:** `dev/sql/create_ternopil_train_v4_view.sql`, `dev/sql/create_ternopil_prob_train_v4_view.sql`
 
@@ -4281,16 +4278,16 @@ Same fix applied to `ternopil_prob_train_v4` (per-customer history variant).
 
 | File | Change |
 |------|--------|
-| `dev/sql/create_ternopil_train_v4_view.sql` | Point-in-time purchase_history (3 new CTEs + date JOIN) |
-| `dev/sql/create_ternopil_prob_train_v4_view.sql` | Point-in-time purchase_history (per-customer variant) |
+| `dev/sql/create_ternopil_train_v4_view.sql` | Purchase history: point-in-time applied then reverted to global aggregation |
+| `dev/sql/create_ternopil_prob_train_v4_view.sql` | Purchase history: point-in-time applied then reverted to global aggregation |
 | `ml_platform/configs/services.py` | Candidate pool uses train + eval files (2 locations) |
 | `ml_platform/datasets/services.py` | Off-by-one fix in `_generate_holdout_ctes` (5 locations) |
 | `dev/tests/test_proposed_split_fix.py` | Updated expected intervals for off-by-one fix |
 
 ### Expected Impact After Retraining
 
-- Training metrics will be **lower** (more honest — no leakage signal)
-- Gap between pipeline eval and notebook inference metrics should **close significantly**
+- Pipeline training metrics will be **higher** than real-world inference metrics (normal train/test gap, not harmful leakage)
+- The gap between pipeline and inference metrics is the honest measure of generalization
 - `Pre-computed embeddings for N products` should show N ~975 (full vocab) vs smaller eval-only count
 - `holdout_days=1` will correctly hold out exactly 1 calendar day
 

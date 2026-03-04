@@ -4775,10 +4775,18 @@ def model_metrics(request, model_id):
                     'avg_latency_change_ms': 0,
                     'error_rate_pct': 0,
                     'error_rate_trend': '--',
+                    'peak_instances': 0,
+                    'avg_instances': 0,
                 },
+                'endpoints': [],
                 'request_volume': {'labels': [], 'endpoints': []},
                 'latency_distribution': {'labels': [], 'p50': [], 'p95': [], 'p99': []},
-                'error_rate': {'labels': [], 'values': []},
+                'error_rate': {'labels': [], 'values': [], 'threshold': 1.0},
+                'container_instances': {'labels': [], 'endpoints': []},
+                'cold_start_latency': {'endpoints': []},
+                'resource_utilization': {'labels': [], 'cpu_percent': [], 'memory_percent': []},
+                'endpoint_performance': [],
+                'peak_periods': [],
             })
 
         # Split into current 7d and previous 7d
@@ -4827,16 +4835,22 @@ def model_metrics(request, model_id):
         else:
             error_trend = 'stable'
 
+        # KPI: peak and avg instances (7-day)
+        peak_instances = max((r.instance_count_peak for r in rows_7d), default=0)
+        avg_instances_vals = [r.instance_count_avg for r in rows_7d if r.instance_count_avg > 0]
+        avg_instances = round(sum(avg_instances_vals) / len(avg_instances_vals), 1) if avg_instances_vals else 0
+
         # Chart data: 30 days
         labels = [r.date.strftime('%b %d') for r in rows_30d]
 
-        # Request volume per endpoint
+        # Collect all endpoint names across all data sources
         all_endpoints = set()
         for r in rows_30d:
             for ep in r.endpoint_details:
                 all_endpoints.add(ep['name'])
         all_endpoints = sorted(all_endpoints)
 
+        # Request volume per endpoint
         request_volume_endpoints = []
         for ep_name in all_endpoints:
             values = []
@@ -4856,6 +4870,85 @@ def model_metrics(request, model_id):
             for r in rows_30d
         ]
 
+        # Container instances per endpoint (30-day time series)
+        container_instance_endpoints = []
+        for ep_name in all_endpoints:
+            values = []
+            for r in rows_30d:
+                ep_match = next((e for e in (r.instance_details or []) if e['name'] == ep_name), None)
+                values.append(ep_match['peak'] if ep_match else 0)
+            container_instance_endpoints.append({'name': ep_name, 'values': values})
+
+        # Cold start latency (most recent day with data)
+        cold_start_endpoints = []
+        for r in reversed(rows_30d):
+            if r.startup_latency_details:
+                cold_start_endpoints = [
+                    {'name': ep['name'], 'p50': ep['p50_ms'], 'p95': ep['p95_ms']}
+                    for ep in r.startup_latency_details
+                ]
+                break
+
+        # Resource utilization (30-day time series)
+        cpu_percent = [round(r.cpu_utilization_avg, 1) for r in rows_30d]
+        memory_percent = [round(r.memory_utilization_avg, 1) for r in rows_30d]
+
+        # Endpoint performance table (7-day aggregation per endpoint)
+        ep_perf_7d = {}
+        for r in rows_7d:
+            for ep in r.endpoint_details:
+                name = ep['name']
+                if name not in ep_perf_7d:
+                    ep_perf_7d[name] = {'requests': 0, 'errors': 0, 'weighted_p50': 0, 'weighted_p95': 0, 'weight': 0}
+                ep_perf_7d[name]['requests'] += ep['requests']
+                ep_perf_7d[name]['errors'] += ep['errors']
+                if ep['requests'] > 0:
+                    ep_perf_7d[name]['weighted_p50'] += ep['latency_p50_ms'] * ep['requests']
+                    ep_perf_7d[name]['weighted_p95'] += ep['latency_p95_ms'] * ep['requests']
+                    ep_perf_7d[name]['weight'] += ep['requests']
+
+        ep_perf_prev = {}
+        for r in rows_prev_7d:
+            for ep in r.endpoint_details:
+                name = ep['name']
+                if name not in ep_perf_prev:
+                    ep_perf_prev[name] = {'requests': 0}
+                ep_perf_prev[name]['requests'] += ep['requests']
+
+        endpoint_performance = []
+        for name in sorted(ep_perf_7d.keys()):
+            ep = ep_perf_7d[name]
+            w = ep['weight']
+            prev_req = ep_perf_prev.get(name, {}).get('requests', 0)
+            trend = round((ep['requests'] - prev_req) / prev_req * 100, 1) if prev_req > 0 else 0
+            err_rate = round(ep['errors'] / ep['requests'] * 100, 2) if ep['requests'] > 0 else 0
+            endpoint_performance.append({
+                'name': name,
+                'requests': ep['requests'],
+                'avg_latency': round(ep['weighted_p50'] / w, 1) if w > 0 else 0,
+                'p95_latency': round(ep['weighted_p95'] / w, 1) if w > 0 else 0,
+                'errors': ep['errors'],
+                'error_rate': err_rate,
+                'trend': trend,
+            })
+
+        # Peak periods table: top-5 days with highest per-endpoint requests
+        peak_candidates = []
+        for r in rows_30d:
+            for ep in r.endpoint_details:
+                inst_match = next((i for i in (r.instance_details or []) if i['name'] == ep['name']), None)
+                peak_candidates.append({
+                    'time_period': r.date.strftime('%b %d'),
+                    'endpoint': ep['name'],
+                    'requests': ep['requests'],
+                    'max_instances': inst_match['peak'] if inst_match else 0,
+                })
+        peak_candidates.sort(key=lambda x: x['requests'], reverse=True)
+        peak_periods = peak_candidates[:5]
+
+        # Endpoints list for color lookups
+        endpoints_list = [{'name': name} for name in all_endpoints]
+
         return JsonResponse({
             'success': True,
             'has_data': True,
@@ -4866,7 +4959,10 @@ def model_metrics(request, model_id):
                 'avg_latency_change_ms': latency_change_ms,
                 'error_rate_pct': error_rate_pct,
                 'error_rate_trend': error_trend,
+                'peak_instances': peak_instances,
+                'avg_instances': avg_instances,
             },
+            'endpoints': endpoints_list,
             'request_volume': {
                 'labels': labels,
                 'endpoints': request_volume_endpoints,
@@ -4880,7 +4976,22 @@ def model_metrics(request, model_id):
             'error_rate': {
                 'labels': labels,
                 'values': error_rate_values,
+                'threshold': 1.0,
             },
+            'container_instances': {
+                'labels': labels,
+                'endpoints': container_instance_endpoints,
+            },
+            'cold_start_latency': {
+                'endpoints': cold_start_endpoints,
+            },
+            'resource_utilization': {
+                'labels': labels,
+                'cpu_percent': cpu_percent,
+                'memory_percent': memory_percent,
+            },
+            'endpoint_performance': endpoint_performance,
+            'peak_periods': peak_periods,
         })
 
     except Exception as e:

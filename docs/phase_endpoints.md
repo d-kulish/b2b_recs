@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-02-02 (Fixed ranking model serving to accept raw JSON inputs instead of serialized tf.Example)
+**Last Updated**: 2026-03-04 (Switched Endpoints Dashboard from demo data to real Cloud Monitoring data)
 
 ---
 
@@ -2726,3 +2726,116 @@ Padding with `0` is correct because the model's `serve()` function calls `tf.spa
 
 - Batch prediction with history features returns `200` (all arrays padded to same length)
 - Single prediction unaffected (padding is applied uniformly)
+
+---
+
+## Endpoints Dashboard: Real Cloud Monitoring Data (2026-03-04)
+
+### Overview
+
+Switched the Endpoints Dashboard from static demo JSON files (`DEMO_MODE_CHARTS = true`) to real Cloud Monitoring data. The dashboard appears on both the Deployment page (`endpoints_dashboard.js`) and the Model Dashboard page (`model_dashboard_endpoints.js`). All 6 charts, 2 tables, and 8 KPIs now display live data collected daily from GCP Cloud Monitoring.
+
+### Scope
+
+- **6 charts**: Request Volume, Latency Distribution, Error Rate, Container Instances, Cold Start Latency, Resource Utilization
+- **2 tables**: Endpoint Performance (7-day aggregation with trend), Peak Periods (top-5 busiest endpoint-days)
+- **8 KPIs**: Total Requests, Latency P95, Error Rate, Peak Instances, Avg Instances (plus change/trend indicators)
+
+### Model Changes
+
+**File**: `ml_platform/models.py` — `ProjectMetrics`
+
+Added 6 fields (all with safe defaults, no data migration required):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `instance_count_peak` | IntegerField | Peak container instances across all endpoints |
+| `instance_count_avg` | FloatField | Average container instances across all endpoints |
+| `instance_details` | JSONField | Per-endpoint `[{name, peak, avg}]` |
+| `startup_latency_details` | JSONField | Per-endpoint `[{name, p50_ms, p95_ms}]` |
+| `cpu_utilization_avg` | FloatField | Daily average CPU utilization (0-100%) |
+| `memory_utilization_avg` | FloatField | Daily average memory utilization (0-100%) |
+
+**Migration**: `0067_projectmetrics_instance_startup_utilization_fields.py`
+
+### Collection Command Changes
+
+**File**: `ml_platform/management/commands/collect_resource_metrics.py` — `_collect_project_metrics()`
+
+Extended with 3 new Cloud Monitoring query blocks (all wrapped in try/except):
+
+1. **Instance counts** — `run.googleapis.com/container/instance_count`
+   - `ALIGN_MAX` → per-service peak instances
+   - `ALIGN_MEAN` → per-service average instances
+
+2. **Startup latencies** — `run.googleapis.com/container/startup_latencies`
+   - `ALIGN_PERCENTILE_50` and `ALIGN_PERCENTILE_95`
+
+3. **CPU/Memory utilization** — `run.googleapis.com/container/cpu/utilizations`, `memory/utilizations`
+   - `ALIGN_MEAN`, Cloud Monitoring 0-1 ratio multiplied by 100 for percentage
+
+### Backfill Command
+
+**New file**: `ml_platform/management/commands/backfill_project_metrics.py`
+
+Queries all 6 metric types across the full date range in a single pass, maps services to projects via `DeployedEndpoint`, and persists via `update_or_create`. Updates existing rows (which already have request/latency data) with the new fields.
+
+```bash
+# Backfill 30 days (default)
+python manage.py backfill_project_metrics
+
+# Custom range with dry run
+python manage.py backfill_project_metrics --days 60 --dry-run
+```
+
+### API Changes
+
+**File**: `ml_platform/training/api.py` — `model_metrics()` (`GET /api/models/<id>/metrics/`)
+
+Added to the response:
+
+| Key | Type | Source |
+|-----|------|--------|
+| `kpi_summary.peak_instances` | int | Max of 7-day `instance_count_peak` |
+| `kpi_summary.avg_instances` | float | Mean of 7-day `instance_count_avg` |
+| `endpoints` | list | `[{name}]` for frontend color lookups |
+| `container_instances` | object | 30-day per-endpoint peak values: `{labels, endpoints: [{name, values}]}` |
+| `cold_start_latency` | object | Most recent day: `{endpoints: [{name, p50, p95}]}` |
+| `resource_utilization` | object | 30-day time series: `{labels, cpu_percent, memory_percent}` |
+| `endpoint_performance` | list | 7-day per-endpoint: `[{name, requests, avg_latency, p95_latency, errors, error_rate, trend}]` |
+| `peak_periods` | list | Top-5 busiest: `[{time_period, endpoint, requests, max_instances}]` |
+| `error_rate.threshold` | float | Hardcoded SLO `1.0` |
+
+Empty-data response also updated with all new keys (empty defaults).
+
+### Frontend Changes
+
+**Files**: `static/js/endpoints_dashboard.js`, `static/js/model_dashboard_endpoints.js`
+
+1. `DEMO_MODE_CHARTS` set to `false`
+2. `load()` rewritten:
+   - **Real data mode** (`DEMO_MODE_CHARTS = false`): Fetches only from the metrics API, passes data directly to existing `renderChartsWithData()` / `renderTablesWithData()` functions
+   - **Demo mode** (`DEMO_MODE_CHARTS = true`): Preserved as-is for future demo needs
+3. Existing chart/table rendering functions unchanged — API response matches the demo JSON schema exactly
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `ml_platform/models.py` | Added 6 fields to `ProjectMetrics` |
+| `ml_platform/migrations/0067_...py` | New migration |
+| `ml_platform/management/commands/collect_resource_metrics.py` | 3 new Cloud Monitoring queries |
+| `ml_platform/management/commands/backfill_project_metrics.py` | New backfill command |
+| `ml_platform/training/api.py` | Extended `model_metrics()` response |
+| `static/js/endpoints_dashboard.js` | Switched to real data |
+| `static/js/model_dashboard_endpoints.js` | Switched to real data |
+
+### Verification
+
+1. `python manage.py migrate` — confirm migration applies
+2. `python manage.py collect_resource_metrics --date 2026-03-03` — confirm new fields populated
+3. `python manage.py backfill_project_metrics --days 30` — confirm historical data
+4. `curl /api/models/<id>/metrics/` — confirm all new keys present
+5. Load Deployment page — verify 6 charts + 2 tables show real data
+6. Load Model Dashboard page — verify same
+7. Test with project that has no endpoints — verify skeleton/empty states

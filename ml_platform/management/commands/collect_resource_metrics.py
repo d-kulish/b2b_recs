@@ -373,17 +373,130 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'  Project metrics latency query failed: {e}'))
 
+        # Query Cloud Monitoring for container instance counts
+        instance_data = {}  # {service_name: {peak: val, avg: val}}
+        try:
+            instance_aligners = {
+                monitoring_v3.Aggregation.Aligner.ALIGN_MAX: 'peak',
+                monitoring_v3.Aggregation.Aligner.ALIGN_MEAN: 'avg',
+            }
+            for aligner, key in instance_aligners.items():
+                results = client.list_time_series(
+                    request={
+                        "name": project_name,
+                        "filter": (
+                            'metric.type = "run.googleapis.com/container/instance_count" '
+                            'AND resource.type = "cloud_run_revision" '
+                            'AND resource.labels.service_name = monitoring.regex.full_match(".*-serving")'
+                        ),
+                        "interval": interval,
+                        "aggregation": monitoring_v3.Aggregation(
+                            alignment_period={"seconds": 86400},
+                            per_series_aligner=aligner,
+                            cross_series_reducer=monitoring_v3.Aggregation.Reducer.REDUCE_NONE,
+                            group_by_fields=["resource.labels.service_name"],
+                        ),
+                        "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+                    }
+                )
+                for ts in results:
+                    svc = ts.resource.labels.get("service_name", "unknown")
+                    if svc not in instance_data:
+                        instance_data[svc] = {'peak': 0, 'avg': 0}
+                    for point in ts.points:
+                        instance_data[svc][key] = point.value.int64_value if key == 'peak' else point.value.double_value
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'  Project metrics instance count query failed: {e}'))
+
+        # Query Cloud Monitoring for cold start / startup latencies
+        startup_data = {}  # {service_name: {p50: val, p95: val}}
+        try:
+            startup_aligners = {
+                monitoring_v3.Aggregation.Aligner.ALIGN_PERCENTILE_50: 'p50',
+                monitoring_v3.Aggregation.Aligner.ALIGN_PERCENTILE_95: 'p95',
+            }
+            for aligner, key in startup_aligners.items():
+                results = client.list_time_series(
+                    request={
+                        "name": project_name,
+                        "filter": (
+                            'metric.type = "run.googleapis.com/container/startup_latencies" '
+                            'AND resource.type = "cloud_run_revision" '
+                            'AND resource.labels.service_name = monitoring.regex.full_match(".*-serving")'
+                        ),
+                        "interval": interval,
+                        "aggregation": monitoring_v3.Aggregation(
+                            alignment_period={"seconds": 86400},
+                            per_series_aligner=aligner,
+                            cross_series_reducer=monitoring_v3.Aggregation.Reducer.REDUCE_NONE,
+                            group_by_fields=["resource.labels.service_name"],
+                        ),
+                        "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+                    }
+                )
+                for ts in results:
+                    svc = ts.resource.labels.get("service_name", "unknown")
+                    if svc not in startup_data:
+                        startup_data[svc] = {'p50': 0, 'p95': 0}
+                    for point in ts.points:
+                        startup_data[svc][key] = point.value.double_value
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'  Project metrics startup latency query failed: {e}'))
+
+        # Query Cloud Monitoring for CPU and memory utilization
+        utilization_data = {}  # {service_name: {cpu: val, memory: val}}
+        try:
+            util_metrics = {
+                'run.googleapis.com/container/cpu/utilizations': 'cpu',
+                'run.googleapis.com/container/memory/utilizations': 'memory',
+            }
+            for metric_type, key in util_metrics.items():
+                results = client.list_time_series(
+                    request={
+                        "name": project_name,
+                        "filter": (
+                            f'metric.type = "{metric_type}" '
+                            'AND resource.type = "cloud_run_revision" '
+                            'AND resource.labels.service_name = monitoring.regex.full_match(".*-serving")'
+                        ),
+                        "interval": interval,
+                        "aggregation": monitoring_v3.Aggregation(
+                            alignment_period={"seconds": 86400},
+                            per_series_aligner=monitoring_v3.Aggregation.Aligner.ALIGN_MEAN,
+                            cross_series_reducer=monitoring_v3.Aggregation.Reducer.REDUCE_NONE,
+                            group_by_fields=["resource.labels.service_name"],
+                        ),
+                        "view": monitoring_v3.ListTimeSeriesRequest.TimeSeriesView.FULL,
+                    }
+                )
+                for ts in results:
+                    svc = ts.resource.labels.get("service_name", "unknown")
+                    if svc not in utilization_data:
+                        utilization_data[svc] = {'cpu': 0, 'memory': 0}
+                    for point in ts.points:
+                        # Cloud Monitoring returns 0-1 ratio, convert to percentage
+                        utilization_data[svc][key] = round(point.value.double_value * 100, 1)
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'  Project metrics utilization query failed: {e}'))
+
         # Aggregate per project
         project_data = defaultdict(lambda: {
             'requests': 0, 'errors': 0,
             'weighted_p50': 0, 'weighted_p95': 0, 'weighted_p99': 0,
             'total_weight': 0,
-            'endpoint_details': []
+            'endpoint_details': [],
+            'instance_details': [],
+            'startup_latency_details': [],
+            'total_cpu': 0, 'total_memory': 0, 'util_count': 0,
+            'peak_instances': 0, 'total_avg_instances': 0,
         })
 
         for svc_name, project in service_to_project.items():
             req_info = request_lookup.get(svc_name, {'requests': 0, 'errors': 0})
             lat_info = latency_data.get(svc_name, {'p50': 0, 'p95': 0, 'p99': 0})
+            inst_info = instance_data.get(svc_name, {'peak': 0, 'avg': 0})
+            start_info = startup_data.get(svc_name, {'p50': 0, 'p95': 0})
+            util_info = utilization_data.get(svc_name, {'cpu': 0, 'memory': 0})
             requests = req_info['requests']
             errors = req_info['errors']
 
@@ -407,10 +520,31 @@ class Command(BaseCommand):
                 'latency_p99_ms': round(lat_info['p99'], 1),
             })
 
+            pd['instance_details'].append({
+                'name': svc_name,
+                'peak': inst_info['peak'],
+                'avg': round(inst_info['avg'], 1),
+            })
+            pd['peak_instances'] = max(pd['peak_instances'], inst_info['peak'])
+            pd['total_avg_instances'] += inst_info['avg']
+
+            if start_info['p50'] > 0 or start_info['p95'] > 0:
+                pd['startup_latency_details'].append({
+                    'name': svc_name,
+                    'p50_ms': round(start_info['p50'], 1),
+                    'p95_ms': round(start_info['p95'], 1),
+                })
+
+            if util_info['cpu'] > 0 or util_info['memory'] > 0:
+                pd['total_cpu'] += util_info['cpu']
+                pd['total_memory'] += util_info['memory']
+                pd['util_count'] += 1
+
         # Persist per project
         count = 0
         for project_id_val, pd in project_data.items():
             w = pd['total_weight']
+            uc = pd['util_count']
             ProjectMetrics.objects.update_or_create(
                 date=target_date,
                 model_endpoint=pd['project'],
@@ -421,6 +555,12 @@ class Command(BaseCommand):
                     'latency_p95_ms': round(pd['weighted_p95'] / w, 1) if w > 0 else 0,
                     'latency_p99_ms': round(pd['weighted_p99'] / w, 1) if w > 0 else 0,
                     'endpoint_details': pd['endpoint_details'],
+                    'instance_count_peak': pd['peak_instances'],
+                    'instance_count_avg': round(pd['total_avg_instances'], 1),
+                    'instance_details': pd['instance_details'],
+                    'startup_latency_details': pd['startup_latency_details'],
+                    'cpu_utilization_avg': round(pd['total_cpu'] / uc, 1) if uc > 0 else 0,
+                    'memory_utilization_avg': round(pd['total_memory'] / uc, 1) if uc > 0 else 0,
                 }
             )
             count += 1

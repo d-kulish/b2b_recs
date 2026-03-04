@@ -19,9 +19,9 @@ const EndpointsDashboard = (function() {
     // CONFIGURATION & STATE
     // =============================================================================
 
-    // Demo mode only affects charts and tables (no APIs exist yet)
-    // KPIs always use real data from the metrics API
-    const DEMO_MODE_CHARTS = true;
+    // Demo mode toggle: set to true for sales demos with artificial data
+    // When false, all charts and tables use real data from the metrics API
+    const DEMO_MODE_CHARTS = false;
     const DEMO_DATA_URL = '/static/data/demo/endpoints_dashboard_demo.json';
 
     const config = {
@@ -1022,54 +1022,49 @@ const EndpointsDashboard = (function() {
             init();
         }
 
-        // Fetch real metrics and demo data in parallel
-        const fetchPromises = [];
-        if (config.metricsApiUrl) {
-            fetchPromises.push(fetchMetricsData());
-        } else {
-            fetchPromises.push(Promise.resolve(null));
-        }
-
         if (DEMO_MODE_CHARTS) {
-            fetchPromises.push(loadDemoData());
+            // Demo mode: fetch real metrics + demo data in parallel
+            const fetchPromises = [
+                config.metricsApiUrl ? fetchMetricsData() : Promise.resolve(null),
+                loadDemoData()
+            ];
+            const [metricsData, demoData] = await Promise.all(fetchPromises);
+
+            if (metricsData || demoData) {
+                const hasMetrics = metricsData && metricsData.has_data;
+                const kpiSummary = hasMetrics ? {
+                    ...metricsData.kpi_summary,
+                    peak_instances: demoData ? demoData.kpi_summary.peak_instances : 0,
+                    avg_instances: demoData ? demoData.kpi_summary.avg_instances : 0
+                } : (demoData ? demoData.kpi_summary : null);
+
+                if (kpiSummary) {
+                    renderKPIsWithData({ kpi_summary: kpiSummary });
+                } else {
+                    renderKPIs();
+                }
+
+                if (demoData) {
+                    renderChartsWithData(demoData);
+                    renderTablesWithData(demoData);
+                } else {
+                    renderChartsGrid();
+                    renderTables();
+                }
+                renderPrometheusSection();
+                return;
+            }
         } else {
-            fetchPromises.push(Promise.resolve(null));
-        }
+            // Real data mode: fetch only from metrics API
+            const metricsData = config.metricsApiUrl ? await fetchMetricsData() : null;
 
-        const [metricsData, demoData] = await Promise.all(fetchPromises);
-
-        if (metricsData || demoData) {
-            const hasMetrics = metricsData && metricsData.has_data;
-
-            // Build KPI summary: real metrics when available, demo fallback
-            const kpiSummary = hasMetrics ? {
-                total_requests: metricsData.kpi_summary.total_requests,
-                total_requests_change_pct: metricsData.kpi_summary.total_requests_change_pct,
-                avg_latency_p95_ms: metricsData.kpi_summary.avg_latency_p95_ms,
-                avg_latency_change_ms: metricsData.kpi_summary.avg_latency_change_ms,
-                error_rate_pct: metricsData.kpi_summary.error_rate_pct,
-                error_rate_trend: metricsData.kpi_summary.error_rate_trend,
-                peak_instances: demoData ? demoData.kpi_summary.peak_instances : 0,
-                avg_instances: demoData ? demoData.kpi_summary.avg_instances : 0
-            } : (demoData ? demoData.kpi_summary : null);
-
-            if (kpiSummary) {
-                renderKPIsWithData({ kpi_summary: kpiSummary });
-            } else {
-                renderKPIs();
+            if (metricsData && metricsData.has_data) {
+                renderKPIsWithData({ kpi_summary: metricsData.kpi_summary });
+                renderChartsWithData(metricsData);
+                renderTablesWithData(metricsData);
+                renderPrometheusSection();
+                return;
             }
-
-            // Charts and tables from demo data
-            if (demoData) {
-                renderChartsWithData(demoData);
-                renderTablesWithData(demoData);
-            } else {
-                renderChartsGrid();
-                renderTables();
-            }
-
-            renderPrometheusSection();
-            return;
         }
 
         // Fallback to skeleton UI

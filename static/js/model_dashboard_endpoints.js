@@ -22,9 +22,9 @@ const ModelDashboardEndpoints = (function() {
     // CONFIGURATION & STATE
     // =============================================================================
 
-    // Demo mode only affects charts and tables (no APIs exist yet)
-    // KPIs always use real data from the deployed-endpoints API
-    const DEMO_MODE_CHARTS = true;
+    // Demo mode toggle: set to true for sales demos with artificial data
+    // When false, all charts and tables use real data from the metrics API
+    const DEMO_MODE_CHARTS = false;
     const DEMO_DATA_URL = '/static/data/demo/model_dashboard_endpoints.json';
 
     const config = {
@@ -1004,73 +1004,87 @@ const ModelDashboardEndpoints = (function() {
             init();
         }
 
-        // Fetch real KPI data and metrics data in parallel
-        const fetchPromises = [fetchEndpointsKpi()];
-        if (config.metricsApiUrl) {
-            fetchPromises.push(fetchMetricsData());
-        } else {
-            fetchPromises.push(Promise.resolve(null));
-        }
-
-        // Load demo data for charts/tables that don't have real APIs yet
         if (DEMO_MODE_CHARTS) {
-            fetchPromises.push(loadDemoData());
+            // Demo mode: fetch real KPI + metrics + demo data in parallel
+            const fetchPromises = [
+                fetchEndpointsKpi(),
+                config.metricsApiUrl ? fetchMetricsData() : Promise.resolve(null),
+                loadDemoData()
+            ];
+            const [realKpi, metricsData, demoData] = await Promise.all(fetchPromises);
+
+            if (realKpi || metricsData || demoData) {
+                const hasMetrics = metricsData && metricsData.has_data;
+                const mergedData = {
+                    endpoints_summary: realKpi || (demoData ? demoData.endpoints_summary : { total: 0, active: 0, inactive: 0 }),
+                    kpi_summary: hasMetrics ? {
+                        ...metricsData.kpi_summary,
+                        peak_instances: demoData ? demoData.kpi_summary.peak_instances : 0,
+                        avg_instances: demoData ? demoData.kpi_summary.avg_instances : 0
+                    } : (demoData ? demoData.kpi_summary : {
+                        total_requests: 0, total_requests_change_pct: 0,
+                        avg_latency_p95_ms: 0, avg_latency_change_ms: 0,
+                        error_rate_pct: 0, error_rate_trend: '-',
+                        peak_instances: 0, avg_instances: 0
+                    }),
+                    endpoints: demoData ? demoData.endpoints : [],
+                    request_volume: demoData ? demoData.request_volume : null,
+                    latency_distribution: demoData ? demoData.latency_distribution : null,
+                    error_rate: demoData ? demoData.error_rate : null,
+                    container_instances: demoData ? demoData.container_instances : null,
+                    cold_start_latency: demoData ? demoData.cold_start_latency : null,
+                    resource_utilization: demoData ? demoData.resource_utilization : null,
+                    endpoint_performance: demoData ? demoData.endpoint_performance : [],
+                    peak_periods: demoData ? demoData.peak_periods : []
+                };
+                renderKPIsWithData(mergedData);
+                if (demoData) {
+                    renderChartsWithData(mergedData);
+                    renderTablesWithData(mergedData);
+                } else {
+                    renderSkeletonCharts();
+                    renderSkeletonTables();
+                }
+                return;
+            }
         } else {
-            fetchPromises.push(Promise.resolve(null));
-        }
+            // Real data mode: fetch real KPI + metrics API in parallel
+            const [realKpi, metricsData] = await Promise.all([
+                fetchEndpointsKpi(),
+                config.metricsApiUrl ? fetchMetricsData() : Promise.resolve(null)
+            ]);
 
-        const [realKpi, metricsData, demoData] = await Promise.all(fetchPromises);
-
-        // Build merged data object with real KPIs + real metrics + demo for remaining
-        if (realKpi || metricsData || demoData) {
             const hasMetrics = metricsData && metricsData.has_data;
 
-            const mergedData = {
-                // Use real KPI data, fallback to demo if API fails
-                endpoints_summary: realKpi || (demoData ? demoData.endpoints_summary : { total: 0, active: 0, inactive: 0 }),
-                // Use real metrics KPI when available, fallback to demo
-                kpi_summary: hasMetrics ? {
-                    total_requests: metricsData.kpi_summary.total_requests,
-                    total_requests_change_pct: metricsData.kpi_summary.total_requests_change_pct,
-                    avg_latency_p95_ms: metricsData.kpi_summary.avg_latency_p95_ms,
-                    avg_latency_change_ms: metricsData.kpi_summary.avg_latency_change_ms,
-                    error_rate_pct: metricsData.kpi_summary.error_rate_pct,
-                    error_rate_trend: metricsData.kpi_summary.error_rate_trend,
-                    peak_instances: demoData ? demoData.kpi_summary.peak_instances : 0,
-                    avg_instances: demoData ? demoData.kpi_summary.avg_instances : 0
-                } : (demoData ? demoData.kpi_summary : {
-                    total_requests: 0,
-                    total_requests_change_pct: 0,
-                    avg_latency_p95_ms: 0,
-                    avg_latency_change_ms: 0,
-                    error_rate_pct: 0,
-                    error_rate_trend: '-',
-                    peak_instances: 0,
-                    avg_instances: 0
-                }),
-                // All 6 charts use demo data (real data is too sparse to visualize well)
-                endpoints: demoData ? demoData.endpoints : [],
-                request_volume: demoData ? demoData.request_volume : null,
-                latency_distribution: demoData ? demoData.latency_distribution : null,
-                error_rate: demoData ? demoData.error_rate : null,
-                container_instances: demoData ? demoData.container_instances : null,
-                cold_start_latency: demoData ? demoData.cold_start_latency : null,
-                resource_utilization: demoData ? demoData.resource_utilization : null,
-                endpoint_performance: demoData ? demoData.endpoint_performance : [],
-                peak_periods: demoData ? demoData.peak_periods : []
-            };
-
-            renderKPIsWithData(mergedData);
-
-            // Render charts and tables from demo data
-            if (demoData) {
-                renderChartsWithData(mergedData);
-                renderTablesWithData(mergedData);
-            } else {
-                renderSkeletonCharts();
-                renderSkeletonTables();
+            if (realKpi || hasMetrics) {
+                const mergedData = {
+                    endpoints_summary: realKpi || { total: 0, active: 0, inactive: 0 },
+                    kpi_summary: hasMetrics ? metricsData.kpi_summary : {
+                        total_requests: 0, total_requests_change_pct: 0,
+                        avg_latency_p95_ms: 0, avg_latency_change_ms: 0,
+                        error_rate_pct: 0, error_rate_trend: '-',
+                        peak_instances: 0, avg_instances: 0
+                    },
+                    endpoints: hasMetrics ? (metricsData.endpoints || []) : [],
+                    request_volume: hasMetrics ? metricsData.request_volume : null,
+                    latency_distribution: hasMetrics ? metricsData.latency_distribution : null,
+                    error_rate: hasMetrics ? metricsData.error_rate : null,
+                    container_instances: hasMetrics ? metricsData.container_instances : null,
+                    cold_start_latency: hasMetrics ? metricsData.cold_start_latency : null,
+                    resource_utilization: hasMetrics ? metricsData.resource_utilization : null,
+                    endpoint_performance: hasMetrics ? (metricsData.endpoint_performance || []) : [],
+                    peak_periods: hasMetrics ? (metricsData.peak_periods || []) : []
+                };
+                renderKPIsWithData(mergedData);
+                if (hasMetrics) {
+                    renderChartsWithData(mergedData);
+                    renderTablesWithData(mergedData);
+                } else {
+                    renderSkeletonCharts();
+                    renderSkeletonTables();
+                }
+                return;
             }
-            return;
         }
 
         // Fallback to skeleton UI if all fail

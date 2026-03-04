@@ -1010,6 +1010,24 @@ class ProjectMetrics(models.Model):
         help_text="[{name, requests, errors, latency_p50_ms, latency_p95_ms, latency_p99_ms}]"
     )
 
+    # Container instance metrics
+    instance_count_peak = models.IntegerField(default=0, help_text="Peak container instances across all endpoints")
+    instance_count_avg = models.FloatField(default=0, help_text="Average container instances across all endpoints")
+    instance_details = models.JSONField(
+        default=list,
+        help_text="[{name, peak, avg}]"
+    )
+
+    # Cold start latency
+    startup_latency_details = models.JSONField(
+        default=list,
+        help_text="[{name, p50_ms, p95_ms}]"
+    )
+
+    # Resource utilization (daily avg, 0-100%)
+    cpu_utilization_avg = models.FloatField(default=0, help_text="Average CPU utilization percentage")
+    memory_utilization_avg = models.FloatField(default=0, help_text="Average memory utilization percentage")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -126,24 +126,26 @@ The Datasets & Configs page provides a four-chapter workflow for configuring ML 
 ### **Experiments** ✅
 The Experiments page (`model_experiments.html`) enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Chapter 1: Quick Test** - Create and manage experiments
-- 🧪 **2-Step Wizard:** Select configs (Feature + Model + Dataset) → Set training params
-- 🎯 **Model Type Selection:** Retrieval, Ranking, or Multitask models
-- ⚙️ **Configurable Parameters:** Sample % (5-100%), epochs (1-50), batch size, learning rate
-- 🖥️ **Hardware Tiers:** Small/Medium/Large CPU with auto-recommendation
-- 📊 **Experiment Cards:** Status tracking, metrics display, progress bars for running experiments
-- 🔍 **Filter & Search:** By status, model type, dataset, feature config, model config
-- ⚖️ **Compare Modal:** Side-by-side comparison of 2-4 experiments
-- 👁️ **View Modal:** 4 tabs (Config, Data Insights, Training charts, Errors)
+**Chapter 1: Experiments Dashboard** - Analytics and insights
+- 📈 **Model Type KPIs:** 3 clickable sections (Retrieval/Ranking/Hybrid) with 5 metric cards each, filtering all dashboard content
+- 📉 **Metrics Trend:** Chart.js line chart showing best metrics over time by selected model type
+- 🏆 **Top Configurations:** Table of top 5 best-performing experiment configs sorted by primary metric
+- 🔬 **Hyperparameter Insights:** TPE-based analysis across 5 categories (Architecture, Features, Dataset, Training, Split) showing which values correlate with top 30% results
+- 🗺️ **Training Heatmaps:** D3.js dual heatmaps — Epoch Loss (60%) + Final Metrics (40%), color-coded green-to-red
+- 📊 **Dataset Performance:** Compare metrics across different datasets with model-type-specific columns
+- 💡 **Suggested Experiments:** AI-powered recommendations (Feature Exploration + Hyperparameter Variation cards)
 
-**Chapter 2: Experiments Dashboard** - Analytics and insights
-- 📈 **Model Type KPIs:** Clickable containers (Retrieval/Ranking/Multitask) that filter all dashboard content
-- 📉 **Metrics Trend:** Line chart showing best Recall@100 or RMSE over time
-- 🏆 **Top Configurations:** Table of best-performing experiment configs sorted by primary metric
-- 🔬 **Hyperparameter Insights:** TPE-based analysis showing which parameters correlate with top 30% results
-- 🗺️ **Training Heatmaps:** Epoch-by-experiment loss visualization + final metrics heatmap
-- 📊 **Dataset Performance:** Compare metrics across different datasets
-- 💡 **Suggested Experiments:** AI-powered recommendations for gaps in coverage
+**Chapter 2: Quick Test** - Create and manage experiments
+- 🧪 **2-Step Wizard:** Step 1: Select configs (Model Type + Feature Config with preview + Model Config with preview) → Step 2: Training params (Sampling, Split Strategy, Epochs/Batch/LR, Hardware)
+- 🎯 **Model Type Selection:** Retrieval, Ranking, or Multitask/Hybrid
+- 🔀 **Split Strategy:** Random (80/15/5), Time Holdout (date column + holdout days), Strict Temporal (rolling window)
+- ⚙️ **Configurable Parameters:** Sample % (5/10/25/100%), epochs (5-500), batch size (128-65536), learning rate (0.0001-1.0)
+- 🖥️ **Hardware Tiers:** Small/Medium/Large CPU + GPU T4 (n1-standard-4 + NVIDIA T4) with auto-recommendation. GPU V100 locked
+- 📊 **Experiment Cards:** 4-column layout with status, configs, metrics, actions + 6-stage progress bar
+- 🔍 **Filter & Search:** 6 filters (Status, Model Type, Dataset, Features, Model, Search) — debounced search supports experiment number (e.g., "#62")
+- ⚖️ **Compare Modal:** Side-by-side comparison of 2 experiments with 6 accordion sections (Results, Dataset, Features, Model, Training, Sampling)
+- 👁️ **View Modal:** Reusable `ExpViewModal` module with 4 tabs (Overview, Pipeline DAG, Data Insights, Training charts)
+- 📐 **AUC-ROC Metrics:** Auto-detected for binary-label ranking models, shown alongside RMSE/MAE
 
 **Execution Pipeline:**
 ```
@@ -552,9 +554,9 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
   - Chapter 1: Dataset Management (4-step wizard, Visual Schema Builder, D3.js Pareto charts)
   - Chapter 2: Feature Engineering (drag-drop UI, tensor preview, TFX code generation)
   - Chapter 3: Model Structure (tower builder, presets, Retrieval/Ranking/Multitask models)
-- **Experiments Page** - ✅ **Fully working!** Two-chapter workflow:
-  - Chapter 1: Quick Test (2-step wizard, experiment cards, compare modal, view modal)
-  - Chapter 2: Dashboard (KPIs, metrics trend, top configs, hyperparameter insights, heatmaps, suggestions)
+- **Experiments Page** - ✅ **Fully working!** Two-chapter workflow with ~25 API endpoints:
+  - Chapter 1: Experiments Dashboard (3 clickable KPI sections, metrics trend, top configs, hyperparameter insights, D3.js heatmaps, dataset comparison, suggestions)
+  - Chapter 2: Quick Test (2-step wizard with config previews, experiment cards with 6-stage progress, 6-filter bar, compare modal, reusable view modal)
 
 ### **🔮 Next Up**
 1. Full Training Pipeline - Extended training with checkpointing (**GPU quota approved!**)

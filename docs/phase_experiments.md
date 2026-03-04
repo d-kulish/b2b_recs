@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides specifications for the **Experiments** page (`model_experiments.html`). The Experiments page enables running Quick Tests to validate configurations and provides an analytics dashboard for comparing results.
 
-**Last Updated**: 2026-02-27 (Fix missing 'yearly' cyclical dimension in 4 dimension calculators)
+**Last Updated**: 2026-03-04 (Sync documentation with actual page structure and functionality)
 
 ---
 
@@ -68,86 +68,258 @@ The Experiments domain allows users to:
 
 ## Page Structure
 
-### Chapter 1: Quick Test
+### Chapter 1: Experiments Dashboard
 
-Experiment creation and management interface.
-
-#### Filter Bar
-- **Status Filter**: All / Running / Completed / Failed / Cancelled
-- **Model Type Filter**: All / Retrieval / Ranking / Multitask
-- **Dataset Filter**: Dropdown of available datasets
-- **Feature Config Filter**: Dropdown of feature configs
-- **Model Config Filter**: Dropdown of model configs
-- **Search**: Full-text search on experiment name/description
-
-#### Experiment Cards
-Each card displays:
-- Experiment name and description
-- Status badge (Running/Completed/Failed/Cancelled)
-- Model type badge (Retrieval/Ranking/Multitask)
-- Configuration summary (Dataset, Features, Model)
-- Metrics (Recall@K for retrieval, RMSE/MAE for ranking, AUC-ROC for binary ranking)
-- Progress bar (for running experiments)
-- Action buttons: View, Rerun, Cancel/Delete
-
-#### Control Buttons
-- **[+ New Exp]**: Opens 2-step wizard
-- **[Compare]**: Opens comparison selection modal
-
-### Chapter 2: Experiments Dashboard
-
-Analytics and insights for completed experiments, filtered by selected model type.
+Analytics and insights for completed experiments, filtered by selected model type. This chapter appears first on the page (collapsed by default).
 
 #### Model Type KPIs (Clickable)
-Three KPI containers (Retrieval/Ranking/Multitask) showing:
-- Experiment count
-- Best metric value
-- Average metric value
 
-Clicking a KPI filters all dashboard content by that model type.
+Three KPI sections (Retrieval / Ranking / Hybrid) with 5 metric cards each. Clicking a section filters all dashboard content by that model type.
+
+**Retrieval KPIs:**
+
+| Card | ID | Description |
+|------|----|-------------|
+| Experiments | `dashboardRetrievalCount` | Total retrieval experiments |
+| R@5 | `dashboardRetrievalR5` | Best Recall@5 |
+| R@10 | `dashboardRetrievalR10` | Best Recall@10 |
+| R@50 | `dashboardRetrievalR50` | Best Recall@50 |
+| R@100 | `dashboardRetrievalR100` | Best Recall@100 |
+
+**Ranking KPIs:**
+
+| Card | ID | Description |
+|------|----|-------------|
+| Experiments | `dashboardRankingCount` | Total ranking experiments |
+| RMSE | `dashboardRankingRMSE` | Best RMSE |
+| Test RMSE | `dashboardRankingTestRMSE` | Best Test RMSE |
+| MAE | `dashboardRankingMAE` | Best MAE |
+| Test MAE | `dashboardRankingTestMAE` | Best Test MAE |
+
+**Hybrid (Multitask) KPIs:**
+
+| Card | ID | Description |
+|------|----|-------------|
+| Experiments | `dashboardHybridCount` | Total hybrid experiments |
+| RMSE | `dashboardHybridRMSE` | Best RMSE |
+| Test RMSE | `dashboardHybridTestRMSE` | Best Test RMSE |
+| R@50 | `dashboardHybridR50` | Best Recall@50 |
+| R@100 | `dashboardHybridR100` | Best Recall@100 |
+
+#### Metrics Trend (in KPI header area)
+
+Line chart (Chart.js) showing best metrics over time, filtered by selected model type. Canvas ID: `trendChartCanvas`.
 
 #### Dashboard Components
 
 | Component | Description |
 |-----------|-------------|
-| **Metrics Trend** | Line chart showing best metrics over time |
-| **Top Configurations** | Table of best-performing experiment configs |
-| **Hyperparameter Insights** | TPE-based analysis of what correlates with good results |
-| **Training Heatmaps** | Epoch loss + final metrics visualization |
-| **Dataset Performance** | Compare metrics across different datasets |
-| **Suggested Experiments** | AI-powered recommendations for next experiments |
+| **Top Configurations** | Table of top 5 best-performing experiment configs sorted by primary metric |
+| **Hyperparameter Insights** | TPE-based analysis with 5 categories (Model Architecture, Features, Dataset, Training, Split Strategy) showing which values correlate with top 30% results |
+| **Training Heatmaps** | Two D3.js heatmaps side-by-side: Epoch Loss (60% width) + Final Metrics (40% width). Color scale: green (low) to red (high) |
+| **Dataset Performance** | Table comparing metrics across different datasets with model-type-specific columns |
+| **Suggested Experiments** | AI-powered recommendations — Feature Exploration or Hyperparameter Variation cards with "Run Experiment" buttons |
+
+### Chapter 2: Quick Test
+
+Experiment creation and management interface.
+
+#### Filter Bar
+
+Six filter controls for the experiment list:
+
+| Filter | ID | Options |
+|--------|----|---------|
+| **Exp Status** | `expStatusFilter` | All / Running / Completed / Failed / Cancelled |
+| **Model Type** | `expModelTypeFilter` | All / Retrieval / Ranking / Hybrid |
+| **Dataset Config** | `expDatasetFilter` | All Datasets (dynamically populated) |
+| **Features Config** | `expFeatureFilter` | All Features (dynamically populated) |
+| **Model Config** | `expModelFilter` | All Models (dynamically populated) |
+| **Search** | `expSearchInput` | Full-text search on experiment name, config names, experiment number (e.g., "Exp #62", "#62") — debounced 300ms |
+
+#### Experiment Cards
+
+4-column card layout (`exp-card-new`) — clicking the card opens the full View Modal:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Col 1: Experiment Info (30%)  │ Col 2: Configs (20%)  │ Col 3: Metrics (30%) │ Col 4: Actions (20%) │
+│ ● Status badge + icon         │ Dataset name           │ R@5  R@10  R@50 R@100│ [Rerun]    [View]    │
+│ Display name (Exp #N)         │ Feature config name    │ Loss: 0.034          │ [Cancel]   [🗑]      │
+│ Experiment name (optional)    │ Model config name      │                      │                      │
+│ Description (50 chars)        │ Model type badge       │                      │                      │
+│ Start: Jan 15 14:30           │                        │                      │                      │
+│ End: Jan 15 15:45             │                        │                      │                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░] 6-Stage Progress Bar                            │
+│  Data Prep │ Feature Eng │ Model Build │ Training │ Evaluation │ Export/Deploy │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Model Type Badges:**
+- Retrieval: Blue search icon
+- Ranking: Yellow star icon
+- Hybrid/Multitask: Purple squares icon
+
+**Metrics by Model Type:**
+- Retrieval: R@5, R@10, R@50, R@100, Loss
+- Ranking: RMSE, Test RMSE, MAE, Test MAE (+ AUC-ROC for binary labels)
+- Hybrid: Retrieval section (R@5, R@10, R@50, R@100) + Ranking section (RMSE, Test RMSE, MAE, Test MAE)
+
+**Action Button States:**
+
+| Button | Running/Submitting | Completed/Failed/Cancelled |
+|--------|--------------------|---------------------------|
+| View | Enabled | Enabled |
+| Cancel | Enabled | Disabled |
+| Rerun | Disabled | Enabled |
+| Delete | Disabled | Enabled |
+
+#### Control Buttons
+- **[Compare]** (`compareBtn`): Opens comparison modal
+- **[+ New Exp]**: Opens 2-step wizard
+
+#### Pagination
+- Default: 5 experiments per page
+- Shows "Showing X-Y of Z" with Previous/Next navigation
 
 ---
 
 ## New Experiment Wizard
 
-### Step 1: Select Configs
+2-step modal wizard (`newExpWizardModal`, max-width 1000px) with pill-based step navigation.
+
+### Step 1: Select Configurations
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚡ New Experiment — Step 1 of 2                    [×]         │
+│  ○ Select Configs    ○ Training Params                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  MODEL TYPE                                                     │
+│  [● Retrieval]  [○ Ranking]  [○ Multitask/Hybrid]              │
+│                                                                 │
+│  EXPERIMENT METADATA (optional)                                 │
+│  Name: [____________________]                                   │
+│  Description: [____________________]                            │
+│                                                                 │
+│  FEATURE CONFIG        FEATURE CONFIG PREVIEW                   │
+│  [▼ Select config ]    ┌────────────────────────────┐           │
+│                        │ Dataset: Q4 Data            │           │
+│                        │ Source: schema.table         │           │
+│                        │ Target: rating (FLOAT64)    │← ranking  │
+│                        │ Buyer Tensor: 80D  ████░░   │           │
+│                        │ Product Tensor: 64D ███░░   │           │
+│                        └────────────────────────────┘           │
+│                                                                 │
+│  MODEL CONFIG          MODEL CONFIG PREVIEW                     │
+│  [▼ Select config ]    ┌────────────────────────────┐           │
+│                        │ Buyer Tower: 256→128→64→32  │           │
+│                        │ Product Tower: 128→64→32    │           │
+│                        │ Rating Head: 128→64→1      │← ranking  │
+│                        │ Retrieval: ScaNN            │← retrieval│
+│                        │ Optimizer: adam, LR: 0.01   │           │
+│                        └────────────────────────────┘           │
+│                                                                 │
+│                                        [Cancel]  [Next →]       │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 1. **Model Type Selector** (required first)
-   - Retrieval (default) / Ranking / Multitask
-   - Filters available Feature and Model configs
+   - Retrieval (default) / Ranking / Multitask (shown as "Hybrid" in UI)
+   - Filters available Feature and Model configs by compatibility
 
-2. **Feature Config** dropdown
+2. **Experiment Metadata** (optional)
+   - Experiment Name (`wizardExpName`) — optional text input
+   - Description (`wizardExpDescription`) — optional textarea
+
+3. **Feature Config** dropdown (`wizardFeatureSelect`)
    - Shows configs compatible with selected model type
-   - Preview: Tensor dimensions, assigned features, target column (if ranking)
+   - **Preview Panel** (`wizardFeaturePreview`):
+     - Dataset name and source info
+     - Target Column section (ranking configs only): column name, type, transforms
+     - Tensor Breakdown Grid (2 columns): Buyer Tensor (dim + feature list) / Product Tensor (dim + feature list)
 
-3. **Model Config** dropdown
+4. **Model Config** dropdown (`wizardModelSelect`)
    - Shows configs of selected model type
-   - Preview: Tower architecture, layer summary, Rating Head (if ranking)
-
-4. **Dataset & Split**
-   - Dataset dropdown
-   - Train/Test split options: Random (80/20), Time Holdout, Strict Time
+   - **Preview Panel** (`wizardModelPreview`):
+     - Tower Architecture: Buyer Tower layers + Product Tower layers with params summary
+     - Rating Head section (ranking/multitask only): layers + parameter count
+     - Training Parameters preview (optimizer, LR, batch size)
+     - Retrieval Algorithm section (retrieval/multitask only): Brute Force or ScaNN
 
 ### Step 2: Training Parameters
 
-| Parameter | Options | Default |
-|-----------|---------|---------|
-| **Sample %** | 5%, 10%, 25%, 50%, 100% | 10% |
-| **Epochs** | 1-50 | 3 |
-| **Batch Size** | 256, 512, 1024, 2048, 4096, 8192 | 4096 |
-| **Learning Rate** | 0.001 - 1.0 | From ModelConfig |
-| **Hardware** | Small (e2-standard-4) / Medium (e2-standard-8) / Large (e2-standard-16) / GPU T4 (n1-standard-4 + T4) | Auto-recommended (CPU only) |
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚡ New Experiment — Step 2 of 2                    [×]         │
+│  ● Select Configs    ○ Training Params                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ⚠ DATA SAMPLING                                               │
+│  [5%] [10%] [25%] [100%]  Custom: [__]%                        │
+│  Estimated examples: 74,346                                     │
+│                                                                 │
+│  🔀 SPLIT STRATEGY                                              │
+│  [▼ Random (fastest) ]                                          │
+│  Train 80% / Eval 15% / Test 5%                                │
+│                                                                 │
+│  📊 TRAINING PARAMETERS                                         │
+│  Epochs:  [5] [10] [25] [50] [100]  Custom: [__]               │
+│  Batch:   [1024] [2048] [4096] [8192]  Custom: [__]            │
+│  LR:      [0.001] [0.01] [0.05] [0.1]  Custom: [__]           │
+│                                                                 │
+│  🎯 RATING COLUMN (ranking only)                                │
+│  Target: rating (FLOAT64) — from feature config                 │
+│                                                                 │
+│  🖥 HARDWARE CONFIGURATION                                      │
+│  Recommended: Small (based on dataset size)                     │
+│  [Small] [Medium] [Large] [GPU T4] [🔒 V100]                   │
+│                                                                 │
+│  📋 SUMMARY (collapsible)                                       │
+│  Feature Config: Q4 v2 │ Model: Deep Tower                     │
+│  Sample: 10% │ Epochs: 25 │ Batch: 4096 │ LR: 0.01            │
+│                                                                 │
+│                              [← Back]  [Cancel]  [▶ Run]       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Data Sampling:**
+
+| Preset | Custom Range |
+|--------|-------------|
+| 5%, 10%, 25%, 100% | 1-100% via input |
+
+Note: No 50% preset. Example count (`wizardExampleCountValue`) updates dynamically based on dataset size.
+
+**Split Strategy** (`wizardSplitStrategy`):
+
+| Strategy | Options | Default Behavior |
+|----------|---------|-----------------|
+| **Random (fastest)** | No extra options | Train 80% / Eval 15% / Test 5% |
+| **Time Holdout** | Date column selector + Holdout days | Last N days = test; rest split 80/20 (train/eval) |
+| **Strict Temporal** | Train days (7-365, default 60), Val days (1-30, default 7), Test days (1-30, default 7) | Rolling window with fixed periods |
+
+**Training Parameters:**
+
+| Parameter | Preset Buttons | Custom Input | Default |
+|-----------|---------------|--------------|---------|
+| **Epochs** | 5, 10, 25, 50, 100 | 1-500 | 25 |
+| **Batch Size** | 1024, 2048, 4096, 8192 | 128-65536 (step 128) | 1024 |
+| **Learning Rate** | 0.001, 0.01, 0.05, 0.1 | 0.0001-1.0 (step 0.001) | 0.01 |
+
+**Hardware Configuration:**
+
+| Card | Machine Type | Specs | GPU |
+|------|-------------|-------|-----|
+| Small (default) | `e2-standard-4` | 4 vCPU, 16 GB RAM | — |
+| Medium | `e2-standard-8` | 8 vCPU, 32 GB RAM | — |
+| Large | `e2-standard-16` | 16 vCPU, 64 GB RAM | — |
+| GPU T4 | `n1-standard-4` | 4 vCPU, 15 GB RAM | 1× NVIDIA T4 |
+| GPU V100 | — | — | Locked ("coming soon") |
+
+Auto-recommendation based on dataset size and model complexity (`hardwareRecommendation`).
 
 ---
 
@@ -224,20 +396,44 @@ For running experiments, the modal automatically:
 
 ## Compare Modal
 
-Side-by-side comparison of 2-4 experiments:
+Side-by-side comparison of 2 experiments (`expCompareModal`, max-width 1000px, height 85vh).
 
 ### Selection
-- Paginated list of completed experiments
-- Checkbox selection (2-4 required)
-- Filter by model type
 
-### Comparison Table
-Unified table showing for each experiment:
-- Dataset configuration
-- Feature configuration (tensor dims, feature count)
-- Model architecture (tower structures, params)
-- Training parameters (epochs, batch size, LR, sample %)
-- Final metrics (Recall@K or RMSE/MAE)
+Two dropdown selectors (left + right) populated with experiments in terminal states (completed, failed, cancelled) via `/api/experiments/selectable/`. Selecting both experiments triggers a comparison data fetch via `POST /api/experiments/compare/`.
+
+### Accordion Sections
+
+Six expandable sections, each showing left vs right comparison:
+
+```
+┌───────────────────────────────────────────────────────────┐
+│ Compare Experiments — Side-by-side comparison             │
+├───────────────────────────────────────────────────────────┤
+│ Left:  [▼ Exp #45 ]          Right: [▼ Exp #62 ]         │
+├───────────────────────────────────────────────────────────┤
+│ ✅ Results & Metrics                               [▼]    │
+│ ┌─────────────────────┬─────────────────────┐             │
+│ │ Completed ✓         │ Completed ✓         │             │
+│ │ R@100: 0.317        │ R@100: 0.473        │             │
+│ │ Loss: 0.034         │ Loss: 0.028         │             │
+│ └─────────────────────┴─────────────────────┘             │
+│ 🗄 Dataset Configuration                          [▼]     │
+│ ⚙ Feature Configuration                           [▼]     │
+│ 🧠 Model Configuration                            [▼]     │
+│ 🏃 Training Parameters                            [▼]     │
+│ 🔽 Sampling Configuration                         [▼]     │
+└───────────────────────────────────────────────────────────┘
+```
+
+| Section | Icon | Content |
+|---------|------|---------|
+| **Results & Metrics** | Chart bar (green) | Status badge + model-specific metrics |
+| **Dataset Configuration** | Database (purple) | Dataset name, tables, row counts |
+| **Feature Configuration** | Cogs (blue) | Tensor dims, feature counts, buyer/product features |
+| **Model Configuration** | Brain (pink) | Tower structures, optimizer, embedding dim |
+| **Training Parameters** | Running (orange) | Epochs, batch size, LR, hardware, GPU info |
+| **Sampling Configuration** | Filter (teal) | Sample %, split strategy, holdout days |
 
 ---
 
@@ -247,16 +443,20 @@ Unified table showing for each experiment:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/quick-tests/` | List experiments (paginated) |
+| GET | `/api/quick-tests/` | List experiments (paginated, filterable) |
 | POST | `/api/feature-configs/{id}/quick-test/` | Create experiment |
 | GET | `/api/quick-tests/{id}/` | Get experiment details |
 | POST | `/api/quick-tests/{id}/cancel/` | Cancel running experiment |
 | POST | `/api/quick-tests/{id}/rerun/` | Re-run experiment with same config |
 | DELETE | `/api/quick-tests/{id}/delete/` | Delete experiment + GCS artifacts |
 | GET | `/api/quick-tests/{id}/errors/` | Get error details |
-| GET | `/api/quick-tests/{id}/statistics/` | Get data insights |
+| GET | `/api/quick-tests/{id}/statistics/` | Get TFDV data statistics |
+| GET | `/api/quick-tests/{id}/schema/` | Get TensorFlow Metadata schema |
+| GET | `/api/quick-tests/{id}/tfdv-visualization/` | Get TFDV visualization data |
+| GET | `/experiments/quick-tests/{id}/tfdv/` | Standalone TFDV page (HTML, opens in new tab) |
 | GET | `/api/quick-tests/{id}/training-history/` | Get training metrics |
 | GET | `/api/quick-tests/{id}/histogram-data/` | Get weight histogram |
+| GET | `/api/quick-tests/{id}/logs/{component}/` | Get pipeline component logs (ExampleGen, StatisticsGen, SchemaGen, Transform, Trainer) |
 
 ### Comparison & Selection
 
@@ -276,6 +476,12 @@ Unified table showing for each experiment:
 | GET | `/api/experiments/training-heatmaps/?model_type=X` | Heatmap data |
 | GET | `/api/experiments/dataset-comparison/?model_type=X` | Dataset performance |
 | GET | `/api/experiments/suggestions/` | Suggested experiments |
+
+### Dataset Support
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/datasets/{id}/date-columns/` | Available date/timestamp columns for temporal split |
 
 ### Configuration Data
 
@@ -299,27 +505,46 @@ class QuickTest(models.Model):
 
     # Configuration references
     feature_config = ForeignKey('FeatureConfig')
-    model_config = ForeignKey('ModelConfig')
+    model_config = ForeignKey('ModelConfig', null=True)
     dataset = ForeignKey('Dataset')
+    created_by = ForeignKey(User)
+
+    # Experiment metadata
+    experiment_name = CharField(max_length=255)        # Optional user-defined name
+    experiment_description = TextField()                # Optional user-defined description
+    experiment_number = PositiveIntegerField()          # Sequential per Model Endpoint (display: "Exp #N")
 
     # Training parameters
     data_sample_percent = IntegerField(default=10)
-    epochs = IntegerField(default=3)
+    epochs = IntegerField(default=10)
     batch_size = IntegerField(default=4096)
-    learning_rate = FloatField(default=0.1)
+    learning_rate = FloatField(default=0.001)
+    rating_column = CharField(max_length=255)           # For ranking models
+
+    # Split strategy
+    split_strategy = CharField()  # random | time_holdout | strict_time
+    holdout_days = IntegerField(default=1)
+    date_column = CharField(max_length=255)
+    train_days = IntegerField()   # strict_time only
+    val_days = IntegerField()     # strict_time only
+    test_days = IntegerField()    # strict_time only
 
     # Hardware
     machine_type = CharField(default='e2-standard-4')  # Dataflow workers
     gpu_config = JSONField(default=dict)  # GPU for Trainer (empty = CPU-only)
 
     # Status tracking
-    status = CharField(choices=['submitting', 'running', 'completed', 'failed', 'cancelled'])
+    status = CharField(choices=['pending', 'submitting', 'running', 'completed', 'failed', 'cancelled'])
     current_stage = CharField()  # ExampleGen, Transform, Trainer, etc.
+    progress_percent = IntegerField()
+    stage_details = JSONField()  # List of {name, status, duration_seconds, error}
 
     # Pipeline references
     cloud_build_id = CharField()
+    cloud_build_run_id = CharField()
     vertex_pipeline_job_name = CharField()
-    gcs_artifacts_path = CharField()
+    vertex_pipeline_job_id = CharField()
+    gcs_artifacts_path = CharField(max_length=500)
 
     # Results - Retrieval metrics
     loss = FloatField(null=True)
@@ -338,14 +563,64 @@ class QuickTest(models.Model):
 
     # Cached training history (for fast UI loading)
     training_history_json = JSONField(default=dict)
+    vocabulary_stats = JSONField()
 
-    # Hyperparameter analysis fields
+    # Error handling
+    error_message = TextField()
+    error_stage = CharField(max_length=50)
+
+    # MLflow tracking
+    mlflow_run_id = CharField()
+    mlflow_experiment_name = CharField()
+
+    # Timestamps
+    created_at = DateTimeField(auto_now_add=True)
+    updated_at = DateTimeField(auto_now=True)
+    submitted_at = DateTimeField(null=True)
+    started_at = DateTimeField(null=True)
+    completed_at = DateTimeField(null=True)
+    duration_seconds = IntegerField(null=True)
+
+    # Denormalized hyperparameter analysis fields
+    optimizer = CharField()
+    output_embedding_dim = IntegerField()
+    retrieval_algorithm = CharField()
+    top_k = IntegerField()
     buyer_tower_structure = CharField()
     product_tower_structure = CharField()
+    buyer_activation = CharField()
+    product_activation = CharField()
+    buyer_l2_category = CharField()
+    product_l2_category = CharField()
+    buyer_total_params = IntegerField()
+    product_total_params = IntegerField()
     buyer_tensor_dim = IntegerField()
     product_tensor_dim = IntegerField()
+    buyer_feature_count = IntegerField()
+    product_feature_count = IntegerField()
+    buyer_cross_count = IntegerField()
+    product_cross_count = IntegerField()
     buyer_feature_details = JSONField()
     product_feature_details = JSONField()
+    buyer_cross_details = JSONField()
+    product_cross_details = JSONField()
+
+    # Denormalized dataset analysis fields
+    dataset_row_count = IntegerField()
+    dataset_date_range_days = IntegerField()
+    dataset_unique_users = IntegerField()
+    dataset_unique_products = IntegerField()
+    dataset_date_filters = JSONField()
+    dataset_customer_filters = JSONField()
+    dataset_product_filters = JSONField()
+
+    @property
+    def is_terminal(self):
+        """Check if completed/failed/cancelled."""
+
+    @property
+    def display_name(self):
+        """Returns 'Exp #N' or 'Exp #id'."""
 ```
 
 ### Training History Cache Structure
@@ -1251,7 +1526,7 @@ Any feature config with yearly cyclical encoding enabled (created via the UI) wo
 - [x] Quick Test chapter with experiment cards
 - [x] 2-step wizard (Select Configs → Training Params)
 - [x] Model type selection (Retrieval/Ranking/Multitask)
-- [x] Experiment comparison (2-4 experiments)
+- [x] Experiment comparison (2 experiments, 6 accordion sections)
 - [x] View modal with Config/Data Insights/Training/Error tabs
 - [x] **View modal migrated to reusable ExpViewModal module** (2026-01-15)
 - [x] **Pipeline logs service with Cloud Logging integration** (2026-01-15)
@@ -1264,7 +1539,10 @@ Any feature config with yearly cyclical encoding enabled (created via the UI) wo
 - [x] ScaNN support for retrieval models
 - [x] Multitask model support
 - [x] **GPU T4 support** (1x T4 via GenericExecutor in europe-west4) (2026-02-13)
+- [x] **AUC-ROC metrics** for binary-label ranking models (auto-detected) (2026-02-24)
 - [x] **History feature type** (purchase history taste vector, shared embedding + masked averaging) (2026-02-26)
+- [x] **Split strategies** — Random, Time Holdout, Strict Temporal with rolling window
+- [x] **6-filter bar** — Status, Model Type, Dataset, Features, Model + debounced search
 
 ### Future Enhancements
 

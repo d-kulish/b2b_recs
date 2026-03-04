@@ -42,7 +42,13 @@ This platform enables businesses to:
 - 🔐 Secret Manager integration for credentials
 
 ### **Datasets & Configs (Unified Page)** ✅
-The Datasets & Configs page provides a three-chapter workflow for configuring ML training:
+The Datasets & Configs page provides a four-chapter workflow for configuring ML training:
+
+**Configs Dashboard** - Overview of all configs
+- 📊 **KPI Summary Row:** 3 cards (Datasets, Features, Models) with total/active/unused counts and complexity scores
+- 🗺️ **Coverage Matrix:** FeatureConfig × ModelConfig heatmap showing experiment counts and best metrics
+- 🔗 **Configuration Flow:** Visual diagram showing Dataset → FeatureConfig → ModelConfig relationships
+- 💡 **Suggestions:** Identifies untested but compatible combinations for experimentation gaps
 
 **Chapter 1: Datasets** - Define WHAT data goes into training
 - 🎨 **Visual Schema Builder:** Power BI-style drag-and-drop interface with visual connection lines
@@ -527,7 +533,8 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - File validation and processing
 - Incremental and snapshot loading
 - Dataflow for large datasets (> 1M rows)
-- **Datasets & Configs (Unified Page)** - Three-chapter workflow with ~47 API endpoints:
+- **Datasets & Configs (Unified Page)** - Four-chapter workflow with ~60 API endpoints:
+  - Configs Dashboard (KPI summary, coverage matrix, configuration flow)
   - Chapter 1: Dataset Management (4-step wizard, Visual Schema Builder, D3.js Pareto charts)
   - Chapter 2: Feature Engineering (drag-drop UI, tensor preview, TFX code generation)
   - Chapter 3: Model Structure (tower builder, presets, Retrieval/Ranking/Multitask models)
@@ -716,9 +723,17 @@ WHERE source_type='gcs';
 - ✅ **GPU container ready** - `tfx-trainer-gpu:latest` with TF 2.15.1 + CUDA 12.2
 - See [Training Full docs](docs/training_full.md) for complete GPU configuration
 
+**February 3, 2026 - Configs Dashboard Chapter Added**
+- ✅ **Configs Dashboard** - New first chapter on the Configs page with inventory and usage insights
+- ✅ **KPI Summary Row** - 3 cards (Datasets, Features, Models) with total/active/unused counts and complexity bars
+- ✅ **Coverage Matrix** - FeatureConfig × ModelConfig heatmap showing experiment counts per combination
+- ✅ **Configuration Flow** - Visual diagram showing Dataset → FeatureConfig → ModelConfig relationships
+- ✅ **Page now has 4 chapters** - Dashboard → Datasets → Feature Engineering → Model Structure
+- See [Phase: Configs docs](docs/phase_configs.md) for Configs Dashboard details
+
 **January 12, 2026 - Datasets & Configs Page Consolidation**
-- ✅ **Unified three-chapter page** - Dataset Manager merged into Configs page as first chapter
-- ✅ **Chapter structure** - Datasets → Feature Engineering → Model Structure
+- ✅ **Unified page** - Dataset Manager merged into Configs page
+- ✅ **Chapter structure** - Datasets → Feature Engineering → Model Structure (later extended with Dashboard)
 - ✅ **Navigation update** - Single "Datasets & Configs" sidebar link
 - ✅ **URL redirect** - Old `/models/<id>/dataset/` URL now redirects to `/models/<id>/configs/`
 - ✅ **Legacy preservation** - Original `model_dataset.html` kept for rollback

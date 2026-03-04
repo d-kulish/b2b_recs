@@ -948,6 +948,292 @@ See [datasets_migration.md](datasets_migration.md) for complete bug fix details.
 
 ---
 
+## Feature Engineering Chapter (Chapter 3) - Implemented 2025-12-08 ✅
+
+The Feature Engineering chapter defines HOW data is transformed for model training. Users create Feature Configs that assign dataset columns to the BuyerModel (Query Tower) or ProductModel (Candidate Tower), configure per-column transforms, and set up cross features.
+
+**Implementation Status:** Complete
+- ✅ Feature Config CRUD (create, view, edit, clone, delete)
+- ✅ 2-step wizard (Basic Info → Feature Assignment)
+- ✅ Drag-and-drop column assignment with semantic type inference
+- ✅ Primary ID zones (Customer ID, Product ID) with dynamic embedding dimensions
+- ✅ Context features with per-feature transform configuration
+- ✅ Cross features with hash bucket configuration
+- ✅ Target column support for Ranking models
+- ✅ Tensor dimension preview with real-time calculation
+- ✅ TFX code generation (Transform module)
+- ✅ Version history tracking
+- ✅ Smart defaults service
+- ✅ Compare and Clone modals
+
+### Feature Config Cards
+
+Feature Config cards display:
+- **Name and model type badge**: `[🔍 Retrieval]` (blue) or `[📚 Retrieval / Ranking / Hybrid]` (gradient)
+- **Dataset reference**: Parent dataset name
+- **Version and timestamps**: Version number, updated date, creator
+- **Description**: Truncated to 80 characters
+- **Tensor breakdown grid**: Buyer and Product tensor bars with dimension totals
+- **Feature/cross counts**: Number of features and crosses per tower
+- **Action buttons**: View, Edit, Delete, Clone, Code
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ [⚙️] cherng_v1                         [🔍 Retrieval]  [View][Edit][Delete] │
+│ Standard feature config for retrieval experiments                           │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Dataset: old_data • v3 • Updated 2h ago • by admin                         │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Buyer Tensor: ████████ 128D          │ Product Tensor: ██████ 96D          │
+│ 5 features, 1 cross                  │ 3 features, 1 cross                 │
+├────────────────────────────────────────────────────────────────────────────┤
+│ [Clone] [Code]                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Feature Config Wizard (2 Steps)
+
+#### Step 1: Basic Info
+- **Name**: Required, validated for uniqueness within dataset
+- **Description**: Optional
+- **Base Dataset**: Required dropdown, populated from model's datasets
+- **Start From**: Blank / Smart Defaults / Clone from existing
+
+#### Step 2: Feature Assignment
+Visual drag-and-drop interface for assigning columns to towers:
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ DATASET SAMPLE (collapsible)                                                │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Preview table showing sample rows from dataset                          │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│ AVAILABLE COLUMNS                                                           │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+│ │customer_id│ │product_id│ │ category │ │  city    │ │  revenue │          │
+│ │ STRING   │ │ STRING   │ │ STRING   │ │ STRING   │ │ FLOAT64  │          │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘          │
+│   (drag columns to towers below)                                           │
+│                                                                             │
+│ ┌──────────────────────────────┐  ┌──────────────────────────────┐         │
+│ │ BUYER MODEL (Query Tower)    │  │ PRODUCT MODEL (Candidate)    │         │
+│ │                              │  │                              │         │
+│ │ ┌─ Customer ID ────────────┐ │  │ ┌─ Product ID ─────────────┐ │         │
+│ │ │ Drop customer_id here    │ │  │ │ Drop product_id here     │ │         │
+│ │ │ 📊 ~287K unique → 64D   │ │  │ │ 📊 ~4.5K unique → 32D   │ │         │
+│ │ └──────────────────────────┘ │  │ └──────────────────────────┘ │         │
+│ │                              │  │                              │         │
+│ │ Context Features:            │  │ Context Features:            │         │
+│ │ ┌────────────────────┐       │  │ ┌────────────────────┐       │         │
+│ │ │ city       ⚙️ ✕   │       │  │ │ category   ⚙️ ✕   │       │         │
+│ │ │ STRING → Text 8D  │       │  │ │ STRING → Text 8D  │       │         │
+│ │ └────────────────────┘       │  │ └────────────────────┘       │         │
+│ │ [+ Add Cross Feature]       │  │ [+ Add Cross Feature]       │         │
+│ └──────────────────────────────┘  └──────────────────────────────┘         │
+│                                                                             │
+│ ┌─ TARGET COLUMN (for Ranking models) ─────────────────────────────────┐   │
+│ │ Drop a numeric column here (e.g., revenue, rating)                    │   │
+│ │ Transforms: [✓] Normalize  [ ] Log Transform  [ ] Clip Outliers      │   │
+│ └───────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│ TENSOR PREVIEW                                                              │
+│ ┌──────────────────────────┐  ┌──────────────────────────────┐             │
+│ │ Buyer: 128D total        │  │ Product: 96D total           │             │
+│ │ ████████████████████████ │  │ ██████████████████           │             │
+│ │ customer_id: 64D         │  │ product_id: 32D              │             │
+│ │ city: 8D                 │  │ category: 8D                 │             │
+│ │ city_norm: 1D            │  │ cat×subcat: 16D              │             │
+│ └──────────────────────────┘  └──────────────────────────────┘             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Drag-and-Drop System
+
+**Column Cards** (Available Columns):
+- Show column name and BigQuery type badge
+- Draggable to Primary ID zones, Context Features zones, or Target Column zone
+- Columns used in one tower are visually dimmed in Available Columns
+
+**Primary ID Zones**:
+- Accept the main identifier column (customer_id, product_id)
+- Auto-apply embedding dimension based on cardinality
+- Show cardinality info and recommendation status (green/amber)
+
+**Context Features Zones**:
+- Accept multiple columns per tower
+- Each feature gets a settings button (⚙️) for transform configuration
+- Features can be removed with the ✕ button
+
+**Target Column Zone** (visible for Ranking models):
+- Accepts a single numeric column for the rating/label
+- Configurable transforms: Normalize, Log Transform, Clip Outliers
+- Clip Outliers options: Lower/Upper percentile bounds (1st, 5th, 10th, 25th)
+
+### Semantic Type Inference
+
+When columns are dropped into towers, the system infers a semantic data type from the BigQuery type:
+
+| BigQuery Type | Inferred Data Type | Default Transform |
+|---------------|-------------------|-------------------|
+| STRING | Text | Embedding (dim based on cardinality) |
+| INT64, FLOAT64, NUMERIC | Numeric | Normalize [-1, 1] |
+| TIMESTAMP, DATE, DATETIME | Temporal | Normalize + Cyclical encoding |
+| ARRAY<STRING> | History | Shared embedding with pooling |
+
+Users can override the inferred type via the feature settings modal.
+
+### Feature Transform Options
+
+**Text Features:**
+- Embedding with configurable dimension (8, 16, 32, 64, 128, 256, or custom)
+- Cardinality-based recommendation with visual indicator (★)
+- Vocabulary auto-detected from training data
+- +1 OOV bucket for unseen values (cold start handling)
+
+**Numeric Features:**
+- Normalize: Z-score normalization to [-1, 1] range (+1D)
+- Bucketize + Embed: Discretize into buckets (10/50/100/200) then embed (8/16/32/64D)
+
+**Temporal Features:**
+- Normalize: Timestamp normalization (+1D)
+- Cyclical encoding: Yearly/Quarterly/Monthly/Weekly/Daily (+2D each)
+- Bucketize + Embed: Same as numeric
+
+**History Features (ARRAY columns):**
+- Shared embedding table with a product ID feature
+- Configurable embedding dimension (16, 32, 64)
+- Max sequence length (default: 50)
+- Averages across variable-length purchase sequences
+
+### Cross Features
+
+Cross features combine two or more features into a hash-bucketed interaction:
+- Created via "Add Cross Feature" button
+- Modal shows available features from the tower
+- Configuration: feature selection, hash bucket size, embedding dimension
+- Displayed in italic in tensor breakdown
+
+### Dynamic Embedding Dimensions
+
+Primary ID columns automatically receive embedding dimensions based on cardinality:
+
+| Cardinality | Recommended Dim |
+|-------------|-----------------|
+| < 50 | 8D |
+| 50–500 | 16D |
+| 500–5K | 32D |
+| 5K–50K | 64D |
+| 50K–500K | 96D |
+| 500K+ | 128D |
+
+The same heuristic applies to context text features. The recommended dimension button is highlighted with a ★ marker.
+
+### Tensor Dimension Preview
+
+Real-time calculation showing input dimensions for both towers:
+- Total dimension badge per tower
+- Visual bar with proportional segments per feature
+- Breakdown list: feature name → dimension contribution
+- Cross features shown separately
+- Updates instantly on any feature change
+
+### Feature Config Compare Modal
+
+Side-by-side comparison of any two feature configs:
+- Two dropdown selects (Left/Right)
+- Table-based aligned layout:
+  - Header: Feature set name + dataset name
+  - Source: Tables, filters, row count
+  - Buyer Tensor: Bar visualization + features list
+  - Product Tensor: Bar visualization + features list
+- Cross features displayed in italic
+
+### TFX Code Generation
+
+**Transform Module** (`preprocessing_fn`):
+- Auto-generated from FeatureConfig on create/update/clone
+- Stored in `FeatureConfig.generated_transform_code`
+- Handles: vocabularies, normalization, cyclical encoding, crosses, bucketization
+- Code Viewer modal with syntax highlighting, copy/download, regenerate
+- Automatic syntax validation with error reporting (line numbers)
+
+**Trainer Module**:
+- Generated at runtime combining FeatureConfig + ModelConfig
+- NOT stored (would become stale when ModelConfig changes)
+- Endpoint: `POST /api/configs/generate-trainer-code/`
+
+### Feature Config Chapter Functions (fc_ prefix)
+
+**List & Cards:**
+- `fc_loadConfigs()` - Fetch and render feature config cards
+- `createConfigCard(config)` - Render individual card with tensor bars
+- `fc_debounceSearch()` - Search filter with debounce
+
+**Wizard Lifecycle:**
+- `fc_openWizard(mode, configId)` - Open create/edit wizard
+- `fc_closeWizard()` - Close wizard and reset state
+- `fc_nextStep()` / `fc_prevStep()` - Step navigation
+- `saveConfig()` - Save to backend
+
+**Drag-and-Drop:**
+- `dropPrimaryId(event, model)` - Handle Customer/Product ID drops
+- `dropFeature(event, model)` - Handle context feature drops
+- `dropTargetColumn(event)` - Handle target column drop
+- `createAssignedFeatureElement()` - Render assigned feature chip
+
+**Feature Configuration:**
+- `openFeatureConfig(model, idx)` - Open feature settings modal
+- `renderFeatureConfigForm()` - Render semantic type selector and transforms
+- `applyFeatureConfig()` - Save transform configuration
+- `getRecommendedEmbedDim(cardinality)` - Cardinality-based dimension lookup
+
+**Tensor Preview:**
+- `renderTensorPreview()` - Visualize tensor breakdown bars
+- `updateTensorDimensions()` - Recalculate dimensions
+
+**Cross Features:**
+- `openCrossFeatureModal(model)` - Open cross feature creation modal
+- `addCrossFeature()` - Add cross feature to tower
+
+**Compare & Code:**
+- `fc_openCompareModal()` - Open side-by-side comparison
+- `viewTransformCode(configId)` - Open code viewer modal
+
+### Feature Config Modals
+
+| Modal ID | Purpose |
+|----------|---------|
+| `featureConfigWizardModal` | 2-step feature config wizard |
+| `featureConfigModal` | Configure individual feature transforms |
+| `viewConfigModal` | View feature config details with dataset info |
+| `cloneConfigModal` | Clone with new name input |
+| `compareModal` | Side-by-side feature comparison |
+| `crossFeatureModal` | Create cross-feature interactions |
+| `transformCodeViewerModal` | View generated TFX transform code |
+| `trainerCodeViewerModal` | View generated trainer code |
+
+### Feature Config API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models/{id}/feature-configs/` | List feature configs for model |
+| POST | `/api/models/{id}/feature-configs/create/` | Create feature config |
+| GET | `/api/feature-configs/{id}/` | Get config details |
+| PUT | `/api/feature-configs/{id}/update/` | Update config |
+| DELETE | `/api/feature-configs/{id}/delete/` | Delete config |
+| POST | `/api/feature-configs/{id}/clone/` | Clone config |
+| GET | `/api/feature-configs/{id}/versions/` | List version history |
+| GET | `/api/feature-configs/{id}/generated-code/` | Get generated transform code |
+| POST | `/api/feature-configs/{id}/regenerate-code/` | Regenerate transform code |
+| POST | `/api/feature-configs/smart-defaults/` | Generate smart default features |
+| POST | `/api/feature-configs/calculate-dims/` | Calculate tensor dimensions |
+| POST | `/api/feature-configs/check-name/` | Check name uniqueness |
+| POST | `/api/configs/generate-trainer-code/` | Generate trainer code (requires FeatureConfig + ModelConfig) |
+
+---
+
 ## Model Structure Chapter (Chapter 4)
 
 The Model Structure chapter defines neural network architecture independently from feature engineering. This enables flexible experimentation with different architectures using the same feature set.
@@ -1143,15 +1429,18 @@ Layers are aligned row-by-row, with empty cells shown for mismatched layer count
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/model-configs/` | List all model configs |
-| POST | `/api/model-configs/create/` | Create new config |
+| GET | `/api/models/{id}/model-configs/` | List model configs for project |
+| POST | `/api/models/{id}/model-configs/create/` | Create new config |
 | GET | `/api/model-configs/{id}/` | Get config details |
-| PUT | `/api/model-configs/{id}/` | Update config |
-| DELETE | `/api/model-configs/{id}/` | Delete config |
-| POST | `/api/model-configs/{id}/clone/` | Clone config |
+| PUT | `/api/model-configs/{id}/update/` | Update config |
+| DELETE | `/api/model-configs/{id}/delete/` | Delete config |
+| POST | `/api/models/{id}/model-configs/{id}/clone/` | Clone config |
 | GET | `/api/model-configs/presets/` | Get tower presets |
+| GET | `/api/model-configs/presets/{name}/` | Get specific preset |
 | GET | `/api/model-configs/rating-head-presets/` | Get Rating Head presets |
 | GET | `/api/model-configs/loss-functions/` | Get loss function options |
+| POST | `/api/model-configs/validate/` | Validate model config data |
+| POST | `/api/models/{id}/model-configs/check-name/` | Check name uniqueness |
 
 ### Model Config Database Fields
 
@@ -1355,33 +1644,49 @@ let configState = {
 | POST | `/api/models/{id}/customer-revenue-analysis/` | Customer revenue distribution |
 | POST | `/api/models/{id}/search-column-values/` | Search category values |
 
+### Configs Dashboard API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models/{id}/configs/dashboard-stats/` | KPI stats, coverage matrix, relationships |
+
 ### Feature Config APIs (`/api/feature-configs/`)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/models/{id}/feature-configs/` | List feature configs |
-| POST | `/api/feature-configs/create/` | Create feature config |
+| GET | `/api/models/{id}/feature-configs/` | List feature configs for model |
+| POST | `/api/models/{id}/feature-configs/create/` | Create feature config |
 | GET | `/api/feature-configs/{id}/` | Get config details |
-| PUT | `/api/feature-configs/{id}/` | Update config |
-| DELETE | `/api/feature-configs/{id}/` | Delete config |
+| PUT | `/api/feature-configs/{id}/update/` | Update config |
+| DELETE | `/api/feature-configs/{id}/delete/` | Delete config |
 | POST | `/api/feature-configs/{id}/clone/` | Clone config |
-| GET | `/api/feature-configs/{id}/generated-code/` | Get transform/trainer code |
-| POST | `/api/feature-configs/{id}/regenerate-code/` | Regenerate code |
+| GET | `/api/feature-configs/{id}/versions/` | List version history |
+| GET | `/api/feature-configs/{id}/generated-code/` | Get generated transform code |
+| POST | `/api/feature-configs/{id}/regenerate-code/` | Regenerate transform code |
+| POST | `/api/feature-configs/smart-defaults/` | Generate smart default features |
+| POST | `/api/feature-configs/calculate-dims/` | Calculate tensor dimensions |
+| POST | `/api/feature-configs/check-name/` | Check name uniqueness |
+| POST | `/api/configs/generate-trainer-code/` | Generate trainer code (FeatureConfig + ModelConfig) |
 | GET | `/api/models/{id}/configs/datasets/` | List datasets for dropdown |
+| GET | `/api/datasets/{id}/columns/` | Get dataset columns with stats |
+| GET | `/api/datasets/{id}/schema-with-sample/` | Get schema with sample data and semantic types |
 
 ### Model Config APIs (`/api/model-configs/`)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/model-configs/` | List all model configs |
-| POST | `/api/model-configs/create/` | Create model config |
+| GET | `/api/models/{id}/model-configs/` | List model configs for project |
+| POST | `/api/models/{id}/model-configs/create/` | Create model config |
 | GET | `/api/model-configs/{id}/` | Get config details |
-| PUT | `/api/model-configs/{id}/` | Update config |
-| DELETE | `/api/model-configs/{id}/` | Delete config |
-| POST | `/api/model-configs/{id}/clone/` | Clone config |
+| PUT | `/api/model-configs/{id}/update/` | Update config |
+| DELETE | `/api/model-configs/{id}/delete/` | Delete config |
+| POST | `/api/models/{id}/model-configs/{id}/clone/` | Clone config |
 | GET | `/api/model-configs/presets/` | Get tower presets |
+| GET | `/api/model-configs/presets/{name}/` | Get specific preset |
 | GET | `/api/model-configs/rating-head-presets/` | Get Rating Head presets |
 | GET | `/api/model-configs/loss-functions/` | Get loss function options |
+| POST | `/api/model-configs/validate/` | Validate model config data |
+| POST | `/api/models/{id}/model-configs/check-name/` | Check name uniqueness |
 
 ---
 

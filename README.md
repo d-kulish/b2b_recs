@@ -180,8 +180,6 @@ b2b-recs-platform (Central)          Client Projects (Isolated)
 - Reduces Quick Test compilation from 12-15 min to 1-2 min
 - Built once, shared across all clients via IAM
 
-See [`implementation.md`](implementation.md) for full architecture details.
-
 ### **Per-Client Components**
 
 | Component | Type | Resources | Purpose |
@@ -282,6 +280,144 @@ gcloud scheduler jobs list --location=$REGION
 └─────────────────┘
 ```
 
+### **Network Architecture & Static IPs**
+
+Enterprise clients typically have on-premise databases behind firewalls that require IP whitelisting. Each client project gets a **Cloud NAT + Reserved Static IP** so all outbound traffic from Cloud Run uses a predictable, stable IP address.
+
+```
+Client GCP Project
+├── Cloud Run Services (Django, ETL, Model Serving)
+│   └── Outbound connections
+│           ↓
+├── Cloud NAT Gateway
+│   └── Maps all outbound traffic to static IP
+│           ↓
+├── Reserved Static External IP
+│   └── Whitelisted in client's source database
+│           ↓
+Client's Database (PostgreSQL, MySQL, etc.)
+    └── Firewall: Allow <client-static-ip>
+```
+
+**Setup per client project:**
+```bash
+# Reserve static IP
+gcloud compute addresses create client-static-ip \
+    --region=$REGION --project=$CLIENT_PROJECT
+
+# Create Cloud Router
+gcloud compute routers create nat-router \
+    --network=default --region=$REGION --project=$CLIENT_PROJECT
+
+# Create Cloud NAT with static IP
+gcloud compute routers nats create nat-config \
+    --router=nat-router --region=$REGION \
+    --nat-external-ip-pool=client-static-ip \
+    --nat-all-subnet-ip-ranges --project=$CLIENT_PROJECT
+```
+
+**Cost:** ~$40/month per client (Static IP ~$7 + Cloud NAT ~$32).
+
+### **GCP Organization Structure**
+
+```
+Your Company GCP Organization
+│
+├── Folder: Management
+│   ├── Project: control-plane-prod        ← Master portal, billing, monitoring
+│   └── Project: b2b-recs-platform         ← Shared TFX compiler image (Artifact Registry)
+│
+├── Folder: Clients
+│   ├── Project: client-acme-prod          ← Fully isolated stack
+│   ├── Project: client-beta-prod          ← Fully isolated stack
+│   └── Project: client-{name}-prod
+│
+└── Folder: Development
+    ├── Project: template-dev              ← Development and testing
+    └── Project: your-sandbox              ← Experimentation
+```
+
+### **Required GCP APIs**
+
+Enable these APIs per client project:
+```bash
+gcloud services enable \
+  bigquery.googleapis.com \
+  cloudscheduler.googleapis.com \
+  run.googleapis.com \
+  cloudbuild.googleapis.com \
+  secretmanager.googleapis.com \
+  sqladmin.googleapis.com \
+  aiplatform.googleapis.com \
+  dataflow.googleapis.com \
+  artifactregistry.googleapis.com
+```
+
+### **Region Selection Policy**
+
+> **CRITICAL**: ALL GCP resources within a client project MUST be in the same region. Mixed regions cause query failures, increased latency, and potential GDPR violations.
+
+| Region | Location | GPU Training | Use Case |
+|--------|----------|--------------|----------|
+| `europe-central2` | Warsaw, Poland | No | Default for EU clients (data + infra) |
+| `europe-west4` | Netherlands | Yes (T4) | GPU training jobs |
+| `us-central1` | Iowa, USA | Yes | US clients, largest GPU capacity |
+
+**Common mistake:** BigQuery defaults to `US` multi-region when no location is specified. Always set location explicitly:
+```bash
+bq mk --location=$REGION --dataset $PROJECT_ID:dataset_name
+```
+
+### **Cost Estimates Per Client**
+
+**Fixed monthly (~$140-200):**
+| Component | Cost |
+|-----------|------|
+| Cloud Run (Django) | ~$30-50 |
+| Cloud SQL (PostgreSQL) | ~$25-40 |
+| Cloud NAT + Static IP | ~$40 |
+| Cloud Scheduler | ~$0.10 |
+
+**Variable (usage-based):**
+| Operation | Cost |
+|-----------|------|
+| ETL run (Cloud Run + Dataflow) | ~$5-20/run |
+| Quick Test (Vertex AI CPU) | ~$2-5/run |
+| Full Training (Vertex AI GPU) | ~$10-50/run |
+| BigQuery queries | ~$5-50/month |
+
+**Typical total:** $190-440/month depending on training frequency.
+
+### **Client Onboarding**
+
+1. Create isolated GCP project under organization
+2. Enable required APIs and configure IAM service accounts
+3. Deploy Django app, ETL runner, and TFDV parser to Cloud Run
+4. Set up Cloud NAT + Static IP for database connectivity
+5. Grant client's Cloud Build access to shared TFX compiler image
+6. Store client database credentials in Secret Manager
+7. Run initial ETL and validate data in BigQuery
+8. Provide client with Django UI URL and credentials
+
+**Timeline:** 2-4 hours manual. **Future:** Automated via Terraform in ~30 minutes.
+
+### **Future: Terraform Automation**
+
+Infrastructure provisioning is currently manual. For scaling beyond the first few clients, the setup will be codified with Terraform:
+
+```
+terraform/
+├── modules/
+│   ├── client-project/     # GCP project, IAM, networking
+│   ├── cloud-run/          # Django, ETL, TFDV services
+│   ├── data-infra/         # BigQuery, GCS, Secret Manager
+│   └── ml-pipeline/        # Vertex AI, Cloud Build
+└── environments/
+    └── client-{name}/      # Per-client tfvars
+```
+
+This will enable one-command client provisioning: `terraform apply -var="client_name=acme"`.
+
 ---
 
 ## 🚀 Quick Start
@@ -332,7 +468,6 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 
 | Document | Description |
 |----------|-------------|
-| [`implementation.md`](implementation.md) | **SaaS architecture, multi-tenant design, shared infrastructure** |
 | [`next_steps.md`](next_steps.md) | Current status, priorities, and roadmap |
 | [`etl_runner/etl_runner.md`](etl_runner/etl_runner.md) | ETL Runner technical documentation |
 | [`docs/phase_configs.md`](docs/phase_configs.md) | **Datasets & Configs page specification** (Datasets + Features + Model Structure) |
@@ -670,7 +805,7 @@ WHERE source_type='gcs';
 - ✅ **New Experiments page** (`model_experiments.html`) - 1,129 lines of new code
 - ✅ **Modeling page reduced** - Removed ~714 lines, now focused on Feature + Model Config only
 - ✅ **Clean separation** - Modeling = Configure, Experiments = Run and Compare
-- ✅ **Documentation updated** - `phase_configs.md`, `phase_experiments.md`, `implementation.md`
+- ✅ **Documentation updated** - `phase_configs.md`, `phase_experiments.md`
 - See [Phase: Experiments docs](docs/phase_experiments.md) for details
 
 **December 12, 2025 - Code Generation Architecture Refactored**
@@ -740,7 +875,7 @@ WHERE source_type='gcs';
 - ✅ Train/eval split moves to TFX ExampleGen in Training domain
 - ✅ Dataset versioning at training time for reproducibility
 - ✅ Simplified Query Preview modal (shows base query only)
-- ✅ Updated documentation (implementation.md, phase_configs.md)
+- ✅ Updated documentation (phase_configs.md)
 
 **December 5, 2025 - Enhanced Filtering System**
 - ✅ Cross-sub-chapter column exclusion - columns used in one filter are unavailable in others

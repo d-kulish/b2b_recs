@@ -348,6 +348,6 @@ The client can train models on this SaaS platform and deploy the exported SavedM
 
 ## Related Documentation
 
-- [Implementation Overview](../implementation.md) -- SaaS architecture and multi-tenant design
+- [README](../../README.md) -- Project overview, SaaS architecture, and multi-tenant design
 - [Training Phase](../phase_training.md) -- TFX pipeline stages and GPU configuration
 - [Deployment Phase](../phase_endpoints.md) -- Model serving and endpoint management

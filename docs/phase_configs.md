@@ -3718,7 +3718,7 @@ These are **point-in-time** features — each transaction row carries the custom
 ## Related Documentation
 
 - [TFX Code Generation](tfx_code_generation.md) - Auto-generated Transform/Trainer code
-- [Implementation Overview](../implementation.md)
+- [README](../README.md)
 - [Datasets Phase](phase_datasets.md)
 - [Training Phase](phase_training.md)
 - [Experiments Phase](phase_experiments.md)

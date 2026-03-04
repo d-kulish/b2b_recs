@@ -3490,7 +3490,7 @@ MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://mlflow-serve
 
 ## Related Documentation
 
-- [Implementation Overview](../implementation.md)
+- [README](../../README.md)
 - [Configs Phase](phase_configs.md)
 - [Training Phase](phase_training.md)
 - [Deployment Phase](phase_deployment.md)

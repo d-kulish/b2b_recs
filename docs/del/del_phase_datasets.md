@@ -1840,7 +1840,7 @@ class TestQueryGeneration:
 
 ## Related Documentation
 
-- [Implementation Overview](../implementation.md)
+- [README](../../README.md)
 - [Modeling Phase](phase_modeling.md)
 - [Training Phase](phase_training.md)
 

@@ -792,7 +792,7 @@ def validate_api_key(auth_header: str) -> bool:
 
 ## Related Documentation
 
-- [Implementation Overview](../implementation.md)
+- [README](../README.md)
 - [Training Phase](phase_training.md)
 - [Experiments Phase](phase_experiments.md)
 

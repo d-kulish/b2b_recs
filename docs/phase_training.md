@@ -4295,7 +4295,7 @@ Training run 66 (retrieval model `tern_retr_v1`) reported R@5=59.6% during pipel
 
 ## Related Documentation
 
-- [Implementation Overview](../implementation.md)
+- [README](../README.md)
 - [Datasets Phase](phase_datasets.md)
 - [Modeling Phase](phase_modeling.md)
 - [Experiments Phase](phase_experiments.md)

@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **ETL (Extract, Transform, Load)** domain in the ML Platform. The ETL domain manages data ingestion from external sources into BigQuery for model training.
 
-**Last Updated**: 2026-03-04 (v20 - Doc sync: Added Create Wizard, Edit Modal, Diverging Chart, Header KPIs, full filter bars, missing API endpoints)
+**Last Updated**: 2026-03-04 (v21 - Page structure: Standalone architecture, 4-chapter layout, 7 modals, JS/CSS inventory, complete API endpoints)
 
 ---
 
@@ -73,6 +73,108 @@ DataSource (ETL Job - Django Model)
 ├── Status: is_enabled, last_run_at, last_run_status
 └── Tables: DataSourceTable[] (one-to-many)
 ```
+
+---
+
+## Page Structure
+
+### Standalone Architecture
+
+`etl_page.html` is a **standalone HTML page** — it does NOT extend `base_model.html` or any other base template. It is a complete `<!DOCTYPE html>` document with its own `<head>`, CSS, and JavaScript. This is intentional: the ETL page is **system-wide** (not project-scoped), so it lives outside the project navigation shell.
+
+- **URL**: `/etl/` → `views.etl_page` (name: `etl_page`)
+- **Legacy redirect**: `/models/<id>/etl/` → redirects to `/etl/`
+- **Template**: `templates/ml_platform/etl_page.html` (11,152 lines)
+- **Django tags**: `{% load humanize %}`, `{% load static %}`, `{% load tz %}`
+
+### Layout Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Header: Logo · Page Title · 4 Header KPIs · Profile Icon  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ▼ Chapter 1: ETL Dashboard       [data-chapter="etl-dashboard"]
+│    ├── 6 KPI Cards (Total Runs, Success Rate, …)           │
+│    ├── Scheduled Jobs Table (paginated, 5/page)             │
+│    ├── Diverging Stacked Bar Chart (D3.js, 30 days)         │
+│    └── Job Legend                                           │
+│                                                             │
+│  ▼ Chapter 2: ETL Runs            [data-chapter="etl-runs"] │
+│    ├── Filter Bar (Status, Connection, Job, Dest, Load, Search)
+│    ├── Runs Table (client-side filtered, 5/page)            │
+│    └── Pagination Controls                                  │
+│                                                             │
+│  ▼ Chapter 3: Connections         [data-chapter="connections"]
+│    ├── Filter Bar (Status, Type, Search)                    │
+│    ├── Connection Cards Grid (3 columns, 6/page)            │
+│    ├── Action Buttons: Test Connections, Create Connection   │
+│    └── Pagination Controls                                  │
+│                                                             │
+│  ▼ Chapter 4: ETL Jobs            [data-chapter="etl-jobs"] │
+│    ├── Filter Bar (Status, Connection, Schedule, Dest, Load, Search)
+│    ├── Job Cards Grid (2 columns, 6/page)                   │
+│    └── Pagination Controls                                  │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  Modals (7):                                                │
+│    notificationModal     — Alerts (success/error/warning)   │
+│    runDetailsModal       — ETL run details + logs + timeline│
+│    confirmationModal     — Action confirmation dialog       │
+│    addSourceModal        — 5-step ETL Job creation wizard   │
+│    createConnectionModal — 2-step Connection creation wizard│
+│    confirmModal          — Destructive action confirmation  │
+│    editJobModal          — Edit ETL job (schedule, columns) │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### External Libraries
+
+| Library | Version | Usage |
+|---------|---------|-------|
+| Tailwind CSS | 3.4.10 | CSS framework (CDN) |
+| Font Awesome | 6.4.0 | Icon library (CDN) |
+| Chart.js | 4.4.0 | Chart library (CDN, loaded but not actively used) |
+| chartjs-adapter-date-fns | 3.0.0 | Date formatting adapter (CDN) |
+| D3.js | v7 | Diverging stacked bar chart (CDN) |
+
+### CSS Files (Static)
+
+| File | Version | Purpose |
+|------|---------|---------|
+| `static/css/buttons.css` | — | Button styling |
+| `static/css/model_dashboard.css` | v17 | Dashboard components |
+| `static/css/cards.css` | v4 | Card component styling |
+| `static/css/modals.css` | v4 | Modal styling |
+| `static/css/backgrounds.css` | — | Background patterns |
+| `static/css/exp_view_modal.css` | v12 | Logs modal styling |
+
+> **Note:** The page also contains extensive inline `<style>` blocks for chapter containers, KPI cards, run cards, filter bars, connection cards, job cards, modal headers (neumorphic soft-gradient), wizard forms, stage bars, and the diverging chart.
+
+### JavaScript
+
+All JavaScript is **inline** (no separate `.js` module files). Major script blocks:
+
+| Block | Purpose |
+|-------|---------|
+| KPI formatting | Number/duration formatting utilities |
+| Diverging chart | D3.js stacked bar chart (30 days of ETL runs) |
+| ETL Runs | Filtering, pagination, status badges, `allRunsData` JSON |
+| Connections | Card rendering, CRUD, test, `connectionsList` grid |
+| ETL Jobs | Card rendering, filtering, `etlJobsData` JSON |
+| Add Source Wizard | 5-step wizard logic (`addSourceModal`) |
+| Create Connection Wizard | 2-step wizard logic (`createConnectionModal`) |
+| Edit Job | Schedule/column editing (`editJobModal`) |
+| Run Details | Modal population, logs viewer, timeline |
+| Modal management | Notification, confirmation, and reusable modal helpers |
+
+### Filter Bars
+
+| Filter Bar | Chapter | Element ID Prefix | Filters |
+|------------|---------|-------------------|---------|
+| ETL Runs | Chapter 2 | `runs` | `runsStatusFilter`, `runsConnectionFilter`, `runsJobFilter`, `runsDestTableFilter`, `runsLoadTypeFilter`, `runsSearchInput` |
+| Connections | Chapter 3 | `connections` | `connectionsStatusFilter`, `connectionsTypeFilter`, `connectionsSearch` |
+| ETL Jobs | Chapter 4 | `jobs` | `jobsStatusFilter`, `jobsConnectionFilter`, `jobsScheduleFilter`, `jobsDestTableFilter`, `jobsLoadTypeFilter`, `jobsSearch` |
 
 ---
 
@@ -1109,6 +1211,7 @@ python main.py \
 | `POST` | `/api/etl/sources/{id}/toggle-pause/` | Pause/resume scheduler |
 | `POST` | `/api/etl/sources/{id}/update/` | Update data source configuration |
 | `GET` | `/api/etl/sources/{id}/available-columns/` | Fetch available columns from source table |
+| `POST` | `/api/etl/sources/{id}/test/` | Test connection for existing source |
 | `POST` | `/api/etl/test-connection/` | Test connection during wizard (no saved source) |
 
 #### BigQuery Table Management
@@ -1141,6 +1244,19 @@ python main.py \
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/etl/runs/{id}/status/` | Get run status with phase timestamps |
+
+#### Legacy Model-Scoped APIs (backward compatibility)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/models/{id}/etl/add-source/` | Add source (model-scoped) |
+| `POST` | `/api/models/{id}/etl/save-draft/` | Save draft source (model-scoped) |
+| `POST` | `/api/models/{id}/etl/check-name/` | Check job name (model-scoped) |
+| `POST` | `/api/models/{id}/etl/toggle/` | Toggle ETL enabled (model-scoped) |
+| `POST` | `/api/models/{id}/etl/run/` | Run ETL now (model-scoped) |
+| `GET` | `/api/models/{id}/etl/connections/` | List connections for wizard (model-scoped) |
+| `POST` | `/api/models/{id}/etl/create-job/` | Create ETL job (model-scoped) |
+| `POST` | `/api/connections/{id}/test-wizard/` | Test connection in wizard context |
 
 ---
 
@@ -3012,7 +3128,7 @@ Three independent issues:
 
 **Files Modified:**
 - `ml_platform/etl/api.py` — Added 3 missing fields to `run_status()` response
-- `templates/ml_platform/model_etl.html` — New CSS for animated indicator, branching `renderRunStagesBar()`, fixed polling functions, new `updateRunCard()`
+- `templates/ml_platform/etl_page.html` — New CSS for animated indicator, branching `renderRunStagesBar()`, fixed polling functions, new `updateRunCard()`
 
 ---
 
@@ -3053,10 +3169,13 @@ Three independent issues:
 
 | File | Purpose |
 |------|---------|
-| `templates/ml_platform/etl_page.html` | Standalone system-wide ETL page template |
-| `templates/ml_platform/model_etl.html` | Legacy per-project ETL template (redirects to standalone page) |
-| `static/css/cards.css` | Card styling for connections/jobs |
-| `static/css/modals.css` | Modal styling for wizards |
+| `templates/ml_platform/etl_page.html` | Standalone system-wide ETL page (11,152 lines, standalone HTML) |
+| `static/css/buttons.css` | Button styling |
+| `static/css/model_dashboard.css` | Dashboard components (v17) |
+| `static/css/cards.css` | Card styling for connections/jobs (v4) |
+| `static/css/modals.css` | Modal styling for wizards (v4) |
+| `static/css/backgrounds.css` | Background patterns |
+| `static/css/exp_view_modal.css` | Logs modal styling (v12) |
 
 ---
 
@@ -3064,6 +3183,7 @@ Three independent issues:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v21 | 2026-03-04 | Page structure: Added standalone architecture section (no base template, system-wide); 4-chapter layout diagram (Dashboard, ETL Runs, Connections, ETL Jobs); 7 modals inventory; external libraries table (Tailwind, D3, Chart.js, Font Awesome); CSS files table (6 static files); inline JS blocks table; 3 filter bars with element IDs; added missing `sources/{id}/test/` endpoint; added legacy model-scoped endpoints section (8 endpoints); expanded Frontend Files listing; fixed stale `model_etl.html` references |
 | v20 | 2026-03-04 | Doc sync: Added 5-step Create ETL Job Wizard, Edit Job Modal, BigQuery Table Setup, file-based source config; replaced Bubble Chart with Diverging Chart; added Header KPIs, full filter bars for ETL Runs and ETL Jobs; added missing API endpoints (available-columns, validate-schema-compatibility, BQ tables, test-connection, logs) |
 | v19 | 2026-02-24 | System-wide ETL: Moved ETL out of per-project scope; made `model_endpoint` nullable on Connection, ETLConfiguration, ETLRun; created standalone `/etl/` page and system-wide API endpoints; removed ETL tab from project nav; added ETL chapter to system dashboard; old `/models/<id>/etl/` URLs redirect to `/etl/` |
 | v18 | 2026-02-07 | ETL Run Cards: Added Rerun button to run cards with `data_source_id` in run JSON; reuses `runSourceNow()` and existing trigger endpoint; disabled for running/pending states |

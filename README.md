@@ -22,24 +22,36 @@ This platform enables businesses to:
 
 ## ✨ Key Features
 
-### **ETL System**
-- 📊 **Data Sources** (7 types):
-  - **SQL Databases:** PostgreSQL, MySQL, BigQuery (cross-project + public datasets)
-  - **NoSQL Databases:** Firestore 🔥 (with automatic schema inference)
+### **ETL System (Standalone Page)** ✅
+The ETL page (`/etl/`) is a system-wide standalone page for managing data ingestion pipelines. It provides a four-chapter interface:
+
+**ETL Dashboard** - Operational overview
+- 📊 **Header KPIs:** Failed/successful runs (last 24h), active connections, configured jobs
+- 📈 **Dashboard KPIs:** Total runs, success rate, rows migrated, avg duration (last 30 days)
+- 📅 **Scheduled Jobs Table:** All scheduled ETL jobs with next run time and Cloud Scheduler state
+- 📉 **Diverging Chart:** D3.js visualization of success vs failure per job (last 30 days)
+
+**ETL Runs** - Execution monitoring
+- 🃏 **Run Cards:** Status, metrics (rows/bytes/tables), 4-stage progress bar (Init → Validate → Extract → Load)
+- 🔍 **Rich Filtering:** Status, Connection, ETL Job, Destination Table, Load Type + search
+- 📋 **Run Details Modal:** Full execution timeline, results, error classification, Cloud Run Job logs
+
+**Connections** - Reusable data source credentials
+- 📊 **Data Sources** (16 types):
+  - **SQL Databases:** PostgreSQL, MySQL, MariaDB, Oracle, SQL Server, DB2, Redshift, BigQuery, Snowflake, Azure Synapse, Teradata
+  - **NoSQL Databases:** MongoDB, Firestore 🔥, Cassandra, DynamoDB, Redis
   - **Cloud Storage:** GCS, S3, Azure Blob Storage
-- 📁 **File Formats:** CSV, Parquet, JSON/JSONL
-- 🔄 **Load Strategies:**
-  - Transactional (incremental/append-only)
-  - Catalog (daily snapshots)
-- ⚙️ **Processing Modes:**
-  - Standard (< 1M rows): Single Cloud Run instance
-  - Dataflow (≥ 1M rows): Distributed processing with partitioning
-- 🧠 **Smart Features:**
-  - Automatic schema inference for NoSQL (samples 100 documents)
-  - Nested data handling (JSON strings for complex objects)
-  - Column name sanitization and type mapping
-- ⏰ Automated scheduling with Cloud Scheduler
-- 🔐 Secret Manager integration for credentials
+- 🔐 **Secret Manager Integration:** Credentials stored in Google Secret Manager, not in Django DB
+- 🔌 **Connection Testing:** Individual and bulk connection validation with duplicate detection
+- 🧙 **2-Step Wizard:** Select type → Configure credentials (type-specific forms)
+
+**ETL Jobs** - Data extraction pipeline configuration
+- 🧙 **5-Step Create Wizard:** Connection → Tables/Files → Load Strategy → BigQuery Setup → Schedule
+- 📁 **File Formats:** CSV, Parquet, JSON/JSONL with auto-schema detection
+- 🔄 **Load Strategies:** Transactional (incremental/append) or Catalog (full snapshot)
+- ⚙️ **Processing Modes:** Standard (< 1M rows, Cloud Run) or Dataflow (≥ 1M rows, Apache Beam)
+- 📅 **Scheduling:** Manual, Hourly, Daily, Weekly via Cloud Scheduler with OIDC authentication
+- 🗄️ **BigQuery Table Management:** Create new or use existing tables with schema editor and compatibility validation
 
 ### **Datasets & Configs (Unified Page)** ✅
 The Datasets & Configs page provides a four-chapter workflow for configuring ML training:
@@ -475,6 +487,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | Document | Description |
 |----------|-------------|
 | [`next_steps.md`](next_steps.md) | Current status, priorities, and roadmap |
+| [`docs/phase_etl.md`](docs/phase_etl.md) | **ETL page specification** (Connections + ETL Jobs + Dashboard + Runs) |
 | [`etl_runner/etl_runner.md`](etl_runner/etl_runner.md) | ETL Runner technical documentation |
 | [`docs/phase_configs.md`](docs/phase_configs.md) | **Datasets & Configs page specification** (Datasets + Features + Model Structure) |
 | [`docs/phase_experiments.md`](docs/phase_experiments.md) | **Experiments page specification** (Quick Test + Dashboard) |
@@ -524,14 +537,15 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 ## 📊 Current Status
 
 ### **✅ Working**
+- **ETL System (Standalone Page)** - System-wide ETL with 4-chapter interface (~40 API endpoints):
+  - ETL Dashboard (header KPIs, dashboard KPIs, scheduled jobs table, diverging chart)
+  - ETL Runs (run cards with 4-stage progress bars, filtering, Cloud Run logs viewer)
+  - Connections (16 source types, Secret Manager, 2-step wizard, bulk testing)
+  - ETL Jobs (5-step wizard, file/database sources, schema editor, Cloud Scheduler)
 - Multi-source ETL (databases + cloud storage files + NoSQL)
 - **Firestore ETL** - Load NoSQL documents to BigQuery with automatic schema inference
 - Automated scheduling via Cloud Scheduler
-- BigQuery integration with auto-schema
-- Connection management with Secret Manager
-- ETL Wizard UI (5-step configuration)
-- File validation and processing
-- Incremental and snapshot loading
+- BigQuery integration with auto-schema and compatibility validation
 - Dataflow for large datasets (> 1M rows)
 - **Datasets & Configs (Unified Page)** - Four-chapter workflow with ~60 API endpoints:
   - Configs Dashboard (KPI summary, coverage matrix, configuration flow)
@@ -722,6 +736,14 @@ WHERE source_type='gcs';
 - ✅ **Cross-region architecture** - Data in `europe-central2`, training in `europe-west4`
 - ✅ **GPU container ready** - `tfx-trainer-gpu:latest` with TF 2.15.1 + CUDA 12.2
 - See [Training Full docs](docs/training_full.md) for complete GPU configuration
+
+**February 24, 2026 - System-Wide ETL Page**
+- ✅ **Standalone ETL page** (`/etl/`) - ETL moved out of per-project scope to system-wide page
+- ✅ **4-chapter interface** - ETL Dashboard → ETL Runs → Connections → ETL Jobs
+- ✅ **5-step Create Wizard** - Connection → Tables/Files → Load Strategy → BigQuery Setup → Schedule
+- ✅ **ETL Dashboard** - Header KPIs, dashboard KPIs, scheduled jobs table, diverging chart (D3.js)
+- ✅ **ETL Run Cards** - 4-stage progress bar (Init → Validate → Extract → Load), Cloud Run Job logs viewer
+- See [Phase: ETL docs](docs/phase_etl.md) for full ETL page specification
 
 **February 3, 2026 - Configs Dashboard Chapter Added**
 - ✅ **Configs Dashboard** - New first chapter on the Configs page with inventory and usage insights

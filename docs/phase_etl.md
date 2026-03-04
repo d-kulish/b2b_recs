@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for the **ETL (Extract, Transform, Load)** domain in the ML Platform. The ETL domain manages data ingestion from external sources into BigQuery for model training.
 
-**Last Updated**: 2026-02-24 (v19 - System-wide ETL: Moved ETL out of project scope to standalone page)
+**Last Updated**: 2026-03-04 (v20 - Doc sync: Added Create Wizard, Edit Modal, Diverging Chart, Header KPIs, full filter bars, missing API endpoints)
 
 ---
 
@@ -377,6 +377,7 @@ class Connection(models.Model):
 | `GET` | `/api/connections/{id}/` | Get connection details |
 | `GET` | `/api/connections/{id}/credentials/` | Get decrypted credentials |
 | `POST` | `/api/connections/{id}/test/` | Test existing connection |
+| `POST` | `/api/connections/{id}/test-and-fetch-tables/` | Test and fetch tables without password input |
 | `POST` | `/api/connections/{id}/update/` | Update connection |
 | `GET` | `/api/connections/{id}/usage/` | Get ETL jobs using this connection |
 | `POST` | `/api/connections/{id}/delete/` | Delete connection |
@@ -619,9 +620,9 @@ User sees: "Cannot delete connection: used by X ETL job(s). Delete or reassign t
 
 ### Known Issues and Limitations
 
-1. **No Connection Sharing Across Models**: Connections are scoped to a single ModelEndpoint. Cross-model sharing not yet implemented.
+1. ~~**No Connection Sharing Across Models**~~: Resolved in v19 — connections are now system-wide (`model_endpoint=None`).
 
-2. **No Connection Folders/Groups**: All connections displayed in flat list. For models with many connections, search and pagination help.
+2. **No Connection Folders/Groups**: All connections displayed in flat list. Search, type filters, and pagination help manage large numbers.
 
 3. **Service Account JSON Stored in DB**: For BigQuery/GCS/Firestore, the service account JSON is currently stored in the model (encrypted). Migration to Secret Manager planned.
 
@@ -1106,6 +1107,16 @@ python main.py \
 | `POST` | `/api/etl/sources/{id}/edit/` | Update ETL job |
 | `POST` | `/api/etl/sources/{id}/delete/` | Delete ETL job |
 | `POST` | `/api/etl/sources/{id}/toggle-pause/` | Pause/resume scheduler |
+| `POST` | `/api/etl/sources/{id}/update/` | Update data source configuration |
+| `GET` | `/api/etl/sources/{id}/available-columns/` | Fetch available columns from source table |
+| `POST` | `/api/etl/test-connection/` | Test connection during wizard (no saved source) |
+
+#### BigQuery Table Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/etl/datasets/{dataset_id}/tables/` | List existing BigQuery tables in dataset |
+| `POST` | `/api/etl/validate-schema-compatibility/` | Validate source schema against existing BQ table |
 
 #### ETL Execution
 
@@ -1120,7 +1131,8 @@ python main.py \
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/etl/job-config/{id}/` | Get job configuration for runner |
-| `PATCH` | `/api/etl/runs/{id}/update/` | Update run status/progress |
+| `POST` | `/api/etl/runs/{id}/update/` | Update run status/progress |
+| `GET` | `/api/etl/runs/{id}/logs/` | Fetch Cloud Run Job logs for ETL run |
 | `GET` | `/api/etl/sources/{id}/processed-files/` | Get processed files list |
 | `POST` | `/api/etl/sources/{id}/record-processed-file/` | Record file as processed |
 
@@ -1128,7 +1140,7 @@ python main.py \
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/etl/runs/{id}/status/` | Get run status |
+| `GET` | `/api/etl/runs/{id}/status/` | Get run status with phase timestamps |
 
 ---
 
@@ -1183,6 +1195,333 @@ Each job card displays 5 columns:
 3. **Last Run Info**: When last ran, status
 4. **Run Actions**: Run Now button, Pause/Resume button (if scheduled)
 5. **Actions**: Edit and Delete buttons
+
+#### ETL Jobs Filter Bar
+
+```
+┌───────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ STATUS        CONNECTION       SCHEDULE         DEST TABLE       LOAD TYPE                         │
+│ [▼ All    ]   [▼ All      ]   [▼ All       ]   [▼ All       ]   [▼ All       ]                    │
+│                                                                                                    │
+│ 🔍 [Search ETL jobs...                                                                    ] [✕]   │
+└───────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+Filter Options:
+- **Status**: All, Active, Paused
+- **Connection**: All, (dynamically populated from connections)
+- **Schedule**: All, Manual, Hourly, Daily, Weekly, Monthly
+- **Destination Table**: All, (dynamically populated from job configs)
+- **Load Type**: All, Relational, NoSQL, Cloud Storage
+- **Search**: Debounced text search on job name
+```
+
+---
+
+### Create ETL Job Wizard (5-Step)
+
+The wizard guides users through configuring a complete ETL pipeline in 5 steps. Opened via the "+ New ETL Job" button.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 📊 Add ETL Data Source                                         Step X of 5 │
+│    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│    [Connection]━━[Tables]━━[Strategy]━━[BQ Setup]━━[Schedule]              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  (Step content varies — see below)                                          │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                         [← Back]  [Next →]      [Cancel]   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Connection & Job Name
+
+Select a saved connection and provide a unique job name.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Step 1: Select Connection                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Job Name *                                                                   │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Daily Transactions Extract                                              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│   ✓ Name available                                                          │
+│                                                                              │
+│ Select a Connection:                                                         │
+│ ┌───────────────────────────────────────────────────────────────────────┐   │
+│ │ ○ Production PostgreSQL      Relational · analytics · 3 jobs          │   │
+│ │ ● GCS Data Lake              Cloud Storage · gs://data-lake · 1 job   │   │
+│ │ ○ BigQuery Analytics         Relational · project · 2 jobs            │   │
+│ └───────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│ ℹ️ Create connections first in the Connections chapter                       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Validation:**
+- Job name is unique (checked via `/api/etl/check-name/`)
+- A connection must be selected
+
+#### Step 2: Table/File Selection
+
+Content changes based on connection type (database vs cloud storage).
+
+**For Database Connections:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Step 2: Select Tables                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Schema:  [▼ public              ]                                           │
+│                                                                              │
+│ Tables:                                                                      │
+│ ┌───────────────────────────────────────────────────────────────────────┐   │
+│ │ ○ customers          50,000 rows                                      │   │
+│ │ ● transactions       1,200,000 rows                                   │   │
+│ │ ○ products           5,000 rows                                       │   │
+│ └───────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│ Preview:                                                                     │
+│ ┌───────────────────────────────────────────────────────────────────────┐   │
+│ │ id  │ customer_id │ product_id │ amount │ created_at                  │   │
+│ │ 1   │ 42          │ 101        │ 29.99  │ 2025-12-25T10:00:00         │   │
+│ │ 2   │ 87          │ 205        │ 14.50  │ 2025-12-25T10:05:00         │   │
+│ │ ... │ ...         │ ...        │ ...    │ ...                         │   │
+│ └───────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**For Cloud Storage Connections:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Step 2: Select Files                                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Folder Path (optional):                                                      │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ data/transactions/                                                      │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ File Pattern:                                                                │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ *.csv                                                                   │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ File Format:  ○ CSV  ○ Parquet  ○ JSON                                     │
+│                                                                              │
+│ CSV Options:                                                                 │
+│   Delimiter: [▼ , (comma)  ]  Encoding: [▼ UTF-8  ]  ☑ Has Header          │
+│                                                                              │
+│ [Preview Matching Files]                                                     │
+│ ┌───────────────────────────────────────────────────────────────────────┐   │
+│ │ ☑ transactions_2025_12.csv        1.2 GB   Dec 1, 2025              │   │
+│ │ ☑ transactions_2025_11.csv        980 MB   Nov 1, 2025              │   │
+│ │ ☐ transactions_2025_10.csv        1.1 GB   Oct 1, 2025              │   │
+│ └───────────────────────────────────────────────────────────────────────┘   │
+│   [Select All] [Deselect All]   3 files matched, 2 selected                │
+│                                                                              │
+│ [Detect Schema]                                                              │
+│ Detected columns: customer_id (STRING), amount (FLOAT64), date (DATE)       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Functions:**
+- `fetchSchemasForConnection()` — Load schemas for database connections
+- `fetchTablesForSchema()` — Load tables within selected schema
+- `fetchTablePreview()` — Preview first 10 rows of selected table
+- `previewMatchingFiles()` — List files matching pattern in cloud storage
+- `detectFileSchema()` — Auto-detect schema from file sample (5MB download)
+
+#### Step 3: Load Strategy Configuration
+
+Configure how data is loaded — Transactional (incremental) or Catalog (full replacement).
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Step 3: Configure Load Strategy                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Load Type:                                                                   │
+│ ┌──────────────────────────────┐  ┌──────────────────────────────┐          │
+│ │ ● Transactional              │  │ ○ Catalog                    │          │
+│ │   Append-Only (Incremental)  │  │   Daily Snapshot (Replace)   │          │
+│ └──────────────────────────────┘  └──────────────────────────────┘          │
+│                                                                              │
+│ ── Transactional Settings (Database) ──────────────────────────────          │
+│                                                                              │
+│ Timestamp Column *                                                           │
+│ [▼ created_at (TIMESTAMP)  ]                                                │
+│                                                                              │
+│ Historical Backfill:                                                         │
+│ ○ Last 30 days  ○ Last 60 days  ● Last 90 days  ○ All  ○ Custom            │
+│                                                                              │
+│ ── Transactional Settings (File-based) ─────────────────────────            │
+│                                                                              │
+│ ℹ️ New and modified files are automatically detected via:                    │
+│    • File size comparison                                                    │
+│    • Modification date comparison                                            │
+│   Best practice: Use date-based naming (e.g., data_2025_12.csv)             │
+│                                                                              │
+│ ── Catalog Settings ────────────────────────────────────────────            │
+│                                                                              │
+│ File-based catalog options:                                                  │
+│ ○ Latest File Only — Only process the newest matching file                  │
+│ ● All Matched Files — Process all files matching pattern                    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 4: BigQuery Table Setup
+
+Configure the destination BigQuery table — create new or use an existing table.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Step 4: BigQuery Destination                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Destination:  ● Create New Table  ○ Use Existing Table                      │
+│                                                                              │
+│ ── Create New Table ────────────────────────────────────────────────        │
+│                                                                              │
+│ Table Name *                                                                 │
+│ raw_data. ┌───────────────────────────────────────────────────────┐         │
+│           │ transactions                                          │         │
+│           └───────────────────────────────────────────────────────┘         │
+│                                                                              │
+│ Schema Editor:                                                               │
+│ ┌──────────────────┬──────────────┬──────────────┬─────────┬─────────────┐ │
+│ │ Column Name      │ Source Type  │ BQ Type      │ Mode    │ Sample      │ │
+│ ├──────────────────┼──────────────┼──────────────┼─────────┼─────────────┤ │
+│ │ customer_id      │ integer      │ [▼ INT64   ] │ [▼ REQ] │ 42, 87      │ │
+│ │ product_id       │ integer      │ [▼ INT64   ] │ [▼ REQ] │ 101, 205    │ │
+│ │ amount           │ numeric(10,2)│ [▼ FLOAT64 ] │ [▼ NUL] │ 29.99, 14.5 │ │
+│ │ created_at       │ timestamp    │ [▼ TIMESTAMP]│ [▼ NUL] │ 2025-12-25  │ │
+│ └──────────────────┴──────────────┴──────────────┴─────────┴─────────────┘ │
+│ [Reset to Defaults]                                                          │
+│                                                                              │
+│ ── Use Existing Table ──────────────────────────────────────────────        │
+│                                                                              │
+│ Existing Table: [▼ raw_data.transactions    ] [↻ Refresh]                   │
+│ Rows: 1,200,000 │ Load Type: Transactional │ Partitioned: Yes (created_at) │
+│                                                                              │
+│ Schema Compatibility:                                                        │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ ✓ 4/4 columns match                                                     │ │
+│ │ ⚠ 1 type mismatch: amount (NUMERIC → FLOAT64)                          │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ Performance (Transactional only):                                            │
+│ ℹ️ Table will be partitioned by created_at (DAY) for query performance       │
+│                                                                              │
+│ Summary: raw_data.transactions · 4 columns · Transactional                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Functions:**
+- `toggleDestinationMode()` — Switch between create new / use existing
+- `loadExistingTables()` — Fetch BigQuery tables via `/api/etl/datasets/{id}/tables/`
+- `validateSchemaCompatibility()` — Validate source schema against existing table via `/api/etl/validate-schema-compatibility/`
+- `renderCompatibilityReport()` — Display compatibility issues
+- `renderBigQuerySchemaEditor()` — Interactive schema editor with type/mode dropdowns
+- `resetSchemaToDefaults()` — Reset schema to auto-detected defaults
+- `syncBigQuerySchemaFromUI()` — Collect schema edits from UI
+
+#### Step 5: Schedule & Review
+
+Configure automation schedule and review the complete ETL job configuration.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Step 5: Schedule & Review                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Schedule:                                                                    │
+│ [Manual] [Hourly] [Daily] [Weekly]                                          │
+│                                                                              │
+│ Hourly options: Minute [▼ :00 ] (:00, :15, :30, :45)                       │
+│ Daily options:  Time [08:00]                                                │
+│ Weekly options: Day [▼ Monday ] Time [08:00]                                │
+│                                                                              │
+│ ── Summary ──────────────────────────────────────────────────────────       │
+│                                                                              │
+│ Connection:   Production PostgreSQL                                          │
+│ Source:       public.transactions                                            │
+│ Destination:  raw_data.transactions                                          │
+│ Strategy:     Transactional (Append)                                         │
+│ Schedule:     Daily at 08:00 UTC                                             │
+│                                                                              │
+│ ☑ Enable immediately after creation                                          │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                         [← Back]  [Create Job]   [Cancel]   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**On Submit:**
+- `createDataSource()` sends all configuration to `/api/etl/create-job/`
+- Cloud Scheduler job is created (if not manual)
+- Job appears in ETL Jobs list
+
+---
+
+### Edit ETL Job Modal
+
+Existing ETL jobs can be edited via the Edit button on job cards. The edit modal exposes a subset of fields — connection and table bindings are read-only.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ✏️ Edit ETL Job                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ Job Name *                                                                   │
+│ ┌─────────────────────────────────────────────────────────────────────────┐ │
+│ │ Daily Transactions Extract                                              │ │
+│ └─────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ Schedule:                                                                    │
+│ [Manual] [Hourly] [Daily] [Weekly]                                          │
+│                                                                              │
+│ Column Selection:                                                            │
+│ [Select All] [Deselect All]                                                 │
+│ ☑ customer_id  ☑ product_id  ☑ amount  ☑ created_at  ☐ internal_notes      │
+│                                                                              │
+│ ── Read-Only Settings ──────────────────────────────────────────────        │
+│ Connection:   Production PostgreSQL                                          │
+│ Source Table:  public.transactions                                            │
+│ Destination:   raw_data.transactions                                         │
+│ Load Strategy: Transactional (Append)                                        │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                              [Save Changes]      [Cancel]   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Editable Fields:**
+- Job name
+- Schedule type and timing
+- Column selection (add/remove columns from extraction)
+
+**Read-Only Fields:**
+- Connection (changing requires recreating the job)
+- Source table
+- Destination table
+- Load strategy
+
+**Key Functions:**
+- `openEditJobModal()` — Fetch job details and open modal
+- `loadEditJobColumns()` — Fetch available columns from source via `/api/etl/sources/{id}/available-columns/`
+- `renderEditJobColumns()` — Render checkbox list with current selections
+- `saveJobChanges()` — Persist changes via `/api/etl/sources/{id}/edit/`
 
 ---
 
@@ -1272,7 +1611,29 @@ The ETL runner updates Django via API at:
 
 The ETL Jobs Dashboard provides operational visibility into ETL pipeline performance through summary KPIs and execution history.
 
-### KPI Cards
+### Header KPIs
+
+The page header displays 4 quick-glance stats for the last 24 hours:
+
+```
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│ ✗ 2           │  │ ✓ 18         │  │ 🔌 8         │  │ 📊 12        │
+│   FAILED      │  │   SUCCESSFUL │  │   CONNECTIONS │  │   ETL JOBS   │
+│   (Last 24h)  │  │   (Last 24h) │  │   Active     │  │   Configured │
+└──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
+     (red)            (green)           (blue)            (purple)
+```
+
+| KPI | Color | Description | Data Source |
+|-----|-------|-------------|-------------|
+| **Failed (Last 24h)** | Red | ETL runs failed in last 24 hours | `COUNT(ETLRun WHERE status='failed' AND started_at > now-24h)` |
+| **Successful (Last 24h)** | Green | ETL runs completed in last 24 hours | `COUNT(ETLRun WHERE status='completed' AND started_at > now-24h)` |
+| **Connections** | Blue | Total active connections | `COUNT(Connection WHERE is_enabled=True)` |
+| **ETL Jobs** | Purple | Total configured ETL jobs | `COUNT(DataSource)` |
+
+---
+
+### Dashboard KPI Cards
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -1428,7 +1789,7 @@ The Scheduled Jobs table displays all ETL jobs configured with automated schedul
 │                                               │                                                           │
 │  📅 Scheduled Jobs                            │  ETL Job Runs (Last 5 Days)                             │
 │  ┌───────────────────────────────────────┐   │                                                           │
-│  │ Job Name    │ Schedule  │ Next Run    │   │              [Bubble Chart]                              │
+│  │ Job Name    │ Schedule  │ Next Run    │   │           [Diverging Chart]                              │
 │  │             │           │             │   │                                                           │
 │  ├─────────────┼───────────┼─────────────┤   │                                                           │
 │  │ Daily Trans │ Daily 09:00│ Dec 27, 09:00│  │                                                           │
@@ -1519,108 +1880,77 @@ When no scheduled jobs exist:
 
 ---
 
-### ETL Job Runs Bubble Chart
+### ETL Job Runs Diverging Chart
 
-The bubble chart provides a visual timeline of ETL job executions over the last 5 days, with bubble attributes encoding run metadata.
+The diverging bar chart provides an operational overview of ETL job success vs failure over the last 30 days. Each ETL job is shown as a horizontal bar with successful runs extending right (green) and failed runs extending left (red).
 
 #### Chart Layout
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ ETL Job Runs (Last 5 Days)                    ● Success  ● Partial  ● Failed  │ ● Data  ○ No data      │
+│ ETL Job Runs (Last 30 Days)                                                                              │
 ├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                          │
-│                       Dec 22        Dec 23        Dec 24        Dec 25        Dec 26                    │
-│                          │             │             │             │             │                       │
-│  Daily Transactions ─────●─────────────●─────────────●─────────────●─────────────●────                  │
-│                         (lg)          (lg)          (lg)          (lg)          (md)                    │
-│                                                                                                          │
-│  Weekly Products ────────────────────────────────────────────────────●─────────────────                  │
-│                                                                     (sm)                                 │
-│                                                                                                          │
-│  Hourly Inventory ───────○───○───○───○───○───○───○───○───○───●───●───●───●───●───●───●                  │
-│                         (xs) ...                              (xs) ...                                   │
-│                                                                                                          │
-│  Monthly Report ─────────────────────────────────────────────────────────────────────────                │
-│                                                                                                          │
+│              Failed ◄───────────────────────┼───────────────────────► Succeeded                          │
+│                                             │                                                            │
+│  Daily Transactions      ██                 │████████████████████████████                                │
+│  Weekly Products                            │██████████                                                  │
+│  Hourly Inventory        ████████           │██████████████████                                          │
+│  Monthly Report                             │████                                                        │
+│  GCS File Sync           ██████             │██████████████                                              │
+│                                             │                                                            │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-Legend:
-  ● Filled bubble = Rows were loaded (data transferred)
-  ○ Hollow bubble = No data loaded (0 rows)
-  Bubble size = Duration (larger = longer running)
-  Color: Green = Success, Orange = Partial, Red = Failed
+Legend (job colors):
+  ████ Daily Transactions  ████ Weekly Products  ████ Hourly Inventory  ...
 ```
 
 #### Visual Encoding
 
 | Attribute | Encoding | Description |
 |-----------|----------|-------------|
-| **X Position** | Time | When the run started (5-day range) |
-| **Y Position** | Job Name | Which ETL job was executed |
-| **Bubble Size** | Duration | Execution time in seconds (scaled min→max to 4px→14px radius) |
-| **Bubble Color** | Status | `completed`=green, `partial`=orange, `failed`=red |
-| **Bubble Fill** | Data Loaded | Filled=rows loaded, Hollow=no data (0 rows) |
+| **Y Position** | Job Name | Which ETL job (categorical axis) |
+| **Bar Right** | Successful Runs | Count of `status='completed'` runs (green) |
+| **Bar Left** | Failed Runs | Count of `status='failed'` runs (red) |
+| **Color** | Job Identity | Each job gets a unique color from a palette |
 
 #### Status Color Mapping
 
-| Status | Color | Hex | Condition |
-|--------|-------|-----|-----------|
-| Success | Green | `#22C55E` | `status='completed'` |
-| Partial | Orange | `#FB923C` | `status='completed'` but partial success |
-| Failed | Red | `#EF4444` | `status='failed'` |
-
-#### Bubble Size Scale
-
-```javascript
-// Size is scaled based on duration relative to all runs in the 5-day window
-const minRadius = 4;   // Minimum bubble radius (px)
-const maxRadius = 14;  // Maximum bubble radius (px)
-
-// Linear scale from min to max duration
-const sizeScale = d3.scaleLinear()
-    .domain([durationStats.min, durationStats.max])
-    .range([minRadius, maxRadius])
-    .clamp(true);
-```
+| Direction | Color | Description |
+|-----------|-------|-------------|
+| Right (positive) | Green (`#22C55E`) | Successful runs (`status='completed'`) |
+| Left (negative) | Red (`#EF4444`) | Failed runs (`status='failed'`) |
 
 #### Data Structure
 
 ```javascript
-// bubble_chart_data passed from Django to JavaScript
+// divergingChartData passed from Django to JavaScript
 {
     "runs": [
         {
+            "id": 567,
             "job_name": "Daily Transactions",
+            "status": "completed",
             "started_at": "2025-12-26T09:00:00+00:00",
-            "duration": 37,        // seconds
-            "status": "completed", // or "failed", "partial"
-            "rows_loaded": 15420
+            "duration_seconds": 37,
+            "rows_extracted": 15420,
+            "source_type": "postgresql"
         },
-        // ... more runs
+        // ... more runs (last 30 days)
     ],
-    "job_names": ["Daily Transactions", "Hourly Inventory", "Weekly Products"],
-    "date_range": {
-        "start": "2025-12-22T00:00:00+00:00",
-        "end": "2025-12-26T23:59:59+00:00"
-    },
-    "duration_stats": {
-        "min": 12,   // shortest run in seconds
-        "max": 145   // longest run in seconds
-    }
+    "job_names": ["Daily Transactions", "Hourly Inventory", "Weekly Products"]
 }
 ```
 
 #### Tooltip
 
-On hover, each bubble displays a tooltip with:
+On hover, each bar segment displays a tooltip with:
 ```
 ┌────────────────────────────────┐
 │ Daily Transactions             │
-│ Dec 26, 09:00                  │
-│ Duration: 37s                  │
-│ Rows: 15,420                   │
-│ Status: ✓ Completed            │
+│ Succeeded: 28                  │
+│ Failed: 2                      │
+│ Total: 30 runs                 │
 └────────────────────────────────┘
 ```
 
@@ -1629,17 +1959,16 @@ On hover, each bubble displays a tooltip with:
 | Property | Value | Notes |
 |----------|-------|-------|
 | Container width | 100% | Responsive to parent |
-| Chart height | 260px | Fixed for consistent layout |
+| Chart height | 260px | Scales with number of jobs |
 | Margins | `{ top: 15, right: 30, bottom: 40, left: 130 }` | Left margin for job names |
 | Y-axis | Categorical (job names) | Uses `d3.scaleBand()` |
-| X-axis | Time scale (5 days) | Uses `d3.scaleTime()` |
+| X-axis | Linear (run counts) | Uses `d3.scaleLinear()` centered at 0 |
 
 #### Rendering Library
 
-Uses **D3.js** for SVG rendering with the following components:
-- `d3.scaleTime()` for X-axis
+Uses **D3.js v7** for SVG rendering with the following components:
 - `d3.scaleBand()` for Y-axis (job names)
-- `d3.scaleLinear()` for bubble size
+- `d3.scaleLinear()` for X-axis (diverging from 0)
 - Custom tooltip positioning
 
 #### Empty State
@@ -1682,7 +2011,9 @@ The Recent Runs table provides a detailed history of ETL job executions with cli
 │ Recent Runs                                                                                              │
 ├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                          │
-│  🔍 [Search by job name...        ]  [✕ Clear Filters]         Status: [Completed] [Failed] [Cancelled] │
+│  STATUS          CONNECTION        ETL JOB          DEST TABLE       LOAD TYPE                            │
+│  [▼ All      ]   [▼ All       ]   [▼ All      ]   [▼ All       ]   [▼ All       ]                       │
+│  🔍 [Search by job name...                                                                    ] [✕]     │
 │                                                                                                          │
 ├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │  Run ID │ ETL Job           │ Connection         │ Status    │ Started         │ Duration │ Rows  │ Act │
@@ -1737,29 +2068,26 @@ The Recent Runs table provides a detailed history of ETL job executions with cli
 
 #### Filter Controls
 
+##### Filter Dropdowns
+
+| Filter | Options | Data Source |
+|--------|---------|-------------|
+| **Status** | All, Completed, Failed, Cancelled | Static |
+| **Connection** | All, (dynamically populated) | `DataSource.connection.name` |
+| **ETL Job** | All, (dynamically populated) | `DataSource.name` |
+| **Destination Table** | All, (dynamically populated) | `DataSourceTable.dest_table_name` |
+| **Load Type** | All, Transactional, Catalog | Static |
+
 ##### Search Input
 
 - **Placeholder**: "Search by job name..."
 - **Behavior**: Debounced search (200ms delay), immediate on Enter
 - **Filter logic**: Case-insensitive substring match on `job_name`
 
-##### Status Filter Buttons
-
-Three toggle buttons for filtering by run status:
-
-| Button | Default Style | Selected Style |
-|--------|--------------|----------------|
-| **Completed** | `bg-green-100 text-green-700` | `bg-green-500 text-white` |
-| **Failed** | `bg-red-100 text-red-700` | `bg-red-500 text-white` |
-| **Cancelled** | `bg-gray-200 text-gray-700` | `bg-gray-500 text-white` |
-
-- **Multi-select**: Multiple statuses can be selected (OR logic)
-- **Toggle behavior**: Click to select/deselect
-
 ##### Clear Filters Button
 
 - **Visibility**: Hidden by default, shown when any filter is active
-- **Action**: Clears search input and all status filters
+- **Action**: Clears search input and all filter dropdowns
 
 ---
 
@@ -2736,6 +3064,7 @@ Three independent issues:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v20 | 2026-03-04 | Doc sync: Added 5-step Create ETL Job Wizard, Edit Job Modal, BigQuery Table Setup, file-based source config; replaced Bubble Chart with Diverging Chart; added Header KPIs, full filter bars for ETL Runs and ETL Jobs; added missing API endpoints (available-columns, validate-schema-compatibility, BQ tables, test-connection, logs) |
 | v19 | 2026-02-24 | System-wide ETL: Moved ETL out of per-project scope; made `model_endpoint` nullable on Connection, ETLConfiguration, ETLRun; created standalone `/etl/` page and system-wide API endpoints; removed ETL tab from project nav; added ETL chapter to system dashboard; old `/models/<id>/etl/` URLs redirect to `/etl/` |
 | v18 | 2026-02-07 | ETL Run Cards: Added Rerun button to run cards with `data_source_id` in run JSON; reuses `runSourceNow()` and existing trigger endpoint; disabled for running/pending states |
 | v17 | 2026-02-07 | ETL Run Cards: Replaced frozen 4-segment bar with animated shimmer indicator for running/pending jobs; fixed polling to target cards instead of table rows; added missing API fields |

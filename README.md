@@ -166,6 +166,51 @@ Cloud Build (1-2 min)              Vertex AI Pipeline (5-15 min)
 | **Ranking** | Score/rank candidates | RMSE, MAE, Test RMSE, Test MAE |
 | **Multitask** | Combined objectives | All 8 metrics (retrieval + ranking) |
 
+### **Training** ✅
+The Training page (`model_training.html`) manages production model training, deployment, and the model registry. It provides a three-chapter interface with ~60 API endpoints:
+
+**Chapter 1: Models Registry** - Production model management
+- 📊 **KPI Summary Row:** Total models, Blessed, Deployed, Idle counts, Latest registration
+- 📅 **Training Activity Calendar:** GitHub-style heatmap showing past 10 weeks + next 30 weeks of scheduled training
+- 🔍 **Filter Bar:** Type (All/Retrieval/Ranking/Multitask), Status (All/Blessed/Deployed/Idle), Sort, Search
+- 📋 **Registered Models Table:** Model name, type, version, metrics, status badge, actions dropdown
+- 📅 **Schedules Section:** Schedule cards with Run/Pause/Resume/Edit/Delete actions
+- 👁️ **Model View Modal:** 4 tabs (Overview, Versions with Chart.js grouped bar chart, Artifacts, Deployment)
+
+**Chapter 2: Best Experiments** - Top-performing experiment configurations
+- 🏆 **3 Model Type KPI Rows:** Retrieval (R@5/10/50/100), Ranking (RMSE/MAE/Test RMSE/Test MAE), Hybrid (R@50/R@100/RMSE/Test RMSE) — clickable, updates table
+- 📋 **Top Configurations Table:** Best 10 experiments per model type (5 visible with scroll)
+
+**Chapter 3: Training Runs** - Launch and monitor training jobs
+- 🧪 **3-Step Wizard:** Step 1: Select experiment (model name, type, base experiment) → Step 2: Configuration (inherited configs, epochs/batch/LR, early stopping) → Step 3: GPU & Deploy (T4/L4/V100/A100, deployment presets, auto-deploy toggle)
+- 🃏 **Training Run Cards:** 4-column layout (Info, Config, Metrics, Actions) with 8-stage pipeline progress bar (Compile→Examples→Stats→Schema→Transform→Train→Evaluator→Register) + optional Deploy stage
+- 🔍 **Filter & Search:** Status, Model Type, Dataset, Features, Model, Search filters
+- 👁️ **View Modal:** Reusable `ExpViewModal` in training_run mode with 4 tabs (Overview with Registry & Deployment sections, Pipeline DAG, Data Insights, Training charts)
+- 🔄 **Rerun/Edit/Schedule:** Rerun from terminal state, edit training params, schedule recurring training
+
+**Deployment & Serving:**
+- ☁️ **Cloud Run Deployment:** TF Serving containers (native for brute-force, Python/Flask for ScaNN models)
+- 📦 **Deploy Wizard:** Endpoint selection, 3 presets (Development/Production/High Traffic), advanced options
+- 🔗 **Integration API:** Input schema, sample code, and live endpoint testing
+- 🔄 **Auto-Deployment:** Optional automatic Cloud Run deployment after successful training and registration
+
+**Scheduling:**
+- 📅 **5 Schedule Types:** Once, Hourly, Daily, Weekly, Monthly via Cloud Scheduler with OIDC authentication
+- 🔄 **Schedule Modal:** Reusable across Training Cards, View Modal, and Training Wizard
+- ✏️ **Edit Schedules:** Modify timing (not training config which stays frozen from source)
+
+**Execution Pipeline:**
+```
+Training Wizard                   Vertex AI Pipeline (GPU)              Cloud Run
+┌─────────────────────┐          ┌──────────────────────────────────┐  ┌──────────────┐
+│ Select experiment   │          │ Compile → ExampleGen → StatsGen →│  │ TF Serving   │
+│ Configure params    │ ───────► │ SchemaGen → Transform → Trainer →│─►│ or Flask+    │
+│ GPU & Deploy        │          │ Evaluator → Register             │  │ ScaNN        │
+└─────────────────────┘          └──────────────────────────────────┘  └──────────────┘
+```
+
+See [`docs/phase_training.md`](docs/phase_training.md) for full training domain specification. See [`docs/models_registry.md`](docs/models_registry.md) for models registry details.
+
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)
 - 📅 Advanced scheduling (cron with timezone support)
@@ -495,7 +540,8 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | [`docs/phase_experiments.md`](docs/phase_experiments.md) | **Experiments page specification** (Quick Test + Dashboard) |
 | [`docs/phase_experiments_implementation.md`](docs/phase_experiments_implementation.md) | **Experiments implementation guide (TFX, Cloud Build)** |
 | [`docs/phase_experiments_changelog.md`](docs/phase_experiments_changelog.md) | Experiments detailed changelog history |
-| [`docs/phase_training.md`](docs/phase_training.md) | **Training domain specification** (GPU config, regional limitations) |
+| [`docs/phase_training.md`](docs/phase_training.md) | **Training domain specification** (3-chapter page, 60+ APIs, GPU config, deployment, scheduling) |
+| [`docs/models_registry.md`](docs/models_registry.md) | **Models Registry specification** (registered models, version tracking, deployment) |
 | [`docs/training_full.md`](docs/training_full.md) | **Full training implementation guide** (GPU container, validation) |
 | [`docs/del_datasets_migration.md`](docs/del_datasets_migration.md) | Migration plan: Dataset Manager → Configs page (reference) |
 | This file | Project overview and quick start |
@@ -557,12 +603,15 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 - **Experiments Page** - ✅ **Fully working!** Two-chapter workflow with ~25 API endpoints:
   - Chapter 1: Experiments Dashboard (3 clickable KPI sections, metrics trend, top configs, hyperparameter insights, D3.js heatmaps, dataset comparison, suggestions)
   - Chapter 2: Quick Test (2-step wizard with config previews, experiment cards with 6-stage progress, 6-filter bar, compare modal, reusable view modal)
+- **Training Page** - ✅ **Fully working!** Three-chapter workflow with ~60 API endpoints:
+  - Chapter 1: Models Registry (KPI summary, training activity calendar, filter bar, registered models table, schedules section, model view modal with 4 tabs)
+  - Chapter 2: Best Experiments (3 model type KPI rows, top configurations table)
+  - Chapter 3: Training Runs (3-step wizard, run cards with 8-stage pipeline progress, filter bar, reusable view modal in training_run mode)
+  - Deployment: Cloud Run with TF Serving (native + ScaNN), Deploy Wizard with 3 presets, auto-deployment, integration API
+  - Scheduling: 5 schedule types via Cloud Scheduler, reusable Schedule Modal, edit/pause/resume
+  - 9-stage pipeline: Compile → ExampleGen → StatsGen → SchemaGen → Transform → Trainer → Evaluator → Register → Deploy
 
 ### **🔮 Next Up**
-1. Full Training Pipeline - Extended training with checkpointing (**GPU quota approved!**)
-2. Model Deployment - Candidate index building, serving endpoints
-3. Model Registry - Version management, A/B testing support
-
 See [`next_steps.md`](next_steps.md) for detailed roadmap.
 
 ---
@@ -976,6 +1025,6 @@ Private/Proprietary
 
 ---
 
-**Project Stats:** 21 models • 70+ files • 139 URL patterns • ~10,000 LOC • 100% auth coverage
+**Project Stats:** 25+ models • 70+ files • 200+ URL patterns • ~15,000 LOC • 100% auth coverage
 
 **Deployed:** November 2025 | **Region:** EU (Warsaw) | **Status:** Production Ready ✅

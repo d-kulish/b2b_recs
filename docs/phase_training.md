@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Training** domain in the ML Platform. The Training domain executes full TFX pipelines for production model training and manages model deployment to Cloud Run.
 
-**Last Updated**: 2026-02-24 (AUC-ROC metrics for binary label ranking models)
+**Last Updated**: 2026-03-04 (page structure, API endpoints, implementation status)
 
 ---
 
@@ -27,6 +27,80 @@ The Training domain allows users to:
 - Metrics logged to MLflow
 - Model registered to Vertex AI Model Registry
 - Model deployed to Cloud Run (optional auto-deployment)
+
+---
+
+## Page Structure
+
+**Template:** `templates/ml_platform/model_training.html` (1,699 lines)
+
+The Training page has **3 collapsible chapters** using the `.chapter-container` pattern:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Training Page (model_training.html)                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ▼ Chapter 1: Models Registry (id="modelsRegistryChapter")                   │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ KPI Summary Row → Training Activity Calendar → Filter Bar →            │  │
+│  │ Registered Models Table → Schedules Section (hidden by default)        │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ▼ Chapter 2: Best Experiments (data-chapter="best-experiments")             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ 3 Model Type KPI Rows (Retrieval/Ranking/Hybrid) →                     │  │
+│  │ Top Configurations Table (max 10 rows, 5 visible)                      │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ▼ Chapter 3: Training Runs (with "New Training Run" action button)          │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │ Training Filter Bar → Training Run Cards → Pagination                  │  │
+│  │ Empty State: icon + "New Training Run" button                          │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ── Modals ──────────────────────────────────────────────────────────────── │
+│  • Training Wizard Modal (id="trainingWizardModal") — inline, 3-step        │
+│  • Confirmation Modal (id="confirmModal") — inline, generic confirm/cancel  │
+│  • Exp View Modal — {% include '_exp_view_modal.html' %}                    │
+│  • Schedule Modal — {% include '_schedule_modal.html' %}                    │
+│  • Deploy Wizard — {% include '_deploy_wizard.html' %}                      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### JavaScript Modules
+
+| Module | File | Version | Purpose |
+|--------|------|---------|---------|
+| Pipeline DAG | `static/js/pipeline_dag.js` | v2 | TFX pipeline visualization |
+| Exp View Modal | `static/js/exp_view_modal.js` | v14 | Multi-tab experiment/training run details |
+| Schedule Modal | `static/js/schedule_modal.js` | v1 | Schedule creation/edit |
+| Deploy Wizard | `static/js/deploy_wizard.js` | v1 | Cloud Run deployment config |
+| Training Wizard | `static/js/training_wizard.js` | v3 | 3-step training run wizard |
+| Training Cards | `static/js/training_cards.js` | v9 | Training run card list & filtering |
+| Schedule Calendar | `static/js/schedule_calendar.js` | v2 | GitHub-style training activity calendar |
+| Models Registry | `static/js/models_registry.js` | v3 | Registered models display & filtering |
+
+**External Libraries:** Chart.js, chartjs-plugin-datalabels v2.0.0, D3.js v7, Flatpickr
+
+### CSS Files
+
+| Stylesheet | Version | Purpose |
+|-----------|---------|---------|
+| `modals.css` | v5 | Modal overlay, containers, headers, footers |
+| `pipeline_dag.css` | v1 | Pipeline DAG node/edge styles |
+| `exp_view_modal.css` | v12 | Experiment view modal tabs & layout |
+| `training_wizard.css` | v2 | Training wizard form & step styles |
+| `cards.css` | v6 | Generic card component (shared with Experiments) |
+| `training_cards.css` | v3 | Training run card-specific styles |
+| `model_dashboard.css` | v17 | Dashboard layout & chapter styles |
+| `models_registry.css` | v3 | Models registry table & grid styles |
+| `schedule_calendar.css` | v1 | Calendar heatmap styles |
+| `schedule_modal.css` | v2 | Schedule modal form styles |
+| `deploy_wizard.css` | v2 | Deploy wizard preset & form styles |
+
+**External CSS:** Flatpickr (`cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css`)
 
 ---
 
@@ -105,26 +179,53 @@ TRAINING_SCHEDULER_SERVICE_ACCOUNT = "custom-scheduler@project.iam.gserviceaccou
 
 ### Best Experiments Container (2026-01-15)
 
-The Training page now features a "Best Experiments" container that displays top-performing experiments across all model types (Retrieval, Ranking, Hybrid). This mirrors functionality from the Experiments page.
+The Training page Chapter 2 features a "Best Experiments" container that displays top-performing experiments across all model types (Retrieval, Ranking, Hybrid). This mirrors functionality from the Experiments page.
 
 #### Layout Structure
 
-**Upper section:** Three clickable KPI rows for Retrieval/Ranking/Hybrid, each showing experiment count and type-specific metrics (R@K for retrieval, RMSE/MAE for ranking).
+**Loading state:** `bestExpLoading` (spinner + "Loading experiments...")
+**Empty state:** `bestExpEmpty` (icon + "No completed experiments yet")
+**Content state:** `bestExpContent` (KPI rows + table, hidden initially)
 
-**Lower section:** Top 10 configurations table for selected model type, showing experiment details, hyperparameters, and metrics. 5 rows visible with scroll.
+**Upper section:** Three clickable KPI rows for Retrieval/Ranking/Hybrid, each showing experiment count and 4 type-specific metrics.
+
+**Lower section:** Top 10 configurations table for selected model type (`bestExpTableContainer`, max-height: 220px, scrollable).
 
 #### Features
 
 1. **Model Type KPI Rows**: Three horizontal rows stacked vertically
-   - Each row shows icon + model type name + 5 KPI boxes
-   - Clicking a row selects it and updates the table below
-   - Default selection: Retrieval
 
-2. **Top Configurations Table**
+   | Row | ID | Icon | KPI 1 | KPI 2 | KPI 3 | KPI 4 | KPI 5 |
+   |-----|----|----|-------|-------|-------|-------|-------|
+   | **Retrieval** | `bestExpRetrievalRow` | search | Experiments | R@5 | R@10 | R@50 | R@100 |
+   | **Ranking** | `bestExpRankingRow` | sort | Experiments | RMSE | Test RMSE | MAE | Test MAE |
+   | **Hybrid** | `bestExpHybridRow` | layer-group | Experiments | R@50 | R@100 | RMSE | Test RMSE |
+
+   - Each `.best-exp-row-header` (icon + title, 120px width) + `.best-exp-kpi-boxes` (5 boxes)
+   - Clicking a row selects it (`.selected` class) and updates the table below
+   - Default selection: Retrieval
+   - Selection handler: `selectBestExpModelType('model_type')`
+
+2. **Top Configurations Table** (`bestExpTableHead` + `bestExpTableBody`)
    - Shows best 10 experiments for the selected model type
    - 5 rows visible, remaining 5 accessible via scroll
    - Sticky header for easy reference while scrolling
-   - Click any row to open the View Modal
+   - Click any row to open the View Modal via `openExpDetails(experiment_id)`
+
+   **Columns by model type:**
+
+   | Retrieval | Ranking | Hybrid |
+   |-----------|---------|--------|
+   | # (rank) | # (rank) | # (rank) |
+   | Experiment | Experiment | Experiment |
+   | Dataset | Dataset | Dataset |
+   | Feature | Feature | Feature |
+   | Model | Model | Model |
+   | LR | LR | LR |
+   | Batch | Batch | R@100 |
+   | Epochs | Epochs | R@50 |
+   | R@100 | Test RMSE | Test RMSE |
+   | Loss | Test MAE | Test MAE |
 
 3. **View Modal with Full Feature Parity**
    - Identical to the Experiments page view modal
@@ -2935,7 +3036,91 @@ Modal closes, schedule list refreshes
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### UI Views
+### Training Wizard (3-Step Modal)
+
+**ID:** `trainingWizardModal`
+
+The Training Wizard is an inline 3-step modal for creating new training runs:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🚀 New Training Run                                              Step 1 of 3│
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Nav: [● Select Experiment] [○ Configuration] [○ GPU & Deploy]               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  STEP 1: Select Base Experiment (id="wizardStep1")                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Model Name: [________________________]                               │    │
+│  │                                                                      │    │
+│  │ Model Type: [Retrieval] [Ranking] [Hybrid]  (card selection)         │    │
+│  │                                                                      │    │
+│  │ Experiment Search: [Search experiments... 🔍]                        │    │
+│  │ ┌──────────────────────────────────────────────────────────────┐    │    │
+│  │ │ Experiment #62 - R@100: 0.289 - Config: feat_v2 + model_v1  │    │    │
+│  │ │ Experiment #63 - R@100: 0.312 - Config: feat_v3 + model_v2  │    │    │
+│  │ └──────────────────────────────────────────────────────────────┘    │    │
+│  │                                                                      │    │
+│  │ Selected Experiment Summary (when selected):                         │    │
+│  │  Dataset: Q4 Data | Features: Standard | Model: Two-Tower            │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  STEP 2: Configuration & Parameters (id="wizardStep2")                       │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ Inherited Config Cards: [Dataset] [Feature Config] [Model Config]    │    │
+│  │ Experiment Chips: Split | Optimizer | Algorithm | Top-K              │    │
+│  │                                                                      │    │
+│  │ Training Parameters:                                                 │    │
+│  │   Epochs: [___] | Batch Size: [___] | Learning Rate: [___]           │    │
+│  │                                                                      │    │
+│  │ ▸ Advanced Parameters:                                               │    │
+│  │   [○] Early Stopping   Patience: [___]                               │    │
+│  │   [🔒] Learning Rate Schedule (coming soon)                          │    │
+│  │   [🔒] Mixed Precision (coming soon)                                 │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  STEP 3: GPU & Deployment (id="wizardStep3")                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │ GPU Selection: [T4] [L4] [V100] [A100]  (card selection)            │    │
+│  │ GPU Count: [1 ▼]                                                     │    │
+│  │                                                                      │    │
+│  │ ▸ Advanced: Preemptible VMs toggle, Evaluator config                 │    │
+│  │                                                                      │    │
+│  │ 🚀 Deploy:                                                           │    │
+│  │   [○] Enable Auto-Deployment to Cloud Run                            │    │
+│  │   Endpoint Name: [auto-generated or custom]                          │    │
+│  │   Presets: [Development] [Production ✓] [High Traffic]               │    │
+│  │   Manual: Min/Max Instances, Memory, CPU, Timeout                    │    │
+│  │                                                                      │    │
+│  │ Training Summary Panel (right side)                                  │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Footer: [◀ Previous] [Next ▶]  |  [📅 Schedule] [▶ Run Now] [Cancel]       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Step Navigation:** `.wizard-nav-bar` with `.wizard-step-pill` elements for "Select Experiment", "Configuration", "GPU & Deploy".
+
+**Footer Buttons:**
+- Previous/Next (step navigation, hidden/shown based on step)
+- Schedule (opens ScheduleModal with wizard config)
+- Run Now (submits training immediately)
+- Update (shown in edit mode)
+- Cancel
+
+**Edit Mode:** The wizard can be opened in edit mode via `TrainingWizard.openForEdit(runId)`, which skips Step 1 and pre-fills Steps 2-3 with existing configuration.
+
+### Filter Bars
+
+Two separate filter bars exist on the page:
+
+| Filter Bar | ID | Chapter | Populated By |
+|-----------|-------|---------|------------|
+| Models Registry | `modelsFilterBar` | Chapter 1 | `models_registry.js` |
+| Training Runs | `trainingFilterBar` | Chapter 3 | `training_cards.js` |
+
+### UI Views Summary
 
 The Training Wizard (`static/js/training_wizard.js`) provides a 3-step dialog for creating training runs. The View Modal (`static/js/exp_view_modal.js` in `training_run` mode) displays progress and results with Pipeline, Data Insights, and Training tabs. See [Unified View Modal for Training Runs](#unified-view-modal-for-training-runs-2026-01-20) for details.
 
@@ -2993,34 +3178,111 @@ Tracks Cloud Run endpoints owned by registered models for model-scoped endpoint 
 
 ## API Endpoints
 
+**URL file:** `ml_platform/training/urls.py` | **API file:** `ml_platform/training/api.py` (~60+ endpoint functions)
+
 ### Training Run CRUD
 
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET/POST | `/api/training-runs/` | `training_run_list` | List or create training runs |
+| GET | `/api/training-runs/check-name/` | `training_run_check_name` | Check if model name is available |
+| GET | `/api/training-runs/{id}/` | `training_run_detail` | Get training run details |
+| POST | `/api/training-runs/{id}/cancel/` | `training_run_cancel` | Cancel running training |
+| DELETE/POST | `/api/training-runs/{id}/delete/` | `training_run_delete` | Delete a training run |
+| POST | `/api/training-runs/{id}/submit/` | `training_run_submit` | Submit training to Vertex AI |
+| POST | `/api/training-runs/{id}/rerun/` | `training_run_rerun` | Rerun a training configuration |
+| GET/PATCH | `/api/training-runs/{id}/config/` | `training_run_config` | Get or update run config |
+| POST | `/api/training-runs/{id}/schedule-webhook/` | `training_run_schedule_webhook` | Handle schedule webhook |
+| POST | `/api/training-runs/{id}/deploy/` | `training_run_deploy` | Deploy training run |
+| POST | `/api/training-runs/{id}/push/` | `training_run_push` | Push model to Vertex AI Registry |
+| POST | `/api/training-runs/{id}/register/` | `training_run_register` | Register to Model Registry |
+| POST | `/api/training-runs/{id}/deploy-cloud-run/` | `training_run_deploy_cloud_run` | Deploy to Cloud Run |
+
+### Training Run Data Insights
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET | `/api/training-runs/{id}/statistics/` | `training_run_statistics` | TFDV statistics summary |
+| GET | `/api/training-runs/{id}/schema/` | `training_run_schema` | Dataset schema |
+| GET | `/api/training-runs/{id}/training-history/` | `training_run_training_history` | Training loss/metrics curves |
+| GET | `/api/training-runs/{id}/histogram-data/` | `training_run_histogram_data` | Weight histogram data |
+| GET | `/api/training-runs/{id}/logs/{component}/` | `training_run_component_logs` | Component logs (e.g., Trainer) |
+| GET | `/training/runs/{id}/tfdv/` | `training_run_tfdv_page` | Full TFDV HTML visualization (standalone page) |
+
+### Cloud Run Services
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET | `/api/cloud-run/services/` | `cloud_run_services_list` | List Cloud Run services for endpoint selection |
+
+### Training Schedules
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET/POST | `/api/training/schedules/` | `training_schedule_list` | List or create schedules |
+| GET/PUT/DELETE | `/api/training/schedules/{id}/` | `training_schedule_detail` | Get/update/delete schedule |
+| POST | `/api/training/schedules/{id}/pause/` | `training_schedule_pause` | Pause a schedule |
+| POST | `/api/training/schedules/{id}/resume/` | `training_schedule_resume` | Resume a paused schedule |
+| POST | `/api/training/schedules/{id}/cancel/` | `training_schedule_cancel` | Cancel a schedule |
+| POST | `/api/training/schedules/{id}/trigger/` | `training_schedule_trigger` | Trigger immediate execution |
+| POST | `/api/training/schedules/from-run/` | `training_schedule_from_run` | Create schedule from existing run |
+| GET | `/api/training/schedules/preview/` | `training_schedule_preview` | Preview next scheduled runs |
+| POST | `/api/training/schedules/{id}/webhook/` | `training_scheduler_webhook` | Cloud Scheduler webhook (webhooks.py) |
+
+### Registered Models
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET | `/api/registered-models/` | `registered_models_list` | List all registered models |
+| GET | `/api/registered-models/check-name/` | `registered_model_check_name` | Check name availability |
+| GET | `/api/registered-models/{id}/` | `registered_model_detail` | Get model details |
+| GET | `/api/registered-models/{id}/versions/` | `registered_model_versions` | List model versions |
+| GET | `/api/registered-models/{id}/endpoints/` | `registered_model_endpoints` | List deployed endpoints for model |
+
+### Models Registry
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET | `/api/models/` | `models_list` | List all models with filtering/pagination |
+| GET | `/api/models/names/` | `registered_model_names` | Get model names for dropdown |
+| GET | `/api/models/{id}/` | `model_detail` | Get model detail |
+| GET | `/api/models/{id}/versions/` | `model_versions` | List model versions |
+| POST | `/api/models/{id}/deploy/` | `model_deploy` | Deploy model version |
+| POST | `/api/models/{id}/undeploy/` | `model_undeploy` | Undeploy model |
+| DELETE | `/api/models/{id}/delete/` | `model_delete` | Delete model |
+| GET | `/api/models/{id}/lineage/` | `model_lineage` | Get model lineage/family tree |
+| GET | `/api/models/{id}/metrics/` | `model_metrics` | Get model metrics comparison |
+| GET | `/api/training-schedules/calendar/` | `training_schedules_calendar` | Get schedule calendar data |
+
+### Deployed Endpoints
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET | `/api/deployed-endpoints/` | `deployed_endpoints_list` | List deployed endpoints |
+| GET | `/api/deployed-endpoints/{id}/` | `endpoint_detail` | Get endpoint details |
+| GET | `/api/deployed-endpoints/{id}/versions/` | `endpoint_versions` | List endpoint versions |
+| POST | `/api/deployed-endpoints/{id}/undeploy/` | `endpoint_undeploy` | Undeploy endpoint |
+| POST | `/api/deployed-endpoints/{id}/deploy/` | `endpoint_deploy` | Deploy to endpoint |
+| PATCH | `/api/deployed-endpoints/{id}/config/` | `endpoint_update_config` | Update deployment config |
+| DELETE | `/api/deployed-endpoints/{id}/delete/` | `endpoint_delete` | Delete endpoint |
+| GET | `/api/deployed-endpoints/{id}/logs/` | `endpoint_logs` | Get endpoint logs |
+
+### Endpoint Integration
+
+| Method | Endpoint | Name | Description |
+|--------|----------|------|-------------|
+| GET | `/api/deployed-endpoints/{id}/integration/` | `endpoint_integration` | Get integration info (input schema, sample) |
+| GET | `/api/deployed-endpoints/{id}/integration/sample/` | `endpoint_integration_sample` | Get sample code/request |
+| POST | `/api/deployed-endpoints/{id}/integration/test/` | `endpoint_integration_test` | Test endpoint with sample data |
+
+### Webhooks (Pipeline Callbacks)
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/models/{model_id}/training-runs/` | List training runs |
-| POST | `/api/models/{model_id}/training-runs/` | Start new training run |
-| GET | `/api/training-runs/{run_id}/` | Get training run details |
-| POST | `/api/training-runs/{run_id}/cancel/` | Cancel running training |
-| GET | `/api/training-runs/{run_id}/logs/` | Get training logs |
-| GET | `/api/training-runs/{run_id}/metrics/` | Get metrics history |
-
-### Webhooks (for pipeline callbacks)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/training-runs/{run_id}/webhook/stage-complete/` | Pipeline stage completed |
-| POST | `/api/training-runs/{run_id}/webhook/epoch-complete/` | Training epoch completed |
-| POST | `/api/training-runs/{run_id}/webhook/failed/` | Pipeline failed |
-| POST | `/api/training-runs/{run_id}/webhook/completed/` | Pipeline completed |
-
-### Deployment API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/training-runs/{run_id}/deploy-cloud-run/` | Deploy model to Cloud Run |
-| POST | `/api/training-runs/{run_id}/push/` | Push model to Vertex AI Registry |
-| GET | `/api/registered-models/{id}/endpoints/` | Get model-scoped endpoints |
-| POST | `/api/endpoints/{id}/undeploy/` | Undeploy a Cloud Run endpoint |
+| POST | `/api/training-runs/{id}/webhook/stage-complete/` | Pipeline stage completed |
+| POST | `/api/training-runs/{id}/webhook/epoch-complete/` | Training epoch completed |
+| POST | `/api/training-runs/{id}/webhook/failed/` | Pipeline failed |
+| POST | `/api/training-runs/{id}/webhook/completed/` | Pipeline completed |
 
 ---
 
@@ -4075,32 +4337,51 @@ Result: {"predictions": [[0.85]], "predictions_normalized": [[0.42]]}
 
 ---
 
-## Implementation Checklist
+## Implementation Status
 
-### Phase 1: Basic Training Run
-- [ ] Create Django models (TrainingRun, TrainingMetricsHistory)
-- [ ] Create training sub-app structure
-- [ ] Implement basic API endpoints
-- [ ] Create training runs list page
-- [ ] Create new training dialog
+### Phase 1: Basic Training Run ✅
+- [x] Create Django models (TrainingRun, TrainingMetricsHistory, TrainingSchedule, RegisteredModel, DeployedEndpoint)
+- [x] Create training sub-app structure (`ml_platform/training/`)
+- [x] Implement basic API endpoints (~60+ endpoints)
+- [x] Create training runs list page with 3-chapter layout
+- [x] Create 3-step training wizard (Select Experiment → Configuration → GPU & Deploy)
 
-### Phase 2: TFX Pipeline Integration
-- [ ] Create TFX pipeline definition
-- [ ] Implement TFRS trainer module
-- [ ] Compile pipeline to Kubeflow IR
-- [ ] Submit to Vertex AI Pipelines
+### Phase 2: TFX Pipeline Integration ✅
+- [x] Create TFX pipeline definition (9-stage: Compile → Examples → Stats → Schema → Transform → Train → Evaluator → Register → Deploy)
+- [x] Implement TFRS trainer module (retrieval, ranking, multitask)
+- [x] Compile pipeline to Kubeflow IR
+- [x] Submit to Vertex AI Pipelines
 
-### Phase 3: Progress Tracking
-- [ ] Implement webhook endpoints
-- [ ] Create training progress view
-- [ ] Real-time metrics display
-- [ ] Training curve visualization
+### Phase 3: Progress Tracking ✅
+- [x] Implement webhook endpoints (stage-complete, epoch-complete, failed, completed)
+- [x] Create training progress view (ExpViewModal in training_run mode)
+- [x] Real-time metrics display with live polling
+- [x] Training curve visualization (Chart.js loss curves, D3.js weight histograms)
 
-### Phase 4: Results & Artifacts
-- [ ] Display final metrics
-- [ ] Link to artifacts in GCS
-- [ ] ML Metadata integration
-- [ ] MLflow logging
+### Phase 4: Results & Artifacts ✅
+- [x] Display final metrics (retrieval: R@5/10/50/100, ranking: RMSE/MAE/Test RMSE/Test MAE, AUC-ROC)
+- [x] Link to artifacts in GCS
+- [x] ML Metadata integration
+- [x] MLflow logging
+
+### Phase 5: Deployment ✅
+- [x] Cloud Run deployment with TF Serving (native + ScaNN containers)
+- [x] Deploy Wizard with presets (Development, Production, High Traffic)
+- [x] Model-scoped endpoint tracking (DeployedEndpoint model)
+- [x] Auto-deployment integration in Training Wizard
+- [x] Endpoint integration API (schema, sample code, test endpoint)
+
+### Phase 6: Scheduling ✅
+- [x] TrainingSchedule model with 5 schedule types (once, hourly, daily, weekly, monthly)
+- [x] Cloud Scheduler integration with OIDC authentication
+- [x] Schedule Modal (reusable across Training Cards, View Modal, Wizard)
+- [x] Edit/Pause/Resume/Delete schedule operations
+
+### Phase 7: Models Registry ✅
+- [x] RegisteredModel entity with version tracking
+- [x] Models Registry chapter with KPI summary, training activity calendar, filter bar
+- [x] Model View Modal with 4 tabs (Overview, Versions, Artifacts, Deployment)
+- [x] Best Experiments chapter with 3 model type KPI rows and top configurations table
 
 ---
 

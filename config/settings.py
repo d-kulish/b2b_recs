@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     # Project apps
     'ml_platform',
     'ml_platform.training',
+    'website',
 ]
 
 MIDDLEWARE = [
@@ -164,7 +165,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Login settings
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'system_dashboard'
-LOGOUT_REDIRECT_URL = 'login'
+LOGOUT_REDIRECT_URL = 'landing'
 
 # GCP Configuration
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')

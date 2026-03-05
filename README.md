@@ -4,7 +4,8 @@ A production-ready multi-tenant SaaS platform for building, training, and deploy
 
 **Status:** Production Deployed ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File ETL Active ✅ | Dataflow Ready ✅
 
-**Live:** https://django-app-555035914949.europe-central2.run.app
+**Website:** https://recs.studio
+**App:** https://django-app-555035914949.europe-central2.run.app
 
 ---
 

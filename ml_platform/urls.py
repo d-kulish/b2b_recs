@@ -22,7 +22,7 @@ urlpatterns = [
     # =========================================================================
     # SYSTEM DASHBOARD (Landing Page)
     # =========================================================================
-    path('', views.system_dashboard, name='system_dashboard'),
+    path('dashboard/', views.system_dashboard, name='system_dashboard'),
 
     # =========================================================================
     # MODEL/ENDPOINT MANAGEMENT

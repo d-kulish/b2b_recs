@@ -233,7 +233,29 @@ The Deployment page (`model_deployment.html`) manages serving endpoints, monitor
 
 See [`docs/phase_endpoints.md`](docs/phase_endpoints.md) for full deployment domain specification.
 
-### **Dashboard** ✅
+### **Starting Page (System Dashboard)** ✅
+The starting page (`system_dashboard.html`) is the landing page at `/dashboard/` showing system-wide health and all projects. It provides a four-chapter interface:
+
+**Chapter 1: System Details** (collapsible) — Platform metrics and resource charts
+- 📊 **3 KPI Cards:** Inference (endpoints, requests 30d, latency), Training (runs, success rate, experiments), Data (ETL runs, tables, volume)
+- 📈 **6 Resource Charts:** Combined storage, BQ jobs, ETL health, Cloud Run requests, GPU hours, GPU jobs
+
+**Chapter 2: Your Projects** (collapsible) — Model management
+- 📊 **2 KPI Cards:** Assets (projects, models, trainings, experiments) and Accuracy (best retrieval recall, ranking RMSE, hybrid recall)
+- 📋 **Project Cards:** Per-project KPIs (endpoints, models, requests 7d, latency P95) with pagination and search
+- ➕ **Create Project Modal:** New project creation with name and description
+
+**Chapter 3: ETL** (non-collapsible) — Data ingestion overview
+- 📊 **2 KPI Cards:** Yesterday and Last Week (active jobs, failed, success, rows) with link to standalone `/etl/` page
+
+**Chapter 4: Billing** (collapsible) — Usage tracking and costs
+- 📊 **Summary Bar:** Period, estimated total (EUR), budget progress
+- 📈 **4 Charts:** Monthly trend, cost breakdown (doughnut), daily spend, cost per training
+- 📋 **Invoice Table:** Collapsible categories with per-service line items
+
+See [`docs/phase_start.md`](docs/phase_start.md) for full starting page specification.
+
+### **Dashboard (Project-level)** ✅
 The Dashboard page (`model_dashboard.html`) is the central observability hub, accessible via the navigation bar on any model page. It provides a four-chapter interface:
 
 **Chapter 1: Endpoints** (collapsible) — Serving performance from Cloud Monitoring
@@ -582,6 +604,7 @@ gcloud run jobs execute django-migrate-and-createsuperuser --region europe-centr
 | Document | Description |
 |----------|-------------|
 | [`next_steps.md`](next_steps.md) | Current status, priorities, and roadmap |
+| [`docs/phase_start.md`](docs/phase_start.md) | **Starting page specification** (System Dashboard — 4 chapters, KPIs, resource charts, billing) |
 | [`docs/phase_etl.md`](docs/phase_etl.md) | **ETL page specification** (Connections + ETL Jobs + Dashboard + Runs) |
 | [`etl_runner/etl_runner.md`](etl_runner/etl_runner.md) | ETL Runner technical documentation |
 | [`docs/phase_configs.md`](docs/phase_configs.md) | **Datasets & Configs page specification** (Datasets + Features + Model Structure) |

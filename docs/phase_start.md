@@ -4,7 +4,7 @@
 
 The starting page (`system_dashboard.html`) is the landing page users see when accessing the Recs Studio platform. It provides an overview of the system and quick access to models.
 
-**URL:** `/` (root)
+**URL:** `/dashboard/`
 **View:** `ml_platform.views.system_dashboard`
 **Template:** `templates/ml_platform/system_dashboard.html`
 
@@ -49,8 +49,8 @@ The starting page is intentionally **different** from model pages to provide cle
 Four collapsible chapters displayed vertically:
 
 1. **System Details** - Platform metrics, charts, and recent activity
-2. **ETL** - Data ingestion pipelines (system-wide)
-3. **Your Projects** - Manage ML models and endpoints
+2. **Your Projects** - Manage ML models and endpoints
+3. **ETL** - Data ingestion pipelines (system-wide, non-collapsible)
 4. **Billing** - Usage tracking and subscription details
 
 ---
@@ -102,8 +102,8 @@ Four collapsible chapters displayed vertically:
 | Chapter | Icon | Background Gradient |
 |---------|------|---------------------|
 | System Details | `fa-server` | Blue (#3b82f6 → #60a5fa) |
-| ETL | `fa-arrow-right-arrow-left` | Green (#10b981 → #34d399) |
 | Your Projects | `fa-cube` | Purple (#8b5cf6 → #a78bfa) |
+| ETL | `fa-arrow-right-arrow-left` | Green (#10b981 → #34d399) |
 | Billing | `fa-credit-card` | Orange (#f59e0b → #fbbf24) |
 
 ---
@@ -121,7 +121,7 @@ The KPIs are organized into 3 themed cards with icons, stats, and progress bars:
 |-----|----|-------------|
 | Active Endpoints | `kpiActiveEndpoints` | `DeployedEndpoint.objects.filter(is_active=True).count()` |
 | Requests (30d) | `kpiRequests` | Sum of `cloud_run_total_requests` over last 30 days |
-| Latency | `kpiLatency` | Placeholder (0ms) |
+| Latency | `kpiLatency` | Volume-weighted avg P95 from `ProjectMetrics` (30 days) via `_system_avg_latency_p95()` |
 | Progress Bar | `kpiLatencyBar`, `kpiLatencyStatus` | Latency status indicator |
 
 **Training Card (Blue icon):**
@@ -190,31 +190,7 @@ Daily snapshot model storing GCP resource usage. Populated by `python manage.py 
 
 ---
 
-## Chapter 2: ETL
-
-Provides a quick overview of ETL status with a link to the standalone ETL page. ETL is system-wide (not per-project).
-
-**Chapter Icon:** `fa-arrow-right-arrow-left` | **Gradient:** Green (#10b981 → #34d399)
-
-### Header Row
-
-The chapter header contains the title on the left and an "Open ETL" button next to the collapse arrow on the right. The button links to `{% url 'etl_page' %}` (`/etl/`) and uses `event.stopPropagation()` to avoid triggering the chapter toggle.
-
-### KPI Row (5 KPIs)
-
-KPIs are displayed inline in the chapter header (not in a collapsible body). Data is loaded asynchronously from `GET /api/system/etl-summary/`.
-
-| KPI | ID | Data Source |
-|-----|----|-------------|
-| Connections | `etlKpiConnections` | `Connection.objects.count()` |
-| Active Jobs | `etlKpiActiveJobs` | `DataSource.objects.filter(is_enabled=True).count()` |
-| Runs (24h) | `etlKpiRuns24h` | `ETLRun.objects.filter(started_at__gte=now-24h).count()` |
-| Success Rate | `etlKpiSuccessRate` | Completed / Total finished ETL runs (last 30 days) × 100 |
-| Rows Loaded | `etlKpiRowsLoaded` | `Sum(ETLRun.rows_loaded)` for all runs |
-
----
-
-## Chapter 3: Your Projects
+## Chapter 2: Your Projects
 
 Displays grouped KPI containers for assets and model accuracy, plus model cards linking to their dashboards.
 
@@ -259,8 +235,8 @@ Uses the shared `.header-kpi-card` classes from `model_dashboard.css` — identi
 |-----|-----------|------|-------------|----------|
 | Endpoints Active | `header-kpi-icon endpoints` | `fa-rocket` | `DeployedEndpoint` per project (real) | "of X total" |
 | Total Models | `header-kpi-icon models` | `fa-cube` | `RegisteredModel` per project (real) | "X deployed" |
-| Requests (7D) | `header-kpi-icon requests` | `fa-chart-bar` | Placeholder (`--`) | -- |
-| Latency (P95) | `header-kpi-icon latency` | `fa-clock` | Placeholder (`--`) | -- |
+| Requests (7D) | `header-kpi-icon requests` | `fa-chart-bar` | `ProjectMetrics` 7-day sum (real) | "±X%" change vs prior 7d |
+| Latency (P95) | `header-kpi-icon latency` | `fa-clock` | `ProjectMetrics` weighted P95 (real) | "±Xms" change vs prior 7d |
 
 **Right section:**
 - Arrow icon (`fa-arrow-right`, blue) — the only clickable element, links to `{% url 'model_dashboard' model.id %}`
@@ -269,6 +245,29 @@ Uses the shared `.header-kpi-card` classes from `model_dashboard.css` — identi
 **Per-project KPI data** is computed server-side in the `system_dashboard` view by iterating the `ModelEndpoint` queryset and attaching:
 - `kpi_endpoints_active` / `kpi_endpoints_total` — from `DeployedEndpoint` objects (via `RegisteredModel`)
 - `kpi_models_total` / `kpi_models_deployed` — from `RegisteredModel` objects
+- `kpi_requests_7d` / `kpi_requests_change_pct` — from `ProjectMetrics` (7-day window vs prior 7 days)
+- `kpi_latency_p95` / `kpi_latency_change_ms` — volume-weighted P95 from `ProjectMetrics` (7-day window vs prior 7 days)
+
+### Pagination & Search
+
+The `ProjectsPagination` IIFE module manages client-side pagination of the projects grid:
+- **Page size:** 5 projects per page
+- **Search:** Input field (visible when > 1 project exists) with 300ms debounce, filters by project name and description
+- **Controls:** Previous/Next buttons, numbered page links, "Showing X–Y of Z" info text
+
+### Create Project Modal
+
+The "New Project" button in the chapter header opens a modal dialog (`#createProjectModal`) for creating new projects.
+
+**Fields:**
+- Project Name (text input, required)
+- Description (textarea, required)
+
+**Behavior:**
+- Validates both fields are filled before submission
+- Sends `POST` to `{% url "create_model_endpoint" %}` with JSON body `{name, description}` and CSRF token
+- On success: reloads page; on error: displays error message
+- Close triggers: Cancel button, click outside, Escape key
 
 ### Empty State
 
@@ -276,6 +275,40 @@ When no models exist, displays:
 - Large cube icon
 - "No models created yet" text
 - "Create Your First Model" button
+
+---
+
+## Chapter 3: ETL
+
+Provides a quick overview of ETL status with a link to the standalone ETL page. ETL is system-wide (not per-project). This chapter is **non-collapsible** — the header has no `onclick="toggleChapter"` handler.
+
+**Chapter Icon:** `fa-arrow-right-arrow-left` | **Gradient:** Green (#10b981 → #34d399)
+
+### Header Row
+
+The chapter header contains the title on the left and an "Open ETL" button on the right (with a 44px right margin to align with other chapters' collapse arrows). The button links to `{% url 'etl_page' %}` (`/etl/`).
+
+### KPI Cards (2 time-window cards)
+
+KPIs are displayed inline in the chapter header (not in a collapsible body). Data is loaded asynchronously from `GET /api/system/etl-summary/`.
+
+**Yesterday Card (clock icon):**
+
+| KPI | ID | Data Source |
+|-----|----|-------------|
+| Active Jobs | `etlYesterdayJobs` | `DataSource` count with runs in last 24h |
+| Failed | `etlYesterdayFailed` | `ETLRun` count with status='failed' (last 24h) |
+| Success | `etlYesterdaySuccess` | `ETLRun` count with status in ['completed','partial'] (last 24h) |
+| Rows | `etlYesterdayRows` | `Sum(ETLRun.rows_loaded)` (last 24h) |
+
+**Last Week Card (calendar icon):**
+
+| KPI | ID | Data Source |
+|-----|----|-------------|
+| Active Jobs | `etlWeekJobs` | `DataSource` count with runs in last 7d |
+| Failed | `etlWeekFailed` | `ETLRun` count with status='failed' (last 7d) |
+| Success | `etlWeekSuccess` | `ETLRun` count with status in ['completed','partial'] (last 7d) |
+| Rows | `etlWeekRows` | `Sum(ETLRun.rows_loaded)` (last 7d) |
 
 ---
 
@@ -439,18 +472,25 @@ Client UI: Service | Costs | Discount | Total
 
 ### `GET /api/system/etl-summary/`
 
-Returns ETL KPIs for the ETL chapter on the system dashboard.
+Returns ETL KPIs for the ETL chapter on the system dashboard. Two time windows: yesterday (24h) and last week (7d).
 
 **Response:**
 ```json
 {
     "success": true,
     "data": {
-        "connections": 4,
-        "active_jobs": 6,
-        "runs_24h": 3,
-        "success_rate": 92.5,
-        "total_rows_loaded": 1234567
+        "yesterday": {
+            "active_jobs": 3,
+            "failed": 0,
+            "success": 3,
+            "rows": 45230
+        },
+        "week": {
+            "active_jobs": 5,
+            "failed": 1,
+            "success": 18,
+            "rows": 312456
+        }
     }
 }
 ```
@@ -574,6 +614,31 @@ function toggleChapter(header) {
 }
 ```
 
+### ProjectsPagination Module
+
+IIFE module that manages client-side pagination and search for the projects grid:
+
+- `init()` — Reads project cards from `.models-grid`, sets up pagination
+- `render(page)` — Shows/hides cards for the given page, updates pagination controls
+- `goToPage(page)` — Navigates to a specific page
+- `applySearch()` — Filters cards by name/description text match
+- `debounceSearch()` — 300ms debounced wrapper for search input
+- Page size: 5 items per page
+- Search bar visible only when more than 1 project exists
+
+### Create Project Modal Functions
+
+Global functions for the project creation modal:
+
+- `openCreateProjectModal()` — Clears form, shows modal, focuses name field
+- `closeCreateProjectModal()` — Hides modal
+- `submitCreateProject()` — Validates fields, POSTs JSON to `create_model_endpoint` URL, reloads on success
+- Escape key listener closes modal when visible
+
+### ETL KPIs Loader
+
+Separate IIFE that fetches `GET /api/system/etl-summary/` and populates the 8 ETL KPI elements (`etlYesterday*` and `etlWeek*`).
+
 ### SystemDashboard Module
 
 IIFE module that manages dashboard data loading:
@@ -621,9 +686,11 @@ The view provides these context variables:
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `models` | QuerySet | All ModelEndpoint objects |
+| `models` | QuerySet | All ModelEndpoint objects (with per-project KPIs attached) |
 | `total_models` | int | Count of all models |
 | `active_models` | int | Count of models with status='active' |
+| `recent_runs` | int | Count of currently running PipelineRuns |
+| `latest_metrics` | SystemMetrics/None | Latest SystemMetrics snapshot |
 | `total_registered_models` | int | Count of all RegisteredModel objects |
 | `total_trainings` | int | Count of all TrainingRun objects |
 | `total_experiments` | int | Count of all QuickTest objects |
@@ -631,13 +698,26 @@ The view provides these context variables:
 | `best_ranking_rmse` | float/None | Best (lowest) RMSE from ranking TrainingRuns |
 | `best_hybrid_recall` | float/None | Best recall@100 from multitask TrainingRuns (×100 for percentage) |
 
+Each model in `models` also has these dynamically attached attributes:
+- `kpi_endpoints_active` / `kpi_endpoints_total` — from `DeployedEndpoint` (via `RegisteredModel`)
+- `kpi_models_total` / `kpi_models_deployed` — from `RegisteredModel`
+- `kpi_requests_7d` / `kpi_requests_change_pct` — from `ProjectMetrics` (7-day sum, % change vs prior 7d)
+- `kpi_latency_p95` / `kpi_latency_change_ms` — volume-weighted P95 from `ProjectMetrics` (7d vs prior 7d)
+
 ---
 
 ## Dependencies
 
-- **Tailwind CSS** 3.4.10 (CDN)
-- **Font Awesome** 6.4.0 (CDN)
-- **Chart.js** 4.4.0 (CDN)
+**CDN Libraries:**
+- **Tailwind CSS** 3.4.10
+- **Font Awesome** 6.4.0
+- **Chart.js** 4.4.0
+- **chartjs-adapter-date-fns** 3.0.0
+
+**CSS Files:**
+- `static/css/buttons.css` — Button styles (`.btn`, `.btn-primary`)
+- `static/css/model_dashboard.css` — Shared KPI card styles (`.header-kpi-card`)
+- `static/css/modals.css` — Modal dialog styles (`.modal-overlay`, `.modal-container`)
 
 ---
 
@@ -729,3 +809,6 @@ The `cloud_run_total_requests` and `cloud_run_request_details` fields are popula
 - [x] ~~Scheduled `collect_resource_metrics` via Cloud Scheduler~~ (Implemented - daily at 02:00 UTC via webhook)
 - [x] ~~Requests KPI wired to real data~~ (Implemented - `requests_30d` now sums `ResourceMetrics.cloud_run_total_requests` over 30 days via `api_system_kpis`)
 - [x] ~~ETL chapter on system dashboard~~ (Implemented — system-wide ETL with standalone `/etl/` page, KPI summary, "Open ETL" button)
+- [x] ~~Per-project Requests & Latency KPIs~~ (Implemented — `ProjectMetrics` 7-day window with week-over-week change)
+- [x] ~~Create Project modal~~ (Implemented — name + description, POST to `create_model_endpoint`)
+- [x] ~~Projects pagination & search~~ (Implemented — `ProjectsPagination` IIFE, 5 per page, debounced search)

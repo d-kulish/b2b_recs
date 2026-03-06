@@ -1352,14 +1352,7 @@ class TrainingService:
         Raises:
             TrainingServiceError: If training run is not in terminal state
         """
-        TERMINAL_STATUSES = [
-            TrainingRun.STATUS_COMPLETED,
-            TrainingRun.STATUS_FAILED,
-            TrainingRun.STATUS_NOT_BLESSED,
-            TrainingRun.STATUS_CANCELLED,
-        ]
-
-        if training_run.status not in TERMINAL_STATUSES:
+        if not training_run.is_terminal:
             raise TrainingServiceError(
                 f"Cannot re-run training in '{training_run.status}' state. "
                 "Only terminal states can be re-run."

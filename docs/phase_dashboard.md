@@ -4,17 +4,28 @@
 ## Document Purpose
 This document provides detailed specifications for the **Dashboard** page in the ML Platform. The Dashboard page (`model_dashboard.html`) serves as the central observability hub for deployed models, displaying key performance indicators, charts, and tables for monitoring model endpoints and registered models.
 
-**Last Updated**: 2026-02-09 (Unified chapter-container style across Endpoints, Models, and Experiments chapters)
+**Last Updated**: 2026-03-06 (Removed phantom ETL chapter, updated file structure, synced with real Cloud Monitoring data)
 
 ---
 
 ## Page Overview
 
-The Model Dashboard (`/model/{id}/dashboard/`) is accessible via the horizontal navigation bar on any model page. It provides a comprehensive view of endpoint performance metrics and operational data.
+The Model Dashboard (`/model/{id}/dashboard/`) is accessible via the horizontal navigation bar on any model page. It provides a four-chapter observability hub covering endpoint performance, model registry, experiment analytics, and configuration inventory.
 
 **URL Pattern**: `/model/<model_id>/dashboard/`
 **Template**: `templates/ml_platform/model_dashboard.html`
 **Base Template**: `base_model.html`
+
+### Page Structure
+
+| Chapter | Title | Subtitle | Icon | JS Module |
+|---------|-------|----------|------|-----------|
+| 1. Endpoints | Endpoints | Monitor serving performance and traffic | `fa-chart-line` (blue) | `ModelDashboardEndpoints` |
+| 2. Models | Models | Track registered models and deployments | `fa-cube` (purple) | `ModelDashboardModels` |
+| 3. Experiments | Experiments | Analyze experiment results and metrics | `fa-flask` (green) | `ModelDashboardExperiments` |
+| 4. Configs | Configs | Track configuration inventory and usage | `fa-cogs` (orange) | `ModelDashboardConfigs` |
+
+All chapters follow the collapsible `.chapter-container` pattern with always-visible KPI rows and expandable content sections.
 
 ### Standard Chapter Style: `.chapter-container`
 
@@ -448,7 +459,6 @@ Table row clicks open `ExpViewModal.open(expId)` to display experiment details. 
 | `static/js/model_dashboard_models.js` | IIFE module for Models chapter |
 | `static/js/model_dashboard_experiments.js` | IIFE module for Experiments chapter |
 | `static/js/model_dashboard_configs.js` | IIFE module for Configs chapter |
-| `static/js/model_dashboard_etl.js` | IIFE module for ETL chapter |
 | `static/css/model_dashboard.css` | Styles with `.model-dashboard-` prefix |
 | `static/data/demo/model_dashboard_endpoints.json` | Demo data for Endpoints (sales demonstrations) |
 
@@ -943,36 +953,9 @@ All styles use `.model-dashboard-configs-*` prefix:
 
 ---
 
-## Chapter 5: ETL
+## Chapter 5: ETL (Planned)
 
-The ETL chapter displays ETL Dashboard data including KPIs, scheduled jobs, and a bubble chart of recent runs. This chapter uses the same API endpoint pattern as the ETL page to ensure data consistency.
-
-### Visual Layout
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│ [Exchange Icon] ETL                                      Last 30 days           │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐             │
-│  │  12    │ │ 91.7%  │ │  11    │ │   1    │ │ 45.2K  │ │  2m 15s│             │
-│  │ Total  │ │Success │ │Success-│ │ Failed │ │ Rows   │ │  Avg   │             │
-│  │ Runs   │ │ Rate   │ │ful    │ │ Runs   │ │Migrated│ │Duration│             │
-│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘             │
-│                                                                                 │
-│  ┌────────────────────────────────────┐ ┌───────────────────────────────────────┐│
-│  │ Scheduled Jobs                     │ │ ETL Job Runs (Last 5 Days)            ││
-│  │                                    │ │ ● Completed ● Partial ● Failed       ││
-│  │ Job Name  │ Schedule │ Next │State │ │                                       ││
-│  │───────────┼──────────┼──────┼──────│ │   job1 ─────●────●────●────────────  ││
-│  │ sync_data │ Daily    │ Feb 5│ ✓    │ │   job2 ──●─────────●──●────────────  ││
-│  │ users_etl │ Hourly   │ 14:00│ ⏸    │ │   job3 ────●──────────●───────────── ││
-│  │                                    │ │                                       ││
-│  │ 1-5 of 8         [Prev] [Next]    │ │   Feb 1  Feb 2  Feb 3  Feb 4  Feb 5   ││
-│  └────────────────────────────────────┘ └───────────────────────────────────────┘│
-│               (45% width)                              (55% width)               │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+> **Note:** The ETL chapter was designed (see below) but not yet implemented in the dashboard template. ETL monitoring is available on the standalone ETL page (`/etl/`). See [`docs/phase_etl.md`](phase_etl.md) for details.
 
 ### KPI Section (6 Cards)
 
@@ -1215,9 +1198,10 @@ Requests (7D) and Latency (P95) KPIs show real data when available, or "0" / "--
 
 The Dashboard page may expand to include additional chapters:
 
-1. **Data Quality** - Feature drift, data distribution changes
-2. **A/B Testing** - Experiment results, variant comparison
-3. **Alerts** - Active alerts, alert history, notification settings
+1. **ETL** - ETL monitoring summary (designed but not yet implemented; available on standalone ETL page)
+2. **Data Quality** - Feature drift, data distribution changes
+3. **A/B Testing** - Experiment results, variant comparison
+4. **Alerts** - Active alerts, alert history, notification settings
 
 ---
 
@@ -1225,6 +1209,7 @@ The Dashboard page may expand to include additional chapters:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-03-06 | 1.9 | Marked ETL chapter as planned (not implemented in template); removed phantom file reference; added page structure table; updated overview |
 | 2026-02-09 | 1.8 | Applied collapsible chapter-container style to Experiments chapter; documented standard chapter pattern; aligned Models KPI icon sizes to Endpoints standard |
 | 2026-02-07 | 1.7 | Added real per-project metrics: ProjectMetrics model, daily collection, metrics API, header and dashboard UI wiring |
 | 2026-02-04 | 1.6 | Added ETL chapter with KPIs, scheduled jobs table, and bubble chart |

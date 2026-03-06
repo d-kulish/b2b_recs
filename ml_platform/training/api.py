@@ -826,8 +826,7 @@ def training_run_rerun(request, training_run_id):
             }, status=404)
 
         # Only allow rerun for terminal states
-        TERMINAL_STATUSES = ['completed', 'failed', 'not_blessed', 'cancelled']
-        if training_run.status not in TERMINAL_STATUSES:
+        if not training_run.is_terminal:
             return JsonResponse({
                 'success': False,
                 'error': f"Cannot re-run training in '{training_run.status}' state. "

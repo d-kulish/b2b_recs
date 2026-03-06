@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides detailed specifications for implementing the **Deployment** domain in the ML Platform. The Deployment domain handles model serving, version management, and production deployment.
 
-**Last Updated**: 2026-03-04 (Switched Endpoints Dashboard from demo data to real Cloud Monitoring data)
+**Last Updated**: 2026-03-06 (Added Deploy Wizard section, updated implementation checklist)
 
 ---
 
@@ -11,10 +11,10 @@ This document provides detailed specifications for implementing the **Deployment
 
 ### Purpose
 The Deployment domain allows users to:
-1. Deploy trained models to production
-2. Manage model versions (rollback, traffic splitting)
-3. Monitor serving performance
-4. Access prediction API documentation
+1. Deploy trained models to Cloud Run serving endpoints
+2. Manage serving endpoints (undeploy, redeploy, edit config, delete)
+3. Monitor serving performance via Cloud Monitoring metrics
+4. Test and integrate with deployed endpoints (health checks, predictions, code examples)
 
 ### Key Principle
 **One-click deployment with easy rollback.** Users should be able to deploy a new model with a single click, and instantly roll back if issues arise.
@@ -23,6 +23,30 @@ The Deployment domain allows users to:
 - Model deployed to Cloud Run serving endpoint
 - API endpoint URL for predictions
 - Version history with rollback capability
+
+### Page Structure
+
+The Deployment page (`templates/ml_platform/model_deployment.html`) provides a two-chapter interface with 4 modals:
+
+**Chapter 1: Endpoints Dashboard** (collapsible) — Cloud Monitoring metrics
+- 8 KPI cards (requests, latency P95, error rate, peak/avg instances)
+- 6 charts (request volume, latency distribution, container instances, error rate, cold start, resource utilization)
+- 2 tables (endpoint performance with 7d trends, peak usage periods)
+
+**Chapter 2: Serving Endpoints** — Endpoint management
+- KPI summary row (total, active, inactive, last updated)
+- Filter bar (model type, status, model name, search)
+- Endpoints table with pagination and action buttons
+
+**Modals:**
+- **Deploy Wizard** (`_deploy_wizard.html`) — Deploy training run to Cloud Run with presets
+- **Endpoint View Modal** (`_exp_view_modal.html`) — Endpoint details, versions, deployment info
+- **Integrate Modal** (`_integrate_modal.html`) — Schema, sample data, code examples, live testing
+- **Confirmation Modal** — Styled confirm/cancel dialogs for undeploy/delete
+
+### Document Structure
+
+> **Note:** Lines 29–779 below contain the **original design specification** written before implementation. Some models and services described there (e.g., `Deployment`, `ServingMetrics`, `APIKey`, `DeploymentService`) were superseded during implementation by `DeployedEndpoint`, `RegisteredModel`, `TrainingService`, and `IntegrationService`. The **implemented specifications** begin at the [Deploy Wizard](#deploy-wizard-2026-01-28) section (after the checklist).
 
 ---
 
@@ -747,35 +771,39 @@ def validate_api_key(auth_header: str) -> bool:
 ## Implementation Checklist
 
 ### Phase 1: Basic Deployment
-- [x] Create Django models (DeployedEndpoint in `ml_platform/training/models.py`)
-- [ ] Create deployment sub-app structure (using training app for now)
-- [x] Implement basic deployment API (deployed-endpoints endpoints)
+- [x] Create Django models (`DeployedEndpoint`, `RegisteredModel` in `ml_platform/training/models.py`)
+- [x] Implement basic deployment API (`deployed-endpoints` endpoints in `ml_platform/training/api.py`)
 - [x] Create deployment dashboard UI (Serving Endpoints chapter)
 
 ### Phase 2: Cloud Run Integration
-- [x] Implement DeploymentService (`deploy_to_cloud_run` in TrainingService)
+- [x] Implement `deploy_to_cloud_run()` in `TrainingService` (`ml_platform/training/services.py`)
 - [x] Copy model artifacts to serving bucket (handled by TFX Pusher)
 - [x] Update Cloud Run service (Python SDK `google-cloud-run`)
-- [x] Delete Cloud Run service (`delete_cloud_run_service` method)
-- [x] List Cloud Run services (`list_cloud_run_services` method)
-- [ ] Traffic switching (future)
+- [x] Delete Cloud Run service (`delete_cloud_run_service()`)
+- [x] List Cloud Run services (`list_cloud_run_services()`)
+- [x] Redeploy endpoint (`redeploy_endpoint()`)
+- [x] Atomic config update (`update_endpoint_config()`)
+- [ ] Traffic splitting for gradual rollouts (future)
 
 ### Phase 3: Health & Monitoring
-- [ ] Implement HealthCheckService
-- [ ] Add health check UI
-- [ ] Integrate with Cloud Monitoring
-- [ ] Display serving metrics
+- [x] Implement `IntegrationService` (`ml_platform/training/integration_service.py`) — health checks, prediction tests, sample data
+- [x] Add health check + prediction test UI (Integrate Modal)
+- [x] Integrate with Cloud Monitoring (`collect_resource_metrics` management command)
+- [x] Display serving metrics (Endpoints Dashboard — 6 charts, 2 tables, 8 KPIs)
+- [x] Endpoint logs via Cloud Logging (`EndpointLogsService`)
 
-### Phase 4: API Management
-- [ ] Implement API key generation
-- [ ] Add API key validation to serving
-- [ ] Create API documentation page
-- [ ] Code examples for different languages
+### Phase 4: API Integration
+- [x] Input schema extraction from feature configs
+- [x] Code examples for Python, JavaScript, Java, cURL (Integrate Modal)
+- [x] Sample data generation from BigQuery (single + batch modes)
+- [x] Live endpoint testing (health check + predict) from UI
+- [ ] API key generation and validation (future)
 
 ### Phase 5: Rollback & Versioning
-- [ ] Implement rollback functionality
-- [ ] Version history UI
-- [ ] Traffic splitting for gradual rollouts
+- [x] Version history UI (Endpoint View Modal — Versions tab)
+- [x] Re-deploy inactive endpoints (`POST /api/deployed-endpoints/<id>/deploy/`)
+- [ ] One-click rollback to previous version (future)
+- [ ] Traffic splitting for gradual rollouts (future)
 
 ---
 
@@ -795,6 +823,141 @@ def validate_api_key(auth_header: str) -> bool:
 - [README](../README.md)
 - [Training Phase](phase_training.md)
 - [Experiments Phase](phase_experiments.md)
+
+---
+
+# Deploy Wizard (2026-01-28)
+
+## Overview
+
+The Deploy Wizard is a multi-step modal that deploys a trained model to a Cloud Run serving endpoint. It is triggered from training run cards (Deploy button) and from the Endpoint View Modal (deploy new version). The wizard supports creating new endpoints or updating existing ones, with three configuration presets and advanced options.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `templates/includes/_deploy_wizard.html` | Modal template with preset cards, endpoint selection, config summary |
+| `static/js/deploy_wizard.js` | IIFE module — state management, API calls, validation |
+| `static/css/deploy_wizard.css` | Styles with `.deploy-` prefix |
+| `ml_platform/training/api.py` | `training_run_deploy_cloud_run()` API handler |
+| `ml_platform/training/services.py` | `TrainingService.deploy_to_cloud_run()` service method |
+| `ml_platform/training/urls.py` | URL: `POST /api/training-runs/<id>/deploy-cloud-run/` |
+
+### API Endpoint
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/training-runs/<id>/deploy-cloud-run/` | Deploy training run to Cloud Run |
+
+**Request Body:**
+```json
+{
+  "deployment_config": {
+    "memory": "4Gi",
+    "cpu": "2",
+    "min_instances": 1,
+    "max_instances": 10,
+    "timeout": 300
+  },
+  "service_name": "my-model-serving"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "service_url": "https://my-model-serving-3dmqemfmxq-ez.a.run.app",
+  "service_name": "my-model-serving",
+  "message": "Model deployed successfully to Cloud Run"
+}
+```
+
+### UI Structure
+
+```
++-------------------------------------------------------------------+
+| Deploy to Cloud Run                                          [X]   |
++-------------------------------------------------------------------+
+| Model Info: model-name | version v3 | Run #66                     |
+|                                                                    |
+| ENDPOINT SELECTION                                                 |
+| +-------------------------------+-------------------------------+  |
+| | (*) Create New Endpoint       | ( ) Update Existing Endpoint  |  |
+| +-------------------------------+-------------------------------+  |
+| | Auto-generated: project-model-serving                         |  |
+| | [ ] Use custom name: [________________]                       |  |
+| +---------------------------------------------------------------+  |
+|                                                                    |
+| DEPLOYMENT PRESET                                                  |
+| +------------------+--------------------+----------------------+   |
+| | Development      | Production         | High Traffic         |   |
+| | 0-2 instances    | 1-10 instances     | 2-50 instances       |   |
+| | 2Gi / 1 CPU      | 4Gi / 2 CPU        | 8Gi / 4 CPU          |   |
+| |                  | * RECOMMENDED *    |                      |   |
+| +------------------+--------------------+----------------------+   |
+|                                                                    |
+| ADVANCED OPTIONS (collapsible)                                     |
+| Memory: [4Gi]  CPU: [2]  Min: [1]  Max: [10]  Timeout: [300s]     |
+|                                                                    |
+| CONFIGURATION SUMMARY                                              |
+| Endpoint: project-model-serving                                    |
+| Instances: 1-10 | Memory: 4Gi | CPU: 2 | Timeout: 300s            |
+|                                                                    |
+|                                       [Cancel]  [Deploy]           |
++-------------------------------------------------------------------+
+```
+
+### Deployment Presets
+
+| Preset | Memory | CPU | Min Instances | Max Instances | Timeout |
+|--------|--------|-----|---------------|---------------|---------|
+| **Development** | 2Gi | 1 | 0 | 2 | 300s |
+| **Production** (recommended) | 4Gi | 2 | 1 | 10 | 300s |
+| **High Traffic** | 8Gi | 4 | 2 | 50 | 300s |
+
+### Endpoint Selection
+
+- **Create New**: Auto-generates service name as `{project_slug}-{model_name}-serving` (max 63 chars, lowercase alphanumeric + hyphens). Optional custom name override.
+- **Update Existing**: Dropdown populated via `GET /api/registered-models/<id>/endpoints/` showing model-scoped endpoints. Replaces the currently deployed model version.
+
+### Service Method: `deploy_to_cloud_run()`
+
+**File**: `ml_platform/training/services.py`
+
+Key steps:
+1. Validate training run has `vertex_model_resource_name` and `gcs_artifacts_path`
+2. Verify Vertex AI model and GCS artifacts exist
+3. Select container image: **Python/ScaNN** for ScaNN retrieval models, **Native TF Serving** for brute-force models
+4. Create/update Cloud Run v2 Service with `RevisionTemplate` (memory, CPU, scaling, env vars)
+5. Set IAM policy for unauthenticated access (`roles/run.invoker` for `allUsers`)
+6. Create or update `DeployedEndpoint` record in database
+7. Update training run status to `deployed`
+8. Return service URL
+
+### JavaScript Module: `DeployWizard`
+
+```javascript
+// Configuration (called once on page load)
+DeployWizard.configure({
+    modelId: 123,
+    onSuccess: function(result) {
+        EndpointsTable.refresh();
+    }
+});
+
+// Open wizard for a training run
+DeployWizard.open(trainingRunId);
+
+// Public API
+DeployWizard.selectPreset(presetName)      // 'development' | 'production' | 'high_traffic'
+DeployWizard.selectEndpointMode(mode)      // 'new' | 'existing'
+DeployWizard.toggleCustomName()            // Enable/disable custom name input
+DeployWizard.updateCustomName(value)       // Sanitize and set custom name
+DeployWizard.updateConfig(key, value)      // Update individual config value
+DeployWizard.deploy()                      // Submit deployment
+DeployWizard.close()                       // Close modal
+```
 
 ---
 

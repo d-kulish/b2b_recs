@@ -189,12 +189,6 @@ The Training page (`model_training.html`) manages production model training, dep
 - 👁️ **View Modal:** Reusable `ExpViewModal` in training_run mode with 4 tabs (Overview with Registry & Deployment sections, Pipeline DAG, Data Insights, Training charts)
 - 🔄 **Rerun/Edit/Schedule:** Rerun from terminal state, edit training params, schedule recurring training
 
-**Deployment & Serving:**
-- ☁️ **Cloud Run Deployment:** TF Serving containers (native for brute-force, Python/Flask for ScaNN models)
-- 📦 **Deploy Wizard:** Endpoint selection, 3 presets (Development/Production/High Traffic), advanced options
-- 🔗 **Integration API:** Input schema, sample code, and live endpoint testing
-- 🔄 **Auto-Deployment:** Optional automatic Cloud Run deployment after successful training and registration
-
 **Scheduling:**
 - 📅 **5 Schedule Types:** Once, Hourly, Daily, Weekly, Monthly via Cloud Scheduler with OIDC authentication
 - 🔄 **Schedule Modal:** Reusable across Training Cards, View Modal, and Training Wizard
@@ -211,6 +205,59 @@ Training Wizard                   Vertex AI Pipeline (GPU)              Cloud Ru
 ```
 
 See [`docs/phase_training.md`](docs/phase_training.md) for full training domain specification. See [`docs/models_registry.md`](docs/models_registry.md) for models registry details.
+
+### **Deployment** ✅
+The Deployment page (`model_deployment.html`) manages serving endpoints, monitoring, and integration testing. It provides a two-chapter interface:
+
+**Chapter 1: Endpoints Dashboard** (collapsible) — Real Cloud Monitoring metrics
+- 📊 **8 KPI Cards:** Total requests (7d), latency P95, error rate, peak/avg instances
+- 📈 **6 Charts:** Request volume, latency distribution (P50/P95/P99), container instances, error rate, cold start latency, CPU/memory utilization — all via Cloud Monitoring API
+- 📋 **2 Tables:** Endpoint performance (7d aggregation with trend), peak usage periods (top-5 busiest)
+
+**Chapter 2: Serving Endpoints** — Cloud Run endpoint management
+- 📊 **KPI Summary Row:** Total, Active, Inactive endpoints, Last updated
+- 🔍 **Filter Bar:** Model Type, Status, Model Name, Search (debounced)
+- 📋 **Endpoints Table:** Service name, model type, version, URL (copy), config (CPU/Memory), status badge, actions (deploy/undeploy, view, edit config, delete, health check, logs)
+
+**Deploy Wizard:**
+- ☁️ **Cloud Run Deployment:** TF Serving containers (native for brute-force, Python/ScaNN for ScaNN models)
+- 📦 **3 Presets:** Development (0-2 instances, 2Gi/1CPU), Production (1-10, 4Gi/2CPU), High Traffic (2-50, 8Gi/4CPU)
+- 🔀 **Endpoint Selection:** Create new (auto-generated or custom name) or update existing endpoint
+- ⚙️ **Advanced Options:** Memory (1-32Gi), CPU (1-8), min/max instances, timeout
+
+**Integrate Modal:**
+- ✅ **Quick Validation:** Health check + prediction test with latency display
+- 📐 **Input Schema:** Auto-extracted from feature config (buyer features for retrieval, buyer+product for ranking)
+- 📝 **Sample Data:** Fresh from BigQuery, single/batch mode toggle
+- 💻 **Code Examples:** Python, JavaScript, Java, cURL with syntax highlighting and copy
+
+See [`docs/phase_endpoints.md`](docs/phase_endpoints.md) for full deployment domain specification.
+
+### **Dashboard** ✅
+The Dashboard page (`model_dashboard.html`) is the central observability hub, accessible via the navigation bar on any model page. It provides a four-chapter interface:
+
+**Chapter 1: Endpoints** (collapsible) — Serving performance from Cloud Monitoring
+- 📊 **Summary + 4 Performance KPIs:** Total/Active/Inactive endpoints, requests (7d), latency P95, error rate, peak/avg instances
+- 📈 **6 Charts:** Request volume, latency distribution (P50/P95/P99), container instances, error rate, cold start latency, CPU/memory utilization
+- 📋 **2 Tables:** Endpoint performance (7d with trend), peak usage periods
+
+**Chapter 2: Models** (collapsible) — Vertex AI Model Registry
+- 📊 **5 KPI Cards:** Total, Deployed, Outdated, Idle, Scheduled models
+- 📅 **Training Activity Calendar:** GitHub-style heatmap via `ScheduleCalendar` component
+- 🔍 **Filter Bar:** Model type, deployment status, sort, search
+- 📋 **Models Table:** 8 columns with type-specific metrics, age badges, pagination
+- 👁️ **View Modal:** `ExpViewModal` with 5 tabs (Overview, Versions, Artifacts, Deployment, Lineage)
+
+**Chapter 3: Experiments** (collapsible) — Experiment analytics
+- 📈 **3 Model Type KPI Sections** (40%): Retrieval, Ranking, Hybrid — clickable, with 4 best metrics each
+- 📉 **Metrics Trend Chart** (60%): Chart.js line chart showing best metrics evolution over 30 days
+- 🏆 **Top Configurations Table:** Best 5 experiments per model type with hyperparameters
+
+**Chapter 4: Configs** — Configuration inventory
+- 📊 **3 KPI Cards:** Datasets, Feature Configs, Model Configs — each showing total/active/unused counts
+- 📊 **Complexity Bars:** Segmented tri-color bars (Low/Medium/High) with type-specific thresholds
+
+See [`docs/phase_dashboard.md`](docs/phase_dashboard.md) for full dashboard domain specification.
 
 ### **Platform Features**
 - 🎨 ETL Wizard UI (5-step data source configuration)

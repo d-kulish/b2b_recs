@@ -1640,6 +1640,136 @@ The 162→168 deltas (+0.2pp R@5, +1.2pp R@10, +1.3pp R@50, +1.1pp R@100) are NO
 4. The silent feature dropping behavior should be replaced with explicit warnings to prevent future confusion.
 ---
 
+## 14. Target Product in History: Include vs Exclude Analysis (2026-03-07)
+
+### 14.1 Background
+
+The v4 training views excluded the target product from each row's `purchase_history` via a self-join (`cp1.product_id != cp2.product_id`). This was intended to prevent label leakage — the model shouldn't "know" which product is the target from the history. However, experiment qt-182 revealed that this exclusion created a *stronger* leakage: the model learned to predict the product that was **missing** from the history (Bug #2 in `docs/potential/purchase_history_bug.md`).
+
+This section documents the analysis of whether to include or exclude the target, drawing on industry practice, academic research, and domain-specific reasoning for B2B grocery.
+
+### 14.2 The Two Scenarios for Target Exclusion
+
+**Scenario A: Sequential prediction (YouTube, Netflix)**
+
+The task: given what a user has watched SO FAR, predict the NEXT video.
+
+YouTube's Covington et al. (2016) paper states: *"the next video is always held out and a rollback of features available prior to the video watch is supplied to the classifier."*
+
+This is NOT target exclusion — the target video simply hasn't happened yet at the time of prediction. The "rollback" means reconstructing the user's state as it was *before* the watch event. The watch history contains everything up to time `t`, and the target is the video at time `t+1`. It's temporal correctness, not active exclusion.
+
+**Source:** Covington, Adams, Sargin. "Deep Neural Networks for YouTube Recommendations." RecSys 2016. [research.google/pubs/deep-neural-networks-for-youtube-recommendations/](https://research.google/pubs/deep-neural-networks-for-youtube-recommendations/)
+
+**Scenario B: Repeat purchase prediction (grocery, B2B)**
+
+The task: given the customer's full purchase profile, what will they buy on the next visit?
+
+Key differences from sequential prediction:
+- ~54% of next-basket items in grocery are **repeat purchases** (items already in history)
+- Purchase history is a taste profile, not a temporal sequence
+- Mean pooling destroys ordering — `mean([Milk, Bread, Fish])` = `mean([Fish, Milk, Bread])`
+- At serving time, the full history is used for ALL candidates — the target is unknown
+
+**Source:** Ariannezhad et al. "A Next Basket Recommendation Reality Check." ACM TOIS, 2023. [dl.acm.org/doi/10.1145/3587153](https://dl.acm.org/doi/10.1145/3587153)
+
+### 14.3 What Happens With Each Approach
+
+**Excluding the target (v4 training view):**
+
+For customer C1 with products [A, B, C, D]:
+```
+Row predicting A: history = [B, C, D]
+Row predicting B: history = [A, C, D]
+Row predicting C: history = [A, B, D]
+Row predicting D: history = [A, B, C]
+```
+
+This is effectively a cloze task — mask one item and predict which is missing. The model learns: "the taste centroid is shifted away from the target; recommend the item that would complete it." The **absence** of the target is 100% correlated with the label.
+
+This breaks at serving time because you can't mask an unknown target.
+
+**Including the target (v5 views):**
+
+For customer C1:
+```
+All rows: history = [A, B, C, D]
+```
+
+The model must learn genuine co-purchase patterns. One item among 50 in a mean-pooled 32D vector contributes ~2% of the signal. The model cannot trivially extract "item X is present" from the averaged embedding. Train/serve consistency is maintained.
+
+### 14.4 Arguments for Including the Target
+
+**1. Train/serve consistency is the cardinal rule.**
+
+Every production system — Google, Uber, Snapchat, Tecton — emphasizes this. At serving time, you cannot exclude the target because you don't know it. Training must match.
+
+**Source:** Tecton. "Hidden Data Engineering Problems in ML." [tecton.ai/blog/hidden-data-engineering-problems-in-ml/](https://www.tecton.ai/blog/hidden-data-engineering-problems-in-ml/)
+
+**2. YouTube's "exclusion" doesn't apply here.**
+
+YouTube excludes the target because it's a **future event** — it hasn't happened yet. In grocery, the target is typically a **past purchase recurring**. A customer who bought Milk 10 times has Milk in their history factually — that's not leakage.
+
+**3. Excluding creates stronger leakage than including.**
+
+Including the target: one item contributes ~2% of the mean-pooled vector (1/50 items in 32D — nearly invisible). Excluding the target: the absence is 100% correlated with the label — a much stronger signal the model can exploit. Experiment qt-182 proved this: the model learned the "missing product" trick with devastating effectiveness (R@5 dropped from 59% to 1.7%).
+
+**4. Grocery is repeat-purchase dominant.**
+
+Research shows 54%+ of next-basket items are repeats. The model SHOULD learn "customers who bought X tend to buy X again" — that's not leakage, that's the primary signal. Excluding X from history when predicting X suppresses the strongest signal in grocery.
+
+**Source:** Ariannezhad et al. "ReCANet: A Repeat Consumption-Aware Neural Network for Next Basket Recommendation." 2022. [staff.fnwi.uva.nl/m.derijke](https://staff.fnwi.uva.nl/m.derijke/wp-content/papercite-data/pdf/ariannezhad-2022-recanet.pdf)
+
+**5. Mean pooling makes single-item leakage negligible.**
+
+The ACM RecSys 2023 paper on average embedding consistency found only 2–14% consistency scores. A single item's presence in a 50-item average barely moves the 32D vector.
+
+**Source:** "On the Consistency of Average Embeddings for Item Recommendation." RecSys 2023. [dl.acm.org/doi/10.1145/3604915.3608837](https://dl.acm.org/doi/10.1145/3604915.3608837)
+
+**6. The two-tower architecture prevents direct leakage.**
+
+The user tower and product tower compute embeddings independently. The user tower sees history (which may include the target), but it produces a SINGLE 32D vector for ALL candidates. It cannot produce different embeddings for different candidates. The dot product with a candidate can't leverage "this specific candidate is in my history" because the user embedding is candidate-agnostic.
+
+This would be different in a cross-attention model (DIN-style) where each candidate attends directly to individual history items — there, inclusion would be genuine leakage. But that architecture violates the two-tower constraint required for ANN serving.
+
+### 14.5 Data Leakage Research Context
+
+Academic studies on data leakage in recommendation systems focus on temporal leakage (using future data to predict past events), not on including historical purchases in the user profile:
+
+- Ji et al. "A Critical Study on Data Leakage in Recommender System Offline Evaluation" (ACM TOIS 2022) — shows that temporal leave-one-out evaluation inflates metrics by 21.7–73.4% when train/test splits don't follow the global timeline. The fix is temporal split, not target exclusion from features.
+
+- Kelen et al. "Don't Get Ahead of Yourself: A Critical Study on Data Leakage in Offline Evaluation of Sequential Recommenders" (RecSys 2025) — extends the analysis to sequential models. Again, the leakage is temporal (using future interactions), not about including past purchases in user features.
+
+**Sources:**
+- [arxiv.org/abs/2010.11060](https://arxiv.org/abs/2010.11060)
+- [dl.acm.org/doi/10.1145/3705328.3759329](https://dl.acm.org/doi/10.1145/3705328.3759329)
+
+### 14.6 Summary Table
+
+| Factor | Exclude target (v4) | Include target (v5) |
+|---|---|---|
+| Train/serve consistency | Broken (can't exclude at serving) | Matched |
+| YouTube analogy | Misapplied (different task) | N/A |
+| Signal from absence | 100% correlated with label (strong leakage) | N/A |
+| Signal from presence | N/A | ~2% of mean-pooled vector (negligible) |
+| Repeat purchase modeling | Suppressed | Captured |
+| Grocery domain fit | Poor (54% repeats ignored) | Good |
+| Architecture safety | N/A | Two-tower independence prevents exploitation |
+
+### 14.7 v5 Views
+
+Created v5 views with per-customer history (target included):
+
+| View | Change from v4 |
+|---|---|
+| `ternopil_train_v5` | `customer_purchase_history` CTE: simple per-customer `ARRAY_AGG` (no self-join, no target exclusion). JOIN on `customer_id` only. |
+| `ternopil_test_v5` | Same change. Matches training view and serving behavior. |
+
+SQL files:
+- `dev/sql/create_ternopil_train_v5_view.sql`
+- `dev/sql/create_ternopil_test_v5_view.sql`
+
+---
+
 ## Appendix A: Alternative Approaches Considered
 
 ### A.1 Per-Category Distribution Vector (+26D)
@@ -1676,8 +1806,10 @@ End-to-end shared embedding table with variable-length history input.
 
 | File | Relevance |
 |---|---|
-| `sql/create_ternopil_train_v4_view.sql` | v4 retrieval training view with `purchase_history` |
-| `sql/create_ternopil_test_v4_view.sql` | v4 retrieval test view with `purchase_history` |
+| `sql/create_ternopil_train_v5_view.sql` | v5 retrieval training view — history INCLUDES target product |
+| `sql/create_ternopil_test_v5_view.sql` | v5 retrieval test view — history INCLUDES target product |
+| `sql/create_ternopil_train_v4_view.sql` | v4 retrieval training view — history EXCLUDES target product |
+| `sql/create_ternopil_test_v4_view.sql` | v4 retrieval test view — history EXCLUDES target product |
 | `sql/create_ternopil_prob_train_v4_view.sql` | v4 ranking training view with `purchase_history` |
 | `sql/create_ternopil_prob_test_v4_view.sql` | v4 ranking test view with `purchase_history` |
 | `sql/create_ternopil_train_v3_view.sql` | v3 retrieval training view (baseline, top-80% filtered) |

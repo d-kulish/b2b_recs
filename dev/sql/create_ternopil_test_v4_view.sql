@@ -54,15 +54,19 @@ customer_products AS (
   GROUP BY customer_id, product_id
 ),
 
--- Purchase history per customer: top 50 products by recency
--- Unlike training (which excludes target product to prevent leakage),
--- test/serving uses the full customer history for all candidates.
+-- Purchase history per (customer, target_product): top 50 products by recency, excluding target
+-- Matches training view behavior so the existing model sees the same history format.
+-- TODO: Once the training view is fixed to include target, revert this to per-customer history.
 customer_purchase_history AS (
   SELECT
-    customer_id,
-    ARRAY_AGG(product_id ORDER BY last_purchase_date DESC LIMIT 50) AS purchase_history
-  FROM customer_products
-  GROUP BY customer_id
+    cp1.customer_id,
+    cp1.product_id AS target_product_id,
+    ARRAY_AGG(cp2.product_id ORDER BY cp2.last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products cp1
+  JOIN customer_products cp2
+    ON cp1.customer_id = cp2.customer_id
+    AND cp1.product_id != cp2.product_id
+  GROUP BY cp1.customer_id, cp1.product_id
 ),
 
 -- Product aggregate stats from training period
@@ -93,6 +97,6 @@ SELECT
   ps.prod_cat_revenue_pctile
 FROM test_data t
 LEFT JOIN customer_purchase_history ch
-  ON t.customer_id = ch.customer_id
+  ON t.customer_id = ch.customer_id AND t.product_id = ch.target_product_id
 LEFT JOIN product_stats ps ON t.product_id = ps.product_id
 WHERE t.product_id IN (SELECT product_id FROM top_products);

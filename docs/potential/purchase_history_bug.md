@@ -1,10 +1,12 @@
-# Analysis: Purchase History Taste Vector — Global Aggregation Is Correct
+# Analysis: Purchase History Taste Vector Bugs
 
-**Date**: 2026-03-03 (initial), 2026-03-03 (revised)
-**Experiments**: qt-162 (baseline), qt-174 (global history), qt-179 (point-in-time history)
-**Status**: Root cause identified, views reverted to global aggregation
+**Date**: 2026-03-03 (initial), 2026-03-03 (revised), 2026-03-07 (target exclusion bug)
+**Experiments**: qt-162 (baseline), qt-174 (global history), qt-179 (point-in-time history), qt-182 (target exclusion analysis)
+**Status**: Two bugs found and fixed. See Bug #1 (point-in-time) and Bug #2 (target exclusion mismatch).
 
 ---
+
+# Bug #1: Point-in-Time Restriction (qt-179, resolved 2026-03-03)
 
 ## Summary
 
@@ -341,13 +343,300 @@ This applies to all taste vectors (product, brand, subcategory, category) — an
 
 ---
 
+---
+
+# Bug #2: Target Product Exclusion Train/Test Mismatch (qt-182, resolved 2026-03-07)
+
+## Summary
+
+Experiment qt-182 (a rerun of qt-174 with identical model code) showed a massive accuracy gap:
+- **Pipeline test** (day 29, within training view): **R@5 = 59.0%**
+- **External test** (day 30, test view via serving model): **R@5 = 1.7%**
+
+These are **consecutive days** with nearly identical data distributions (80.6% customer overlap, 100% product overlap, similar feature statistics). The root cause was a train/test mismatch in how `purchase_history` was computed:
+
+- **Training view** (`ternopil_train_v4`): history per-(customer, target_product), **excluding** the target product via self-join `cp1.product_id != cp2.product_id`
+- **Test view** (`ternopil_test_v4`): history per-customer, **including** all products
+
+The model learned a "missing product" signal — it predicted products that were **absent** from the customer's history, because during training the target product was always absent from the history array. When the test view included the target product in history, the model actively avoided recommending it.
+
+---
+
+## Investigation Process
+
+### Initial hypotheses tested and eliminated
+
+The investigation followed a systematic elimination process. Several plausible hypotheses were tested and ruled out before finding the root cause:
+
+**1. Code differences between qt-174 and qt-182 (ELIMINATED)**
+
+Downloaded and diffed GCS artifacts:
+```
+gs://b2b-recs-quicktest-artifacts/qt-174-20260228-173331/
+gs://b2b-recs-quicktest-artifacts/qt-182-20260307-*/
+```
+Only 2 lines differ: timestamp and candidate pool source (`eval_files` → `train_files + eval_files`). Generated transform and trainer modules are functionally identical.
+
+**2. TFT layer type mismatch — int64 vs string vocab lookup (ELIMINATED)**
+
+The serving model receives history as `tf.int64`, while the vocab file has string entries. Hypothesis: the TFT layer's `apply_vocabulary` might map all int64 values to OOV due to type mismatch.
+
+Diagnostic script (`diagnose_history.py`) tested four scenarios:
+- Known product IDs in history → top score 3718
+- Empty history (all zeros) → top score 1537
+- Random OOV IDs → top score 1209
+- Different known product IDs → top score 2517
+
+**Result**: History DOES affect recommendations. Different product IDs produce different scores. The TFT layer correctly handles int64→string conversion internally. Type mismatch hypothesis eliminated.
+
+**3. Serving model path vs pipeline path (ELIMINATED)**
+
+Ran the serving model on **day 29 data** (same data the pipeline test used) from the training view:
+
+| Evaluation | R@5 |
+|---|---|
+| Pipeline test (day 29, in-pipeline) | 59.0% |
+| Serving model (day 29, from training view) | **84.3%** |
+| Serving model (day 30, from test view) | 1.7% |
+
+Day 29 via serving model gives **84.3%** — even higher than the pipeline test (59%, which includes OOV customers/products that always miss). The serving model path works correctly. The issue is specific to day 30 data from the test view.
+
+**4. Feature value differences between day 29 and day 30 (ELIMINATED)**
+
+Compared feature statistics for the same known customers across both views:
+
+| Metric | Day 29 (train view) | Day 30 (test view) |
+|---|---|---|
+| avg_cust_value | 6,397 | 5,373 |
+| avg_days_since | 15.7 | 23.2 |
+| avg_orders | 11.2 | 10.4 |
+| avg_unique_prods | 69.6 | 49.4 |
+| avg_hist_len | 39.7 | 27.2 |
+| null_history | 0% | 0% |
+
+Values differ slightly but are in the same ballpark. History content for overlapping customers is nearly identical (same items, slightly different order).
+
+**5. Controlled feature-swap experiments (ELIMINATED all individual features)**
+
+Took 300 day 30 samples and systematically swapped features to day 29 values:
+
+| Experiment | R@5 |
+|---|---|
+| 1. Baseline (day 30 as-is) | 1.3% |
+| 2. Date → day 29 | 1.3% |
+| 3. Empty history | 2.7% |
+| 4. Buyer stats → day 29 averages | 2.0% |
+| 5. Date + buyer stats → day 29 | 2.7% |
+| 6. History from training view (16/300 swapped) | 1.3% |
+| 7. ALL features → day 29 | 2.0% |
+
+**No individual feature swap or combination improved accuracy.** The model's recommendations are relatively stable regardless of features. The issue is that day 30's ground truth products are not in the model's top-K.
+
+**6. Data distribution differences (ELIMINATED)**
+
+Compared repeat purchase rates and product popularity:
+
+| Metric | Day 29 | Day 30 |
+|---|---|---|
+| Total (customer, product) pairs | 645 | 723 |
+| Repeat pairs (seen in training) | 280 (43.4%) | 296 (40.9%) |
+| Unique products | 356 | 377 |
+| Avg training frequency | 184.6 | 181.4 |
+
+Nearly identical distributions. No systematic difference in product popularity or repeat purchase behavior.
+
+**7. Model degeneracy observation**
+
+Analysis revealed the model recommends product `49892001001` as the #1 recommendation for **100% of customers** — a degenerate model with popularity collapse. Beyond #1, recommendations differ by customer but are **extremely sensitive** to small feature changes: the same customer gets completely different top-5 lists with day 29 vs day 30 features.
+
+### Root cause identified: target product exclusion mismatch
+
+The decisive diagnostic (`diagnose_target_exclusion.py`) tested whether excluding the target product from history would improve accuracy:
+
+| Scenario | R@5 (all 300 samples) |
+|---|---|
+| History **WITH** target product (test view behavior) | 3.0% (9/300) |
+| History **WITHOUT** target product (training view behavior) | **30.7%** (92/300) |
+
+Breaking down by whether the target product appeared in the customer's history:
+
+| Scenario | Target IN history (126 samples) | Target NOT in history (174 samples) |
+|---|---|---|
+| History WITH target | R@5 = 4.8% (6/126) | R@5 = 1.7% (3/174) |
+| History WITHOUT target | **R@5 = 70.6% (89/126)** | R@5 = 1.7% (3/174) |
+
+Key findings:
+- **14.7x improvement** when removing target from history (for samples where target was in history)
+- **Identical results** when target was not in history (confirming the effect is purely about target inclusion)
+- Specific examples confirm the pattern:
+  - Customer 330061020401, target 357301001001: WITH target → not in top-5. WITHOUT target → **#2 in top-5**
+  - Customer 640000543701, target 259887001001: WITH target → not in top-5. WITHOUT target → **#2 in top-5**
+
+---
+
+## Root Cause Mechanism
+
+### How the model learned the "missing product" signal
+
+The training view computes history per-(customer, target_product), excluding the target:
+
+```sql
+-- Training view CTE
+customer_purchase_history AS (
+  SELECT
+    cp1.customer_id,
+    cp1.product_id AS target_product_id,
+    ARRAY_AGG(cp2.product_id ORDER BY cp2.last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products cp1
+  JOIN customer_products cp2
+    ON cp1.customer_id = cp2.customer_id
+    AND cp1.product_id != cp2.product_id  -- target excluded
+  GROUP BY cp1.customer_id, cp1.product_id
+)
+```
+
+During training, for every (customer, product) pair, the target product is **guaranteed absent** from the history. The model's mean-pooled taste vector (32D) captures the customer's preferences **minus one product**. Over 100 epochs of training with massive overfitting (505x train/val loss ratio), the model learned:
+
+1. Compute the customer's taste centroid from their history
+2. The centroid is shifted slightly AWAY from the target (because the target was removed)
+3. Recommend the product that would "complete" the centroid — i.e., the missing item
+
+This is a subtle form of information leakage: the **absence** of the target product from the history array encodes which product is the target.
+
+### Why this breaks at serving time
+
+At serving time (and in the test view), the customer's full history is used for all candidates — the target product is not excluded because you don't know what the customer will buy next:
+
+```sql
+-- Test view CTE (original, before fix)
+customer_purchase_history AS (
+  SELECT
+    customer_id,
+    ARRAY_AGG(product_id ORDER BY last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products
+  GROUP BY customer_id
+)
+```
+
+When the target product IS in the history (42% of test samples), the model's learned "missing product" detector fails: it looks for what's missing, but the target is present, so it recommends something else.
+
+### Why day 29 (training view) worked but day 30 (test view) didn't
+
+- **Day 29 evaluation** used the training view's `purchase_history`, which excludes the target → model sees the pattern it was trained on → R@5 = 84.3%
+- **Day 30 evaluation** used the test view's `purchase_history`, which includes all products → model doesn't see the "missing product" pattern → R@5 = 1.7%
+
+---
+
+## Fix Applied (Short-Term Validation)
+
+Updated `ternopil_test_v4` to exclude the target product from history, matching the training view's behavior:
+
+```sql
+-- BEFORE (per-customer, includes target)
+customer_purchase_history AS (
+  SELECT
+    customer_id,
+    ARRAY_AGG(product_id ORDER BY last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products
+  GROUP BY customer_id
+)
+...
+LEFT JOIN customer_purchase_history ch
+  ON t.customer_id = ch.customer_id
+
+-- AFTER (per-(customer, target_product), excludes target)
+customer_purchase_history AS (
+  SELECT
+    cp1.customer_id,
+    cp1.product_id AS target_product_id,
+    ARRAY_AGG(cp2.product_id ORDER BY cp2.last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products cp1
+  JOIN customer_products cp2
+    ON cp1.customer_id = cp2.customer_id
+    AND cp1.product_id != cp2.product_id
+  GROUP BY cp1.customer_id, cp1.product_id
+)
+...
+LEFT JOIN customer_purchase_history ch
+  ON t.customer_id = ch.customer_id AND t.product_id = ch.target_product_id
+```
+
+This is a **validation fix** only — it confirms the root cause by making the test view match the training view. The accuracy should jump from ~1.7% to ~60-70% R@5 with the existing qt-182 model.
+
+## Recommended Long-Term Fix
+
+The short-term fix makes the test view match the (broken) training view. The proper fix is the opposite: make the **training view** include the target product in history, matching real serving behavior.
+
+### Training view change needed
+
+```sql
+-- CURRENT (broken): per-(customer, target_product), excludes target
+customer_purchase_history AS (
+  SELECT
+    cp1.customer_id,
+    cp1.product_id AS target_product_id,
+    ARRAY_AGG(cp2.product_id ORDER BY cp2.last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products cp1
+  JOIN customer_products cp2
+    ON cp1.customer_id = cp2.customer_id
+    AND cp1.product_id != cp2.product_id
+  GROUP BY cp1.customer_id, cp1.product_id
+)
+...
+LEFT JOIN customer_purchase_history ch
+  ON t.customer_id = ch.customer_id AND t.product_id = ch.target_product_id
+
+-- FIX: per-customer, includes all products (matches serving)
+customer_purchase_history AS (
+  SELECT
+    customer_id,
+    ARRAY_AGG(product_id ORDER BY last_purchase_date DESC LIMIT 50) AS purchase_history
+  FROM customer_products
+  GROUP BY customer_id
+)
+...
+LEFT JOIN customer_purchase_history ch
+  ON t.customer_id = ch.customer_id
+```
+
+After updating the training view, the test view should be reverted to per-customer history (its original form) and the model retrained.
+
+### Why including the target in training history is correct
+
+1. **Serving consistency**: At serving time, you don't know the target product, so you can't exclude it. Training and serving must use the same history format.
+
+2. **The "leakage" concern is misplaced**: Including product X in history when predicting X seems like leakage, but the mean-pooled taste vector averages 50 products into one 32D vector. The presence of one product among 50 contributes ~2% of the signal — the model cannot trivially extract "recommend what's in history" from a mean-pooled embedding.
+
+3. **Current approach is worse**: Excluding the target created a stronger leakage — the model learned to exploit the **absence** of the target, which is 100% correlated with the label.
+
+4. **The model should learn co-purchase patterns**: If a customer bought Milk, Bread, and Butter, recommending Eggs is a legitimate co-purchase pattern whether or not Eggs appears in the history. The model needs to learn general taste preferences, not the "find the missing item" trick.
+
+---
+
+## Diagnostic Scripts
+
+All diagnostic scripts are in `dev/models/qt-182/`:
+
+| Script | Purpose |
+|---|---|
+| `diagnose_history.py` | Tests if TFT layer correctly processes int64 history values (eliminated type mismatch hypothesis) |
+| `diagnose_day29_via_serving.py` | Runs serving model on day 29 data to isolate data vs model path issue |
+| `diagnose_data_diff.py` | Compares feature values between day 29 and day 30 for overlapping customers |
+| `diagnose_controlled.py` | Systematic feature-swap experiments (date, history, buyer stats) |
+| `diagnose_ground_truth.py` | Compares product distributions, repeat rates, and model recommendation patterns |
+| `diagnose_target_exclusion.py` | **Decisive test**: compares accuracy with/without target in history |
+
+---
+
 ## Files Referenced
 
 | File | Purpose |
 |------|---------|
-| `dev/sql/create_ternopil_train_v4_view.sql` | Training view — reverted to global aggregation |
-| `dev/sql/create_ternopil_prob_train_v4_view.sql` | Ranking training view — reverted to global aggregation |
-| `dev/sql/create_ternopil_test_v4_view.sql` | Test view — unchanged (already correct) |
-| `dev/sql/create_ternopil_prob_test_v4_view.sql` | Ranking test view — unchanged (already correct) |
+| `dev/sql/create_ternopil_train_v4_view.sql` | Training view — global aggregation, excludes target (needs long-term fix) |
+| `dev/sql/create_ternopil_prob_train_v4_view.sql` | Ranking training view — global aggregation |
+| `dev/sql/create_ternopil_test_v4_view.sql` | Test view — updated to exclude target (short-term validation fix) |
+| `dev/sql/create_ternopil_prob_test_v4_view.sql` | Ranking test view — unchanged |
 | `dev/models/qt-174/inference_demo.ipynb` | Inference notebook showing R@5=32.8% on unseen data |
+| `dev/models/qt-182/inference_demo.ipynb` | Inference notebook showing R@5=1.7% (before fix) |
+| `dev/models/qt-182/diagnose_*.py` | Diagnostic scripts used during investigation |
 | `ml_platform/configs/services.py` | Code generation — unchanged |

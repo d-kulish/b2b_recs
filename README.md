@@ -4,8 +4,8 @@ A production-ready multi-tenant SaaS platform for building, training, and deploy
 
 **Status:** Production Deployed ✅ | Cloud Scheduler Working ✅ | SQL/NoSQL/File ETL Active ✅ | Dataflow Ready ✅
 
-**Website:** https://recs.studio
-**App:** https://django-app-555035914949.europe-central2.run.app
+**Website:** https://recs.studio (Cloud Run: `django-app-website` in `europe-west4`)
+**App:** https://django-app-555035914949.europe-central2.run.app (Cloud Run: `django-app` in `europe-central2`)
 
 ---
 
@@ -314,6 +314,35 @@ b2b-recs-platform (Central)          Client Projects (Isolated)
 - Pre-built with TFX, KFP, and dependencies (Python 3.10)
 - Reduces Quick Test compilation from 12-15 min to 1-2 min
 - Built once, shared across all clients via IAM
+
+### **Website Deployment**
+
+The public website at `recs.studio` is a **separate Cloud Run service** from the main Django app:
+
+| Service | Region | URL | Purpose |
+|---------|--------|-----|---------|
+| `django-app` | `europe-central2` | `django-app-555035914949.europe-central2.run.app` | Main app (UI + API) |
+| `django-app-website` | `europe-west4` | `django-app-website-555035914949.europe-west4.run.app` | Public website (`recs.studio`) |
+
+Both services use the **same Docker image** (`gcr.io/b2b-recs/django-app`) and the same database. The website service must be in `europe-west4` because `europe-central2` does not support Cloud Run domain mappings.
+
+**To deploy website changes:**
+```bash
+# Step 1: Build the image (same as main app)
+gcloud builds submit --tag gcr.io/b2b-recs/django-app --project b2b-recs
+
+# Step 2: Deploy to the website service in europe-west4
+gcloud run deploy django-app-website \
+    --image gcr.io/b2b-recs/django-app \
+    --region europe-west4 \
+    --project b2b-recs
+```
+
+> **Note:** `deploy_django.sh` only deploys to `django-app` in `europe-central2`. To update the website at `recs.studio`, you must also deploy to `django-app-website` in `europe-west4` (step 2 above).
+
+**Domain mapping:** `recs.studio` → `django-app-website` via `gcloud beta run domain-mappings` in `europe-west4`.
+
+**Templates:** `templates/website/landing.html`, `templates/website/privacy.html`, `templates/website/terms.html`.
 
 ### **Per-Client Components**
 

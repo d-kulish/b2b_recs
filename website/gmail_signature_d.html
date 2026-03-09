@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gmail Signature — Copy Helper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .instructions {
+            max-width: 520px;
+            margin: 0 auto 24px;
+            font-size: 15px;
+            color: #374151;
+        }
+        button {
+            background: #1e3a8a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 32px;
+        }
+        button:hover { background: #1e40af; }
+        .status {
+            font-size: 14px;
+            color: #059669;
+            font-weight: 600;
+            margin-bottom: 24px;
+            min-height: 20px;
+        }
+        .preview-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .preview {
+            display: inline-block;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body>
+
+<div class="instructions">
+    Click the button below, then go to Gmail → Settings → Signature editor and press <strong>Cmd+V</strong> to paste.
+</div>
+
+<button onclick="copySignature()">Copy Signature to Clipboard</button>
+<div class="status" id="status"></div>
+
+<div class="preview-label">Preview</div>
+<div class="preview">
+    <table cellpadding="0" cellspacing="0" border="0" style="border:2px solid #1f2937; border-radius:16px; padding:12px 18px; font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; width:100%; max-width:520px;">
+        <tr>
+            <td style="vertical-align:middle; padding-right:18px; width:80px; text-align:center;">
+                <img src="https://storage.googleapis.com/recs-studio-public/logo/recs_logo.png"
+                     alt="Recs Studio"
+                     width="56" height="48"
+                     style="display:block; margin:0 auto; border:0; width:56px; height:auto;">
+                <div style="font-size:10px; font-weight:700; color:#374151; margin-top:2px; white-space:nowrap;">
+                    Recs Studio
+                </div>
+            </td>
+            <td style="vertical-align:middle; border-left:1px solid #e5e7eb; padding-left:16px;">
+                <div style="font-size:17px; font-weight:700; color:#1e3a8a; line-height:1.2;">
+                    Dmytro Kulish
+                </div>
+                <div style="font-size:13px; font-weight:500; color:#374151; line-height:1.3; margin-top:2px;">
+                    Founder
+                </div>
+                <div style="font-size:13px; color:#6b7280; line-height:1.3; margin-top:2px;">
+                    <a href="mailto:dkulish@recs.studio" style="color:#6b7280; text-decoration:none;">dkulish@recs.studio</a>
+                    &nbsp;&middot;&nbsp;
+                    <a href="https://www.recs.studio" style="color:#6b7280; text-decoration:none;">www.recs.studio</a>
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+async function copySignature() {
+    const signatureHTML = `<table cellpadding="0" cellspacing="0" border="0" style="border:2px solid #1f2937; border-radius:16px; padding:12px 18px; font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; width:100%; max-width:520px;"><tr><td style="vertical-align:middle; padding-right:18px; width:80px; text-align:center;"><img src="https://storage.googleapis.com/recs-studio-public/logo/recs_logo.png" alt="Recs Studio" width="56" height="48" style="display:block; margin:0 auto; border:0; width:56px; height:auto;"><div style="font-size:10px; font-weight:700; color:#374151; margin-top:2px; white-space:nowrap;">Recs Studio</div></td><td style="vertical-align:middle; border-left:1px solid #e5e7eb; padding-left:16px;"><div style="font-size:17px; font-weight:700; color:#1e3a8a; line-height:1.2;">Dmytro Kulish</div><div style="font-size:13px; font-weight:500; color:#374151; line-height:1.3; margin-top:2px;">Founder</div><div style="font-size:13px; color:#6b7280; line-height:1.3; margin-top:2px;"><a href="mailto:dkulish@recs.studio" style="color:#6b7280; text-decoration:none;">dkulish@recs.studio</a>&nbsp;&middot;&nbsp;<a href="https://www.recs.studio" style="color:#6b7280; text-decoration:none;">www.recs.studio</a></div></td></tr></table>`;
+
+    try {
+        const blob = new Blob([signatureHTML], { type: 'text/html' });
+        await navigator.clipboard.write([
+            new ClipboardItem({ 'text/html': blob })
+        ]);
+        document.getElementById('status').textContent = 'Copied! Now paste (Cmd+V) into the Gmail signature editor.';
+    } catch (err) {
+        document.getElementById('status').textContent = 'Copy failed: ' + err.message;
+    }
+}
+</script>
+
+</body>
+</html>

@@ -9,14 +9,19 @@ each handling a specific part of the email pipeline:
 |------------|------------|-------------------------------------------|
 | Sending    | Resend     | SMTP relay for outgoing email             |
 | Receiving  | ImprovMX   | MX forwarding to Gmail                    |
-| Inbox/UI   | Outlook    | Desktop email client (reads Gmail via IMAP)|
+| Compose/UI | Gmail web  | Primary client for sending (branded sig)  |
+| Reading    | Outlook    | Desktop client for reading (Gmail via IMAP)|
 
 ## Architecture
 
 ```
-Outgoing:
+Outgoing (branded):
+  Gmail web (compose as dkulish@recs.studio) → Resend SMTP → recipient
+  Signature auto-appended by Gmail (Option D)
+
+Outgoing (plain, legacy):
   Outlook (compose) → Resend SMTP → recipient
-                       (dkulish@recs.studio)
+  No HTML signature (Outlook doesn't support custom HTML signatures)
 
 Incoming:
   sender → MX (ImprovMX) → forwards to kulish.dmytro@gmail.com → Gmail IMAP → Outlook
@@ -65,9 +70,11 @@ Incoming:
   - Username: `resend`
   - Password: Resend API key
 
-### 4. Gmail (backend inbox storage)
+### 4. Gmail (compose + inbox storage)
 
-- **Role:** invisible backend — stores incoming mail forwarded by ImprovMX
+- **Role:** primary client for composing branded emails as `dkulish@recs.studio`; also stores incoming mail forwarded by ImprovMX
+- **"Send mail as" configured:** `dkulish@recs.studio` via Resend SMTP (verified)
+- **Signature:** Option D (dashboard style) — auto-appended when composing as `dkulish@recs.studio`
 - **App Password:** generated for Outlook IMAP access (Google Account → Security → 2-Step Verification → App Passwords)
 - **Personal email (kulish.dmytro@gmail.com)** uses separate Gmail app / Apple Mail
 
@@ -117,20 +124,37 @@ A branded HTML email signature (Option D — dashboard style with logo and label
 
 ### How to Use the Signature
 
-Outlook's signature editor does not support custom HTML properly — copy-pasting from a browser
-loses styling (rounded corners, fonts, spacing). Two approaches that work:
+Outlook's signature editor does not support custom HTML properly.
+Gmail web is the primary client for sending branded emails.
 
-#### Option A: Gmail "Send mail as" (recommended for daily use)
+#### Daily use: compose in Gmail web
 
-1. In Gmail → Settings → Accounts → "Send mail as" → Add another email
-2. Enter `dkulish@recs.studio`
-3. SMTP settings: server `smtp.resend.com`, port `465` (SSL), username `resend`, password = Resend API key
-4. Confirm via verification email (arrives back to Gmail via ImprovMX)
-5. In Gmail → Settings → General → Signature → create new signature
-6. Paste the Option D signature block from `website/email_signature.html` (select in browser, Cmd+C, paste into Gmail signature editor — Gmail preserves HTML styling correctly)
-7. Assign it as default for the `dkulish@recs.studio` identity
+1. Open Gmail web → click **Compose**
+2. In the "From" dropdown, select `dkulish@recs.studio`
+3. The Option D signature is auto-appended
 
-#### Option B: Resend API (for outreach / programmatic emails)
+#### Gmail "Send mail as" setup (already completed)
+
+1. Gmail → Settings → Accounts → "Send mail as" → added `dkulish@recs.studio`
+2. SMTP settings: server `smtp.resend.com`, port `465` (SSL), username `resend`, password = Resend API key
+3. Verified via confirmation email (arrived via ImprovMX)
+
+#### Signature setup (already completed)
+
+The signature was set using a clipboard-copy helper page (`website/gmail_signature_d.html`).
+Open in Chrome → click "Copy Signature to Clipboard" → paste into Gmail signature editor.
+
+**Gmail API limitation:** The Gmail API cannot update signatures for non-primary sendAs
+addresses on personal Gmail accounts (requires Google Workspace domain-wide delegation).
+The clipboard-copy approach is the only reliable method.
+
+**GCP setup for Gmail API (completed, for reference):**
+- Gmail API enabled in project `b2b-recs`
+- OAuth consent screen configured (External, test user: `kulish.dmytro@gmail.com`)
+- OAuth client: Desktop app "set-gmail-signature" (credentials in `.gcp/gmail_oauth_client.json`)
+- Script `website/set_gmail_signature.py` can read sendAs config but cannot write signatures for non-primary addresses
+
+#### Resend API (for outreach / programmatic emails)
 
 ```python
 import resend

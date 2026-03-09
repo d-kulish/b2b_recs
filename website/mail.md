@@ -144,15 +144,8 @@ Gmail web is the primary client for sending branded emails.
 The signature was set using a clipboard-copy helper page (`website/gmail_signature_d.html`).
 Open in Chrome → click "Copy Signature to Clipboard" → paste into Gmail signature editor.
 
-**Gmail API limitation:** The Gmail API cannot update signatures for non-primary sendAs
-addresses on personal Gmail accounts (requires Google Workspace domain-wide delegation).
-The clipboard-copy approach is the only reliable method.
-
-**GCP setup for Gmail API (completed, for reference):**
-- Gmail API enabled in project `b2b-recs`
-- OAuth consent screen configured (External, test user: `kulish.dmytro@gmail.com`)
-- OAuth client: Desktop app "set-gmail-signature" (credentials in `.gcp/gmail_oauth_client.json`)
-- Script `website/set_gmail_signature.py` can read sendAs config but cannot write signatures for non-primary addresses
+**Note:** The Gmail API cannot update signatures for non-primary sendAs addresses on personal
+Gmail accounts (requires Google Workspace). The clipboard-copy approach is the only reliable method.
 
 #### Resend API (for outreach / programmatic emails)
 

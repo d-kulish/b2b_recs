@@ -326,19 +326,7 @@ The public website at `recs.studio` is a **separate Cloud Run service** from the
 
 Both services use the **same Docker image** (`gcr.io/b2b-recs/django-app`) and the same database. The website service must be in `europe-west4` because `europe-central2` does not support Cloud Run domain mappings.
 
-**To deploy website changes:**
-```bash
-# Step 1: Build the image (same as main app)
-gcloud builds submit --tag gcr.io/b2b-recs/django-app --project b2b-recs
-
-# Step 2: Deploy to the website service in europe-west4
-gcloud run deploy django-app-website \
-    --image gcr.io/b2b-recs/django-app \
-    --region europe-west4 \
-    --project b2b-recs
-```
-
-> **Note:** `deploy_django.sh` only deploys to `django-app` in `europe-central2`. To update the website at `recs.studio`, you must also deploy to `django-app-website` in `europe-west4` (step 2 above).
+**Deployment:** `deploy_django.sh` deploys to **both** services automatically (builds image once, deploys to platform in `europe-central2`, then to website in `europe-west4`).
 
 **Domain mapping:** `recs.studio` → `django-app-website` via `gcloud beta run domain-mappings` in `europe-west4`.
 

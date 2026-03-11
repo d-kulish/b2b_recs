@@ -326,12 +326,9 @@
                     Recommendations. Managed.
                 </h2>
                 <p class="text-2xl text-gray-400 font-medium mb-6">From data to personalised offer. At any scale.</p>
-                <p class="text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed mb-8">
+                <p class="text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
                     Recs Studio gives you state-of-the-art recommender systems without the infrastructure overhead. You own the business domain — we handle the platform, education, and consulting.
                 </p>
-                <button onclick="openDemoModal()" class="inline-block px-8 py-3 text-lg font-semibold text-white rounded-lg transition-all hover:opacity-90" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
-                    Request a Demo
-                </button>
             </div>
 
             <!-- Separator -->
@@ -689,33 +686,290 @@
         <div class="flex items-center justify-between py-8 text-sm text-gray-500">
             <span>&copy; 2025 recs.studio</span>
             <div class="flex gap-6">
-                <a href="#" onclick="openDemoModal(); return false;" class="hover:text-gray-300 transition">Request a Demo</a>
                 <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
                 <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
             </div>
         </div>
     </div>
 
+    <!-- Floating "Request a Demo" button -->
+    <button onclick="openDemoModal()" style="
+        position: fixed;
+        bottom: 32px;
+        right: 32px;
+        z-index: 9000;
+        padding: 14px 28px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+        transition: all 0.25s ease;
+    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(59,130,246,0.5)'"
+       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 14px rgba(59,130,246,0.4)'"
+    >Request a Demo</button>
+
     <!-- Demo Request Modal -->
-    <div id="demoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.4); align-items:center; justify-content:center;">
-        <div style="background:#fff; border:2px solid #1f2937; border-radius:16px; max-width:480px; width:90%; padding:32px; position:relative;">
-            <h3 style="font-size:24px; font-weight:700; color:#111827; margin-bottom:8px;">Request a Demo</h3>
-            <p style="font-size:14px; color:#6b7280; margin-bottom:24px;">Tell us how to reach you and we'll schedule a walkthrough.</p>
-            <form id="demoForm" onsubmit="submitDemo(event)">
-                <label style="display:block; font-size:14px; font-weight:600; color:#374151; margin-bottom:6px;">Email <span style="color:#ef4444;">*</span></label>
-                <input type="email" id="demoEmail" required placeholder="you@company.com" style="width:100%; padding:10px 14px; border:1.5px solid #d1d5db; border-radius:8px; font-size:15px; margin-bottom:16px; outline:none; box-sizing:border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#d1d5db'">
-                <label style="display:block; font-size:14px; font-weight:600; color:#374151; margin-bottom:6px;">What are you looking for? <span style="font-weight:400; color:#9ca3af;">(optional)</span></label>
-                <textarea id="demoDesc" rows="3" placeholder="E.g. product recommendations for our e-commerce site..." style="width:100%; padding:10px 14px; border:1.5px solid #d1d5db; border-radius:8px; font-size:15px; margin-bottom:16px; outline:none; resize:vertical; box-sizing:border-box; font-family:inherit;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#d1d5db'"></textarea>
-                <!-- Honeypot -->
-                <div style="position:absolute; left:-9999px;" aria-hidden="true">
-                    <input type="text" id="demoCompany" name="company" tabindex="-1" autocomplete="off">
+    <style>
+        /* Modal overlay */
+        .demo-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .demo-modal-overlay.visible {
+            display: flex;
+        }
+
+        /* Modal container — 576 * 1.2 = 691, 480 * 1.1 = 528 */
+        .demo-modal-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 691px;
+            width: 100%;
+            min-height: 528px;
+            display: flex;
+            flex-direction: column;
+            animation: demoModalSlideIn 0.2s ease-out;
+        }
+        @keyframes demoModalSlideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Header — sky blue gradient matching soft-deploy */
+        .demo-modal-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 20px 24px;
+            min-height: 80px;
+            background: linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 50%, #0ea5e9 100%);
+            border-radius: 12px 12px 0 0;
+            flex-shrink: 0;
+        }
+        .demo-modal-header .icon-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: #0ea5e9;
+        }
+        .demo-modal-header .icon-badge i {
+            font-size: 20px;
+            color: #ffffff;
+        }
+        .demo-modal-header .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0c4a6e;
+        }
+        .demo-modal-header .header-subtitle {
+            font-size: 12px;
+            margin-top: 2px;
+            color: #075985;
+        }
+
+        /* Body */
+        .demo-modal-body {
+            padding: 20px 24px;
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .demo-modal-body form {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .demo-modal-body label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+        .demo-modal-body input[type="email"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            margin-bottom: 12px;
+            outline: none;
+            box-sizing: border-box;
+            font-family: inherit;
+            flex-shrink: 0;
+        }
+        .demo-modal-body textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            box-sizing: border-box;
+            font-family: inherit;
+            flex: 1;
+            resize: none;
+            margin: 0;
+        }
+        .demo-modal-body input[type="email"]:focus,
+        .demo-modal-body textarea:focus {
+            border-color: #3b82f6;
+        }
+
+        /* Footer — neumorphic buttons */
+        .demo-modal-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #ffffff;
+            border-radius: 0 0 12px 12px;
+            flex-shrink: 0;
+        }
+        .demo-modal-footer .footer-left {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .demo-modal-footer .footer-right {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        /* Neumorphic button base */
+        .demo-btn-neu {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            font-weight: 600;
+            font-size: 14px;
+            background: linear-gradient(145deg, #ffffff, #dcdcdc);
+            box-shadow:
+                6px 6px 14px rgba(0, 0, 0, 0.2),
+                -4px -4px 10px rgba(255, 255, 255, 1),
+                inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+            padding: 6px;
+            width: 120px;
+            height: 48px;
+        }
+        .demo-btn-neu:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow:
+                6px 6px 15px rgba(0, 0, 0, 0.18),
+                -3px -3px 10px rgba(255, 255, 255, 0.9);
+        }
+        .demo-btn-neu:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow:
+                2px 2px 6px rgba(0, 0, 0, 0.12),
+                -1px -1px 4px rgba(255, 255, 255, 0.7);
+        }
+        .demo-btn-neu:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .demo-btn-neu .btn-inner {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            color: #ffffff;
+            padding: 0 20px;
+            transition: all 0.25s ease;
+        }
+
+        /* Send — green */
+        .demo-btn-send .btn-inner {
+            background: linear-gradient(145deg, #22c55e, #16a34a);
+        }
+        .demo-btn-send:hover:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #16a34a, #15803d);
+        }
+        .demo-btn-send:active:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #15803d, #166534);
+        }
+
+        /* Cancel — red */
+        .demo-btn-cancel .btn-inner {
+            background: linear-gradient(145deg, #f87171, #ef4444);
+        }
+        .demo-btn-cancel:hover:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #ef4444, #dc2626);
+        }
+        .demo-btn-cancel:active:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #dc2626, #b91c1c);
+        }
+    </style>
+
+    <div id="demoModal" class="demo-modal-overlay" onclick="if(event.target===this) closeDemoModal();">
+        <div class="demo-modal-container" onclick="event.stopPropagation()">
+            <!-- Header -->
+            <div class="demo-modal-header">
+                <div class="icon-badge">
+                    <i class="fas fa-envelope"></i>
                 </div>
-                <div id="demoMessage" style="display:none; padding:10px 14px; border-radius:8px; font-size:14px; margin-bottom:16px;"></div>
-                <div style="display:flex; gap:12px; justify-content:flex-end;">
-                    <button type="button" onclick="closeDemoModal()" style="padding:10px 20px; font-size:14px; font-weight:600; color:#374151; background:#f3f4f6; border:none; border-radius:8px; cursor:pointer;">Cancel</button>
-                    <button type="submit" id="demoSubmit" style="padding:10px 20px; font-size:14px; font-weight:600; color:#fff; border:none; border-radius:8px; cursor:pointer; background:linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">Send Request</button>
+                <div style="flex:1;">
+                    <div class="header-title">Request a Demo</div>
+                    <div class="header-subtitle">Tell us how to reach you and we'll schedule a walkthrough</div>
                 </div>
-            </form>
+            </div>
+
+            <!-- Body -->
+            <div class="demo-modal-body">
+                <form id="demoForm" onsubmit="submitDemo(event)">
+                    <label>Email <span style="color:#ef4444;">*</span></label>
+                    <input type="email" id="demoEmail" required placeholder="you@company.com">
+                    <label>What are you looking for?</label>
+                    <textarea id="demoDesc" placeholder="E.g. product recommendations for our e-commerce site..."></textarea>
+                    <!-- Honeypot -->
+                    <div style="position:absolute; left:-9999px;" aria-hidden="true">
+                        <input type="text" id="demoCompany" name="company" tabindex="-1" autocomplete="off">
+                    </div>
+                    <div id="demoMessage" style="display:none; padding:10px 14px; border-radius:8px; font-size:14px;"></div>
+                </form>
+            </div>
+
+            <!-- Footer -->
+            <div class="demo-modal-footer">
+                <div class="footer-left"></div>
+                <div class="footer-right">
+                    <button type="submit" form="demoForm" id="demoSubmit" class="demo-btn-neu demo-btn-send">
+                        <span class="btn-inner">Send</span>
+                    </button>
+                    <button type="button" onclick="closeDemoModal()" class="demo-btn-neu demo-btn-cancel">
+                        <span class="btn-inner">Cancel</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -748,23 +1002,18 @@
 
         function openDemoModal() {
             const modal = document.getElementById('demoModal');
-            modal.style.display = 'flex';
+            modal.classList.add('visible');
             document.getElementById('demoEmail').focus();
         }
 
         function closeDemoModal() {
             const modal = document.getElementById('demoModal');
-            modal.style.display = 'none';
+            modal.classList.remove('visible');
             document.getElementById('demoForm').reset();
             const msg = document.getElementById('demoMessage');
             msg.style.display = 'none';
             msg.textContent = '';
         }
-
-        // Close on backdrop click
-        document.getElementById('demoModal').addEventListener('click', function(e) {
-            if (e.target === this) closeDemoModal();
-        });
 
         // Close on Escape
         document.addEventListener('keydown', function(e) {
@@ -774,9 +1023,10 @@
         function submitDemo(e) {
             e.preventDefault();
             const btn = document.getElementById('demoSubmit');
+            const btnInner = btn.querySelector('.btn-inner');
             const msg = document.getElementById('demoMessage');
             btn.disabled = true;
-            btn.textContent = 'Sending...';
+            btnInner.textContent = 'Sending...';
             msg.style.display = 'none';
 
             fetch('{% url "request_demo" %}', {
@@ -814,7 +1064,7 @@
             })
             .finally(() => {
                 btn.disabled = false;
-                btn.textContent = 'Send Request';
+                btnInner.textContent = 'Send';
             });
         }
     </script>

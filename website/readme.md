@@ -43,7 +43,7 @@ A popup modal on the landing page collects demo requests from potential customer
 ### Email notification
 
 - **Sender:** `Recs Studio <noreply@recs.studio>` (domain verified in Resend)
-- **Recipient:** `dkulish@recs.studio`
+- **Recipient:** `kulish.dmytro@gmail.com` (direct to Gmail, bypasses ImprovMX forwarding for reliable delivery)
 - **API key:** `RESEND_API_KEY` env var — stored in GCP Secret Manager (`resend-api-key`) and mounted to both Cloud Run services via `--set-secrets`
 - **Failure handling:** Email errors are logged but don't fail the request. The database is the source of truth.
 

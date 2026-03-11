@@ -1,3 +1,86 @@
+# Website App (`website/`)
+
+The public-facing website at **recs.studio** — landing page, legal pages, and demo request form.
+
+## Architecture
+
+The website runs as a separate Cloud Run service (`django-app-website`) from the same Docker image as the ML platform (`django-app`). Both share the same Django codebase and database but are deployed to different regions with different resource allocations.
+
+| | Platform (`django-app`) | Website (`django-app-website`) |
+|---|---|---|
+| Region | europe-central2 (Warsaw) | europe-west4 (Netherlands) |
+| Domain | Cloud Run default URL | recs.studio |
+| Memory / CPU | 2 Gi / 2 | 512 Mi / 1 |
+| Max instances | 10 | 3 |
+
+The website service is publicly accessible (`--allow-unauthenticated`). Authenticated users hitting the landing page are redirected to the platform dashboard.
+
+## Pages
+
+| URL | View | Template |
+|-----|-------|----------|
+| `/` | `landing` | `templates/website/landing.html` |
+| `/terms/` | `terms` | `templates/website/terms.html` |
+| `/privacy/` | `privacy` | `templates/website/privacy.html` |
+
+## Request a Demo
+
+A popup modal on the landing page collects demo requests from potential customers.
+
+### How it works
+
+1. User clicks "Request a Demo" (hero section button or footer link)
+2. Modal opens with email (required), description (optional), and a hidden honeypot field
+3. JS sends `POST /api/request-demo/` with JSON body and CSRF token
+4. Backend validates, saves `DemoRequest` to the database, and sends a notification email via Resend API
+5. Modal shows success message and auto-closes after 2 seconds
+
+### Anti-spam
+
+- **Honeypot field:** A hidden field named "company" is positioned off-screen. Bots that fill it get a silent `{"success": true}` response — no DB write, no email.
+- **CSRF:** `@ensure_csrf_cookie` on the landing view ensures the CSRF cookie is set for anonymous users (no Django form on the page to trigger it otherwise).
+
+### Email notification
+
+- **Sender:** `Recs Studio <noreply@recs.studio>` (domain verified in Resend)
+- **Recipient:** `dkulish@recs.studio`
+- **API key:** `RESEND_API_KEY` env var — stored in GCP Secret Manager (`resend-api-key`) and mounted to both Cloud Run services via `--set-secrets`
+- **Failure handling:** Email errors are logged but don't fail the request. The database is the source of truth.
+
+### Admin
+
+`DemoRequest` is registered in Django admin as read-only. No add/edit permissions — submissions only come through the public form.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `website/models.py` | `DemoRequest` model |
+| `website/admin.py` | Read-only admin registration |
+| `website/views.py` | `request_demo` POST endpoint |
+| `website/urls.py` | `/api/request-demo/` route |
+| `templates/website/landing.html` | Button, modal, JS |
+
+## Deployment
+
+Both services are deployed from a single script:
+
+```bash
+./deploy_django.sh
+```
+
+This builds the Docker image once and deploys it to both Cloud Run services. The script also updates the ETL runner with the platform service URL.
+
+### Secrets (GCP Secret Manager)
+
+| Secret name | Env var | Used by |
+|---|---|---|
+| `django-db-password` | `DB_PASSWORD` | Both services |
+| `django-secret-key` | `DJANGO_SECRET_KEY` | Both services |
+| `resend-api-key` | `RESEND_API_KEY` | Both services |
+
+---
+
 # Corporate Email Setup: dkulish@recs.studio
 
 ## Overview

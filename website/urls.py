@@ -5,4 +5,5 @@ urlpatterns = [
     path('', views.landing, name='landing'),
     path('terms/', views.terms, name='terms'),
     path('privacy/', views.privacy, name='privacy'),
+    path('api/request-demo/', views.request_demo, name='request_demo'),
 ]

@@ -55,6 +55,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --add-cloudsql-instances "${CLOUD_SQL_CONNECTION}" \
     --set-secrets "DB_PASSWORD=django-db-password:latest" \
     --set-secrets "DJANGO_SECRET_KEY=django-secret-key:latest" \
+    --set-secrets "RESEND_API_KEY=resend-api-key:latest" \
     --service-account "django-app@b2b-recs.iam.gserviceaccount.com"
 
 echo ""
@@ -100,6 +101,7 @@ gcloud run deploy ${WEBSITE_SERVICE_NAME} \
     --add-cloudsql-instances "${CLOUD_SQL_CONNECTION}" \
     --set-secrets "DB_PASSWORD=django-db-password:latest" \
     --set-secrets "DJANGO_SECRET_KEY=django-secret-key:latest" \
+    --set-secrets "RESEND_API_KEY=resend-api-key:latest" \
     --service-account "django-app@b2b-recs.iam.gserviceaccount.com"
 
 WEBSITE_URL=$(gcloud run services describe ${WEBSITE_SERVICE_NAME} --region ${WEBSITE_REGION} --format="value(status.url)")

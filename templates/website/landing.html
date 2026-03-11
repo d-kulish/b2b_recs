@@ -326,9 +326,12 @@
                     Recommendations. Managed.
                 </h2>
                 <p class="text-2xl text-gray-400 font-medium mb-6">From data to personalised offer. At any scale.</p>
-                <p class="text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
+                <p class="text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed mb-8">
                     Recs Studio gives you state-of-the-art recommender systems without the infrastructure overhead. You own the business domain — we handle the platform, education, and consulting.
                 </p>
+                <button onclick="openDemoModal()" class="inline-block px-8 py-3 text-lg font-semibold text-white rounded-lg transition-all hover:opacity-90" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
+                    Request a Demo
+                </button>
             </div>
 
             <!-- Separator -->
@@ -686,9 +689,33 @@
         <div class="flex items-center justify-between py-8 text-sm text-gray-500">
             <span>&copy; 2025 recs.studio</span>
             <div class="flex gap-6">
+                <a href="#" onclick="openDemoModal(); return false;" class="hover:text-gray-300 transition">Request a Demo</a>
                 <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
                 <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
             </div>
+        </div>
+    </div>
+
+    <!-- Demo Request Modal -->
+    <div id="demoModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.4); align-items:center; justify-content:center;">
+        <div style="background:#fff; border:2px solid #1f2937; border-radius:16px; max-width:480px; width:90%; padding:32px; position:relative;">
+            <h3 style="font-size:24px; font-weight:700; color:#111827; margin-bottom:8px;">Request a Demo</h3>
+            <p style="font-size:14px; color:#6b7280; margin-bottom:24px;">Tell us how to reach you and we'll schedule a walkthrough.</p>
+            <form id="demoForm" onsubmit="submitDemo(event)">
+                <label style="display:block; font-size:14px; font-weight:600; color:#374151; margin-bottom:6px;">Email <span style="color:#ef4444;">*</span></label>
+                <input type="email" id="demoEmail" required placeholder="you@company.com" style="width:100%; padding:10px 14px; border:1.5px solid #d1d5db; border-radius:8px; font-size:15px; margin-bottom:16px; outline:none; box-sizing:border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#d1d5db'">
+                <label style="display:block; font-size:14px; font-weight:600; color:#374151; margin-bottom:6px;">What are you looking for? <span style="font-weight:400; color:#9ca3af;">(optional)</span></label>
+                <textarea id="demoDesc" rows="3" placeholder="E.g. product recommendations for our e-commerce site..." style="width:100%; padding:10px 14px; border:1.5px solid #d1d5db; border-radius:8px; font-size:15px; margin-bottom:16px; outline:none; resize:vertical; box-sizing:border-box; font-family:inherit;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#d1d5db'"></textarea>
+                <!-- Honeypot -->
+                <div style="position:absolute; left:-9999px;" aria-hidden="true">
+                    <input type="text" id="demoCompany" name="company" tabindex="-1" autocomplete="off">
+                </div>
+                <div id="demoMessage" style="display:none; padding:10px 14px; border-radius:8px; font-size:14px; margin-bottom:16px;"></div>
+                <div style="display:flex; gap:12px; justify-content:flex-end;">
+                    <button type="button" onclick="closeDemoModal()" style="padding:10px 20px; font-size:14px; font-weight:600; color:#374151; background:#f3f4f6; border:none; border-radius:8px; cursor:pointer;">Cancel</button>
+                    <button type="submit" id="demoSubmit" style="padding:10px 20px; font-size:14px; font-weight:600; color:#fff; border:none; border-radius:8px; cursor:pointer; background:linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">Send Request</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -703,6 +730,93 @@
             container.classList.toggle('open');
         }
 
+        // Demo modal
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function openDemoModal() {
+            const modal = document.getElementById('demoModal');
+            modal.style.display = 'flex';
+            document.getElementById('demoEmail').focus();
+        }
+
+        function closeDemoModal() {
+            const modal = document.getElementById('demoModal');
+            modal.style.display = 'none';
+            document.getElementById('demoForm').reset();
+            const msg = document.getElementById('demoMessage');
+            msg.style.display = 'none';
+            msg.textContent = '';
+        }
+
+        // Close on backdrop click
+        document.getElementById('demoModal').addEventListener('click', function(e) {
+            if (e.target === this) closeDemoModal();
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeDemoModal();
+        });
+
+        function submitDemo(e) {
+            e.preventDefault();
+            const btn = document.getElementById('demoSubmit');
+            const msg = document.getElementById('demoMessage');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            msg.style.display = 'none';
+
+            fetch('{% url "request_demo" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify({
+                    email: document.getElementById('demoEmail').value,
+                    description: document.getElementById('demoDesc').value,
+                    company: document.getElementById('demoCompany').value,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    msg.style.display = 'block';
+                    msg.style.background = '#f0fdf4';
+                    msg.style.color = '#166534';
+                    msg.textContent = 'Thank you! We\'ll be in touch shortly.';
+                    setTimeout(closeDemoModal, 2000);
+                } else {
+                    msg.style.display = 'block';
+                    msg.style.background = '#fef2f2';
+                    msg.style.color = '#991b1b';
+                    msg.textContent = data.error || 'Something went wrong. Please try again.';
+                }
+            })
+            .catch(() => {
+                msg.style.display = 'block';
+                msg.style.background = '#fef2f2';
+                msg.style.color = '#991b1b';
+                msg.textContent = 'Something went wrong. Please try again.';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = 'Send Request';
+            });
+        }
     </script>
 </body>
 </html>

@@ -328,9 +328,21 @@ Both services use the **same Docker image** (`gcr.io/b2b-recs/django-app`) and t
 
 **Deployment:** `deploy_django.sh` deploys to **both** services automatically (builds image once, deploys to platform in `europe-central2`, then to website in `europe-west4`).
 
+**Important:** The website's `CSRF_TRUSTED_ORIGINS` env var contains commas (multiple origins). The `--set-env-vars` flag uses `^##^` as a custom delimiter so commas are treated as literal characters, not key-value separators. Without this, the website deploy step fails silently.
+
+**Secrets (GCP Secret Manager):**
+
+| Secret | Env var | Used by |
+|--------|---------|---------|
+| `django-db-password` | `DB_PASSWORD` | Both services |
+| `django-secret-key` | `DJANGO_SECRET_KEY` | Both services |
+| `resend-api-key` | `RESEND_API_KEY` | Both services (demo request notifications) |
+
 **Domain mapping:** `recs.studio` → `django-app-website` via `gcloud beta run domain-mappings` in `europe-west4`.
 
 **Templates:** `templates/website/landing.html`, `templates/website/privacy.html`, `templates/website/terms.html`.
+
+See [`website/readme.md`](website/readme.md) for full website documentation including the "Request a Demo" feature.
 
 ### **Per-Client Components**
 

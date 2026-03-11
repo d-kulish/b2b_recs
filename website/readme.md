@@ -69,7 +69,25 @@ Both services are deployed from a single script:
 ./deploy_django.sh
 ```
 
-This builds the Docker image once and deploys it to both Cloud Run services. The script also updates the ETL runner with the platform service URL.
+This builds the Docker image once and deploys it to both Cloud Run services (steps 2 and 5). The script also updates the ETL runner with the platform service URL (step 4).
+
+**Gotcha — comma escaping:** The website's `CSRF_TRUSTED_ORIGINS` contains multiple comma-separated origins. The `gcloud run deploy --set-env-vars` flag treats commas as key-value separators by default. The script uses `^##^` as a custom delimiter prefix so commas are preserved as literal characters. Without this, the website deploy fails and the site is not updated.
+
+### Deploying website only
+
+If you need to redeploy only the website (e.g. after a failed deploy or to skip rebuilding):
+
+```bash
+gcloud run deploy django-app-website \
+    --image gcr.io/b2b-recs/django-app \
+    --region europe-west4 \
+    --project b2b-recs \
+    --platform managed \
+    --allow-unauthenticated \
+    --set-env-vars "^##^CSRF_TRUSTED_ORIGINS=https://recs.studio,https://www.recs.studio,https://django-app-555035914949.europe-central2.run.app" \
+    --set-secrets "RESEND_API_KEY=resend-api-key:latest" \
+    --service-account "django-app@b2b-recs.iam.gserviceaccount.com"
+```
 
 ### Secrets (GCP Secret Manager)
 
@@ -77,7 +95,7 @@ This builds the Docker image once and deploys it to both Cloud Run services. The
 |---|---|---|
 | `django-db-password` | `DB_PASSWORD` | Both services |
 | `django-secret-key` | `DJANGO_SECRET_KEY` | Both services |
-| `resend-api-key` | `RESEND_API_KEY` | Both services |
+| `resend-api-key` | `RESEND_API_KEY` | Both services (demo request notifications) |
 
 ---
 

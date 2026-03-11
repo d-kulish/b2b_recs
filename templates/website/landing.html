@@ -683,12 +683,10 @@
     <!-- Footer -->
     <div class="max-w-[88rem] mx-auto px-12 mt-6">
         <div style="height: 2px; background: linear-gradient(to right, transparent 0%, #1f2937 15%, #1f2937 85%, transparent 100%);"></div>
-        <div class="flex items-center justify-between py-8 text-sm text-gray-500">
+        <div class="flex items-center py-8 text-sm text-gray-500 gap-6">
             <span>&copy; 2025 recs.studio</span>
-            <div class="flex gap-6">
-                <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
-                <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
-            </div>
+            <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
+            <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
         </div>
     </div>
 

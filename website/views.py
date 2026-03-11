@@ -68,7 +68,7 @@ def request_demo(request):
                 body_lines.append(f"\nDescription:\n{description}")
             resend.Emails.send({
                 "from": "Recs Studio <noreply@recs.studio>",
-                "to": ["dkulish@recs.studio"],
+                "to": ["kulish.dmytro@gmail.com"],
                 "subject": f"New Demo Request from {email}",
                 "text": "\n".join(body_lines),
             })

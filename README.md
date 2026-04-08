@@ -317,18 +317,18 @@ b2b-recs-platform (Central)          Client Projects (Isolated)
 
 ### **Website Deployment**
 
-The public website at `recs.studio` is a **separate Cloud Run service** from the main Django app:
+The public website at `recs.studio` is a **separate Cloud Run service and image** from the main Django app:
 
 | Service | Region | URL | Purpose |
 |---------|--------|-----|---------|
 | `django-app` | `europe-central2` | `django-app-555035914949.europe-central2.run.app` | Main app (UI + API) |
 | `django-app-website` | `europe-west4` | `django-app-website-555035914949.europe-west4.run.app` | Public website (`recs.studio`) |
 
-Both services use the **same Docker image** (`gcr.io/b2b-recs/django-app`) and the same database. The website service must be in `europe-west4` because `europe-central2` does not support Cloud Run domain mappings.
+The platform uses `gcr.io/b2b-recs/django-app` and the website uses `gcr.io/b2b-recs/website-app`. They still share the same database, but they now deploy independently and no longer share a URL surface. The website service must be in `europe-west4` because `europe-central2` does not support Cloud Run domain mappings.
 
-**Deployment:** `deploy_django.sh` deploys to **both** services automatically (builds image once, deploys to platform in `europe-central2`, then to website in `europe-west4`).
+**Deployment:** `deploy_django.sh` deploys only the platform app. `website/deploy_website.sh` deploys only the public website.
 
-**Important:** The website's `CSRF_TRUSTED_ORIGINS` env var contains commas (multiple origins). The `--set-env-vars` flag uses `^##^` as a custom delimiter so commas are treated as literal characters, not key-value separators. Without this, the website deploy step fails silently.
+**Important:** The website's `CSRF_TRUSTED_ORIGINS` env var contains commas (multiple origins). The website deploy script uses `^##^` as a custom delimiter so commas are treated as literal characters, not key-value separators.
 
 **Secrets (GCP Secret Manager):**
 

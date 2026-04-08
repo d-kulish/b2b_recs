@@ -3,6 +3,7 @@ import logging
 import os
 
 import resend
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -15,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 @ensure_csrf_cookie
 def landing(request):
-    """Public landing page. Authenticated users get redirected to dashboard."""
+    """Public landing page. Authenticated users get redirected to the platform."""
     if request.user.is_authenticated:
-        return redirect('system_dashboard')
+        return redirect(settings.PLATFORM_DASHBOARD_URL)
     return render(request, 'website/landing.html')
 
 

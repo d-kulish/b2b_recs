@@ -34,6 +34,11 @@ ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
 
 # CSRF Configuration
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if os.getenv('CSRF_TRUSTED_ORIGINS') else []
+PLATFORM_BASE_URL = os.getenv(
+    'PLATFORM_BASE_URL',
+    'https://django-app-555035914949.europe-central2.run.app'
+).rstrip('/')
+PLATFORM_DASHBOARD_URL = f'{PLATFORM_BASE_URL}/dashboard/'
 
 # Application definition
 
@@ -45,11 +50,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    'django.contrib.sitemaps',
     # Project apps
     'ml_platform',
     'ml_platform.training',
-    'website',
 ]
 
 MIDDLEWARE = [
@@ -166,7 +169,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Login settings
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'system_dashboard'
-LOGOUT_REDIRECT_URL = 'landing'
+LOGOUT_REDIRECT_URL = 'login'
 
 # GCP Configuration
 GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', 'b2b-recs')

@@ -1,10 +1,10 @@
-# Platform Django app Dockerfile for Cloud Run
+# Public website Dockerfile for Cloud Run
 FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DJANGO_SETTINGS_MODULE=config.settings \
+    DJANGO_SETTINGS_MODULE=config.settings_website \
     PORT=8080
 
 # Set working directory
@@ -24,7 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Collect static files (use dummy SECRET_KEY for build)
+# Collect static files with website-only settings
 ENV DJANGO_SECRET_KEY=dummy-secret-key-for-collectstatic
 RUN python manage.py collectstatic --noinput
 
@@ -36,4 +36,4 @@ USER django
 EXPOSE 8080
 
 # Run gunicorn
-CMD exec gunicorn --bind :$PORT --workers 2 --threads 4 --timeout 0 config.wsgi:application
+CMD exec gunicorn --bind :$PORT --workers 2 --threads 4 --timeout 0 config.wsgi_website:application

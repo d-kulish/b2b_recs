@@ -4,7 +4,7 @@ The public-facing website at **recs.studio** — landing page, legal pages, and 
 
 ## Architecture
 
-The website runs as a separate Cloud Run service (`django-app-website`) from the same Docker image as the ML platform (`django-app`). Both share the same Django codebase and database but are deployed to different regions with different resource allocations.
+The website runs as a separate Cloud Run service (`django-app-website`) and its own Docker image (`gcr.io/b2b-recs/website-app`). It still shares the same Django repo and database as the ML platform (`django-app`), but it now deploys independently and no longer shares the platform URL configuration.
 
 | | Platform (`django-app`) | Website (`django-app-website`) |
 |---|---|---|
@@ -95,30 +95,22 @@ A popup modal on the landing page collects demo requests from potential customer
 
 ## Deployment
 
-Both services are deployed from a single script:
+The website is deployed from its own script:
 
 ```bash
-./deploy_django.sh
+./website/deploy_website.sh
 ```
 
-This builds the Docker image once and deploys it to both Cloud Run services (steps 2 and 5). The script also updates the ETL runner with the platform service URL (step 4).
+This builds the website image from [`website/Dockerfile.website`](/Users/dkulish/Projects/b2b_recs/website/Dockerfile.website) and deploys only the public website service. Platform releases now happen separately through `./deploy_django.sh`.
 
 **Gotcha — comma escaping:** The website's `CSRF_TRUSTED_ORIGINS` contains multiple comma-separated origins. The `gcloud run deploy --set-env-vars` flag treats commas as key-value separators by default. The script uses `^##^` as a custom delimiter prefix so commas are preserved as literal characters. Without this, the website deploy fails and the site is not updated.
 
 ### Deploying website only
 
-If you need to redeploy only the website (e.g. after a failed deploy or to skip rebuilding):
+If you need to redeploy only the website:
 
 ```bash
-gcloud run deploy django-app-website \
-    --image gcr.io/b2b-recs/django-app \
-    --region europe-west4 \
-    --project b2b-recs \
-    --platform managed \
-    --allow-unauthenticated \
-    --set-env-vars "^##^CSRF_TRUSTED_ORIGINS=https://recs.studio,https://www.recs.studio,https://django-app-555035914949.europe-central2.run.app" \
-    --set-secrets "RESEND_API_KEY=resend-api-key:latest" \
-    --service-account "django-app@b2b-recs.iam.gserviceaccount.com"
+./website/deploy_website.sh
 ```
 
 ### Secrets (GCP Secret Manager)

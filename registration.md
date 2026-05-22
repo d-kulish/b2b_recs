@@ -79,7 +79,7 @@ This enables:
 
 ---
 
-## Current Status (as of 2026-05-21)
+## Current Status (as of 2026-05-22)
 
 | Component | State |
 |---|---|
@@ -90,8 +90,9 @@ This enables:
 | MX records | Cut over to Google |
 | SPF | Merged (Google + Resend subdomains) |
 | Resend (website emails) | Preserved and functional |
+| Partner Advantage application | **Submitted, awaiting verification** |
 
-**Blockers:** None for Workspace setup. The main open question is the business entity requirement for the Marketplace listing.
+**Blockers:** None for Workspace setup. Partner account verification in progress (up to 7 days). The main open question is whether sole proprietorship will be accepted for the final Marketplace listing.
 
 ---
 

@@ -79,7 +79,7 @@ This enables:
 
 ---
 
-## Current Status (as of 2026-05-22)
+## Current Status (as of 2026-05-24)
 
 | Component | State |
 |---|---|
@@ -90,9 +90,43 @@ This enables:
 | MX records | Cut over to Google |
 | SPF | Merged (Google + Resend subdomains) |
 | Resend (website emails) | Preserved and functional |
-| Partner Advantage application | **Submitted, awaiting verification** |
+| Partner Advantage application | **Submitted; verification email received and replied** |
 
-**Blockers:** None for Workspace setup. Partner account verification in progress (up to 7 days). The main open question is whether sole proprietorship will be accepted for the final Marketplace listing.
+**Blockers:** None for Workspace setup. Waiting for Partner Advantage response after submitting company details. The main open question is whether sole proprietorship will be accepted for the final Marketplace listing.
+
+---
+
+## Verification Email & Reply (2026-05-24)
+
+Google Partner Advantage sent a verification email requesting company details. The following reply was sent to `concierge-amer@google.com`:
+
+```
+Hi Partner Advantage Team,
+
+Here is the requested information:
+
+Legal Company Name: Dmytro Kulish
+Street Address: 4 Chumaka str., apt 14
+City: Kyiv
+State: N/A
+Zip: 03065
+Country: Ukraine
+Website: https://recs.studio
+
+I operate as a sole proprietor. Please confirm if this structure is acceptable for
+the Registered Partner tier, and whether an incorporated entity will be required for
+a future Google Cloud Marketplace listing.
+
+Best,
+Dmytro Kulish
+d.kulish@recs.studio
+```
+
+**Key decisions made:**
+- Used the exact legal name as registered in the Ukrainian sole proprietorship records.
+- Asked explicitly about sole proprietorship eligibility for Registered Partner tier.
+- Asked explicitly about Marketplace listing entity requirements (typically stricter).
+- Did not volunteer GCP project details unless requested.
 
 ---
 
@@ -172,4 +206,4 @@ This enables:
 
 ---
 
-**Last Updated:** 2026-05-21
+**Last Updated:** 2026-05-24

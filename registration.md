@@ -221,6 +221,62 @@ Per the MVA acceptance page:
 
 ---
 
+## Solution Validation Form — In Progress (2026-06-05)
+
+On 2026-06-05 at 11:48 AM GMT, **Agent Tanya P** (Case #71987890) confirmed MVA completion and sent the **Solution Validation form** link. The form is a Google Form (18 pages, typically 4–6 sections for SaaS) that gauges product fit and assigns a revenue share.
+
+### Decisions Made
+
+| Question | Decision | Rationale |
+|---|---|---|
+| **Product Type** | **SaaS — with billing integration** | True managed SaaS; enables Google billing, co-selling, procurement integration |
+| **Workload location** | **Everything runs in the partner's tenant** | Recs Studio company pays GCP (~$800/mo per customer) and resells at margin. Customer pays Recs Studio, not Google directly. |
+| **Single vs. Multi-tenant** | **Single-tenant per customer** | Each customer receives an isolated GCP project with dedicated Cloud Run, BigQuery, Vertex AI, etc. |
+
+### Assets Prepared
+
+| Asset | File / Status | Notes |
+|---|---|---|
+| **Architecture Diagram** | `docs/marketplace-architecture-variant1.html` | Two-container layout: Customer Infrastructure → GCP Project. Uses real Google Cloud product icons (inline SVG, official colors). Ready for Print → PDF → form upload. |
+| **Pricing Calculator Estimate** | *To be built on cloud.google.com/products/calculator* | Target: **~$800/month per customer** — $300 base infra + $500 GPU training. See breakdown below. |
+| **GTV / Market Projections** | *Pending* | Need 1-year projected Gross Transaction Value and small/medium/large customer pricing tiers. |
+
+### Pricing Calculator Breakdown (Single-Tenant)
+
+Target monthly cost per customer: **~$800 USD**.
+
+| # | GCP Service | Monthly Estimate |
+|---|---|---|
+| 1 | Cloud Run (Services: Django App + Model Serving) | ~$130 |
+| 2 | Cloud Run (Job: ETL Runner) | ~$90 |
+| 3 | Cloud SQL (PostgreSQL 15, db-n1-standard-2) | ~$110 |
+| 4 | BigQuery (500 GB storage + 5 TB queries) | ~$90 |
+| 5 | Cloud Storage (300 GB Standard + 200 GB Nearline) | ~$35 |
+| 6 | Cloud NAT (1 gateway + 500 GB) | ~$35 |
+| 7 | Dataflow (3× n1-standard-4, 20 hrs/mo) | ~$60 |
+| 8 | Cloud Build (~30 builds/mo) | ~$25 |
+| 9 | Vertex AI Custom Training (n1-standard-16 + 2×T4, 24 hrs/mo) | ~$450 |
+| 10 | Vertex AI Pipelines (20 runs/mo) | ~$50 |
+| 11 | Platform services (Scheduler, Secrets, Monitoring) | ~$25 |
+| | **Total** | **~$800–850** |
+
+**Important:** Do NOT link a billing account in the calculator — reviewers cannot access linked calculators due to IAM. Export a .csv/screenshot instead.
+
+### Form Submission Status
+
+- **Status:** ⏳ Submission attempted 5× — hit "Something went wrong" error each time.
+- **Next attempt:** Chrome Incognito, no extensions, compressed screenshot upload (<2 MB).
+- **Fallback:** Email `gcp-solution-validation@google.com` directly with form answers + attachments if the form remains broken.
+
+### Remaining Form Sections to Complete
+
+1. **GTV & Market Projections** — 1-year Gross Transaction Value, small/medium/large customer pricing
+2. **Upload architecture diagram** (PDF/screenshot)
+3. **Paste Pricing Calculator link**
+4. **Submit and await review** (2–4 business days)
+
+---
+
 ## GCP Marketplace Technical Requirements (Research Complete)
 
 ### Project Setup
@@ -269,71 +325,30 @@ Sources:
 
 ## Next Steps
 
-### Immediate (MVA signed — awaiting Producer Portal)
+### Immediate (Solution Validation form)
 
-1. ~~**Reply to Agent JM**~~ — ✅ Done (case 71883638 closed)
-2. ~~**Open new Partner Support case**~~ — ✅ Done (2026-06-04, case 71961480)
-3. ~~**Sign Marketplace Vendor Agreement**~~ — ✅ Done (2026-06-05)
-4. **Await Producer Portal access email** — ⏳ In progress
-   - Google states: "If you're a new partner, you'll receive instructions via email to gain access to Producer Portal."
-   - Check `d.kulish@recs.studio` inbox (including spam) over the next 1-3 business days.
+1. **Retry form submission** — Try Chrome Incognito, no extensions, compressed screenshot (<2 MB). If still failing, email `gcp-solution-validation@google.com` directly with answers + attachments.
+2. **Build Pricing Calculator** on `cloud.google.com/products/calculator` with the ~$800/month breakdown above. Export .csv/screenshot. Do NOT link billing account.
+3. **Draft GTV / market projections** for the form — 1-year Gross Transaction Value, small/medium/large customer pricing tiers.
+4. **Update Terms of Service and Privacy Policy** (`templates/website/terms.html`, `privacy.html`) — these will serve as your **Product EULA** for Marketplace customers.
+5. **Capture screenshots** — Platform dashboard, ETL wizard, training pipeline, deployment interface. Marketplace listings require at least **3–5 screenshots**.
+6. **Research USD receiving options for Ukrainian ФОП** — You'll need a **Payment Account** in the Producer Portal (minimum payout $100 USD/month). Options: bank SWIFT transfer, Payoneer, Wise Business.
 
-### Parallel Prep (can do now)
+### Short-term (after Solution Validation approval)
 
-While waiting for the portal, these tasks don't depend on it:
+7. **Await Product Validation Letter** (2–4 business days after form submission)
+8. **Await Producer Portal access email** from Google
+9. **Create `recs-studio-public` project** and grant IAM roles to Google service accounts
+10. **Submit Cloud Marketplace Project Info Form**
+11. **Configure Payment Account** in Producer Portal
+12. **Build listing** in Producer Portal
+13. **Integrate SaaS fulfillment API** (sign-up flow, purchase tokens, billing metering)
 
-5. **Update Terms of Service and Privacy Policy** (`templates/website/terms.html`, `privacy.html`) — these will serve as your **Product EULA** for Marketplace customers.
-6. **Draft the listing copy** — Product name, one-line description, detailed description, key features list, category tags.
-7. **Capture screenshots** — Platform dashboard, ETL wizard, training pipeline, deployment interface. Marketplace listings require at least **3–5 screenshots**.
-8. **Plan your pricing model** — Subscription vs. usage-based vs. BYOL? Free trial? This affects the fulfillment API integration you'll need to build.
-9. **Research USD receiving options for Ukrainian ФОП** — You'll need a **Payment Account** in the Producer Portal. Common options: direct SWIFT transfer to Ukrainian bank, Payoneer, Wise Business. Check which ones your bank supports for incoming USD business transfers.
+### Medium-term (next 1–3 months)
 
-### Short-term (after Producer Portal access)
-
-11. **Create `recs-studio-public` project**
-12. **Grant IAM roles** to Google service accounts
-13. **Submit Cloud Marketplace Project Info Form**
-14. **Configure Payment Account** in Producer Portal
-15. **Build listing** in Producer Portal
-16. **Integrate SaaS fulfillment API** (sign-up flow, purchase tokens, billing metering)
-
-### Medium-term
-
-17. **Submit listing for Google review**
-18. **Address feedback**
-19. **Launch**
-
-### Short-term (next 2-4 weeks)
-
-4. **Start Marketplace listing application**
-   - Select product track: **SaaS / Managed Service**
-   - Begin listing draft in Partner Hub
-
-5. **Technical onboarding**
-   - Review [Marketplace SaaS fulfillment requirements](https://cloud.google.com/marketplace/docs/partners)
-   - Plan integration for:
-     - Sign-up flow accepting Google Cloud purchase tokens
-     - Usage-based billing metering (if offering pay-as-you-go)
-     - Partner Interconnect or SaaS fulfillment API
-
-6. **Prepare listing materials**
-   - Product description and value proposition
-   - Screenshots / demo video
-   - Pricing model (subscription, usage-based, or bring-your-own-license)
-   - Support terms and SLA
-   - Privacy policy and terms of service (review for Marketplace compliance)
-
-### Medium-term (next 1-3 months)
-
-7. **Submit Marketplace listing**
-   - Complete listing draft in Partner Portal
-   - Submit for Google review
-   - Address any technical or compliance feedback
-
-8. **Post-launch**
-   - Monitor Marketplace analytics
-   - Engage with Google Cloud field teams for co-selling
-   - Maintain partner status (certifications, customer references if required)
+14. **Submit listing for Google review**
+15. **Address feedback**
+16. **Launch**
 
 ---
 

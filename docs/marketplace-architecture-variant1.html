@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Recs Studio — Solution Architecture</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Google Sans", Roboto, Arial, sans-serif;
+    background: #f8f9fa;
+    padding: 32px;
+  }
+  .page {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 12px;
+    padding: 36px;
+    box-shadow: 0 1px 2px rgba(60,64,67,0.08);
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #202124;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #5f6368;
+    margin-bottom: 24px;
+  }
+
+  .big-pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 16px;
+    min-height: 460px;
+  }
+  .container {
+    border-radius: 10px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+  }
+  .container-header {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    color: #fff;
+    text-align: center;
+    margin: -18px -18px 0 -18px;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .container.customer {
+    flex: 0 0 300px;
+    background: #fce8e6;
+    border: 2px dashed #c5221f;
+  }
+  .container.customer .container-header { background: #c5221f; }
+
+  .container.gcp {
+    flex: 1;
+    background: #e8f0fe;
+    border: 2px solid #1967d2;
+  }
+  .container.gcp .container-header { background: #1967d2; }
+
+  .big-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .big-arrow svg { width: 28px; height: 28px; }
+  .big-arrow-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 10px;
+    color: #5f6368;
+    background: #fff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid #dadce0;
+    white-space: nowrap;
+    z-index: 2;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  .component {
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 14px 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 1px 2px rgba(60,64,67,0.05);
+    flex: 1;
+    min-width: 80px;
+  }
+  .component .icon-wrap {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .component .icon-wrap svg { width: 38px; height: 38px; }
+  .component .name { font-size: 13px; font-weight: 600; color: #202124; }
+  .component .detail { font-size: 10px; color: #5f6368; line-height: 1.3; }
+
+  .gcp-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gcp-row .component { min-width: 100px; padding: 10px; }
+  .gcp-row .component .icon-wrap { width: 36px; height: 36px; }
+  .gcp-row .component .icon-wrap svg { width: 32px; height: 32px; }
+  .gcp-row .component .name { font-size: 12px; }
+  .gcp-row .component .detail { font-size: 9px; }
+
+  .row-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #1967d2;
+    letter-spacing: 0.5px;
+    margin-bottom: -6px;
+    margin-left: 2px;
+  }
+
+  .small-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .small-arrow svg { width: 16px; height: 16px; }
+
+  .user-row {
+    border-bottom: 1px dashed #dadce0;
+    padding-bottom: 12px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .user-row .component { min-width: 100px; padding: 10px; }
+  .user-row .component .icon-wrap { width: 36px; height: 36px; }
+  .user-row .component .icon-wrap svg { width: 32px; height: 32px; }
+  .user-row .component .name { font-size: 12px; }
+  .user-row .component .detail { font-size: 9px; }
+
+  .platform-row {
+    border-top: 1px dashed #dadce0;
+    padding-top: 12px;
+    margin-top: 2px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .platform-row-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #5f6368;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    margin-right: 4px;
+  }
+  .mini-component {
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 5px;
+    padding: 5px 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #202124;
+    box-shadow: 0 1px 1px rgba(60,64,67,0.04);
+  }
+  .mini-component svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  .notes {
+    margin-top: 16px;
+    padding: 14px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 11px;
+    color: #5f6368;
+    line-height: 1.6;
+  }
+  .notes strong { color: #202124; }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { border: none; box-shadow: none; max-width: 100%; padding: 20px; }
+    .big-pipeline { min-height: 360px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Recs Studio — Solution Architecture</h1>
+  <p class="subtitle"><strong>Customer Infrastructure</strong> (left) → <strong>Recs Studio GCP Project</strong> (right). One isolated GCP project per tenant.</p>
+
+  <div class="big-pipeline">
+
+    <!-- LEFT: Customer Infrastructure -->
+    <div class="container customer">
+      <div class="container-header">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:5px;"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        Customer Infrastructure
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; gap:10px; justify-content:center;">
+        <div class="component">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 42 42" fill="none"><rect x="5" y="10" width="32" height="22" rx="3" fill="#fce8e6" stroke="#c5221f" stroke-width="1.5"/><ellipse cx="21" cy="10" rx="15" ry="6" fill="#fce8e6" stroke="#c5221f" stroke-width="1.5"/></svg>
+          </div>
+          <div class="name">SQL Databases</div>
+          <div class="detail">PostgreSQL, MySQL, Oracle<br>SQL Server, BigQuery, Snowflake</div>
+        </div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 42 42" fill="none"><rect x="7" y="11" width="28" height="20" rx="3" fill="#fce8e6" stroke="#c5221f" stroke-width="1.5"/><circle cx="12" cy="17" r="2" fill="#c5221f"/><circle cx="21" cy="17" r="2" fill="#c5221f"/><circle cx="30" cy="17" r="2" fill="#c5221f"/></svg>
+          </div>
+          <div class="name">NoSQL Stores</div>
+          <div class="detail">MongoDB, Firestore<br>Cassandra, DynamoDB, Redis</div>
+        </div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 42 42" fill="none"><rect x="8" y="12" width="26" height="18" rx="3" fill="#fce8e6" stroke="#c5221f" stroke-width="1.5"/><path d="M8 18h26M12 12v18M20 12v18M28 12v18" stroke="#c5221f" stroke-width="1.5"/></svg>
+          </div>
+          <div class="name">Object Storage</div>
+          <div class="detail">GCS, S3, Azure Blob<br>CSV, Parquet, JSONL</div>
+        </div>
+      </div>
+      <div style="text-align:center; font-size:11px; color:#c5221f; font-weight:600; margin-top:6px;">
+        Managed by the customer
+      </div>
+    </div>
+
+    <!-- CENTER: Big Arrow -->
+    <div class="big-arrow">
+      <div class="big-arrow-label">ETL Sync</div>
+      <svg viewBox="0 0 28 28" fill="none"><path d="M2 14h20M18 8l8 6-8 6" stroke="#5f6368" stroke-width="2"/></svg>
+    </div>
+
+    <!-- RIGHT: GCP Project — Recs Studio Stack -->
+    <div class="container gcp">
+      <div class="container-header">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:5px;"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        GCP Project — Recs Studio Stack (Isolated per Tenant)
+      </div>
+
+      <!-- User row -->
+      <div class="row-title">End User Access</div>
+      <div class="user-row">
+        <div class="component">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="18" rx="2" fill="#e6f4ea" stroke="#137333" stroke-width="1.5"/><rect x="3" y="9" width="26" height="3" fill="#137333"/><circle cx="6" cy="7.5" r="1" fill="#fff"/><circle cx="9" cy="7.5" r="1" fill="#fff"/></svg>
+          </div>
+          <div class="name">Web Browser</div>
+          <div class="detail">HTTPS</div>
+        </div>
+        <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg viewBox="0 0 32 32" fill="none"><rect x="5" y="5" width="22" height="22" rx="2" fill="#e6f4ea" stroke="#137333" stroke-width="1.5"/><path d="M12 16l4 4 4-4" stroke="#137333" stroke-width="1.5"/></svg>
+          </div>
+          <div class="name">Recs Studio UI</div>
+          <div class="detail">React frontend</div>
+        </div>
+        <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32px" height="32px" viewBox="0 0 24 24"><defs><style>.cr-cls-1{fill:#aecbfa;}.cr-cls-1,.cr-cls-2{fill-rule:evenodd;}.cr-cls-2{fill:#4285f4;}</style></defs><title>Icon_24px_CloudRun_Color</title><g data-name="Product Icons"><g ><polygon class="cr-cls-1" points="8.9 2.63 12.02 12 21.38 12 8.9 2.63"/><polygon class="cr-cls-2" points="21.38 12 12.02 12 8.9 21.38 21.38 12"/><polygon class="cr-cls-2" points="3.44 21.38 6.57 19.81 8.9 12 5.78 12 3.44 21.38"/><polygon class="cr-cls-1" points="3.44 2.63 5.78 12 8.9 12 6.57 4.19 3.44 2.63"/></g></g></svg>
+          </div>
+          <div class="name">Django App</div>
+          <div class="detail">Cloud Run — UI + API gateway</div>
+        </div>
+      </div>
+
+      <!-- Row 1: Data Ingestion → Data Warehouse -->
+      <div class="row-title" style="margin-top:4px;">1. Ingestion & Data Warehouse</div>
+      <div class="gcp-row">
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36px" height="36px" viewBox="0 0 24 24"><defs><style>.etl-cls-1{fill:#aecbfa;}.etl-cls-1,.etl-cls-2{fill-rule:evenodd;}.etl-cls-2{fill:#4285f4;}</style></defs><title>Icon_24px_CloudRun_Color</title><g data-name="Product Icons"><g ><polygon class="etl-cls-1" points="8.9 2.63 12.02 12 21.38 12 8.9 2.63"/><polygon class="etl-cls-2" points="21.38 12 12.02 12 8.9 21.38 21.38 12"/><polygon class="etl-cls-2" points="3.44 21.38 6.57 19.81 8.9 12 5.78 12 3.44 21.38"/><polygon class="etl-cls-1" points="3.44 2.63 5.78 12 8.9 12 6.57 4.19 3.44 2.63"/></g></g></svg>
+          </div>
+          <div class="name">ETL Runner</div>
+          <div class="detail">Cloud Run Job<br>4 vCPU / 8 GiB</div>
+        </div>
+        <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36px" height="36px" viewBox="0 0 24 24"><defs><style>.df-cls-1{fill:#669df6;}.df-cls-1,.df-cls-2,.df-cls-3{fill-rule:evenodd;}.df-cls-2,.df-cls-4{fill:#aecbfa;}.df-cls-3{fill:#4285f4;}</style></defs><title>Icon_24px_Dataflow_Color</title><g data-name="Product Icons"><g ><polygon class="df-cls-1" points="13.79 5.04 13.52 4.1 12.11 4.03 10.39 4.99 11.91 6.49 11.89 8.22 12.91 8.23 12.93 6.5 17.17 9.06 17.16 10.13 18.93 10.16 18.93 8.11 13.79 5.04"/><polygon class="df-cls-2" points="12.11 4.03 12.11 4.03 12.1 4.03 10.68 4.38 10.39 4.99 5.13 7.92 5.1 9.97 6.88 10 6.9 8.93 11.21 6.48 11.19 8.21 12.05 8.22 12.11 4.03"/><polygon class="df-cls-1" points="12.11 4.03 12.11 4.03 12.1 4.03 8.69 2 6.95 2.95 10.39 4.99 12.11 4.03 12.11 4.03"/><polygon class="df-cls-1" points="17.09 15.06 12.79 17.51 12.81 15.79 11.09 15.77 11.07 17.49 11.89 19.97 13.31 19.85 13.6 19 18.87 16.07 18.9 13.98 17.11 13.96 17.09 15.06"/><polygon class="df-cls-1" points="11.89 19.97 11.89 19.97 11.89 19.97 8.43 21.91 8.38 21.91 6.72 20.92 10.21 18.96 11.89 19.97 11.89 19.97"/><polygon class="df-cls-3" points="13.79 5.04 17.28 3.08 15.62 2.09 15.57 2.09 12.11 4.03 13.79 5.04"/><polygon class="df-cls-3" points="13.61 19.01 17.05 21.05 15.36 22 15.31 22 11.89 19.97 11.89 19.97 11.89 19.97 11.89 19.97 13.61 19.01"/><polygon class="df-cls-2" points="11.89 19.96 10.21 18.96 5.07 15.89 5.07 13.89 6.83 13.89 6.82 14.93 11.07 17.49 11.09 15.77 11.95 15.78 11.89 19.96"/><circle id="Oval" class="df-cls-4" cx="18.12" cy="12.04" r="1.14"/><circle class="df-cls-4" cx="5.88" cy="11.88" r="1.14"/><circle class="df-cls-4" cx="12.06" cy="9.99" r="1.14"/><circle class="df-cls-4" cx="11.97" cy="14" r="1.14"/></g></g></svg>
+          </div>
+          <div class="name">Dataflow</div>
+          <div class="detail">Apache Beam<br>&gt;1M rows auto-scale</div>
+        </div>
+        <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36px" height="36px" viewBox="0 0 24 24"><defs><style>.bq-cls-1{fill:#aecbfa;}.bq-cls-1,.bq-cls-2,.bq-cls-3{fill-rule:evenodd;}.bq-cls-2{fill:#669df6;}.bq-cls-3{fill:#4285f4;}</style></defs><title>Icon_24px_BigQuery_Color</title><g data-name="Product Icons"><g ><path class="bq-cls-1" d="M6.73,10.83v2.63A4.91,4.91,0,0,0,8.44,15.2V10.83Z"/><path class="bq-cls-2" d="M9.89,8.41v7.53A7.62,7.62,0,0,0,11,16,8,8,0,0,0,12,16V8.41Z"/><path class="bq-cls-1" d="M13.64,11.86v3.29a5,5,0,0,0,1.7-1.82V11.86Z"/><path class="bq-cls-3" d="M17.74,16.32l-1.42,1.42a.42.42,0,0,0,0,.6l3.54,3.54a.42.42,0,0,0,.59,0l1.43-1.43a.42.42,0,0,0,0-.59l-3.54-3.54a.42.42,0,0,0-.6,0"/><path class="bq-cls-2" d="M11,2a9,9,0,1,0,9,9,9,9,0,0,0-9-9m0,15.69A6.68,6.68,0,1,1,17.69,11,6.68,6.68,0,0,1,11,17.69"/></g></g></svg>
+          </div>
+          <div class="name">BigQuery</div>
+          <div class="detail">raw_data dataset<br>Analytics + ML source</div>
+        </div>
+        <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36px" height="36px" viewBox="0 0 24 24"><defs><style>.gcs-cls-1{fill:#aecbfa;}.gcs-cls-2{fill:#669df6;}.gcs-cls-3{fill:#4285f4;}.gcs-cls-4{fill:#fff;}</style></defs><title>Icon_24px_CloudStorage_Color</title><g data-name="Product Icons"><rect class="gcs-cls-1" x="2" y="4" width="20" height="7"/><rect class="gcs-cls-2" x="20" y="4" width="2" height="7"/><polygon class="gcs-cls-3" points="22 4 20 4 20 11 22 4"/><rect class="gcs-cls-2" x="2" y="4" width="2" height="7"/><rect class="gcs-cls-4" x="6" y="7" width="6" height="1"/><rect class="gcs-cls-4" x="15" y="6" width="3" height="3" rx="1.5"/><rect class="gcs-cls-1" x="2" y="13" width="20" height="7"/><rect class="gcs-cls-2" x="20" y="13" width="2" height="7"/><polygon class="gcs-cls-3" points="22 13 20 13 20 20 22 13"/><rect class="gcs-cls-2" x="2" y="13" width="2" height="7"/><rect class="gcs-cls-4" x="6" y="16" width="6" height="1"/><rect class="gcs-cls-4" x="15" y="15" width="3" height="3" rx="1.5"/></g></svg>
+          </div>
+          <div class="name">Cloud Storage</div>
+          <div class="detail">4 GCS buckets<br>Artifacts, staging, temp</div>
+        </div>
+      </div>
+
+      <!-- Row 2: ML Platform -->
+      <div class="row-title" style="margin-top:4px;">2. ML Platform & Training</div>
+      <div class="gcp-row">
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36px" height="36px"><path d="M20,13.89A.77.77,0,0,0,19,13.73l-7,5.14v.22a.72.72,0,1,1,0,1.43v0a.74.74,0,0,0,.45-.15l7.41-5.47A.76.76,0,0,0,20,13.89Z" style="fill:#669df6"/><path d="M12,20.52a.72.72,0,0,1,0-1.43h0v-.22L5,13.73a.76.76,0,0,0-1,.16.74.74,0,0,0,.16,1l7.41,5.47a.73.73,0,0,0,.44.15v0Z" style="fill:#aecbfa"/><path d="M12,18.34a1.47,1.47,0,1,0,1.47,1.47A1.47,1.47,0,0,0,12,18.34Zm0,2.18a.72.72,0,1,1,.72-.71A.71.71,0,0,1,12,20.52Z" style="fill:#4285f4"/><path d="M6,6.11a.76.76,0,0,1-.75-.75V3.48a.76.76,0,1,1,1.51,0V5.36A.76.76,0,0,1,6,6.11Z" style="fill:#aecbfa"/><circle cx="5.98" cy="12" r="0.76" style="fill:#aecbfa"/><circle cx="5.98" cy="9.79" r="0.76" style="fill:#aecbfa"/><circle cx="5.98" cy="7.57" r="0.76" style="fill:#aecbfa"/><path d="M18,8.31a.76.76,0,0,1-.75-.76V5.67a.75.75,0,1,1,1.5,0V7.55A.75.75,0,0,1,18,8.31Z" style="fill:#4285f4"/><circle cx="18.02" cy="12.01" r="0.76" style="fill:#4285f4"/><circle cx="18.02" cy="9.76" r="0.76" style="fill:#4285f4"/><circle cx="18.02" cy="3.48" r="0.76" style="fill:#4285f4"/><path d="M12,15a.76.76,0,0,1-.75-.75V12.34a.76.76,0,0,1,1.51,0v1.89A.76.76,0,0,1,12,15Z" style="fill:#669df6"/><circle cx="12" cy="16.45" r="0.76" style="fill:#669df6"/><circle cx="12" cy="10.14" r="0.76" style="fill:#669df6"/><circle cx="12" cy="7.92" r="0.76" style="fill:#669df6"/><path d="M15,10.54a.76.76,0,0,1-.75-.75V7.91a.76.76,0,1,1,1.51,0V9.79A.76.76,0,0,1,15,10.54Z" style="fill:#4285f4"/><circle cx="15.01" cy="5.69" r="0.76" style="fill:#4285f4"/><circle cx="15.01" cy="14.19" r="0.76" style="fill:#4285f4"/><circle cx="15.01" cy="11.97" r="0.76" style="fill:#4285f4"/><circle cx="8.99" cy="14.19" r="0.76" style="fill:#aecbfa"/><circle cx="8.99" cy="7.92" r="0.76" style="fill:#aecbfa"/><circle cx="8.99" cy="5.69" r="0.76" style="fill:#aecbfa"/><path d="M9,12.73A.76.76,0,0,1,8.24,12V10.1a.75.75,0,1,1,1.5,0V12A.75.75,0,0,1,9,12.73Z" style="fill:#aecbfa"/></svg>
+          </div>
+          <div class="name">Vertex AI</div>
+          <div class="detail">TFX pipelines<br>TFRS training</div>
+        </div>
+        <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36px" height="36px" viewBox="0 0 24 24"><defs><style>.cb-cls-1{fill:#4285f4;}.cb-cls-2{fill:#669df6;}.cb-cls-3{fill:#aecbfa;}</style></defs><title>Icon_24px_CloudBuild_Color</title><g data-name="Product Icons"><g ><g ><g ><polygon class="cb-cls-1" points="12.15 16.24 15.67 14.21 15.67 10.15 14.49 9.46 10.97 15.56 12.15 16.24"/><polygon class="cb-cls-2" points="8.63 10.15 8.63 14.21 9.81 14.89 13.34 8.8 12.15 8.11 8.63 10.15"/></g></g></g><polygon class="cb-cls-3" points="11.46 17.45 7.24 15.01 7.24 10.15 3.49 7.98 3.49 17.18 11.46 21.78 11.46 17.45"/><polygon class="cb-cls-3" points="7.93 8.95 12.15 6.51 16.37 8.95 20.13 6.78 12.15 2.17 4.17 6.78 7.93 8.95"/><polygon class="cb-cls-3" points="17.06 15.01 12.84 17.45 12.84 21.78 20.82 17.18 20.82 7.98 17.06 10.15 17.06 15.01"/></g></svg>
+          </div>
+          <div class="name">Cloud Build</div>
+          <div class="detail">TFX image compile<br>Pre-built compiler</div>
+        </div>
+      </div>
+
+      <!-- Row 3: Serving -->
+      <div class="row-title" style="margin-top:4px;">3. Serving & Application</div>
+      <div class="gcp-row">
+        <div class="component">
+          <div class="icon-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36px" height="36px" viewBox="0 0 24 24"><defs><style>.cr2-cls-1{fill:#aecbfa;}.cr2-cls-1,.cr2-cls-2{fill-rule:evenodd;}.cr2-cls-2{fill:#4285f4;}</style></defs><title>Icon_24px_CloudRun_Color</title><g data-name="Product Icons"><g ><polygon class="cr2-cls-1" points="8.9 2.63 12.02 12 21.38 12 8.9 2.63"/><polygon class="cr2-cls-2" points="21.38 12 12.02 12 8.9 21.38 21.38 12"/><polygon class="cr2-cls-2" points="3.44 21.38 6.57 19.81 8.9 12 5.78 12 3.44 21.38"/><polygon class="cr2-cls-1" points="3.44 2.63 5.78 12 8.9 12 6.57 4.19 3.44 2.63"/></g></g></svg>
+          </div>
+          <div class="name">Model Serving</div>
+          <div class="detail">Cloud Run<br>TF Serving / ScaNN</div>
+        </div>
+      </div>
+
+      <!-- Platform strip -->
+      <div class="platform-row">
+        <div class="platform-row-title">Platform:</div>
+        <div class="mini-component">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24"><defs><style>.sch-cls-1{fill:#669df6;}.sch-cls-2{fill:#4285f4;}.sch-cls-3{fill:none;}.sch-cls-4{fill:#aecbfa;}</style></defs><title>Icon_24px_Scheduler_Color</title><g data-name="Product Icons"><path class="sch-cls-1" d="M20,21a1,1,0,0,1-.7-.29l-2-2a1,1,0,0,1,1.41-1.41l2,2a1,1,0,0,1,0,1.41A1,1,0,0,1,20,21Z"/><path class="sch-cls-1" d="M4,21a1,1,0,0,1-.7-1.71l2-2a1,1,0,0,1,1.42,0,1,1,0,0,1,0,1.41l-2,2A1,1,0,0,1,4,21Z"/><path class="sch-cls-2" d="M5.47,17.13,4.25,18.35a11.13,11.13,0,0,0,1.42,1.41l1.22-1.22Z"/><path class="sch-cls-2" d="M19.73,18.31l-1-1a1.19,1.19,0,0,0-.23-.16l-1.34,1.34a1.19,1.19,0,0,0,.16.23l1,1A11.13,11.13,0,0,0,19.73,18.31Z"/><g data-name="colored-32/scheduler"><rect class="sch-cls-3" width="24" height="24"/><g ><g ><path class="sch-cls-1" d="M12,21a9,9,0,1,1,9-9A9,9,0,0,1,12,21Zm0-2a7,7,0,1,0-7-7A7,7,0,0,0,12,19Z"/><path id="Oval" class="sch-cls-2" d="M12,17a5,5,0,0,0,5-5,5,5,0,0,0-5-5v5L7.92,14.91A5,5,0,0,0,12,17Z"/></g></g></g><path class="sch-cls-4" d="M4,6.07a1,1,0,0,1-.71-1.71l2-2a1,1,0,0,1,1.42,0,1,1,0,0,1,0,1.41l-2,2A1,1,0,0,1,4,6.07Z"/><path class="sch-cls-4" d="M20,6.07a1,1,0,0,1-.71-.3l-2-2a1,1,0,0,1,0-1.41,1,1,0,0,1,1.42,0l2,2A1,1,0,0,1,20,6.07Z"/></g></svg>
+          Cloud Scheduler
+        </div>
+        <div class="mini-component">
+          <svg width="16px" height="16px" viewBox="0 0 24 24" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g transform="translate(2.000000, 6.000000)" fill="#4285F4" fill-rule="nonzero"><path d="M20,9.41469125e-14 L20,11.8867925 L16.0377358,11.8867925 C15.9335312,11.8867925 15.8490566,11.8023179 15.8490566,11.6981132 L15.8490566,10.5660377 C15.8490566,10.4618331 15.9335312,10.3773585 16.0377358,10.3773585 L18.4900566,10.377 L18.4900566,1.509 L16.0377358,1.50943396 C15.9335312,1.50943396 15.8490566,1.42495939 15.8490566,1.32075472 L15.8490566,0.188679245 C15.8490566,0.0844745755 15.9335312,9.41105434e-14 16.0377358,9.41469125e-14 L20,9.41469125e-14 Z M4.309101,9.41469125e-14 C4.41330567,9.3877869e-14 4.49778024,0.0844745755 4.49778024,0.188679245 L4.49778024,1.32075472 C4.49778024,1.42495939 4.41330567,1.50943396 4.309101,1.50943396 L1.509,1.509 L1.509,10.377 L4.29245283,10.3773585 C4.3966575,10.3773585 4.48113208,10.4618331 4.48113208,10.5660377 L4.48113208,11.6981132 C4.48113208,11.8023179 4.3966575,11.8867925 4.29245283,11.8867925 L2.14050999e-13,11.8867925 L2.14050999e-13,9.41469125e-14 L4.309101,9.41469125e-14 Z M15.4271098,3.86792453 L15.4271098,5.3240566 L15.4879305,5.34852941 L16.8381494,4.87130966 L17.1179245,5.69114872 L15.7555414,6.15613208 L15.719049,6.25402331 L16.6556874,7.51437292 L15.9501676,8.02830189 L15.0378575,6.76795228 L14.9527085,6.76795228 L14.0403984,8.02830189 L13.3348786,7.51437292 L14.2593529,6.25402331 L14.2350246,6.15613208 L12.8726415,5.69114872 L13.1524166,4.87130966 L14.4904714,5.34852941 L14.5634562,5.3240566 L14.5634562,3.86792453 L15.4271098,3.86792453 Z M5.19597773,3.86792453 L5.19597773,5.30963945 L5.2567984,5.33386996 L6.60701735,4.86137515 L6.88679245,5.673097 L5.52440936,6.13347656 L5.48791696,6.23039857 L6.42455533,7.47826947 L5.71903552,7.98711003 L4.80672541,6.73923913 L4.72157647,6.73923913 L3.80926637,7.98711003 L3.10374655,7.47826947 L4.02822079,6.23039857 L4.00389252,6.13347656 L2.64150943,5.673097 L2.92128453,4.86137515 L4.25933935,5.33386996 L4.33232416,5.30963945 L4.33232416,3.86792453 L5.19597773,3.86792453 Z M10.2903173,3.86792453 L10.2903173,5.30963945 L10.351138,5.33386996 L11.701357,4.86137515 L11.9811321,5.673097 L10.618749,6.13347656 L10.5822566,6.23039857 L11.518895,7.47826947 L10.8133751,7.98711003 L9.90106504,6.73923913 L9.81591609,6.73923913 L8.90360599,7.98711003 L8.19808618,7.47826947 L9.12256042,6.23039857 L9.09823215,6.13347656 L7.73584906,5.673097 L8.01562416,4.86137515 L9.35367897,5.33386996 L9.42666378,5.30963945 L9.42666378,3.86792453 L10.2903173,3.86792453 Z" ></path></g></g></svg>
+          Secret Manager
+        </div>
+        <div class="mini-component">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24"><defs><style>.nat-cls-1{fill:#4285f4;}.nat-cls-2{fill:#669df6;}</style></defs><title>Icon_24px_CloudNAT_Color</title><g data-name="Product Icons"><path class="nat-cls-1" d="M15.3,11.17c0,.27,0,.54,0,.83s0,.56,0,.83h4.5V11.17Z"/><path class="nat-cls-1" d="M9.86,5.89H7V7.56h3.93A10,10,0,0,0,9.86,5.89Z"/><path class="nat-cls-1" d="M11,16.44H7.6v1.67H9.89A10.7,10.7,0,0,0,11,16.44Z"/><path class="nat-cls-1" d="M12,12a7.45,7.45,0,0,0,0-.83H4.5v1.66H12A7.45,7.45,0,0,0,12,12Z"/><path class="nat-cls-2" d="M3.67,12.48A.48.48,0,1,1,4.14,12,.48.48,0,0,1,3.67,12.48Zm0-2.15A1.67,1.67,0,1,0,5.33,12,1.67,1.67,0,0,0,3.67,10.33Z"/><path class="nat-cls-2" d="M6.17,17.75a.48.48,0,1,1,.47-.48A.47.47,0,0,1,6.17,17.75Zm0-2.14a1.67,1.67,0,1,0,1.66,1.66A1.67,1.67,0,0,0,6.17,15.61Z"/><path class="nat-cls-2" d="M6.17,7.2a.48.48,0,1,1,.47-.47A.47.47,0,0,1,6.17,7.2Zm0-2.14a1.67,1.67,0,1,0,0,3.33,1.67,1.67,0,0,0,0-3.33Z"/><polygon class="nat-cls-1" points="18.67 14.5 18.67 9.5 22 12 18.67 14.5"/><path class="nat-cls-1" d="M9.5,22l-.86-1.5A10.73,10.73,0,0,0,12.83,12a10.89,10.89,0,0,0-4.2-8.5L9.5,2a12.53,12.53,0,0,1,5,10A12.46,12.46,0,0,1,9.5,22Z"/></g></svg>
+          Cloud NAT (static IP)
+        </div>
+        <div class="mini-component">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24"><defs><style>.sql-cls-1{fill:#aecbfa;}.sql-cls-1,.sql-cls-2,.sql-cls-3{fill-rule:evenodd;}.sql-cls-2{fill:#669df6;}.sql-cls-3{fill:#4285f4;}</style></defs><title>Icon_24px_SQL_Color</title><g data-name="Product Icons"><g ><polygon class="sql-cls-1" points="4.67 10.44 4.67 13.45 12 17.35 12 14.34 4.67 10.44"/><polygon class="sql-cls-1" points="4.67 15.09 4.67 18.1 12 22 12 18.99 4.67 15.09"/><polygon class="sql-cls-2" points="12 17.35 19.33 13.45 19.33 10.44 12 14.34 12 17.35"/><polygon class="sql-cls-2" points="12 22 19.33 18.1 19.33 15.09 12 18.99 12 22"/><polygon class="sql-cls-3" points="19.33 8.91 19.33 5.9 12 2 12 5.01 19.33 8.91"/><polygon class="sql-cls-2" points="12 2 4.67 5.9 4.67 8.91 12 5.01 12 2"/><polygon class="sql-cls-1" points="4.67 5.87 4.67 8.89 12 12.79 12 9.77 4.67 5.87"/><polygon class="sql-cls-2" points="12 12.79 19.33 8.89 19.33 5.87 12 9.77 12 12.79"/></g></g></svg>
+          Cloud SQL
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <strong>Security & Isolation:</strong> Each tenant runs in a fully isolated GCP project. Customer data never leaves their project. Cloud NAT provides a static outbound IP for firewall whitelisting at on-premise databases. All DB credentials live in Secret Manager. HTTPS is enforced on all Cloud Run services.
+  </div>
+</div>
+
+</body>
+</html>

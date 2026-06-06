@@ -76,7 +76,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --set-secrets "RESEND_API_KEY=resend-api-key:latest" \
     --service-account "django-app@b2b-recs.iam.gserviceaccount.com"
 
-WEBSITE_URL=$(gcloud run services describe ${SERVICE_NAME} --region ${REGION} --format="value(status.url)")
+WEBSITE_URL=$(gcloud run services describe ${SERVICE_NAME} --region ${REGION} --project ${PROJECT_ID} --format="value(status.url)")
 
 echo ""
 echo "================================"

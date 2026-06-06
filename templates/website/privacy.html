@@ -76,7 +76,7 @@
             <div class="max-w-4xl mx-auto">
                 <h1 class="text-4xl font-bold text-gray-900 mb-8">Privacy Policy</h1>
                 <div class="text-gray-600 space-y-6">
-                    <p class="text-sm text-gray-400">Last updated: March 2025</p>
+                    <p class="text-sm text-gray-400">Last updated: June 2026</p>
 
                     <h2 class="text-xl font-semibold text-gray-900 mt-8">1. Information We Collect</h2>
                     <p>We collect information you provide when creating an account (email address, name) and data you upload to the platform for model training purposes.</p>
@@ -91,13 +91,18 @@
                     </ul>
 
                     <h2 class="text-xl font-semibold text-gray-900 mt-8">3. Data Storage and Security</h2>
-                    <p>Your data is stored on Google Cloud Platform infrastructure in the EU (europe-central2 region). We use encryption in transit (TLS) and at rest. Access to your data is restricted to authorized personnel only.</p>
+                    <p>Your data is stored on Google Cloud Platform infrastructure in the customer's isolated GCP project. The default region is <strong>europe-central2</strong> (Warsaw, Poland) unless a different region is selected during onboarding. We use encryption in transit (TLS) and at rest. Access to your data is restricted to authorized personnel only. Recs Studio does not copy customer data outside the customer's project.</p>
 
                     <h2 class="text-xl font-semibold text-gray-900 mt-8">4. Data Ownership</h2>
                     <p>You retain full ownership of all data you upload to the platform. We do not use your data for any purpose other than providing the Service to you.</p>
 
                     <h2 class="text-xl font-semibold text-gray-900 mt-8">5. Third-Party Services</h2>
-                    <p>The Service uses Google Cloud Platform services (BigQuery, Vertex AI, Cloud Run, Cloud Storage) to process your data. Your use of these services is subject to Google Cloud's terms and privacy policies.</p>
+                    <p>The Service uses the following subprocessors to process your data:</p>
+                    <ul class="list-disc list-inside space-y-2 ml-4">
+                        <li><strong>Google Cloud Platform</strong> — BigQuery, Cloud Storage, Cloud Run, Vertex AI, Cloud SQL, Cloud Scheduler, Secret Manager (infrastructure and ML services)</li>
+                        <li><strong>Resend</strong> — transactional email delivery only</li>
+                    </ul>
+                    <p>Your use of Google Cloud Platform services is subject to <a href="https://cloud.google.com/terms" target="_blank" class="text-blue-600 hover:underline">Google Cloud's Terms of Service</a> and <a href="https://cloud.google.com/privacy" target="_blank" class="text-blue-600 hover:underline">Privacy Policy</a>.</p>
 
                     <h2 class="text-xl font-semibold text-gray-900 mt-8">6. Data Retention</h2>
                     <p>Your data is retained for as long as your account is active. Upon account deletion, we will remove your data within 30 days, except where retention is required by law.</p>
@@ -111,7 +116,10 @@
                     <h2 class="text-xl font-semibold text-gray-900 mt-8">9. Changes to This Policy</h2>
                     <p>We may update this Privacy Policy from time to time. We will notify you of significant changes via email or through the Service.</p>
 
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">10. Contact</h2>
+                    <h2 class="text-xl font-semibold text-gray-900 mt-8">10. Data Processing Addendum</h2>
+                    <p>A Data Processing Addendum (DPA) incorporating the <strong>EU Standard Contractual Clauses (SCCs)</strong> is available upon request for customers subject to GDPR or other data protection regulations. To request a DPA, contact us at <span class="text-blue-600">privacy@recs.studio</span>.</p>
+
+                    <h2 class="text-xl font-semibold text-gray-900 mt-8">11. Contact</h2>
                     <p>For privacy-related inquiries, contact us at <span class="text-blue-600">privacy@recs.studio</span>.</p>
                 </div>
             </div>
@@ -122,7 +130,7 @@
     <div class="max-w-[88rem] mx-auto px-12 mt-6">
         <div style="height: 2px; background: linear-gradient(to right, transparent 0%, #1f2937 15%, #1f2937 85%, transparent 100%);"></div>
         <div class="flex items-center justify-between py-8 text-sm text-gray-500">
-            <span>&copy; 2025 recs.studio</span>
+            <span>&copy; 2026 recs.studio</span>
             <div class="flex gap-6">
                 <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
                 <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>

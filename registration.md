@@ -221,7 +221,7 @@ Per the MVA acceptance page:
 
 ---
 
-## Solution Validation Form — In Progress (2026-06-05)
+## Solution Validation Form — Escalated via Email (2026-06-06)
 
 On 2026-06-05 at 11:48 AM GMT, **Agent Tanya P** (Case #71987890) confirmed MVA completion and sent the **Solution Validation form** link. The form is a Google Form (18 pages, typically 4–6 sections for SaaS) that gauges product fit and assigns a revenue share.
 
@@ -237,9 +237,12 @@ On 2026-06-05 at 11:48 AM GMT, **Agent Tanya P** (Case #71987890) confirmed MVA 
 
 | Asset | File / Status | Notes |
 |---|---|---|
-| **Architecture Diagram** | `docs/marketplace-architecture-variant1.html` | Two-container layout: Customer Infrastructure → GCP Project. Uses real Google Cloud product icons (inline SVG, official colors). Ready for Print → PDF → form upload. |
-| **Pricing Calculator Estimate** | *To be built on cloud.google.com/products/calculator* | Target: **~$800/month per customer** — $300 base infra + $500 GPU training. See breakdown below. |
-| **GTV / Market Projections** | *Pending* | Need 1-year projected Gross Transaction Value and small/medium/large customer pricing tiers. |
+| **Architecture Diagram** | `docs/marketplace-architecture-variant1.html` | Two-container layout: Customer Infrastructure → GCP Project. Uses real Google Cloud product icons (inline SVG, official colors). **Fixed:** "React frontend" label corrected to "Django UI" (line 289). Ready for Print → PDF → form upload. |
+| **Pricing Calculator Estimate** | *Text breakdown ready* | Target: **~$800/month per customer** — $300 base infra + $500 GPU training. See breakdown below. |
+| **GTV / Market Projections** | *Drafted in escalation email* | 1-year projected Gross Transaction Value and small/medium/large customer pricing tiers. |
+| **Terms of Service** | ✅ Deployed live | Updated to June 2026. Added Marketplace merchant-of-record clause, GCP Terms reference, data residency. No entity type disclosed publicly. Live at https://recs.studio/terms/ |
+| **Privacy Policy** | ✅ Deployed live | Updated to June 2026. Added explicit subprocessor list (GCP + Resend), data residency clause, DPA/SCCs available upon request. Live at https://recs.studio/privacy/ |
+| **Product Screenshots** | ⏳ Pending | Need 3–5 screenshots from live app (Dashboard, ETL Wizard, Schema Builder, Training Pipeline, Deployment). Compress to < 500 KB each. |
 
 ### Pricing Calculator Breakdown (Single-Tenant)
 
@@ -260,20 +263,70 @@ Target monthly cost per customer: **~$800 USD**.
 | 11 | Platform services (Scheduler, Secrets, Monitoring) | ~$25 |
 | | **Total** | **~$800–850** |
 
-**Important:** Do NOT link a billing account in the calculator — reviewers cannot access linked calculators due to IAM. Export a .csv/screenshot instead.
+### Form Submission Failure & Escalation
 
-### Form Submission Status
+**Problem:** The Solution Validation form returned the error **"Something went wrong. Please try again."** on every submission attempt.
 
-- **Status:** ⏳ Submission attempted 5× — hit "Something went wrong" error each time.
-- **Next attempt:** Chrome Incognito, no extensions, compressed screenshot upload (<2 MB).
-- **Fallback:** Email `gcp-solution-validation@google.com` directly with form answers + attachments if the form remains broken.
+**Attempts made:**
+- **8 total submission attempts** across Chrome, Safari, and Chrome Incognito (no extensions)
+- Multiple file sizes tested (all < 500 KB)
+- Different upload methods (paste vs. upload) tested
+- Form remained non-functional over multiple days (2026-06-05 through 2026-06-06)
 
-### Remaining Form Sections to Complete
+**Escalation sent 2026-06-06:**
 
-1. **GTV & Market Projections** — 1-year Gross Transaction Value, small/medium/large customer pricing
-2. **Upload architecture diagram** (PDF/screenshot)
-3. **Paste Pricing Calculator link**
-4. **Submit and await review** (2–4 business days)
+#### Escalation 1 — Direct Email to Solution Validation Team
+**To:** `gcp-solution-validation@google.com`  
+**Subject:** Solution Validation Form Technical Failure — Case 71987890 — Recs Studio SaaS
+
+Full submission package sent, including:
+- Architecture Diagram (PDF)
+- Pricing Calculator breakdown (text)
+- Product screenshots (5 images)
+- GTV & Market Projections (text)
+- Product details: SaaS with billing integration, single-tenant per customer, ~$800/mo infra
+- Year 1 GTV projection: ~$235,000 USD
+- Terms of Service: https://recs.studio/terms/
+- Privacy Policy: https://recs.studio/privacy/
+
+Requested either review of attached materials or an alternative submission method.
+
+#### Escalation 2 — "Contact Form Owner" Popup
+**Subject:** Form repeatedly fails with "Something went wrong" — Case 71987890  
+**Message:** Brief technical report confirming 8+ failed attempts across multiple browsers, no extensions, and fallback email already sent to `gcp-solution-validation@google.com`. Requested form fix or manual forwarding to the Solution Validation team.
+
+### Current Status
+
+- **Form submission:** ❌ Blocked — form appears non-functional
+- **Email escalation:** ✅ Sent to `gcp-solution-validation@google.com`
+- **Form owner contact:** ✅ Sent via popup
+- **Awaiting:** Response from Solution Validation team (target: 2–4 business days)
+- **Do not retry the form** — wait for email response or form fix
+
+---
+
+## Technical Fixes Completed (2026-06-06)
+
+### Website Deploy Script Bug Fix
+**File:** `website/deploy_website.sh`  
+**Issue:** Post-deploy `gcloud run services describe` failed with `ERROR: (gcloud.run.services.describe) Cannot find service [django-app-website]` because `--project ${PROJECT_ID}` was missing. The user's default gcloud project (`memo2-456215`) differed from the target project (`b2b-recs`).  
+**Fix:** Added `--project ${PROJECT_ID}` to line 79. Deployments now complete cleanly.
+
+### Website Deployment — Terms & Privacy Updates
+**Revisions deployed:**
+- `django-app-website-00009-lt4` (first deploy with entity disclosure error)
+- `django-app-website-00010-8q9` (redeploy after removing "ФОП" from public Terms)
+
+**What changed:**
+- Terms of Service: June 2026 date, Marketplace merchant-of-record clause, GCP Terms reference, data residency
+- Privacy Policy: June 2026 date, explicit subprocessors (GCP services + Resend), data residency, DPA/SCCs clause
+- **Critical fix:** Removed "Dmytro Kulish, sole proprietor (ФОП) registered in Kyiv, Ukraine" from public-facing Terms. Entity type is disclosed only to Google via internal contracts (MVA), never to customers.
+
+### Architecture Diagram Label Fix
+**File:** `docs/marketplace-architecture-variant1.html` line 289  
+**Before:** `React frontend`  
+**After:** `Django UI`  
+**Note:** The submitted file `variant2.html` never had this issue; variant1 is kept as backup.
 
 ---
 
@@ -325,30 +378,36 @@ Sources:
 
 ## Next Steps
 
-### Immediate (Solution Validation form)
+### Immediate (while awaiting Solution Validation response)
 
-1. **Retry form submission** — Try Chrome Incognito, no extensions, compressed screenshot (<2 MB). If still failing, email `gcp-solution-validation@google.com` directly with answers + attachments.
-2. **Build Pricing Calculator** on `cloud.google.com/products/calculator` with the ~$800/month breakdown above. Export .csv/screenshot. Do NOT link billing account.
-3. **Draft GTV / market projections** for the form — 1-year Gross Transaction Value, small/medium/large customer pricing tiers.
-4. **Update Terms of Service and Privacy Policy** (`templates/website/terms.html`, `privacy.html`) — these will serve as your **Product EULA** for Marketplace customers.
-5. **Capture screenshots** — Platform dashboard, ETL wizard, training pipeline, deployment interface. Marketplace listings require at least **3–5 screenshots**.
-6. **Research USD receiving options for Ukrainian ФОП** — You'll need a **Payment Account** in the Producer Portal (minimum payout $100 USD/month). Options: bank SWIFT transfer, Payoneer, Wise Business.
+1. **Await email reply** from `gcp-solution-validation@google.com` — do not retry the broken form. Response target: 2–4 business days from 2026-06-06.
+2. **Capture product screenshots** — Platform dashboard, ETL wizard, training pipeline, deployment interface. Marketplace listings require at least **3–5 screenshots**. Compress each to < 500 KB.
+
+### Done Today (2026-06-06)
+
+| # | Task | Status |
+|---|---|---|
+| ✅ | Terms of Service updated + deployed | Live at https://recs.studio/terms/ |
+| ✅ | Privacy Policy updated + deployed | Live at https://recs.studio/privacy/ |
+| ✅ | Website deploy script bug fixed | `--project` flag added to `describe` command |
+| ✅ | Architecture diagram label corrected | `React frontend` → `Django UI` in variant1.html |
+| ✅ | USD receiving capability confirmed | Existing SWIFT account handles USD payments from EU clients |
 
 ### Short-term (after Solution Validation approval)
 
-7. **Await Product Validation Letter** (2–4 business days after form submission)
-8. **Await Producer Portal access email** from Google
-9. **Create `recs-studio-public` project** and grant IAM roles to Google service accounts
-10. **Submit Cloud Marketplace Project Info Form**
-11. **Configure Payment Account** in Producer Portal
-12. **Build listing** in Producer Portal
-13. **Integrate SaaS fulfillment API** (sign-up flow, purchase tokens, billing metering)
+3. **Await Product Validation Letter** (2–4 business days after submission acceptance)
+4. **Await Producer Portal access email** from Google
+5. **Create `recs-studio-public` project** and grant IAM roles to Google service accounts
+6. **Submit Cloud Marketplace Project Info Form**
+7. **Configure Payment Account** in Producer Portal
+8. **Build listing** in Producer Portal
+9. **Integrate SaaS fulfillment API** (sign-up flow, purchase tokens, billing metering)
 
 ### Medium-term (next 1–3 months)
 
-14. **Submit listing for Google review**
-15. **Address feedback**
-16. **Launch**
+10. **Submit listing for Google review**
+11. **Address feedback**
+12. **Launch**
 
 ---
 
@@ -379,5 +438,5 @@ Sources:
 
 ---
 
-**Last Updated:** 2026-06-05
+**Last Updated:** 2026-06-06
 

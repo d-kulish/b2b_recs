@@ -295,13 +295,35 @@ Requested either review of attached materials or an alternative submission metho
 **Subject:** Form repeatedly fails with "Something went wrong" — Case 71987890  
 **Message:** Brief technical report confirming 8+ failed attempts across multiple browsers, no extensions, and fallback email already sent to `gcp-solution-validation@google.com`. Requested form fix or manual forwarding to the Solution Validation team.
 
-### Current Status
+### Current Status (as of 2026-06-06)
 
 - **Form submission:** ❌ Blocked — form appears non-functional
 - **Email escalation:** ✅ Sent to `gcp-solution-validation@google.com`
 - **Form owner contact:** ✅ Sent via popup
 - **Awaiting:** Response from Solution Validation team (target: 2–4 business days)
 - **Do not retry the form** — wait for email response or form fix
+
+---
+
+## Solution Validation — Google Follow-up Questions (2026-06-10)
+
+Google Cloud Marketplace Team reviewed the submission and sent follow-up questions on **Case 72148641** regarding:
+1. Whether the customer infrastructure (left side of the architecture diagram) is managed exclusively by the customer and if any components are deployed there.
+2. Clarification on Vertex AI usage, given the earlier statement that the solution "does not use any AI."
+
+### Response Sent (2026-06-10)
+
+Clarification email sent to Google Cloud Marketplace Team with updated architecture diagram (`docs/marketplace-architecture-variant1.html`).
+
+**Key clarifications provided:**
+- **Customer Data Sources:** The left-side components (SQL Databases, NoSQL Stores, Object Storage) are the customer’s existing data stores. Recs Studio does not deploy any software, agents, or components into the customer environment. The ETL Runner (a Cloud Run Job within the isolated GCP project) connects via read-only APIs. The customer only needs to open network-level access (e.g., firewall whitelisting of the Cloud NAT static IP).
+- **Vertex AI / "No AI" correction:** Recs Studio uses classical machine learning (not Generative AI / LLMs). The Vertex AI label refers to: Pipelines (TFX orchestration), Custom Training (TensorFlow Recommenders — two-tower collaborative filtering), and Model Registry. No pre-trained AI models or third-party AI APIs are used. Model serving runs on Cloud Run (TF Serving / ScaNN), not Vertex AI Prediction.
+
+**Diagram updates made:**
+- `Customer Infrastructure` → `Customer Data Sources`
+- `Managed by the customer` → `No Recs Studio components deployed here`
+- `TFX pipelines / TFRS training` → `Pipelines, Training, Registry / Classical ML only`
+- Added notes: Vertex AI sub-products, explicit statement that no components are deployed into customer environment
 
 ---
 
@@ -378,12 +400,19 @@ Sources:
 
 ## Next Steps
 
-### Immediate (while awaiting Solution Validation response)
+### Immediate (as of 2026-06-10)
 
-1. **Await email reply** from `gcp-solution-validation@google.com` — do not retry the broken form. Response target: 2–4 business days from 2026-06-06.
+1. **Await response** from Google Cloud Marketplace Team on Case 72148641 (follow-up clarifications sent 2026-06-10).
 2. **Capture product screenshots** — Platform dashboard, ETL wizard, training pipeline, deployment interface. Marketplace listings require at least **3–5 screenshots**. Compress each to < 500 KB.
 
-### Done Today (2026-06-06)
+### Done Today (2026-06-10)
+
+| # | Task | Status |
+|---|---|---|
+| ✅ | Responded to Google follow-up questions (Case 72148641) | Sent clarifications + updated architecture diagram |
+| ✅ | Architecture diagram updated | `Customer Infrastructure` → `Customer Data Sources`; Vertex AI details clarified; no-deployment note added |
+
+### Done Earlier (2026-06-06)
 
 | # | Task | Status |
 |---|---|---|
@@ -438,5 +467,5 @@ Sources:
 
 ---
 
-**Last Updated:** 2026-06-06
+**Last Updated:** 2026-06-10
 

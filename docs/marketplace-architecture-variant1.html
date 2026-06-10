@@ -219,7 +219,7 @@
 
 <div class="page">
   <h1>Recs Studio — Solution Architecture</h1>
-  <p class="subtitle"><strong>Customer Infrastructure</strong> (left) → <strong>Recs Studio GCP Project</strong> (right). One isolated GCP project per tenant.</p>
+  <p class="subtitle"><strong>Customer Data Sources</strong> (left) → <strong>Recs Studio GCP Project</strong> (right). One isolated GCP project per tenant.</p>
 
   <div class="big-pipeline">
 
@@ -227,7 +227,7 @@
     <div class="container customer">
       <div class="container-header">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:5px;"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-        Customer Infrastructure
+        Customer Data Sources
       </div>
       <div style="flex:1; display:flex; flex-direction:column; gap:10px; justify-content:center;">
         <div class="component">
@@ -253,7 +253,7 @@
         </div>
       </div>
       <div style="text-align:center; font-size:11px; color:#c5221f; font-weight:600; margin-top:6px;">
-        Managed by the customer
+        No Recs Studio components deployed here
       </div>
     </div>
 
@@ -342,7 +342,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36px" height="36px"><path d="M20,13.89A.77.77,0,0,0,19,13.73l-7,5.14v.22a.72.72,0,1,1,0,1.43v0a.74.74,0,0,0,.45-.15l7.41-5.47A.76.76,0,0,0,20,13.89Z" style="fill:#669df6"/><path d="M12,20.52a.72.72,0,0,1,0-1.43h0v-.22L5,13.73a.76.76,0,0,0-1,.16.74.74,0,0,0,.16,1l7.41,5.47a.73.73,0,0,0,.44.15v0Z" style="fill:#aecbfa"/><path d="M12,18.34a1.47,1.47,0,1,0,1.47,1.47A1.47,1.47,0,0,0,12,18.34Zm0,2.18a.72.72,0,1,1,.72-.71A.71.71,0,0,1,12,20.52Z" style="fill:#4285f4"/><path d="M6,6.11a.76.76,0,0,1-.75-.75V3.48a.76.76,0,1,1,1.51,0V5.36A.76.76,0,0,1,6,6.11Z" style="fill:#aecbfa"/><circle cx="5.98" cy="12" r="0.76" style="fill:#aecbfa"/><circle cx="5.98" cy="9.79" r="0.76" style="fill:#aecbfa"/><circle cx="5.98" cy="7.57" r="0.76" style="fill:#aecbfa"/><path d="M18,8.31a.76.76,0,0,1-.75-.76V5.67a.75.75,0,1,1,1.5,0V7.55A.75.75,0,0,1,18,8.31Z" style="fill:#4285f4"/><circle cx="18.02" cy="12.01" r="0.76" style="fill:#4285f4"/><circle cx="18.02" cy="9.76" r="0.76" style="fill:#4285f4"/><circle cx="18.02" cy="3.48" r="0.76" style="fill:#4285f4"/><path d="M12,15a.76.76,0,0,1-.75-.75V12.34a.76.76,0,0,1,1.51,0v1.89A.76.76,0,0,1,12,15Z" style="fill:#669df6"/><circle cx="12" cy="16.45" r="0.76" style="fill:#669df6"/><circle cx="12" cy="10.14" r="0.76" style="fill:#669df6"/><circle cx="12" cy="7.92" r="0.76" style="fill:#669df6"/><path d="M15,10.54a.76.76,0,0,1-.75-.75V7.91a.76.76,0,1,1,1.51,0V9.79A.76.76,0,0,1,15,10.54Z" style="fill:#4285f4"/><circle cx="15.01" cy="5.69" r="0.76" style="fill:#4285f4"/><circle cx="15.01" cy="14.19" r="0.76" style="fill:#4285f4"/><circle cx="15.01" cy="11.97" r="0.76" style="fill:#4285f4"/><circle cx="8.99" cy="14.19" r="0.76" style="fill:#aecbfa"/><circle cx="8.99" cy="7.92" r="0.76" style="fill:#aecbfa"/><circle cx="8.99" cy="5.69" r="0.76" style="fill:#aecbfa"/><path d="M9,12.73A.76.76,0,0,1,8.24,12V10.1a.75.75,0,1,1,1.5,0V12A.75.75,0,0,1,9,12.73Z" style="fill:#aecbfa"/></svg>
           </div>
           <div class="name">Vertex AI</div>
-          <div class="detail">TFX pipelines<br>TFRS training</div>
+          <div class="detail">Pipelines, Training, Registry<br>Classical ML only</div>
         </div>
         <div class="small-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M2 8h10M10 5l4 3-4 3" stroke="#5f6368" stroke-width="1.5"/></svg></div>
         <div class="component">
@@ -391,6 +391,10 @@
 
   <div class="notes">
     <strong>Security & Isolation:</strong> Each tenant runs in a fully isolated GCP project. Customer data never leaves their project. Cloud NAT provides a static outbound IP for firewall whitelisting at on-premise databases. All DB credentials live in Secret Manager. HTTPS is enforced on all Cloud Run services.
+    <br><br>
+    <strong>Vertex AI usage:</strong> Pipelines (TFX orchestration), Custom Training (TensorFlow Recommenders — classical two-tower collaborative filtering), and Model Registry. No Generative AI, LLMs, or third-party AI APIs are used. Model serving runs on Cloud Run (TF Serving / ScaNN), not Vertex AI Prediction.
+    <br><br>
+    <strong>Customer data sources:</strong> The systems shown on the left are existing customer-managed data stores. Recs Studio does not deploy any agents or software into the customer environment. The ETL Runner (a Cloud Run Job within the isolated GCP project) connects via read-only APIs. The customer only needs to provide network access (e.g., firewall whitelisting of the Cloud NAT static IP). ETL setup can be performed by the customer or with our support.
   </div>
 </div>
 

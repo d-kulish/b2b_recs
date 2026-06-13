@@ -350,7 +350,7 @@ The request references the public Marketplace requirements at https://cloud.goog
 | Customer support | ✅ Support page, response-time SLAs, escalation path, and support@recs.studio live at https://recs.studio/support/ | — |
 | Security best practices | ✅ Public security overview at https://recs.studio/security/ | — |
 | Website URL | ✅ https://recs.studio/ | — |
-| Social media accounts | Three founder LinkedIn profiles; company LinkedIn page still to be created | Missing company LinkedIn page and ideally a second company social account |
+| Social media accounts | ✅ Company LinkedIn page live at https://www.linkedin.com/company/recs-studio-ml/ and X/Twitter live at https://x.com/recs_studio | — |
 
 ### Decision: Build Assets Before Replying
 
@@ -363,10 +363,12 @@ Rather than sending an immediate reply that describes future pages, we will firs
    - `/support/` — support channels, response-time targets, escalation path
    - `/security/` — architecture, encryption, IAM, compliance posture, DPA availability
    - `/customers/` — case studies for Metro.ua and Zakaz.ua
-2. ⏳ Create **Recs Studio LinkedIn Company Page** (`https://www.linkedin.com/company/recs-studio/`).
-3. (Optional) Register a company **X/Twitter account** `@recsstudio` to satisfy plural "social media accounts."
+2. ✅ Create **Recs Studio LinkedIn Company Page** (`https://www.linkedin.com/company/recs-studio-ml/`).
+   - Created under the founder's personal LinkedIn account because LinkedIn requires a personal profile with sufficient connections to create a Company Page. The page is owned by Recs Studio; `d.kulish@recs.studio` should be added as a page admin.
+3. ✅ Register **Recs Studio X/Twitter account** (`https://x.com/recs_studio`).
+   - Created under `d.kulish@recs.studio`. Adding the same email as an admin failed with X's "We’re unable to add this admin right now" error, likely because the same name exists under `kulish.dmytro@gmail.com`. Account is controlled by the founder via the `d.kulish@recs.studio` login; revisit admin addition later if X support is needed.
 
-**Reply deadline:** Send the response to Google as soon as the LinkedIn company page is live, ideally no later than 2026-06-15.
+**Reply deadline:** ✅ Response sent on 2026-06-14 (before 2026-06-15 target).
 
 ### Positioning for the Reply
 
@@ -376,7 +378,7 @@ The reply must present Recs Studio as **production-proven and scaling**, not as 
 - Do say: "Recs Studio is production-deployed with two live retail customers and a third pilot in discussion; Google Cloud Marketplace is the strategic channel for scaling to EU and US retailers."
 - Position security as **least-privilege, customer-controlled access** rather than "single admin from Recs Studio side."
 
-### Draft Reply (to send after pages are live)
+### Sent Reply (2026-06-14)
 
 **Subject:** Re: Recs Studio — Solution Validation requirements (Case 72148641)
 
@@ -406,8 +408,9 @@ The reply must present Recs Studio as **production-proven and scaling**, not as 
 >
 > **6. Social media accounts**
 >
-> Company: https://www.linkedin.com/company/recs-studio/
-> Founding team: Dmytro Kulish, Maksym Kulish, Kostyantyn Patsera (LinkedIn profiles linked on the About page).
+> - LinkedIn: https://www.linkedin.com/company/recs-studio-ml/
+> - X/Twitter: https://x.com/recs_studio
+> - Founding team: Dmytro Kulish, Maksym Kulish, Kostyantyn Patsera (LinkedIn profiles linked at https://recs.studio/about/)
 >
 > **Background**
 >
@@ -419,6 +422,8 @@ The reply must present Recs Studio as **production-proven and scaling**, not as 
 > Dmytro Kulish
 > Founder, Recs Studio
 > d.kulish@recs.studio
+
+**Status:** Sent. Awaiting Google response.
 
 ---
 
@@ -497,9 +502,11 @@ Sources:
 
 ### Immediate (as of 2026-06-13)
 
-1. **Create Recs Studio LinkedIn Company Page** and optionally a company X/Twitter account.
-2. **Reply to Google Cloud Marketplace Team** on Case 72148641 with the enterprise-readiness email once the LinkedIn page is live (target: ideally 2026-06-15).
-3. **Capture product screenshots** — Platform dashboard, ETL wizard, training pipeline, deployment interface. Marketplace listings require at least **3–5 screenshots**. Compress each to < 500 KB.
+1. ✅ ~~Create Recs Studio LinkedIn Company Page~~ Created at https://www.linkedin.com/company/recs-studio-ml/; add `d.kulish@recs.studio` as page admin.
+2. ✅ ~~Register company X/Twitter account~~ Created at https://x.com/recs_studio.
+3. ✅ ~~Deploy updated website~~ Deployed with LinkedIn and X footer links plus consolidated `support@recs.studio` email.
+4. ✅ **Reply to Google Cloud Marketplace Team** sent on Case 72148641 with the enterprise-readiness email. Awaiting response.
+5. ✅ **Consolidate public contact emails to `support@recs.studio`** — Replaced `info@`, `privacy@`, and `security@` references in the public website templates. Alias verified: test email from `kulish.dmytro@gmail.com` delivered to `d.kulish@recs.studio`.
 
 ### Done Today (2026-06-13)
 
@@ -508,6 +515,10 @@ Sources:
 | ✅ | Enterprise-readiness pages added + deployed | About, Pricing, Support, Security, Customers live at https://recs.studio/ |
 | ✅ | Website sitemap updated | New pages indexed at https://recs.studio/sitemap.xml |
 | ✅ | Shared website base template created | Consistent header, navigation, footer, demo modal, and SEO blocks |
+| ✅ | Founder LinkedIn links fixed | About page now links Dmytro, Maksym, and Kostyantyn |
+| ✅ | Recs Studio LinkedIn Company Page created | https://www.linkedin.com/company/recs-studio-ml/ |
+| ✅ | Recs Studio X/Twitter account created | https://x.com/recs_studio |
+| ✅ | Website footer links to LinkedIn + X | Added to base template; deploy before replying |
 
 ### Done Earlier (2026-06-10)
 
@@ -533,6 +544,7 @@ Sources:
 5. **Create `recs-studio-public` project** and grant IAM roles to Google service accounts
 6. **Submit Cloud Marketplace Project Info Form**
 7. **Configure Payment Account** in Producer Portal
+8. **Capture product screenshots** — 3–5 screenshots from the live app (Dashboard, ETL wizard, training pipeline, deployment). Compress to < 500 KB each for the Marketplace listing.
 8. **Build listing** in Producer Portal
 9. **Integrate SaaS fulfillment API** (sign-up flow, purchase tokens, billing metering)
 

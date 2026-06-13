@@ -415,16 +415,26 @@
     <div class="max-w-[88rem] mx-auto px-12 mt-6">
         <div class="gradient-line"></div>
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between py-8 text-sm text-gray-500 gap-4">
-            <span>&copy; 2026 recs.studio</span>
+            <div class="flex items-center gap-4">
+                <span>&copy; 2026 recs.studio</span>
+                <div class="flex items-center gap-3">
+                    <a href="https://www.linkedin.com/company/recs-studio-ml/" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-blue-600 transition" aria-label="LinkedIn">
+                        <i class="fab fa-linkedin text-lg"></i>
+                    </a>
+                    <a href="https://x.com/recs_studio" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-gray-900 transition" aria-label="X / Twitter">
+                        <i class="fab fa-x-twitter text-lg"></i>
+                    </a>
+                </div>
+            </div>
             <div class="flex flex-wrap items-center gap-6">
-                <a href="{% url 'landing' %}" class="hover:text-gray-300 transition">Home</a>
-                <a href="{% url 'about' %}" class="hover:text-gray-300 transition">About</a>
-                <a href="{% url 'pricing' %}" class="hover:text-gray-300 transition">Pricing</a>
-                <a href="{% url 'customers' %}" class="hover:text-gray-300 transition">Customers</a>
-                <a href="{% url 'support' %}" class="hover:text-gray-300 transition">Support</a>
-                <a href="{% url 'security' %}" class="hover:text-gray-300 transition">Security</a>
-                <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
-                <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
+                <a href="{% url 'landing' %}" class="hover:text-blue-600 transition">Home</a>
+                <a href="{% url 'about' %}" class="hover:text-blue-600 transition">About</a>
+                <a href="{% url 'pricing' %}" class="hover:text-blue-600 transition">Pricing</a>
+                <a href="{% url 'customers' %}" class="hover:text-blue-600 transition">Customers</a>
+                <a href="{% url 'support' %}" class="hover:text-blue-600 transition">Support</a>
+                <a href="{% url 'security' %}" class="hover:text-blue-600 transition">Security</a>
+                <a href="{% url 'terms' %}" class="hover:text-blue-600 transition">Terms of Service</a>
+                <a href="{% url 'privacy' %}" class="hover:text-blue-600 transition">Privacy Policy</a>
             </div>
         </div>
     </div>

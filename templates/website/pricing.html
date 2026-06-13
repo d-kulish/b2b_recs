@@ -21,22 +21,22 @@
 
     <div class="gradient-line my-8"></div>
 
-    <div class="grid md:grid-cols-3 gap-6 my-8">
+    <div class="grid md:grid-cols-3 gap-6 my-8 w-[120%] -ml-[10%]">
         <!-- Pilot -->
         <div class="border-2 border-gray-900 rounded-2xl p-6 flex flex-col">
             <div class="mb-4">
                 <span class="inline-block px-3 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">Pilot</span>
             </div>
             <h2 class="!mt-0">Proof of Concept</h2>
-            <p class="text-3xl font-bold text-gray-900 mb-4">From €3,500</p>
-            <p class="text-sm text-gray-500 mb-6">One-time fee for a 30–60 day pilot, plus GCP infrastructure costs.</p>
+            <p class="text-3xl font-bold text-gray-900 mb-4">€999</p>
+            <p class="text-sm text-gray-500 mb-6">One-time fee for a simple, risk-free 3-week pilot. No complex setup, no long-term commitment.</p>
             <ul class="flex-1">
-                <li>One recommendation use case (retrieval or ranking)</li>
-                <li>Single data source integration</li>
-                <li>Up to 2 experiment iterations</li>
+                <li>Lightweight setup on your existing data</li>
+                <li>Best-practice consulting on recommendation design</li>
+                <li>A working recommendation model tailored to your use case</li>
+                <li>3 weeks of hands-on guidance and iteration</li>
                 <li>Shared Slack / email support</li>
-                <li>Model deployed to a staging endpoint</li>
-                <li>Pilot success report with metrics</li>
+                <li>Clear next-step recommendation after the pilot</li>
             </ul>
             <button onclick="openDemoModal()" class="mt-6 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-400 hover:from-blue-600 hover:to-blue-500 transition">
                 Start a Pilot
@@ -45,9 +45,6 @@
 
         <!-- Growth -->
         <div class="border-2 border-gray-900 rounded-2xl p-6 flex flex-col relative">
-            <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <span class="inline-block px-4 py-1 text-xs font-semibold bg-gray-900 text-white rounded-full">Most Popular</span>
-            </div>
             <div class="mb-4">
                 <span class="inline-block px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded-full">Growth</span>
             </div>
@@ -107,7 +104,7 @@
 
     <h2>Need a Quote?</h2>
     <p>
-        Every data estate is different. Click <strong>Request a Demo</strong> or email <a href="mailto:d.kulish@recs.studio">d.kulish@recs.studio</a> and we'll prepare a detailed estimate based on your catalog size, data sources, and use cases.
+        Every data estate is different. Click <strong>Request a Demo</strong> or email <a href="mailto:info@recs.studio">info@recs.studio</a> and we'll prepare a detailed estimate based on your catalog size, data sources, and use cases.
     </p>
 </div>
 {% endblock %}

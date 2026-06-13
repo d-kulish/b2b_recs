@@ -362,7 +362,7 @@
 </head>
 <body>
     <!-- Header -->
-    <div class="p-6 pb-0">
+    <div class="p-6 pb-2">
         <div class="max-w-[88rem] mx-auto">
             <div class="px-6 py-3 flex items-center gap-6">
                 <!-- Logo -->
@@ -386,10 +386,10 @@
     </div>
 
     <!-- Navigation -->
-    <div class="px-6 pb-2">
+    <div class="px-6 pb-0">
         <div class="max-w-[88rem] mx-auto">
-            <div class="px-6 py-3">
-                <nav class="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-medium">
+            <div class="px-6 py-4">
+                <nav class="flex flex-wrap items-center justify-center gap-x-8 gap-y-1 text-[17px] font-medium">
                     <a href="{% url 'landing' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_landing %}{% endblock %}">Home</a>
                     <a href="{% url 'about' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_about %}{% endblock %}">About</a>
                     <a href="{% url 'pricing' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_pricing %}{% endblock %}">Pricing</a>
@@ -404,7 +404,7 @@
     </div>
 
     <!-- Content -->
-    <div class="py-6 px-6">
+    <div class="pt-2 pb-6 px-6">
         <div class="max-w-[88rem] mx-auto px-6">
             <div class="gradient-line mb-6"></div>
             {% block content %}{% endblock %}

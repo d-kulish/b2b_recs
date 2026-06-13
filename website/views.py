@@ -22,6 +22,36 @@ def landing(request):
     return render(request, 'website/landing.html')
 
 
+@ensure_csrf_cookie
+def about(request):
+    """About page."""
+    return render(request, 'website/about.html')
+
+
+@ensure_csrf_cookie
+def pricing(request):
+    """Pricing page."""
+    return render(request, 'website/pricing.html')
+
+
+@ensure_csrf_cookie
+def support(request):
+    """Support page."""
+    return render(request, 'website/support.html')
+
+
+@ensure_csrf_cookie
+def security(request):
+    """Security page."""
+    return render(request, 'website/security.html')
+
+
+@ensure_csrf_cookie
+def customers(request):
+    """Customers / case studies page."""
+    return render(request, 'website/customers.html')
+
+
 def terms(request):
     """Terms of Service page."""
     return render(request, 'website/terms.html')

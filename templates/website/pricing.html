@@ -1,0 +1,113 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block title %}Pricing — Recs Studio{% endblock %}
+{% block meta_description %}Recs Studio pricing: Pilot, Growth, and Enterprise packages for managed recommendation systems on Google Cloud.{% endblock %}
+{% block canonical %}https://recs.studio/pricing/{% endblock %}
+{% block og_url %}https://recs.studio/pricing/{% endblock %}
+{% block og_title %}Pricing — Recs Studio{% endblock %}
+{% block og_description %}Recs Studio pricing: Pilot, Growth, and Enterprise packages for managed recommendation systems on Google Cloud.{% endblock %}
+{% block twitter_title %}Pricing — Recs Studio{% endblock %}
+{% block twitter_description %}Recs Studio pricing: Pilot, Growth, and Enterprise packages for managed recommendation systems on Google Cloud.{% endblock %}
+{% block nav_pricing %}active{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto page-content">
+    <h1>Pricing</h1>
+
+    <p class="text-lg text-gray-600 leading-relaxed mb-8">
+        Recs Studio is offered as a managed service on Google Cloud. Every customer gets an isolated GCP project with dedicated infrastructure. Pricing has two components: a fixed Recs Studio management fee and the underlying Google Cloud infrastructure, which we pass through at cost.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <div class="grid md:grid-cols-3 gap-6 my-8">
+        <!-- Pilot -->
+        <div class="border-2 border-gray-900 rounded-2xl p-6 flex flex-col">
+            <div class="mb-4">
+                <span class="inline-block px-3 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">Pilot</span>
+            </div>
+            <h2 class="!mt-0">Proof of Concept</h2>
+            <p class="text-3xl font-bold text-gray-900 mb-4">From €3,500</p>
+            <p class="text-sm text-gray-500 mb-6">One-time fee for a 30–60 day pilot, plus GCP infrastructure costs.</p>
+            <ul class="flex-1">
+                <li>One recommendation use case (retrieval or ranking)</li>
+                <li>Single data source integration</li>
+                <li>Up to 2 experiment iterations</li>
+                <li>Shared Slack / email support</li>
+                <li>Model deployed to a staging endpoint</li>
+                <li>Pilot success report with metrics</li>
+            </ul>
+            <button onclick="openDemoModal()" class="mt-6 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-blue-500 to-blue-400 hover:from-blue-600 hover:to-blue-500 transition">
+                Start a Pilot
+            </button>
+        </div>
+
+        <!-- Growth -->
+        <div class="border-2 border-gray-900 rounded-2xl p-6 flex flex-col relative">
+            <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span class="inline-block px-4 py-1 text-xs font-semibold bg-gray-900 text-white rounded-full">Most Popular</span>
+            </div>
+            <div class="mb-4">
+                <span class="inline-block px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded-full">Growth</span>
+            </div>
+            <h2 class="!mt-0">Managed SaaS</h2>
+            <p class="text-3xl font-bold text-gray-900 mb-4">From €1,500/mo</p>
+            <p class="text-sm text-gray-500 mb-6">Per production model, plus Google Cloud infrastructure at cost (from ~€700/month for a typical setup).</p>
+            <ul class="flex-1">
+                <li>One production model (retrieval, ranking, or multitask)</li>
+                <li>Multiple data sources and scheduled ETL</li>
+                <li>Unlimited experiments and feature configs</li>
+                <li>Automated retraining and model registry</li>
+                <li>Production serving endpoint with monitoring</li>
+                <li>Email support with 1-business-day response target</li>
+            </ul>
+            <button onclick="openDemoModal()" class="mt-6 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-600 hover:to-emerald-500 transition">
+                Request Growth Plan
+            </button>
+        </div>
+
+        <!-- Enterprise -->
+        <div class="border-2 border-gray-900 rounded-2xl p-6 flex flex-col">
+            <div class="mb-4">
+                <span class="inline-block px-3 py-1 text-xs font-semibold bg-violet-100 text-violet-800 rounded-full">Enterprise</span>
+            </div>
+            <h2 class="!mt-0">Custom Scale</h2>
+            <p class="text-3xl font-bold text-gray-900 mb-4">Custom</p>
+            <p class="text-sm text-gray-500 mb-6">Annual contract for multiple models, custom regions, and dedicated support.</p>
+            <ul class="flex-1">
+                <li>Multiple production models and use cases</li>
+                <li>Custom data connectors and ETL pipelines</li>
+                <li>Regional deployment (EU, US, or multi-region)</li>
+                <li>Private VPC, dedicated static IPs, custom IAM</li>
+                <li>Quarterly business reviews and roadmap input</li>
+                <li>Priority support with 4-hour critical response target</li>
+            </ul>
+            <button onclick="openDemoModal()" class="mt-6 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-violet-500 to-violet-400 hover:from-violet-600 hover:to-violet-500 transition">
+                Contact Sales
+            </button>
+        </div>
+    </div>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>What's Included in Infrastructure Costs?</h2>
+    <p>
+        Each customer runs in a dedicated Google Cloud project. Typical monthly infrastructure for a single production model starts around €700 and includes Cloud Run (app and serving), Cloud SQL, BigQuery, Cloud Storage, Cloud Scheduler, Vertex AI training, and Cloud NAT with a static IP. We invoice GCP costs at cost; there is no markup.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Custom Builds and Marketplace Migration</h2>
+    <p>
+        If you need a fully tailored implementation before the managed Marketplace listing is available, we offer custom-build engagements. Existing custom-build customers continue to receive full support and will be migrated to the Marketplace billing model once the listing goes live.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Need a Quote?</h2>
+    <p>
+        Every data estate is different. Click <strong>Request a Demo</strong> or email <a href="mailto:d.kulish@recs.studio">d.kulish@recs.studio</a> and we'll prepare a detailed estimate based on your catalog size, data sources, and use cases.
+    </p>
+</div>
+{% endblock %}

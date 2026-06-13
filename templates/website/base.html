@@ -1,0 +1,557 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Recs Studio{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Managed recommendation systems built on TensorFlow Recommenders (TFRS), TFX pipelines, and Vertex AI.{% endblock %}">
+    {% block meta_keywords %}{% endblock %}
+    <link rel="canonical" href="{% block canonical %}https://recs.studio/{% endblock %}">
+    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{% block og_url %}https://recs.studio/{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}Recs Studio{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Managed recommendation systems built on TensorFlow Recommenders (TFRS), TFX pipelines, and Vertex AI.{% endblock %}">
+    <meta property="og:image" content="https://storage.googleapis.com/recs-studio-public/logo/recs_logo.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{% block twitter_title %}Recs Studio{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}Managed recommendation systems built on TensorFlow Recommenders (TFRS), TFX pipelines, and Vertex AI.{% endblock %}">
+    <meta name="twitter:image" content="https://storage.googleapis.com/recs-studio-public/logo/recs_logo.png">
+
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+    <style>
+        body {
+            background-color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .header-user-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .header-user-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .header-user-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: transparent;
+        }
+
+        .nav-link {
+            color: #4b5563;
+            font-weight: 500;
+            font-size: 15px;
+            transition: color 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .nav-link:hover {
+            color: #2563eb;
+        }
+
+        .nav-link.active {
+            color: #2563eb;
+        }
+
+        .gradient-line {
+            height: 2px;
+            background: linear-gradient(to right, transparent 0%, #1f2937 15%, #1f2937 85%, transparent 100%);
+        }
+
+        .page-content h1 {
+            font-size: 2.25rem;
+            line-height: 2.5rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 2rem;
+        }
+
+        .page-content h2 {
+            font-size: 1.25rem;
+            line-height: 1.75rem;
+            font-weight: 600;
+            color: #111827;
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .page-content h3 {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+            font-weight: 600;
+            color: #374151;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-content p {
+            color: #4b5563;
+            line-height: 1.7;
+            margin-bottom: 1rem;
+        }
+
+        .page-content ul {
+            list-style: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #4b5563;
+            line-height: 1.7;
+        }
+
+        .page-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .page-content a {
+            color: #2563eb;
+        }
+
+        .page-content a:hover {
+            text-decoration: underline;
+        }
+
+        /* Demo modal styles */
+        .demo-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .demo-modal-overlay.visible {
+            display: flex;
+        }
+
+        .demo-modal-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            max-width: 691px;
+            width: 100%;
+            min-height: 528px;
+            display: flex;
+            flex-direction: column;
+            animation: demoModalSlideIn 0.2s ease-out;
+        }
+        @keyframes demoModalSlideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .demo-modal-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 20px 24px;
+            min-height: 80px;
+            background: linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 50%, #0ea5e9 100%);
+            border-radius: 12px 12px 0 0;
+            flex-shrink: 0;
+        }
+        .demo-modal-header .icon-badge {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: #0ea5e9;
+        }
+        .demo-modal-header .icon-badge i {
+            font-size: 20px;
+            color: #ffffff;
+        }
+        .demo-modal-header .header-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0c4a6e;
+        }
+        .demo-modal-header .header-subtitle {
+            font-size: 12px;
+            margin-top: 2px;
+            color: #075985;
+        }
+
+        .demo-modal-body {
+            padding: 20px 24px;
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .demo-modal-body form {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .demo-modal-body label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+        .demo-modal-body input[type="email"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            margin-bottom: 12px;
+            outline: none;
+            box-sizing: border-box;
+            font-family: inherit;
+            flex-shrink: 0;
+        }
+        .demo-modal-body textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            box-sizing: border-box;
+            font-family: inherit;
+            flex: 1;
+            resize: none;
+            margin: 0;
+        }
+        .demo-modal-body input[type="email"]:focus,
+        .demo-modal-body textarea:focus {
+            border-color: #3b82f6;
+        }
+
+        .demo-modal-footer {
+            padding: 12px 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #ffffff;
+            border-radius: 0 0 12px 12px;
+            flex-shrink: 0;
+        }
+        .demo-modal-footer .footer-left {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .demo-modal-footer .footer-right {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .demo-btn-neu {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            font-weight: 600;
+            font-size: 14px;
+            background: linear-gradient(145deg, #ffffff, #dcdcdc);
+            box-shadow:
+                6px 6px 14px rgba(0, 0, 0, 0.2),
+                -4px -4px 10px rgba(255, 255, 255, 1),
+                inset 1px 1px 2px rgba(255, 255, 255, 0.8);
+            padding: 6px;
+            width: 120px;
+            height: 48px;
+        }
+        .demo-btn-neu:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow:
+                6px 6px 15px rgba(0, 0, 0, 0.18),
+                -3px -3px 10px rgba(255, 255, 255, 0.9);
+        }
+        .demo-btn-neu:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow:
+                2px 2px 6px rgba(0, 0, 0, 0.12),
+                -1px -1px 4px rgba(255, 255, 255, 0.7);
+        }
+        .demo-btn-neu:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .demo-btn-neu .btn-inner {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            color: #ffffff;
+            padding: 0 20px;
+            transition: all 0.25s ease;
+        }
+
+        .demo-btn-send .btn-inner {
+            background: linear-gradient(145deg, #22c55e, #16a34a);
+        }
+        .demo-btn-send:hover:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #16a34a, #15803d);
+        }
+        .demo-btn-send:active:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #15803d, #166534);
+        }
+
+        .demo-btn-cancel .btn-inner {
+            background: linear-gradient(145deg, #f87171, #ef4444);
+        }
+        .demo-btn-cancel:hover:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #ef4444, #dc2626);
+        }
+        .demo-btn-cancel:active:not(:disabled) .btn-inner {
+            background: linear-gradient(145deg, #dc2626, #b91c1c);
+        }
+
+        .floating-demo-btn {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            z-index: 9000;
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+            transition: all 0.25s ease;
+        }
+        .floating-demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="p-6 pb-0">
+        <div class="max-w-[88rem] mx-auto">
+            <div class="px-6 py-3 flex items-center gap-6">
+                <!-- Logo -->
+                <a href="{% url 'landing' %}" class="flex flex-col items-center w-fit flex-shrink-0 mr-4">
+                    <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-[70px] w-auto">
+                </a>
+
+                <!-- Brand name -->
+                <a href="{% url 'landing' %}" class="flex-shrink-0 no-underline">
+                    <h1 class="text-5xl font-bold text-blue-900">Recs Studio</h1>
+                </a>
+
+                <!-- User Profile Icon (pushed to far right) -->
+                <div class="ml-auto flex-shrink-0">
+                    <a href="#" class="header-user-icon" title="Sign In">
+                        <img src="{% static 'images/person_icon.webp' %}" alt="Sign In">
+                    </a>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="px-6 pb-3">
+                <nav class="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <a href="{% url 'landing' %}" class="nav-link {% block nav_landing %}{% endblock %}">Home</a>
+                    <a href="{% url 'about' %}" class="nav-link {% block nav_about %}{% endblock %}">About</a>
+                    <a href="{% url 'pricing' %}" class="nav-link {% block nav_pricing %}{% endblock %}">Pricing</a>
+                    <a href="{% url 'customers' %}" class="nav-link {% block nav_customers %}{% endblock %}">Customers</a>
+                    <a href="{% url 'support' %}" class="nav-link {% block nav_support %}{% endblock %}">Support</a>
+                    <a href="{% url 'security' %}" class="nav-link {% block nav_security %}{% endblock %}">Security</a>
+                    <a href="{% url 'terms' %}" class="nav-link {% block nav_terms %}{% endblock %}">Terms</a>
+                    <a href="{% url 'privacy' %}" class="nav-link {% block nav_privacy %}{% endblock %}">Privacy</a>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="py-6 px-6">
+        <div class="max-w-[88rem] mx-auto px-6">
+            <div class="gradient-line mb-6"></div>
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="max-w-[88rem] mx-auto px-12 mt-6">
+        <div class="gradient-line"></div>
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between py-8 text-sm text-gray-500 gap-4">
+            <span>&copy; 2026 recs.studio</span>
+            <div class="flex flex-wrap items-center gap-6">
+                <a href="{% url 'landing' %}" class="hover:text-gray-300 transition">Home</a>
+                <a href="{% url 'about' %}" class="hover:text-gray-300 transition">About</a>
+                <a href="{% url 'pricing' %}" class="hover:text-gray-300 transition">Pricing</a>
+                <a href="{% url 'customers' %}" class="hover:text-gray-300 transition">Customers</a>
+                <a href="{% url 'support' %}" class="hover:text-gray-300 transition">Support</a>
+                <a href="{% url 'security' %}" class="hover:text-gray-300 transition">Security</a>
+                <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
+                <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating "Request a Demo" button -->
+    <button onclick="openDemoModal()" class="floating-demo-btn">Request a Demo</button>
+
+    <!-- Demo Request Modal -->
+    <div id="demoModal" class="demo-modal-overlay" onclick="if(event.target===this) closeDemoModal();">
+        <div class="demo-modal-container" onclick="event.stopPropagation()">
+            <div class="demo-modal-header">
+                <div class="icon-badge">
+                    <i class="fas fa-envelope"></i>
+                </div>
+                <div style="flex:1;">
+                    <div class="header-title">Request a Demo</div>
+                    <div class="header-subtitle">Tell us how to reach you and we'll schedule a walkthrough</div>
+                </div>
+            </div>
+
+            <div class="demo-modal-body">
+                <form id="demoForm" onsubmit="submitDemo(event)">
+                    <label>Email <span style="color:#ef4444;">*</span></label>
+                    <input type="email" id="demoEmail" required placeholder="you@company.com">
+                    <label>What are you looking for?</label>
+                    <textarea id="demoDesc" placeholder="E.g. product recommendations for our e-commerce site..."></textarea>
+                    <!-- Honeypot -->
+                    <div style="position:absolute; left:-9999px;" aria-hidden="true">
+                        <input type="text" id="demoCompany" name="company" tabindex="-1" autocomplete="off">
+                    </div>
+                    <div id="demoMessage" style="display:none; padding:10px 14px; border-radius:8px; font-size:14px;"></div>
+                </form>
+            </div>
+
+            <div class="demo-modal-footer">
+                <div class="footer-left"></div>
+                <div class="footer-right">
+                    <button type="submit" form="demoForm" id="demoSubmit" class="demo-btn-neu demo-btn-send">
+                        <span class="btn-inner">Send</span>
+                    </button>
+                    <button type="button" onclick="closeDemoModal()" class="demo-btn-neu demo-btn-cancel">
+                        <span class="btn-inner">Cancel</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function openDemoModal() {
+            const modal = document.getElementById('demoModal');
+            modal.classList.add('visible');
+            document.getElementById('demoEmail').focus();
+        }
+
+        function closeDemoModal() {
+            const modal = document.getElementById('demoModal');
+            modal.classList.remove('visible');
+            document.getElementById('demoForm').reset();
+            const msg = document.getElementById('demoMessage');
+            msg.style.display = 'none';
+            msg.textContent = '';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeDemoModal();
+        });
+
+        function submitDemo(e) {
+            e.preventDefault();
+            const btn = document.getElementById('demoSubmit');
+            const btnInner = btn.querySelector('.btn-inner');
+            const msg = document.getElementById('demoMessage');
+            btn.disabled = true;
+            btnInner.textContent = 'Sending...';
+            msg.style.display = 'none';
+
+            fetch('{% url "request_demo" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify({
+                    email: document.getElementById('demoEmail').value,
+                    description: document.getElementById('demoDesc').value,
+                    company: document.getElementById('demoCompany').value,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    msg.style.display = 'block';
+                    msg.style.background = '#f0fdf4';
+                    msg.style.color = '#166534';
+                    msg.textContent = 'Thank you! We\'ll be in touch shortly.';
+                    setTimeout(closeDemoModal, 2000);
+                } else {
+                    msg.style.display = 'block';
+                    msg.style.background = '#fef2f2';
+                    msg.style.color = '#991b1b';
+                    msg.textContent = data.error || 'Something went wrong. Please try again.';
+                }
+            })
+            .catch(() => {
+                msg.style.display = 'block';
+                msg.style.background = '#fef2f2';
+                msg.style.color = '#991b1b';
+                msg.textContent = 'Something went wrong. Please try again.';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btnInner.textContent = 'Send';
+            });
+        }
+    </script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

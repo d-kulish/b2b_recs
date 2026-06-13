@@ -1,0 +1,123 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block title %}Support — Recs Studio{% endblock %}
+{% block meta_description %}Recs Studio support channels, response-time targets, and escalation paths for customers running managed recommendation systems on Google Cloud.{% endblock %}
+{% block canonical %}https://recs.studio/support/{% endblock %}
+{% block og_url %}https://recs.studio/support/{% endblock %}
+{% block og_title %}Support — Recs Studio{% endblock %}
+{% block og_description %}Recs Studio support channels, response-time targets, and escalation paths for customers running managed recommendation systems on Google Cloud.{% endblock %}
+{% block twitter_title %}Support — Recs Studio{% endblock %}
+{% block twitter_description %}Recs Studio support channels, response-time targets, and escalation paths for customers running managed recommendation systems on Google Cloud.{% endblock %}
+{% block nav_support %}active{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto page-content">
+    <h1>Support</h1>
+
+    <p class="text-lg text-gray-600 leading-relaxed mb-8">
+        We support every customer directly through the engineering team that builds and operates the platform. There are no outsourced help desks or ticket queues between you and the people who can resolve your issue.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Support Channels</h2>
+    <div class="grid md:grid-cols-2 gap-6 my-6">
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-envelope"></i>
+            </div>
+            <h3 class="!mt-0">Email Support</h3>
+            <p class="text-sm">Primary channel for all support requests.</p>
+            <p class="font-semibold"><a href="mailto:support@recs.studio">support@recs.studio</a></p>
+        </div>
+
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-comments"></i>
+            </div>
+            <h3 class="!mt-0">Slack / Shared Channel</h3>
+            <p class="text-sm">Growth and Enterprise customers get a shared Slack channel or equivalent for fast, informal coordination during onboarding and production issues.</p>
+        </div>
+
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-phone"></i>
+            </div>
+            <h3 class="!mt-0">Scheduled Escalation Calls</h3>
+            <p class="text-sm">For complex issues, architecture reviews, or quarterly business reviews, we schedule video calls directly with the engineering team.</p>
+        </div>
+
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-book"></i>
+            </div>
+            <h3 class="!mt-0">In-App Help</h3>
+            <p class="text-sm">Contextual guidance and documentation links are available inside the platform UI, with direct links to raise a support request.</p>
+        </div>
+    </div>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Response-Time Targets</h2>
+    <div class="overflow-x-auto my-6">
+        <table class="w-full border-collapse border-2 border-gray-900 rounded-2xl">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="border border-gray-300 px-4 py-3 text-left">Severity</th>
+                    <th class="border border-gray-300 px-4 py-3 text-left">Definition</th>
+                    <th class="border border-gray-300 px-4 py-3 text-left">First Response</th>
+                    <th class="border border-gray-300 px-4 py-3 text-left">Target Resolution</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="border border-gray-300 px-4 py-3 font-semibold">Critical</td>
+                    <td class="border border-gray-300 px-4 py-3">Production model or serving endpoint down; no recommendations being served.</td>
+                    <td class="border border-gray-300 px-4 py-3">Within 4 hours</td>
+                    <td class="border border-gray-300 px-4 py-3">Same business day (mitigation), full fix as fast as possible</td>
+                </tr>
+                <tr>
+                    <td class="border border-gray-300 px-4 py-3 font-semibold">High</td>
+                    <td class="border border-gray-300 px-4 py-3">Significant degradation: training failures, data pipeline errors, or partial serving issues.</td>
+                    <td class="border border-gray-300 px-4 py-3">Within 1 business day</td>
+                    <td class="border border-gray-300 px-4 py-3">Within 2 business days</td>
+                </tr>
+                <tr>
+                    <td class="border border-gray-300 px-4 py-3 font-semibold">Standard</td>
+                    <td class="border border-gray-300 px-4 py-3">Configuration questions, feature requests, documentation requests, or non-urgent issues.</td>
+                    <td class="border border-gray-300 px-4 py-3">Within 2 business days</td>
+                    <td class="border border-gray-300 px-4 py-3">Within 5 business days, or scheduled in roadmap</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <p class="text-sm text-gray-500">
+        Business hours are Monday–Friday, 09:00–18:00 EEST/EET. Critical issues are handled on-call outside business hours for Enterprise customers.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Escalation Path</h2>
+    <ol class="list-decimal pl-6">
+        <li><strong>Initial triage:</strong> Support request is acknowledged by the engineering team and assigned a severity.</li>
+        <li><strong>Engineering investigation:</strong> The team that built the relevant component investigates and communicates status every 4 hours for Critical issues.</li>
+        <li><strong>Founder escalation:</strong> If a Critical or High issue is not resolved within the target window, it is escalated directly to the founder for resource allocation and customer communication.</li>
+        <li><strong>Post-incident review:</strong> For Critical incidents, we provide a written root-cause analysis and prevention steps within 5 business days.</li>
+    </ol>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Scope of Support</h2>
+    <p>
+        Recs Studio support covers the platform itself: data pipelines, model training, deployment, serving endpoints, monitoring, and the user interface. We do not manage your source databases or cloud accounts, but we will guide your team on network access, IAM, and schema requirements.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Open a Support Request</h2>
+    <p>
+        Email <a href="mailto:support@recs.studio">support@recs.studio</a> with a short description of the issue, the affected model or endpoint, and any error messages. For sales or demo requests, use the <strong>Request a Demo</strong> button.
+    </p>
+</div>
+{% endblock %}

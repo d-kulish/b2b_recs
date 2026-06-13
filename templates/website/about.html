@@ -1,0 +1,108 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block title %}About — Recs Studio{% endblock %}
+{% block meta_description %}Learn about Recs Studio: our mission, founding team, and production experience building managed recommendation systems on TFRS, TFX, and Vertex AI.{% endblock %}
+{% block canonical %}https://recs.studio/about/{% endblock %}
+{% block og_url %}https://recs.studio/about/{% endblock %}
+{% block og_title %}About — Recs Studio{% endblock %}
+{% block og_description %}Learn about Recs Studio: our mission, founding team, and production experience building managed recommendation systems.{% endblock %}
+{% block twitter_title %}About — Recs Studio{% endblock %}
+{% block twitter_description %}Learn about Recs Studio: our mission, founding team, and production experience building managed recommendation systems.{% endblock %}
+{% block nav_about %}active{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto page-content">
+    <h1>About Recs Studio</h1>
+
+    <p class="text-lg text-gray-600 leading-relaxed mb-8">
+        Recs Studio helps mid-to-large retailers and B2B marketplaces deliver state-of-the-art personalised recommendations without building an internal ML platform from scratch. We combine production-grade recommender systems, modern data engineering, and Google Cloud infrastructure into a managed service that our customers can deploy in hours.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Our Mission</h2>
+    <p>
+        Every retailer sits on rich customer and product data, but most never turn that data into real-time, personalised experiences because the path from raw data to a production recommender is long, expensive, and error-prone. Our mission is to shorten that path to a single managed platform: connect your data, configure your model, deploy your endpoints, and continuously improve accuracy.
+    </p>
+
+    <h2>What We Built</h2>
+    <p>
+        Recs Studio is a complete recommendation platform built on TensorFlow Recommenders (TFRS), TFX production pipelines, and Vertex AI. It covers the full lifecycle:
+    </p>
+    <ul>
+        <li><strong>Data ingestion:</strong> ETL from SQL, NoSQL, data warehouses, and cloud storage into BigQuery.</li>
+        <li><strong>Feature engineering:</strong> Visual schema builder, two-tower feature assignment, embeddings, normalisation, cyclical encoding, and cross features.</li>
+        <li><strong>Model architecture:</strong> Configurable retrieval, ranking, and multitask models with dense, dropout, batch-normalisation, and regularisation layers.</li>
+        <li><strong>Experiments:</strong> Quick-test Vertex AI pipelines to validate configurations before full training.</li>
+        <li><strong>Training:</strong> GPU-powered production training, model registry, automated evaluation, and scheduled retraining.</li>
+        <li><strong>Serving:</strong> Auto-scaling Cloud Run endpoints with TF Serving and ScaNN, real-time monitoring, and client SDK examples.</li>
+    </ul>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Founding Team</h2>
+    <p>
+        Recs Studio was founded by a team of engineers with hands-on production experience in large-scale recommender systems, cloud ML infrastructure, and retail data platforms.
+    </p>
+
+    <div class="grid md:grid-cols-3 gap-6 my-8">
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-user"></i>
+            </div>
+            <h3 class="!mt-0">Dmytro Kulish</h3>
+            <p class="text-sm text-gray-500 mb-2">Founder</p>
+            <p class="text-sm">Product and engineering lead. Architect of the Recs Studio platform, TFX pipelines, and customer deployments.</p>
+            <a href="https://www.linkedin.com/in/dmytro-kulish/" target="_blank" class="text-sm inline-flex items-center gap-2 mt-3">
+                <i class="fab fa-linkedin"></i> LinkedIn
+            </a>
+        </div>
+
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-user"></i>
+            </div>
+            <h3 class="!mt-0">Maksym Kulish</h3>
+            <p class="text-sm text-gray-500 mb-2">Co-founder, Engineering</p>
+            <p class="text-sm">ML engineering, model training infrastructure, and production serving systems.</p>
+            <a href="#" target="_blank" class="text-sm inline-flex items-center gap-2 mt-3">
+                <i class="fab fa-linkedin"></i> LinkedIn
+            </a>
+        </div>
+
+        <div class="border-2 border-gray-900 rounded-2xl p-6">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-400 flex items-center justify-center text-white text-xl mb-4">
+                <i class="fas fa-user"></i>
+            </div>
+            <h3 class="!mt-0">Kostyantyn Patsera</h3>
+            <p class="text-sm text-gray-500 mb-2">Co-founder, Engineering</p>
+            <p class="text-sm">Data engineering, ETL pipelines, and cloud infrastructure automation.</p>
+            <a href="#" target="_blank" class="text-sm inline-flex items-center gap-2 mt-3">
+                <i class="fab fa-linkedin"></i> LinkedIn
+            </a>
+        </div>
+    </div>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Customer Traction</h2>
+    <p>
+        Recs Studio is already in production with two retail customers in Ukraine. Both systems were delivered as tailored implementations, are under active support, and are on a migration path to the managed Google Cloud Marketplace SaaS model.
+    </p>
+    <ul>
+        <li><strong>Metro.ua:</strong> Live recommendation system for a major Ukrainian retail chain.</li>
+        <li><strong>Zakaz.ua:</strong> Personalised recommendations for an online grocery marketplace.</li>
+    </ul>
+    <p>
+        We are also in discussion with additional EU and US retailers for pilots through the Google Cloud Marketplace.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Get in Touch</h2>
+    <p>
+        For partnerships, press, or general inquiries, email us at <a href="mailto:d.kulish@recs.studio">d.kulish@recs.studio</a>. To see the platform in action, click the <strong>Request a Demo</strong> button.
+    </p>
+</div>
+{% endblock %}

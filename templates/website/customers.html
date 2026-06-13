@@ -1,0 +1,101 @@
+{% extends "website/base.html" %}
+{% load static %}
+
+{% block title %}Customers — Recs Studio{% endblock %}
+{% block meta_description %}See how retailers use Recs Studio to deliver personalised recommendations, from production deployments at Metro.ua and Zakaz.ua to upcoming Google Cloud Marketplace pilots.{% endblock %}
+{% block canonical %}https://recs.studio/customers/{% endblock %}
+{% block og_url %}https://recs.studio/customers/{% endblock %}
+{% block og_title %}Customers — Recs Studio{% endblock %}
+{% block og_description %}See how retailers use Recs Studio to deliver personalised recommendations, from production deployments at Metro.ua and Zakaz.ua to upcoming Google Cloud Marketplace pilots.{% endblock %}
+{% block twitter_title %}Customers — Recs Studio{% endblock %}
+{% block twitter_description %}See how retailers use Recs Studio to deliver personalised recommendations, from production deployments at Metro.ua and Zakaz.ua to upcoming Google Cloud Marketplace pilots.{% endblock %}
+{% block nav_customers %}active{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto page-content">
+    <h1>Customers</h1>
+
+    <p class="text-lg text-gray-600 leading-relaxed mb-8">
+        Recs Studio is already helping retailers turn their transaction and product data into live, personalised recommendation systems. Here are two production deployments driving real business outcomes.
+    </p>
+
+    <div class="gradient-line my-8"></div>
+
+    <!-- Metro.ua -->
+    <div class="border-2 border-gray-900 rounded-2xl p-8 mb-8">
+        <div class="flex items-center gap-4 mb-6">
+            <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center text-white text-2xl">
+                <i class="fas fa-cart-shopping"></i>
+            </div>
+            <div>
+                <h2 class="!mt-0 !mb-1">Metro.ua</h2>
+                <p class="text-sm text-gray-500">Major Ukrainian retail chain — B2B and B2C e-commerce</p>
+            </div>
+        </div>
+
+        <h3>Challenge</h3>
+        <p>
+            Metro.ua wanted to move from rule-based product suggestions to data-driven personalised recommendations across their digital catalogue. The goal was to increase average basket size and improve product discovery without building an internal ML team.
+        </p>
+
+        <h3>Solution</h3>
+        <p>
+            Recs Studio connected to Metro.ua's existing data sources, built a TFRS two-tower retrieval model, and deployed a real-time serving endpoint integrated into their e-commerce platform. The full pipeline — ETL, feature engineering, training, and serving — runs in a dedicated Google Cloud project managed by Recs Studio.
+        </p>
+
+        <h3>Results</h3>
+        <ul>
+            <li>Live personalised recommendations deployed in production</li>
+            <li>Retrieval and ranking models trained on historical purchase and catalogue data</li>
+            <li>Real-time serving endpoint with sub-100ms latency</li>
+            <li>Ongoing retraining schedule keeps models current as the catalogue evolves</li>
+        </ul>
+
+        <p class="text-sm text-gray-500 mt-4">
+            <em>Specific business metrics are shared under NDA.</em>
+        </p>
+    </div>
+
+    <!-- Zakaz.ua -->
+    <div class="border-2 border-gray-900 rounded-2xl p-8 mb-8">
+        <div class="flex items-center gap-4 mb-6">
+            <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-500 flex items-center justify-center text-white text-2xl">
+                <i class="fas fa-bag-shopping"></i>
+            </div>
+            <div>
+                <h2 class="!mt-0 !mb-1">Zakaz.ua</h2>
+                <p class="text-sm text-gray-500">Online grocery marketplace in Ukraine</p>
+            </div>
+        </div>
+
+        <h3>Challenge</h3>
+        <p>
+            Zakaz.ua needed a recommendation system that could handle a fast-changing grocery catalogue, seasonal demand spikes, and diverse customer shopping patterns. Accuracy and freshness were critical because grocery customers expect relevant substitutions and complementary products.
+        </p>
+
+        <h3>Solution</h3>
+        <p>
+            Recs Studio built a multitask recommendation pipeline that combines retrieval and ranking objectives in a single model. Automated ETL refreshes the data, scheduled retraining keeps predictions aligned with seasonal trends, and the serving endpoint scales with demand.
+        </p>
+
+        <h3>Results</h3>
+        <ul>
+            <li>Multitask retrieval + ranking model in production</li>
+            <li>Automated daily data refresh and periodic retraining</li>
+            <li>Model serving integrated into the marketplace recommendation slots</li>
+            <li>Full observability of endpoint latency, errors, and usage</li>
+        </ul>
+
+        <p class="text-sm text-gray-500 mt-4">
+            <em>Specific business metrics are shared under NDA.</em>
+        </p>
+    </div>
+
+    <div class="gradient-line my-8"></div>
+
+    <h2>Become a Customer</h2>
+    <p>
+        We are onboarding new retailers and B2B marketplaces through the Google Cloud Marketplace. If you are a mid-to-large retailer looking for production-grade recommendations, click <strong>Request a Demo</strong> or email <a href="mailto:d.kulish@recs.studio">d.kulish@recs.studio</a>.
+    </p>
+</div>
+{% endblock %}

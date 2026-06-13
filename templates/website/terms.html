@@ -1,127 +1,51 @@
+{% extends "website/base.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms of Service — Recs Studio</title>
-    <meta name="description" content="Terms of Service for Recs Studio — managed recommendation systems platform built on TFRS, TFX, and Vertex AI.">
-    <link rel="canonical" href="https://recs.studio/terms/">
-    <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
-    <script src="https://cdn.jsdelivr.net/npm/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {
-            background-color: #ffffff;
-            min-height: 100vh;
-        }
 
-        .header-user-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            border: none;
-            overflow: hidden;
-            transition: all 0.2s ease;
-            background: transparent;
-            cursor: pointer;
-        }
+{% block title %}Terms of Service — Recs Studio{% endblock %}
+{% block meta_description %}Terms of Service for Recs Studio — managed recommendation systems platform built on TFRS, TFX, and Vertex AI.{% endblock %}
+{% block canonical %}https://recs.studio/terms/{% endblock %}
+{% block og_url %}https://recs.studio/terms/{% endblock %}
+{% block og_title %}Terms of Service — Recs Studio{% endblock %}
+{% block og_description %}Terms of Service for Recs Studio — managed recommendation systems platform built on TFRS, TFX, and Vertex AI.{% endblock %}
+{% block twitter_title %}Terms of Service — Recs Studio{% endblock %}
+{% block twitter_description %}Terms of Service for Recs Studio — managed recommendation systems platform built on TFRS, TFX, and Vertex AI.{% endblock %}
+{% block nav_terms %}!text-blue-600 font-semibold{% endblock %}
 
-        .header-user-icon:hover {
-            transform: scale(1.05);
-        }
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-4xl font-bold text-gray-900 mb-8">Terms of Service</h1>
+    <div class="text-gray-600 space-y-6">
+        <p class="text-sm text-gray-400">Last updated: June 2026</p>
 
-        .header-user-icon img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background: transparent;
-        }
-    </style>
-</head>
-<body>
-    <!-- Header -->
-    <div class="p-6 pb-0">
-        <div class="max-w-[88rem] mx-auto">
-            <div class="px-6 py-3 flex items-center gap-6">
-                <!-- Logo -->
-                <a href="{% url 'landing' %}" class="flex flex-col items-center w-fit flex-shrink-0 mr-4">
-                    <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-[70px] w-auto">
-                </a>
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">1. Acceptance of Terms</h2>
+        <p>By accessing and using recs.studio ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
 
-                <!-- Brand name -->
-                <a href="{% url 'landing' %}" class="flex-shrink-0 no-underline">
-                    <h1 class="text-5xl font-bold text-blue-900">Recs Studio</h1>
-                </a>
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">2. Description of Service</h2>
+        <p>recs.studio provides a cloud-based platform for building, training, and deploying machine learning recommendation models. The Service includes ETL pipeline management, model training on Google Cloud Vertex AI, and model deployment capabilities. Your use of the underlying Google Cloud Platform infrastructure is subject to the <a href="https://cloud.google.com/terms" target="_blank" class="text-blue-600 hover:underline">Google Cloud Platform Terms of Service</a> in addition to these Terms.</p>
 
-                <!-- User Profile Icon (pushed to far right) -->
-                <div class="ml-auto flex-shrink-0">
-                    <a href="#" class="header-user-icon" title="Sign In">
-                        <img src="{% static 'images/person_icon.webp' %}" alt="Sign In">
-                    </a>
-                </div>
-            </div>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">3. User Accounts</h2>
+        <p>You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">4. Data and Privacy</h2>
+        <p>Your use of the Service is also governed by our <a href="{% url 'privacy' %}" class="text-blue-600 hover:underline">Privacy Policy</a>. You retain ownership of all data you upload to the platform. Customer data is processed and stored in the customer's isolated Google Cloud project; Recs Studio does not copy customer data outside the customer's project or jurisdiction without written authorization.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">5. Acceptable Use</h2>
+        <p>You agree not to misuse the Service. This includes attempting to access systems without authorization, interfering with other users' access, or using the Service for any unlawful purpose.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">6. Service Availability</h2>
+        <p>We strive to maintain high availability but do not guarantee uninterrupted access. The Service may be temporarily unavailable for maintenance or updates.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">7. Limitation of Liability</h2>
+        <p>The Service is provided "as is" without warranties of any kind. We shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">8. Changes to Terms</h2>
+        <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the updated terms.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">9. Google Cloud Marketplace</h2>
+        <p>For purchases made through the <strong>Google Cloud Marketplace</strong>, <strong>Google Commerce Limited</strong> acts as the merchant of record. Google collects customer payments, handles chargebacks and refunds, and remits the Vendor's share. All Marketplace transactions are subject to the <a href="https://cloud.google.com/terms/marketplace-vendor-agreement" target="_blank" class="text-blue-600 hover:underline">Google Cloud Marketplace Vendor Agreement</a>.</p>
+
+        <h2 class="text-xl font-semibold text-gray-900 mt-8">10. Contact</h2>
+        <p>For questions about these Terms, contact us at <span class="text-blue-600">support@recs.studio</span>.</p>
     </div>
-
-    <!-- Content -->
-    <div class="py-6 px-6">
-        <div class="max-w-[88rem] mx-auto px-6">
-            <!-- Separator -->
-            <div class="mb-6" style="height: 2px; background: linear-gradient(to right, transparent 0%, #1f2937 15%, #1f2937 85%, transparent 100%);"></div>
-
-            <div class="max-w-4xl mx-auto">
-                <h1 class="text-4xl font-bold text-gray-900 mb-8">Terms of Service</h1>
-                <div class="text-gray-600 space-y-6">
-                    <p class="text-sm text-gray-400">Last updated: June 2026</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">1. Acceptance of Terms</h2>
-                    <p>By accessing and using recs.studio ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">2. Description of Service</h2>
-                    <p>recs.studio provides a cloud-based platform for building, training, and deploying machine learning recommendation models. The Service includes ETL pipeline management, model training on Google Cloud Vertex AI, and model deployment capabilities. Your use of the underlying Google Cloud Platform infrastructure is subject to the <a href="https://cloud.google.com/terms" target="_blank" class="text-blue-600 hover:underline">Google Cloud Platform Terms of Service</a> in addition to these Terms.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">3. User Accounts</h2>
-                    <p>You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">4. Data and Privacy</h2>
-                    <p>Your use of the Service is also governed by our <a href="{% url 'privacy' %}" class="text-blue-600 hover:underline">Privacy Policy</a>. You retain ownership of all data you upload to the platform. Customer data is processed and stored in the customer's isolated Google Cloud project; Recs Studio does not copy customer data outside the customer's project or jurisdiction without written authorization.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">5. Acceptable Use</h2>
-                    <p>You agree not to misuse the Service. This includes attempting to access systems without authorization, interfering with other users' access, or using the Service for any unlawful purpose.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">6. Service Availability</h2>
-                    <p>We strive to maintain high availability but do not guarantee uninterrupted access. The Service may be temporarily unavailable for maintenance or updates.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">7. Limitation of Liability</h2>
-                    <p>The Service is provided "as is" without warranties of any kind. We shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Service.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">8. Changes to Terms</h2>
-                    <p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the updated terms.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">9. Google Cloud Marketplace</h2>
-                    <p>For purchases made through the <strong>Google Cloud Marketplace</strong>, <strong>Google Commerce Limited</strong> acts as the merchant of record. Google collects customer payments, handles chargebacks and refunds, and remits the Vendor's share. All Marketplace transactions are subject to the <a href="https://cloud.google.com/terms/marketplace-vendor-agreement" target="_blank" class="text-blue-600 hover:underline">Google Cloud Marketplace Vendor Agreement</a>.</p>
-
-                    <h2 class="text-xl font-semibold text-gray-900 mt-8">10. Contact</h2>
-                    <p>For questions about these Terms, contact us at <span class="text-blue-600">support@recs.studio</span>.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="max-w-[88rem] mx-auto px-12 mt-6">
-        <div style="height: 2px; background: linear-gradient(to right, transparent 0%, #1f2937 15%, #1f2937 85%, transparent 100%);"></div>
-        <div class="flex items-center justify-between py-8 text-sm text-gray-500">
-            <span>&copy; 2026 recs.studio</span>
-            <div class="flex gap-6">
-                <a href="{% url 'terms' %}" class="hover:text-gray-300 transition">Terms of Service</a>
-                <a href="{% url 'privacy' %}" class="hover:text-gray-300 transition">Privacy Policy</a>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+</div>
+{% endblock %}

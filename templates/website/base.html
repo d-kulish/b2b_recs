@@ -366,14 +366,14 @@
         <div class="max-w-[88rem] mx-auto">
             <div class="px-6 py-3 flex items-center gap-6">
                 <!-- Logo -->
-                <a href="{% url 'landing' %}" class="flex flex-col items-center w-fit flex-shrink-0 mr-4">
+                <div class="flex flex-col items-center w-fit flex-shrink-0 mr-4">
                     <img src="{% static 'images/recs_logo.png' %}" alt="Recs Studio" class="h-[70px] w-auto">
-                </a>
+                </div>
 
                 <!-- Brand name -->
-                <a href="{% url 'landing' %}" class="flex-shrink-0 no-underline">
+                <div class="flex-shrink-0">
                     <h1 class="text-5xl font-bold text-blue-900">Recs Studio</h1>
-                </a>
+                </div>
 
                 <!-- User Profile Icon (pushed to far right) -->
                 <div class="ml-auto flex-shrink-0">
@@ -382,18 +382,22 @@
                     </a>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Navigation -->
-            <div class="px-6 pb-3">
-                <nav class="flex flex-wrap items-center gap-x-6 gap-y-2">
-                    <a href="{% url 'landing' %}" class="nav-link {% block nav_landing %}{% endblock %}">Home</a>
-                    <a href="{% url 'about' %}" class="nav-link {% block nav_about %}{% endblock %}">About</a>
-                    <a href="{% url 'pricing' %}" class="nav-link {% block nav_pricing %}{% endblock %}">Pricing</a>
-                    <a href="{% url 'customers' %}" class="nav-link {% block nav_customers %}{% endblock %}">Customers</a>
-                    <a href="{% url 'support' %}" class="nav-link {% block nav_support %}{% endblock %}">Support</a>
-                    <a href="{% url 'security' %}" class="nav-link {% block nav_security %}{% endblock %}">Security</a>
-                    <a href="{% url 'terms' %}" class="nav-link {% block nav_terms %}{% endblock %}">Terms</a>
-                    <a href="{% url 'privacy' %}" class="nav-link {% block nav_privacy %}{% endblock %}">Privacy</a>
+    <!-- Navigation -->
+    <div class="px-6 pb-2">
+        <div class="max-w-[88rem] mx-auto">
+            <div class="px-6 py-3">
+                <nav class="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-medium">
+                    <a href="{% url 'landing' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_landing %}{% endblock %}">Home</a>
+                    <a href="{% url 'about' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_about %}{% endblock %}">About</a>
+                    <a href="{% url 'pricing' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_pricing %}{% endblock %}">Pricing</a>
+                    <a href="{% url 'customers' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_customers %}{% endblock %}">Customers</a>
+                    <a href="{% url 'support' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_support %}{% endblock %}">Support</a>
+                    <a href="{% url 'security' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_security %}{% endblock %}">Security</a>
+                    <a href="{% url 'terms' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_terms %}{% endblock %}">Terms</a>
+                    <a href="{% url 'privacy' %}" class="text-gray-600 hover:text-blue-600 transition {% block nav_privacy %}{% endblock %}">Privacy</a>
                 </nav>
             </div>
         </div>
